@@ -1,0 +1,4 @@
+/bin/
+/pkg/
+/vendor/pkg/
+/*.sublime-*
