@@ -1,18 +1,38 @@
 package handlers
 
 import (
+	"fmt"
+	"github.com/gorilla/mux"
 	"net/http"
 	"vmango"
 	"vmango/models"
 )
 
-func MachinesListHandler(ctx *vmango.Context, w http.ResponseWriter, request *http.Request) (int, error) {
-	ctx.Render.HTML(w, http.StatusOK, "machines/list", struct {
-		Request  *http.Request
-		Machines []*models.VirtualMachine
-	}{
-		request,
-		ctx.Storage.ListMachines(),
+func MachineList(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
+	machines := []*models.VirtualMachine{}
+	if err := ctx.Storage.ListMachines(&machines); err != nil {
+		return err
+	}
+	ctx.Render.HTML(w, http.StatusOK, "machines/list", map[string]interface{}{
+		"Request":  req,
+		"Machines": machines,
 	})
-	return 200, nil
+	return nil
+}
+
+func MachineDetail(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
+	machine := &models.VirtualMachine{
+		Name: mux.Vars(req)["name"],
+	}
+	if exists, err := ctx.Storage.GetMachine(machine); err != nil {
+		return err
+	} else if !exists {
+		return vmango.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
+	}
+
+	ctx.Render.HTML(w, http.StatusOK, "machines/detail", map[string]interface{}{
+		"Request": req,
+		"Machine": machine,
+	})
+	return nil
 }

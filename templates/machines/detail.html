@@ -1,0 +1,34 @@
+{{template "header" .}}
+
+    <div class="row">
+        <!-- Card Projects -->
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-image">
+                    <img class="img-responsive" src="http://i1.wp.com/desarrollador-android.com/wp-content/uploads/2015/03/wallpaper-material-design-14.png">
+                    <span class="card-title">{{ .Machine.Name }}</span>
+                </div>
+
+                <div class="card-content">
+                  <ul class="nav nav-pills">
+                    <li role="presentation">
+                      <a>{{ .Machine.StateName }}</a>
+                    </li>
+                    <li role="presentation">
+                      <a>Memory: {{ .Machine.MemoryMegabytes }}Mb</a>
+                    </li>
+                    <li role="presentation">
+                      <a>Cpus: {{ .Machine.Cpus }}</a>
+                    </li>
+                  </ul>
+                </div>
+
+                <div class="card-action">
+                    <a href="#" target="new_blank">Remove</a>
+                    <a href="#" target="new_blank">Resize</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{{template "footer" .}}

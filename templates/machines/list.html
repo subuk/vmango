@@ -6,6 +6,7 @@
     <tr>
       <th>Name</th>
       <th>State</th>
+      <th>CPU Cores</th>
       <th>Memory</th>
     </tr>
   </thead>
@@ -13,8 +14,9 @@
 
   {{ range .Machines }}
     <tr>
-      <td><a href="/machines/{{ .Name }}">{{ .Name }}</a></td>
+      <td><a href="{{ Url "machine-detail" "name" .Name }}">{{ .Name }}</a></td>
       <td>{{ .StateName }}</td>
+      <td>{{ .Cpus }}</td>
       <td>{{ .MemoryMegabytes }}Mb</td>
     </tr>
   {{ end }}

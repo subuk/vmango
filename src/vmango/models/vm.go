@@ -4,18 +4,25 @@ import (
 	"fmt"
 )
 
+const (
+	STATE_RUNNING = iota
+	STATE_STOPPED = iota
+	STATE_UNKNOWN = iota
+)
+
 type VirtualMachine struct {
 	Name   string
-	State  uint8
+	State  int
 	Uuid   string
-	Memory uint64
+	Memory int
+	Cpus   int
 }
 
 func (v *VirtualMachine) StateName() string {
 	switch v.State {
-	case 1:
+	case STATE_RUNNING:
 		return "running"
-	case 5:
+	case STATE_STOPPED:
 		return "stopped"
 	}
 	return "unknown"

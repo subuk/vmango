@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="">
     <meta name="author" content="">
-    <link rel="icon" href="../../favicon.ico">
 
     <title>Vmango</title>
     {{template "css" }}
@@ -29,8 +28,8 @@
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
-            <li {{if eq .Request.URL.Path "/machines" }}class="active"{{end}}>
-              <a href="/machines">Machines</a>
+            <li {{if HasPrefix .Request.URL.Path "/machines" }}class="active"{{end}}>
+              <a href="{{ Url "machine-list" }}">Machines</a>
             </li>
           </ul>
           <ul class="nav navbar-nav navbar-right">
