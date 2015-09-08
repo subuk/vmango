@@ -7,8 +7,8 @@ import (
 )
 
 func IndexHandler(w http.ResponseWriter, request *http.Request) {
-	context := struct {
+	vmango.Render.HTML(w, http.StatusOK, "index", struct {
+		Request  *http.Request
 		Machines []*models.VirtualMachine
-	}{models.Store.ListMachines()}
-	vmango.Render.HTML(w, http.StatusOK, "index", context)
+	}{request, models.Store.ListMachines()})
 }

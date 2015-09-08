@@ -1,7 +1,7 @@
-{{template "header"}}
+{{template "header" .}}
 
 <ul>
-    <li><a href="/machines">Machines</a></li>
+    <li><a href="/machines">Machines {{.Request.URL.Path}}</a></li>
 </ul>
 
-{{template "footer"}}
+{{template "footer" .}}

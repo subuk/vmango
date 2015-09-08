@@ -25,11 +25,13 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="#">Vmango</a>
+          <a class="navbar-brand" href="/">Vmango</a>
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
-            <li class="active"><a href="#">Machines</a></li>
+            <li {{if eq .Request.URL.Path "/machines" }}class="active"{{end}}>
+              <a href="/machines">Machines</a>
+            </li>
           </ul>
           <ul class="nav navbar-nav navbar-right">
             <li><a href="">Add machine</a></li>
