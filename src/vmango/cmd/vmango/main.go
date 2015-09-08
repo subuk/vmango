@@ -36,6 +36,7 @@ func main() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/", handlers.IndexHandler)
+	router.HandleFunc("/machines", handlers.MachinesListHandler)
 	router.HandleFunc("/static{name:.*}", handlers.MakeStaticHandler(*STATIC_PATH))
 
 	n := negroni.New()
@@ -44,5 +45,5 @@ func main() {
 	n.UseHandler(router)
 
 	log.WithField("address", *LISTEN_ADDR).Info("listening")
-	http.ListenAndServe(*LISTEN_ADDR, n)
+	log.Fatal(http.ListenAndServe(*LISTEN_ADDR, n))
 }

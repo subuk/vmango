@@ -1,26 +1,7 @@
-<h1>It works!</h1>
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>UUID</th>
-            <th>State</th>
-            <th>Memory</th>
-        </tr>
-    </thead>
-    <tbody>
-{{ range .Machines }}
-    <tr>
-        <td>{{ .Name }}</td>
-        <td>{{ .Uuid }}</td>
-        <td>{{ .StateName }}</td>
-        <td>{{ .MemoryMegabytes }}Mb</td>
-    </tr>
-{{ end }}
-    </tbody>
-</table>
+{{template "header"}}
 
 <ul>
-
+    <li><a href="/machines">Machines</a></li>
 </ul>
+
+{{template "footer"}}
