@@ -1,28 +1,23 @@
-
 GOPATH = $(CURDIR)/vendor:$(CURDIR)
 SOURCES = $(shell find src/ -name *.go)
-.PHONY = clean test acceptance show-coverage-html show-coverage-text
-ONLY = .
+.PHONY = clean test show-coverage-html show-coverage-text
 
 
-
-bin/vmango: deps $(SOURCES)
-	GOPATH=$(GOPATH) go build -o bin/vmango vmango/cmd/vmango
-
-deps:
+bin/vmango: $(SOURCES)
 	GOPATH=$(GOPATH) go get vmango
+	GOPATH=$(GOPATH) go build -o bin/vmango vmango/cmd/vmango
 
 test:
 	GOPATH=$(GOPATH) go get github.com/stretchr/testify/mock
 	GOPATH=$(GOPATH) go get github.com/stretchr/testify/assert
 	GOPATH=$(GOPATH) go get github.com/stretchr/testify/suite
-	GOPATH=$(GOPATH) go test -race -coverprofile=coverage.out --run=$(ONLY) vmango
+	GOPATH=$(GOPATH) go test -race -coverprofile=coverage.out --run=. vmango
 
 norace-test:
 	GOPATH=$(GOPATH) go get github.com/stretchr/testify/mock
 	GOPATH=$(GOPATH) go get github.com/stretchr/testify/assert
 	GOPATH=$(GOPATH) go get github.com/stretchr/testify/suite
-	GOPATH=$(GOPATH) go test --run=$(ONLY) vmango
+	GOPATH=$(GOPATH) go test --run=. vmango
 
 show-coverage-html:
 	GOPATH=$(GOPATH) go tool cover -html=coverage.out
