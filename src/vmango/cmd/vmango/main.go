@@ -10,10 +10,13 @@ import (
 	"net/http"
 	"vmango"
 	"vmango/handlers"
+	"vmango/models"
 )
 
 var (
-	LISTEN_ADDR = flag.String("listen", "0.0.0.0:8000", "Listen address")
+	LISTEN_ADDR   = flag.String("listen", "0.0.0.0:8000", "Listen address")
+	TEMPLATE_PATH = flag.String("template-path", "templates", "Template path")
+	STATIC_PATH   = flag.String("static-path", "static", "Static path")
 )
 
 func main() {
@@ -22,14 +25,18 @@ func main() {
 	vmango.Render = render.New(render.Options{
 		Extensions:    []string{".html"},
 		IsDevelopment: true,
+		Directory:     *TEMPLATE_PATH,
 	})
 
-	vmango.DB = vmango.NewDatabase("qemu:///system")
-
+	storage, err := models.NewLibvirtStorage("qemu:///system")
+	if err != nil {
+		panic(err)
+	}
+	models.Store = storage
 	router := mux.NewRouter()
 
 	router.HandleFunc("/", handlers.IndexHandler)
-	router.HandleFunc("/static/{name:.*}", handlers.StaticHandler)
+	router.HandleFunc("/static{name:.*}", handlers.MakeStaticHandler(*STATIC_PATH))
 
 	n := negroni.New()
 	n.Use(negronilogrus.NewMiddleware())
