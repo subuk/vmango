@@ -9,7 +9,7 @@ import (
 
 type Context struct {
 	Render  *render.Render
-	Storage *models.LibvirtStorage
+	Storage models.Storage
 	Logger  *logrus.Logger
 }
 

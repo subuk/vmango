@@ -20,6 +20,7 @@ var (
 	LISTEN_ADDR   = flag.String("listen", "0.0.0.0:8000", "Listen address")
 	TEMPLATE_PATH = flag.String("template-path", "templates", "Template path")
 	STATIC_PATH   = flag.String("static-path", "static", "Static path")
+	STORAGE       = flag.String("storage", "kvm", "Storage type (kvm or ovz)")
 )
 
 func main() {
@@ -49,9 +50,19 @@ func main() {
 		},
 	})
 
-	storage, err := models.NewLibvirtStorage("qemu:///system")
-	if err != nil {
-		panic(err)
+	var storage models.Storage
+
+	switch *STORAGE {
+	default:
+		log.WithField("storage", *STORAGE).Fatal("unknown storage specified. Choices are kvm or ovz")
+	case "kvm":
+		_storage, err := models.NewLibvirtStorage("qemu:///system")
+		if err != nil {
+			log.WithError(err).Fatal("failed to initialize libvirt-kvm storage")
+		}
+		storage = _storage
+	case "ovz":
+		storage = models.NewOVZStorage()
 	}
 
 	ctx := &vmango.Context{
