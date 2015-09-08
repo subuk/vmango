@@ -6,9 +6,10 @@ import (
 	"vmango/models"
 )
 
-func IndexHandler(w http.ResponseWriter, request *http.Request) {
-	vmango.Render.HTML(w, http.StatusOK, "index", struct {
+func IndexHandler(ctx *vmango.Context, w http.ResponseWriter, request *http.Request) (int, error) {
+	ctx.Render.HTML(w, http.StatusOK, "index", struct {
 		Request  *http.Request
 		Machines []*models.VirtualMachine
-	}{request, models.Store.ListMachines()})
+	}{request, ctx.Storage.ListMachines()})
+	return 200, nil
 }

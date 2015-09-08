@@ -22,7 +22,7 @@ var (
 func main() {
 	flag.Parse()
 
-	vmango.Render = render.New(render.Options{
+	renderer := render.New(render.Options{
 		Extensions:    []string{".html"},
 		IsDevelopment: true,
 		Directory:     *TEMPLATE_PATH,
@@ -32,11 +32,16 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	models.Store = storage
+
+	ctx := &vmango.Context{
+		Render:  renderer,
+		Storage: storage,
+	}
+
 	router := mux.NewRouter()
 
-	router.HandleFunc("/", handlers.IndexHandler)
-	router.HandleFunc("/machines", handlers.MachinesListHandler)
+	router.Handle("/", vmango.NewHandler(ctx, handlers.IndexHandler))
+	router.Handle("/machines", vmango.NewHandler(ctx, handlers.MachinesListHandler))
 	router.HandleFunc("/static{name:.*}", handlers.MakeStaticHandler(*STATIC_PATH))
 
 	n := negroni.New()
@@ -44,6 +49,6 @@ func main() {
 	n.Use(negroni.NewRecovery())
 	n.UseHandler(router)
 
-	log.WithField("address", *LISTEN_ADDR).Info("listening")
+	log.WithField("address", *LISTEN_ADDR).Info("starting server")
 	log.Fatal(http.ListenAndServe(*LISTEN_ADDR, n))
 }

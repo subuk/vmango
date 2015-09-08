@@ -5,8 +5,6 @@ import (
 	"gopkg.in/alexzorin/libvirt-go.v2"
 )
 
-var Store *LibvirtStorage
-
 type LibvirtStorage struct {
 	conn libvirt.VirConnection
 }

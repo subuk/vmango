@@ -6,12 +6,13 @@ import (
 	"vmango/models"
 )
 
-func MachinesListHandler(w http.ResponseWriter, request *http.Request) {
-	vmango.Render.HTML(w, http.StatusOK, "machines/list", struct {
+func MachinesListHandler(ctx *vmango.Context, w http.ResponseWriter, request *http.Request) (int, error) {
+	ctx.Render.HTML(w, http.StatusOK, "machines/list", struct {
 		Request  *http.Request
 		Machines []*models.VirtualMachine
 	}{
 		request,
-		models.Store.ListMachines(),
+		ctx.Storage.ListMachines(),
 	})
+	return 200, nil
 }

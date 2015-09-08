@@ -2,20 +2,36 @@ package vmango
 
 import (
 	"github.com/unrolled/render"
-	"gopkg.in/alexzorin/libvirt-go.v2"
+	"net/http"
+	"vmango/models"
 )
 
-var Render *render.Render
-var DB *Database
-
-type Database struct {
-	Conn *libvirt.VirConnection
+type Context struct {
+	Render  *render.Render
+	Storage *models.LibvirtStorage
 }
 
-func NewDatabase(uri string) *Database {
-	conn, err := libvirt.NewVirConnection(uri)
+type HandlerFunc func(*Context, http.ResponseWriter, *http.Request) (int, error)
+
+type Handler struct {
+	ctx    *Context
+	handle HandlerFunc
+}
+
+func NewHandler(ctx *Context, handle HandlerFunc) *Handler {
+	return &Handler{ctx, handle}
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	status, err := h.handle(h.ctx, w, r)
 	if err != nil {
-		panic(err)
+		switch status {
+		case http.StatusNotFound:
+			h.ctx.Render.HTML(w, status, "404", nil)
+		case http.StatusForbidden:
+			h.ctx.Render.HTML(w, status, "403", nil)
+		default:
+			http.Error(w, http.StatusText(status), status)
+		}
 	}
-	return &Database{&conn}
 }
