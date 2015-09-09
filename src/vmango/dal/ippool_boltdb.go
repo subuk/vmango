@@ -1,9 +1,10 @@
-package models
+package dal
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/boltdb/bolt"
+	"vmango/models"
 )
 
 type BoltIPPool struct {
@@ -18,14 +19,14 @@ func NewBoltIPPool(db *bolt.DB) *BoltIPPool {
 	}
 }
 
-func (pool *BoltIPPool) List(ips *[]*IP) error {
+func (pool *BoltIPPool) List(ips *[]*models.IP) error {
 	return pool.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(pool.bucket)
 		if bucket == nil {
 			return fmt.Errorf(`bucket "%s" not found`, string(pool.bucket))
 		}
 		return bucket.ForEach(func(k, v []byte) error {
-			ip := &IP{}
+			ip := &models.IP{}
 			if err := json.Unmarshal(v, ip); err != nil {
 				return err
 			}
@@ -35,7 +36,7 @@ func (pool *BoltIPPool) List(ips *[]*IP) error {
 	})
 }
 
-func (pool *BoltIPPool) Add(ip *IP) error {
+func (pool *BoltIPPool) Add(ip *models.IP) error {
 	return pool.db.Update(func(tx *bolt.Tx) error {
 		bucket, err := tx.CreateBucketIfNotExists(pool.bucket)
 		if err != nil {
@@ -49,6 +50,6 @@ func (pool *BoltIPPool) Add(ip *IP) error {
 	})
 }
 
-func (pool *BoltIPPool) Get(*IP) (bool, error) {
+func (pool *BoltIPPool) Get(*models.IP) (bool, error) {
 	return false, fmt.Errorf("not implemented")
 }

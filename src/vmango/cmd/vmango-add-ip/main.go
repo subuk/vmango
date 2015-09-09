@@ -4,7 +4,7 @@ import (
 	"flag"
 	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
-	"vmango/models"
+	"vmango/dal"
 )
 
 var (
@@ -32,9 +32,9 @@ func main() {
 		log.WithError(err).Fatal("failed to open database")
 	}
 
-	pool := models.NewBoltIPPool(db)
+	pool := dal.NewBoltIPPool(db)
 
-	ip := &models.IP{
+	ip := &dal.IP{
 		Address: *ADDRESS,
 		Gateway: *GW,
 		Netmask: *MASK,

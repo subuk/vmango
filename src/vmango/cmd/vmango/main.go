@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 	"vmango"
+	"vmango/dal"
 	"vmango/handlers"
-	"vmango/models"
 )
 
 var (
@@ -56,19 +56,19 @@ func main() {
 		},
 	})
 
-	machines, err := models.NewLibvirtMachinerep("qemu:///system")
+	machines, err := dal.NewLibvirtMachinerep("qemu:///system")
 	if err != nil {
 		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
 	}
 
-	imagerep := models.NewLocalfsImagerep(*IMAGES_PATH)
+	imagerep := dal.NewLocalfsImagerep(*IMAGES_PATH)
 
 	metadb, err := bolt.Open(*METADB_PATH, 0600, nil)
 	if err != nil {
 		log.WithError(err).Fatal("failed to open metadata db")
 	}
 
-	ippool := models.NewBoltIPPool(metadb)
+	ippool := dal.NewBoltIPPool(metadb)
 
 	ctx := &vmango.Context{
 		Render:   renderer,

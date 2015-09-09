@@ -1,10 +1,11 @@
-package models
+package dal
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"vmango/models"
 )
 
 type VZInfo struct {
@@ -22,20 +23,20 @@ func NewOVZMachinerep() *OVZMachinerep {
 	return &OVZMachinerep{}
 }
 
-func fillOvzVm(vm *VirtualMachine, info *VZInfo) {
+func fillOvzVm(vm *models.VirtualMachine, info *VZInfo) {
 	vm.Name = info.Name
 	vm.Uuid = fmt.Sprintf("%d", info.ID)
 	vm.Cpus = info.Cpus
 	vm.Memory = info.Physpages["limit"]
 	switch info.Status {
 	default:
-		vm.State = STATE_UNKNOWN
+		vm.State = models.STATE_UNKNOWN
 	case "running":
-		vm.State = STATE_RUNNING
+		vm.State = models.STATE_RUNNING
 	}
 }
 
-func (store *OVZMachinerep) List(machines *[]*VirtualMachine) error {
+func (store *OVZMachinerep) List(machines *[]*models.VirtualMachine) error {
 	var out bytes.Buffer
 	cmd := exec.Command("vzlist", "-j", "-a")
 	cmd.Stdout = &out
@@ -48,7 +49,7 @@ func (store *OVZMachinerep) List(machines *[]*VirtualMachine) error {
 	}
 
 	for _, vzinfo := range vzinfos {
-		vm := &VirtualMachine{}
+		vm := &models.VirtualMachine{}
 		fillOvzVm(vm, vzinfo)
 		*machines = append(*machines, vm)
 	}
@@ -56,7 +57,7 @@ func (store *OVZMachinerep) List(machines *[]*VirtualMachine) error {
 
 }
 
-func (store *OVZMachinerep) Get(machine *VirtualMachine) (bool, error) {
+func (store *OVZMachinerep) Get(machine *models.VirtualMachine) (bool, error) {
 	if machine.Name == "" {
 		return false, nil
 	}

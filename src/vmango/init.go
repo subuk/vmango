@@ -5,16 +5,16 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/unrolled/render"
 	"net/http"
-	"vmango/models"
+	"vmango/dal"
 )
 
 type Context struct {
 	Render   *render.Render
-	Machines models.Machinerep
-	Images   models.Imagerep
+	Machines dal.Machinerep
+	Images   dal.Imagerep
 	Logger   *logrus.Logger
 	Meta     *bolt.DB
-	IPPool   models.IPPool
+	IPPool   dal.IPPool
 }
 
 type HandlerFunc func(*Context, http.ResponseWriter, *http.Request) error

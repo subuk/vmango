@@ -1,8 +1,9 @@
-package models
+package dal
 
 import (
 	"fmt"
 	"gopkg.in/alexzorin/libvirt-go.v2"
+	"vmango/models"
 )
 
 type LibvirtMachinerep struct {
@@ -17,7 +18,7 @@ func NewLibvirtMachinerep(uri string) (*LibvirtMachinerep, error) {
 	return &LibvirtMachinerep{conn: conn}, nil
 }
 
-func fillVm(vm *VirtualMachine, domain libvirt.VirDomain) error {
+func fillVm(vm *models.VirtualMachine, domain libvirt.VirDomain) error {
 	name, err := domain.GetName()
 	if err != nil {
 		return err
@@ -33,11 +34,11 @@ func fillVm(vm *VirtualMachine, domain libvirt.VirDomain) error {
 
 	switch info.GetState() {
 	default:
-		vm.State = STATE_UNKNOWN
+		vm.State = models.STATE_UNKNOWN
 	case 1:
-		vm.State = STATE_RUNNING
+		vm.State = models.STATE_RUNNING
 	case 5:
-		vm.State = STATE_STOPPED
+		vm.State = models.STATE_STOPPED
 	}
 
 	vm.Name = name
@@ -47,13 +48,13 @@ func fillVm(vm *VirtualMachine, domain libvirt.VirDomain) error {
 	return nil
 }
 
-func (store *LibvirtMachinerep) List(machines *[]*VirtualMachine) error {
+func (store *LibvirtMachinerep) List(machines *[]*models.VirtualMachine) error {
 	domains, err := store.conn.ListAllDomains(0)
 	if err != nil {
 		return err
 	}
 	for _, domain := range domains {
-		vm := &VirtualMachine{}
+		vm := &models.VirtualMachine{}
 		if err := fillVm(vm, domain); err != nil {
 			return err
 		}
@@ -62,7 +63,7 @@ func (store *LibvirtMachinerep) List(machines *[]*VirtualMachine) error {
 	return nil
 }
 
-func (store *LibvirtMachinerep) Get(machine *VirtualMachine) (bool, error) {
+func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error) {
 	if machine.Name == "" {
 		return false, nil
 	}
