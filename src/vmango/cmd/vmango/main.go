@@ -56,9 +56,9 @@ func main() {
 		},
 	})
 
-	storage, err := models.NewLibvirtStorage("qemu:///system")
+	machines, err := models.NewLibvirtMachinerep("qemu:///system")
 	if err != nil {
-		log.WithError(err).Fatal("failed to initialize libvirt-kvm storage")
+		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
 	}
 
 	imagerep := models.NewLocalfsImagerep(*IMAGES_PATH)
@@ -71,12 +71,12 @@ func main() {
 	ippool := models.NewBoltIPPool(metadb)
 
 	ctx := &vmango.Context{
-		Render:  renderer,
-		Storage: storage,
-		Logger:  log.New(),
-		Meta:    metadb,
-		Images:  imagerep,
-		IPPool:  ippool,
+		Render:   renderer,
+		Machines: machines,
+		Logger:   log.New(),
+		Meta:     metadb,
+		Images:   imagerep,
+		IPPool:   ippool,
 	}
 
 	router.Handle("/", vmango.NewHandler(ctx, handlers.Index)).Name("index")

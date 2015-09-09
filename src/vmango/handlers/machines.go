@@ -10,7 +10,7 @@ import (
 
 func MachineList(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
 	machines := []*models.VirtualMachine{}
-	if err := ctx.Storage.ListMachines(&machines); err != nil {
+	if err := ctx.Machines.List(&machines); err != nil {
 		return err
 	}
 	ctx.Render.HTML(w, http.StatusOK, "machines/list", map[string]interface{}{
@@ -24,7 +24,7 @@ func MachineDetail(ctx *vmango.Context, w http.ResponseWriter, req *http.Request
 	machine := &models.VirtualMachine{
 		Name: mux.Vars(req)["name"],
 	}
-	if exists, err := ctx.Storage.GetMachine(machine); err != nil {
+	if exists, err := ctx.Machines.Get(machine); err != nil {
 		return err
 	} else if !exists {
 		return vmango.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))

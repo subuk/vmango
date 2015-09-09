@@ -9,12 +9,12 @@ import (
 )
 
 type Context struct {
-	Render  *render.Render
-	Storage models.Storage
-	Images  models.Imagerep
-	Logger  *logrus.Logger
-	Meta    *bolt.DB
-	IPPool  models.IPPool
+	Render   *render.Render
+	Machines models.Machinerep
+	Images   models.Imagerep
+	Logger   *logrus.Logger
+	Meta     *bolt.DB
+	IPPool   models.IPPool
 }
 
 type HandlerFunc func(*Context, http.ResponseWriter, *http.Request) error

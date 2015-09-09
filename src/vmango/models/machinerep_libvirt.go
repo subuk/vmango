@@ -5,16 +5,16 @@ import (
 	"gopkg.in/alexzorin/libvirt-go.v2"
 )
 
-type LibvirtStorage struct {
+type LibvirtMachinerep struct {
 	conn libvirt.VirConnection
 }
 
-func NewLibvirtStorage(uri string) (*LibvirtStorage, error) {
+func NewLibvirtMachinerep(uri string) (*LibvirtMachinerep, error) {
 	conn, err := libvirt.NewVirConnection(uri)
 	if err != nil {
 		return nil, err
 	}
-	return &LibvirtStorage{conn: conn}, nil
+	return &LibvirtMachinerep{conn: conn}, nil
 }
 
 func fillVm(vm *VirtualMachine, domain libvirt.VirDomain) error {
@@ -47,7 +47,7 @@ func fillVm(vm *VirtualMachine, domain libvirt.VirDomain) error {
 	return nil
 }
 
-func (store *LibvirtStorage) ListMachines(machines *[]*VirtualMachine) error {
+func (store *LibvirtMachinerep) List(machines *[]*VirtualMachine) error {
 	domains, err := store.conn.ListAllDomains(0)
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func (store *LibvirtStorage) ListMachines(machines *[]*VirtualMachine) error {
 	return nil
 }
 
-func (store *LibvirtStorage) GetMachine(machine *VirtualMachine) (bool, error) {
+func (store *LibvirtMachinerep) Get(machine *VirtualMachine) (bool, error) {
 	if machine.Name == "" {
 		return false, nil
 	}

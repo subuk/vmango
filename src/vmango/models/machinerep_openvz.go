@@ -15,11 +15,11 @@ type VZInfo struct {
 	Physpages map[string]int `json:"physpages"`
 }
 
-type OVZStorage struct {
+type OVZMachinerep struct {
 }
 
-func NewOVZStorage() *OVZStorage {
-	return &OVZStorage{}
+func NewOVZMachinerep() *OVZMachinerep {
+	return &OVZMachinerep{}
 }
 
 func fillOvzVm(vm *VirtualMachine, info *VZInfo) {
@@ -35,7 +35,7 @@ func fillOvzVm(vm *VirtualMachine, info *VZInfo) {
 	}
 }
 
-func (store *OVZStorage) ListMachines(machines *[]*VirtualMachine) error {
+func (store *OVZMachinerep) List(machines *[]*VirtualMachine) error {
 	var out bytes.Buffer
 	cmd := exec.Command("vzlist", "-j", "-a")
 	cmd.Stdout = &out
@@ -56,7 +56,7 @@ func (store *OVZStorage) ListMachines(machines *[]*VirtualMachine) error {
 
 }
 
-func (store *OVZStorage) GetMachine(machine *VirtualMachine) (bool, error) {
+func (store *OVZMachinerep) Get(machine *VirtualMachine) (bool, error) {
 	if machine.Name == "" {
 		return false, nil
 	}

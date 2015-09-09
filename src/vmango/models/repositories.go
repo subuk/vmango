@@ -1,8 +1,8 @@
 package models
 
-type Storage interface {
-	ListMachines(machines *[]*VirtualMachine) error
-	GetMachine(machine *VirtualMachine) (bool, error)
+type Machinerep interface {
+	List(*[]*VirtualMachine) error
+	Get(*VirtualMachine) (bool, error)
 }
 
 type Imagerep interface {
