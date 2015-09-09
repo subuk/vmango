@@ -7,6 +7,10 @@ bin/vmango: $(SOURCES)
 	GOPATH=$(GOPATH) go get vmango
 	GOPATH=$(GOPATH) go build -o bin/vmango vmango/cmd/vmango
 
+bin/vmango-add-ip:
+	GOPATH=$(GOPATH) go get vmango
+	GOPATH=$(GOPATH) go build -o bin/vmango-add-ip vmango/cmd/vmango-add-ip
+
 test:
 	GOPATH=$(GOPATH) go get github.com/stretchr/testify/mock
 	GOPATH=$(GOPATH) go get github.com/stretchr/testify/assert
