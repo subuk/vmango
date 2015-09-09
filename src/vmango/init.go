@@ -10,6 +10,7 @@ import (
 
 type Context struct {
 	Render   *render.Render
+	Plans    dal.Planrep
 	Machines dal.Machinerep
 	Images   dal.Imagerep
 	Logger   *logrus.Logger
