@@ -37,4 +37,6 @@ test-race:
 	GOPATH=$(GOPATH) go test -race vmango
 
 clean:
-	rm -rf bin/ vendor/pkg/ vendor/bin
+	rm -rf bin/ vendor/pkg/ vendor/bin pkg/
+
+all: bin/vmango bin/vmango-add-ip bin/vmango-add-plan
