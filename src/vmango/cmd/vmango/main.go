@@ -22,7 +22,7 @@ var (
 	LISTEN_ADDR   = flag.String("listen", "0.0.0.0:8000", "Listen address")
 	TEMPLATE_PATH = flag.String("template-path", "templates", "Template path")
 	STATIC_PATH   = flag.String("static-path", "static", "Static path")
-	METADB_PATH   = flag.String("metadb-path", "vmango-meta.db", "Metadata database path")
+	METADB_PATH   = flag.String("metadb-path", "vmango.db", "Metadata database path")
 	IMAGES_PATH   = flag.String("images-path", "images", "Machine images repository path")
 )
 
@@ -68,18 +68,22 @@ func main() {
 		log.WithError(err).Fatal("failed to open metadata db")
 	}
 
+	ippool := models.NewBoltIPPool(metadb)
+
 	ctx := &vmango.Context{
 		Render:  renderer,
 		Storage: storage,
 		Logger:  log.New(),
 		Meta:    metadb,
 		Images:  imagerep,
+		IPPool:  ippool,
 	}
 
 	router.Handle("/", vmango.NewHandler(ctx, handlers.Index)).Name("index")
 	router.Handle("/machines", vmango.NewHandler(ctx, handlers.MachineList)).Name("machine-list")
 	router.Handle("/machines/{name:.+}", vmango.NewHandler(ctx, handlers.MachineDetail)).Name("machine-detail")
 	router.Handle("/images", vmango.NewHandler(ctx, handlers.ImageList)).Name("image-list")
+	router.Handle("/ipaddress", vmango.NewHandler(ctx, handlers.IPList)).Name("ip-list")
 
 	router.HandleFunc("/static{name:.*}", handlers.MakeStaticHandler(*STATIC_PATH)).Name("static")
 

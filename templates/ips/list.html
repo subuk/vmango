@@ -1,0 +1,25 @@
+{{template "header" .}}
+<h1>IP Addresses</h1>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Address</th>
+      <th>Netmask</th>
+      <th>Gateway</th>
+      <th>UsedBy</th>
+    </tr>
+  </thead>
+  <tbody>
+
+  {{ range .Ips }}
+    <tr>
+      <td>{{ .Address }}</td>
+      <td>{{ .Netmask }}</td>
+      <td>{{ .Gateway }}</td>
+      <td>{{ .UsedBy }}</td>
+    </tr>
+  {{ end }}
+  </tbody>
+</table>
+{{template "footer" .}}

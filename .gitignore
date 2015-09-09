@@ -3,4 +3,4 @@
 /vendor/pkg/
 /*.sublime-*
 /images/
-/vmango-meta.db
+/*.db

@@ -28,12 +28,19 @@
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
-            <li {{if HasPrefix .Request.URL.Path "/machines" }}class="active"{{end}}>
-              <a href="{{ Url "machine-list" }}">Machines</a>
+            {{ $machinesUrl := Url "machine-list" }}
+            {{ $imagesUrl := Url "image-list" }}
+            {{ $ipsUrl := Url "ip-list" }}
+            <li {{if HasPrefix .Request.URL.Path $machinesUrl }}class="active"{{end}}>
+              <a href="{{ $machinesUrl }}">Machines</a>
             </li>
-            <li {{if HasPrefix .Request.URL.Path "/images" }}class="active"{{end}}>
-              <a href="{{ Url "image-list" }}">Images</a>
+            <li {{if HasPrefix .Request.URL.Path $imagesUrl }}class="active"{{end}}>
+              <a href="{{ $imagesUrl }}">Images</a>
             </li>
+            <li {{if HasPrefix .Request.URL.Path $ipsUrl }}class="active"{{end}}>
+              <a href="{{ $ipsUrl }}">IP Addresses</a>
+            </li>
+
           </ul>
           <ul class="nav navbar-nav navbar-right">
             <li><a href="">Add machine</a></li>
