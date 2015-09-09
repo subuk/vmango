@@ -5,6 +5,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
 	"vmango/dal"
+	"vmango/models"
 )
 
 var (
@@ -34,7 +35,7 @@ func main() {
 
 	pool := dal.NewBoltIPPool(db)
 
-	ip := &dal.IP{
+	ip := &models.IP{
 		Address: *ADDRESS,
 		Gateway: *GW,
 		Netmask: *MASK,

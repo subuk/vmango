@@ -68,6 +68,7 @@ func main() {
 		log.WithError(err).Fatal("failed to open metadata db")
 	}
 
+	planrep := dal.NewBoltPlanrep(metadb)
 	ippool := dal.NewBoltIPPool(metadb)
 
 	ctx := &vmango.Context{
@@ -77,6 +78,7 @@ func main() {
 		Meta:     metadb,
 		Images:   imagerep,
 		IPPool:   ippool,
+		Plans:    planrep,
 	}
 
 	router.Handle("/", vmango.NewHandler(ctx, handlers.Index)).Name("index")
@@ -84,6 +86,7 @@ func main() {
 	router.Handle("/machines/{name:.+}", vmango.NewHandler(ctx, handlers.MachineDetail)).Name("machine-detail")
 	router.Handle("/images", vmango.NewHandler(ctx, handlers.ImageList)).Name("image-list")
 	router.Handle("/ipaddress", vmango.NewHandler(ctx, handlers.IPList)).Name("ip-list")
+	router.Handle("/plans", vmango.NewHandler(ctx, handlers.PlanList)).Name("plan-list")
 
 	router.HandleFunc("/static{name:.*}", handlers.MakeStaticHandler(*STATIC_PATH)).Name("static")
 

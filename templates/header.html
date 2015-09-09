@@ -32,6 +32,7 @@
             {{ $machinesUrl := Url "machine-list" }}
             {{ $imagesUrl := Url "image-list" }}
             {{ $ipsUrl := Url "ip-list" }}
+            {{ $plansUrl := Url "plan-list" }}
             <li {{if HasPrefix .Request.URL.Path $machinesUrl }}class="active"{{end}}>
               <a href="{{ $machinesUrl }}">Machines</a>
             </li>
@@ -40,6 +41,9 @@
             </li>
             <li {{if HasPrefix .Request.URL.Path $ipsUrl }}class="active"{{end}}>
               <a href="{{ $ipsUrl }}">IP Addresses</a>
+            </li>
+            <li {{if HasPrefix .Request.URL.Path $plansUrl }}class="active"{{end}}>
+              <a href="{{ $plansUrl }}">Plans</a>
             </li>
 
           </ul>
