@@ -31,6 +31,9 @@
             <li {{if HasPrefix .Request.URL.Path "/machines" }}class="active"{{end}}>
               <a href="{{ Url "machine-list" }}">Machines</a>
             </li>
+            <li {{if HasPrefix .Request.URL.Path "/images" }}class="active"{{end}}>
+              <a href="{{ Url "image-list" }}">Images</a>
+            </li>
           </ul>
           <ul class="nav navbar-nav navbar-right">
             <li><a href="">Add machine</a></li>

@@ -1,0 +1,27 @@
+{{template "header" .}}
+<h1>Disk images</h1>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Arch</th>
+      <th>Size</th>
+      <th>Type</th>
+      <th>Last updated</th>
+    </tr>
+  </thead>
+  <tbody>
+
+  {{ range .Images }}
+    <tr>
+      <td>{{ .Name }}</td>
+      <td>{{ .ArchString }}</td>
+      <td>{{ .SizeMegabytes }}Mb</td>
+      <td>{{ .TypeString }}</td>
+      <td>{{ HumanizeDate .Date }}</td>
+    </tr>
+  {{ end }}
+  </tbody>
+</table>
+{{template "footer" .}}

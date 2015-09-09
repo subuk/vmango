@@ -2,6 +2,7 @@ package vmango
 
 import (
 	"github.com/Sirupsen/logrus"
+	"github.com/boltdb/bolt"
 	"github.com/unrolled/render"
 	"net/http"
 	"vmango/models"
@@ -10,7 +11,9 @@ import (
 type Context struct {
 	Render  *render.Render
 	Storage models.Storage
+	Images  models.Imagerep
 	Logger  *logrus.Logger
+	Meta    *bolt.DB
 }
 
 type HandlerFunc func(*Context, http.ResponseWriter, *http.Request) error
