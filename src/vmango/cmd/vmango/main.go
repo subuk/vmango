@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	text_template "text/template"
 	"time"
 	"vmango"
 	"vmango/dal"
@@ -24,10 +25,12 @@ var (
 	STATIC_PATH   = flag.String("static-path", "static", "Static path")
 	METADB_PATH   = flag.String("metadb-path", "vmango.db", "Metadata database path")
 	IMAGES_PATH   = flag.String("images-path", "images", "Machine images repository path")
+	VM_TEMPLATE   = flag.String("vm-template", "vm.xml.in", "Virtual machine configuration template")
 )
 
 func main() {
 	flag.Parse()
+	log.SetLevel(log.DebugLevel)
 
 	router := mux.NewRouter()
 
@@ -55,8 +58,11 @@ func main() {
 			},
 		},
 	})
-
-	machines, err := dal.NewLibvirtMachinerep("qemu:///system")
+	vmtpl, err := text_template.ParseFiles(*VM_TEMPLATE)
+	if err != nil {
+		log.WithError(err).WithField("filename", *VM_TEMPLATE).Fatal("failed to parse machine template")
+	}
+	machines, err := dal.NewLibvirtMachinerep("qemu:///system", vmtpl)
 	if err != nil {
 		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
 	}
@@ -73,6 +79,7 @@ func main() {
 
 	ctx := &vmango.Context{
 		Render:   renderer,
+		Router:   router,
 		Machines: machines,
 		Logger:   log.New(),
 		Meta:     metadb,
@@ -83,6 +90,7 @@ func main() {
 
 	router.Handle("/", vmango.NewHandler(ctx, handlers.Index)).Name("index")
 	router.Handle("/machines", vmango.NewHandler(ctx, handlers.MachineList)).Name("machine-list")
+	router.Handle("/machines/add", vmango.NewHandler(ctx, handlers.MachineAddForm)).Name("machine-add")
 	router.Handle("/machines/{name:.+}", vmango.NewHandler(ctx, handlers.MachineDetail)).Name("machine-detail")
 	router.Handle("/images", vmango.NewHandler(ctx, handlers.ImageList)).Name("image-list")
 	router.Handle("/ipaddress", vmango.NewHandler(ctx, handlers.IPList)).Name("ip-list")

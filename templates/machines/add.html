@@ -1,0 +1,46 @@
+{{template "header" .}}
+<form method="post" action="">
+    <div class="row">
+      <div class="col-md-9">
+        <div class="form-group">
+          <label class="control-label" for="name">Name</label>
+          <input name="Name" type="text" class="form-control" id="name">
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-9">
+        <div class="form-group">
+          <label class="control-label" for="name">Size</label>
+          <select name="Plan" class="form-control">
+            {{ range .Plans }}
+              <option value="{{ .Name }}">{{ .Name }} ({{ .Cpus }}xCPU, {{ .MemoryMegabytes }}Mb, {{ .DiskSizeGigabytes }}GB)</option>
+            {{ end }}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-9">
+        <div class="form-group">
+          <label class="control-label" for="name">Image</label>
+          <select name="Image" class="form-control">
+            {{ range .Images }}
+              <option value="{{ .Filename }}">{{ .Name }} {{ .ArchString }}</option>
+            {{ end }}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-9">
+        <div class="form-group">
+          <button class="btn btn-primary btn-block" type="submit">Create machine</button>
+        </div>
+      </div>
+    </div>
+</form>
+{{template "footer" .}}

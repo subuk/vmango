@@ -3,6 +3,7 @@ package vmango
 import (
 	"github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
+	"github.com/gorilla/mux"
 	"github.com/unrolled/render"
 	"net/http"
 	"vmango/dal"
@@ -10,6 +11,7 @@ import (
 
 type Context struct {
 	Render   *render.Render
+	Router   *mux.Router
 	Plans    dal.Planrep
 	Machines dal.Machinerep
 	Images   dal.Imagerep
@@ -47,5 +49,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.ctx.Render.HTML(w, http.StatusForbidden, "403", vars)
 	case *ErrBadRequest:
 		h.ctx.Render.HTML(w, http.StatusBadRequest, "400", vars)
+	case *ErrRedirect:
+		http.Redirect(w, r, err.Error(), http.StatusFound)
 	}
 }

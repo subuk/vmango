@@ -30,10 +30,12 @@
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
             {{ $machinesUrl := Url "machine-list" }}
+            {{ $machineAddUrl :=  Url "machine-add" }}
             {{ $imagesUrl := Url "image-list" }}
             {{ $ipsUrl := Url "ip-list" }}
             {{ $plansUrl := Url "plan-list" }}
-            <li {{if HasPrefix .Request.URL.Path $machinesUrl }}class="active"{{end}}>
+
+            <li {{if and (HasPrefix .Request.URL.Path $machinesUrl) (not (eq .Request.URL.Path $machineAddUrl)) }}class="active"{{end}}>
               <a href="{{ $machinesUrl }}">Machines</a>
             </li>
             <li {{if HasPrefix .Request.URL.Path $imagesUrl }}class="active"{{end}}>
@@ -45,10 +47,9 @@
             <li {{if HasPrefix .Request.URL.Path $plansUrl }}class="active"{{end}}>
               <a href="{{ $plansUrl }}">Plans</a>
             </li>
-
           </ul>
           <ul class="nav navbar-nav navbar-right">
-            <li><a href="">Add machine</a></li>
+            <li {{if HasPrefix .Request.URL.Path $machineAddUrl }}class="active"{{end}}><a href="{{ $machineAddUrl }}">Add machine</a></li>
           </ul>
         </div><!--/.nav-collapse -->
       </div>

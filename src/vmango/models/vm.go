@@ -11,11 +11,12 @@ const (
 )
 
 type VirtualMachine struct {
-	Name   string
-	State  int
-	Uuid   string
-	Memory int
-	Cpus   int
+	Name      string `json:"name"`
+	State     int    `json:"-"`
+	Uuid      string `json:"-"`
+	Memory    int    `json:"memory"`
+	Cpus      int    `json:"cpus"`
+	ImageName string `json:"image_name"`
 }
 
 func (v *VirtualMachine) StateName() string {

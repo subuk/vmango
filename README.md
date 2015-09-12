@@ -22,7 +22,6 @@ Compile
 
 Create test ip addresses and plans
 
-    ./bin/vmango-add-plan --name=5 --memory=512 --disk=20 
     ./bin/vmango-add-plan --name=5 --memory=512 --disk=20 --cpus=1
     ./bin/vmango-add-plan --name=10 --memory=1024 --disk=30 --cpus=1
     ./bin/vmango-add-plan --name=20 --memory=2048 --disk=40 --cpus=2

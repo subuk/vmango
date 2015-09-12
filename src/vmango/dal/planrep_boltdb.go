@@ -50,6 +50,22 @@ func (pool *BoltPlanrep) Add(plan *models.Plan) error {
 	})
 }
 
-func (pool *BoltPlanrep) Get(*models.Plan) (bool, error) {
-	return false, fmt.Errorf("not implemented")
+func (pool *BoltPlanrep) Get(plan *models.Plan) (bool, error) {
+	exists := false
+	err := pool.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(pool.bucket)
+		if bucket == nil {
+			return fmt.Errorf(`bucket "%s" not found`, string(pool.bucket))
+		}
+		data := bucket.Get([]byte(plan.Name))
+		if len(data) <= 0 {
+			return nil
+		}
+		exists = true
+		if err := json.Unmarshal(data, plan); err != nil {
+			return err
+		}
+		return nil
+	})
+	return exists, err
 }

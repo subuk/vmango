@@ -1,21 +1,25 @@
 package dal
 
 import (
+	"bytes"
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alexzorin/libvirt-go.v2"
+	"text/template"
 	"vmango/models"
 )
 
 type LibvirtMachinerep struct {
-	conn libvirt.VirConnection
+	conn  libvirt.VirConnection
+	vmtpl *template.Template
 }
 
-func NewLibvirtMachinerep(uri string) (*LibvirtMachinerep, error) {
+func NewLibvirtMachinerep(uri string, tpl *template.Template) (*LibvirtMachinerep, error) {
 	conn, err := libvirt.NewVirConnection(uri)
 	if err != nil {
 		return nil, err
 	}
-	return &LibvirtMachinerep{conn: conn}, nil
+	return &LibvirtMachinerep{conn: conn, vmtpl: tpl}, nil
 }
 
 func fillVm(vm *models.VirtualMachine, domain libvirt.VirDomain) error {
@@ -78,4 +82,23 @@ func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error
 	}
 	fillVm(machine, domain)
 	return true, nil
+}
+
+func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *models.Image, plan *models.Plan) error {
+	var machineXml bytes.Buffer
+	vmtplContext := struct {
+		Machine *models.VirtualMachine
+		Image   *models.Image
+		Plan    *models.Plan
+	}{machine, image, plan}
+	if err := store.vmtpl.Execute(&machineXml, vmtplContext); err != nil {
+		return err
+	}
+	log.WithField("xml", machineXml.String()).Debug("defining domain from xml")
+	domain, err := store.conn.DomainDefineXML(machineXml.String())
+	if err != nil {
+		return err
+	}
+	fillVm(machine, domain)
+	return nil
 }

@@ -13,11 +13,12 @@ const (
 )
 
 type Image struct {
-	Name string
-	Arch int
-	Size int64
-	Type int
-	Date time.Time
+	Name     string
+	Arch     int
+	Size     int64
+	Type     int
+	Date     time.Time
+	Filename string
 }
 
 func (image *Image) String() string {
@@ -36,6 +37,17 @@ func (image *Image) ArchString() string {
 		return "amd64"
 	case IMAGE_ARCH_X86:
 		return "i386"
+	}
+}
+
+func (image *Image) ArchString2() string {
+	switch image.Arch {
+	default:
+		return "unknown"
+	case IMAGE_ARCH_X86_64:
+		return "x86_64"
+	case IMAGE_ARCH_X86:
+		return "x86"
 	}
 }
 

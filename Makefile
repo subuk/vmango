@@ -4,7 +4,7 @@ SOURCES = $(shell find src/ -name *.go)
 
 
 bin/vmango: $(SOURCES)
-	GOPATH=$(GOPATH) go get vmango
+	GOPATH=$(GOPATH) go get vmango/...
 	GOPATH=$(GOPATH) go build -o bin/vmango vmango/cmd/vmango
 
 bin/vmango-add-ip: src/vmango/cmd/vmango-add-ip/*.go

@@ -1,0 +1,34 @@
+<domain type='kvm'>
+  <name>{{ .Machine.Name }}</name>
+  <currentMemory unit="b">{{ .Plan.Memory }}</currentMemory>
+  <memory unit="b">{{ .Plan.Memory }}</memory>
+  <os>
+    <type arch='{{ .Image.ArchString2 }}'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+    <pae/>
+  </features>
+  <clock offset="utc"/>
+
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>restart</on_crash>
+
+  <vcpu>{{ .Plan.Cpus }}</vcpu>
+
+  <devices>
+    <emulator>/usr/bin/kvm-spice</emulator>
+
+    <input type='tablet' bus='usb'/>
+    <graphics type='vnc' port='-1'/>
+    <console type='pty'/>
+    <sound model='ac97'/>
+    <video>
+      <model type='cirrus'/>
+    </video>
+
+  </devices>
+</domain>
