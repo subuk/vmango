@@ -23,6 +23,11 @@ func fillLocalfsImage(image *models.Image, fileinfo os.FileInfo) bool {
 	// ubuntu-14.04_x86_64_raw.img -> name: ubuntu-14.04, arch: x86_64, type: raw.img
 	imginfo := strings.SplitN(fileinfo.Name(), "_", 3)
 
+	if len(imginfo) != 3 {
+		log.WithField("image", fileinfo.Name()).Info("skipping image with invalid name")
+		return false
+	}
+
 	image.Name = imginfo[0]
 	image.Size = fileinfo.Size()
 	image.Date = fileinfo.ModTime()
