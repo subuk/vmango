@@ -20,8 +20,10 @@ Compile
 
     make all
 
-Create test ip addresses and plans
-
+Create test ip addresses, images and plans
+    
+    mkdir images
+    touch images/{Centos-7.1_amd64_raw.img,Centos-7.1_i386_raw.img,Ubuntu-14.04_amd64_raw.img}
     ./bin/vmango-add-plan --name=5 --memory=512 --disk=20 --cpus=1
     ./bin/vmango-add-plan --name=10 --memory=1024 --disk=30 --cpus=1
     ./bin/vmango-add-plan --name=20 --memory=2048 --disk=40 --cpus=2
