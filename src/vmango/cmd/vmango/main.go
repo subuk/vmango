@@ -32,7 +32,7 @@ func main() {
 	flag.Parse()
 	log.SetLevel(log.DebugLevel)
 
-	router := mux.NewRouter()
+	router := mux.NewRouter().StrictSlash(true)
 
 	renderer := render.New(render.Options{
 		Extensions:    []string{".html"},
@@ -89,12 +89,12 @@ func main() {
 	}
 
 	router.Handle("/", vmango.NewHandler(ctx, handlers.Index)).Name("index")
-	router.Handle("/machines", vmango.NewHandler(ctx, handlers.MachineList)).Name("machine-list")
+	router.Handle("/machines/", vmango.NewHandler(ctx, handlers.MachineList)).Name("machine-list")
 	router.Handle("/machines/add", vmango.NewHandler(ctx, handlers.MachineAddForm)).Name("machine-add")
-	router.Handle("/machines/{name:.+}", vmango.NewHandler(ctx, handlers.MachineDetail)).Name("machine-detail")
-	router.Handle("/images", vmango.NewHandler(ctx, handlers.ImageList)).Name("image-list")
-	router.Handle("/ipaddress", vmango.NewHandler(ctx, handlers.IPList)).Name("ip-list")
-	router.Handle("/plans", vmango.NewHandler(ctx, handlers.PlanList)).Name("plan-list")
+	router.Handle("/machines/{name:.+}/", vmango.NewHandler(ctx, handlers.MachineDetail)).Name("machine-detail")
+	router.Handle("/images/", vmango.NewHandler(ctx, handlers.ImageList)).Name("image-list")
+	router.Handle("/ipaddress/", vmango.NewHandler(ctx, handlers.IPList)).Name("ip-list")
+	router.Handle("/plans/", vmango.NewHandler(ctx, handlers.PlanList)).Name("plan-list")
 
 	router.HandleFunc("/static{name:.*}", handlers.MakeStaticHandler(*STATIC_PATH)).Name("static")
 
