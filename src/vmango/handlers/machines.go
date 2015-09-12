@@ -83,8 +83,8 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 		if err != nil {
 			panic(err)
 		}
-		if 1 == 2 {
-			panic(vm)
+		if err := ctx.Machines.Start(vm); err != nil {
+			return fmt.Errorf("failed to start machine: %s", err)
 		}
 		return vmango.Redirect(url.Path)
 	} else {

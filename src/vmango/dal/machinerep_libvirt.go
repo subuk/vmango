@@ -102,3 +102,11 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	fillVm(machine, domain)
 	return nil
 }
+
+func (store *LibvirtMachinerep) Start(machine *models.VirtualMachine) error {
+	domain, err := store.conn.LookupDomainByName(machine.Name)
+	if err != nil {
+		return err
+	}
+	return domain.Create()
+}
