@@ -1,7 +1,10 @@
 {{template "header" .}}
 
-<ul>
-    <li><a href="/machines">Machines {{.Request.URL.Path}}</a></li>
-</ul>
+<div class="jumbotron">
+  <h1>Vmango</h1>
+  <p>virtual machines management web interface written using <a href="http://golang.org/">Go</a></p>
+  <br/>
+  <p><strong>{{ .ActiveMachinesCount }}</strong> machines running now</p>
+</div>
 
 {{template "footer" .}}
