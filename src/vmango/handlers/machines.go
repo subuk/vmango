@@ -11,7 +11,7 @@ import (
 
 func MachineList(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
 	machines := []*models.VirtualMachine{}
-	if err := ctx.Machines.List(&machines); err != nil {
+	if err, _ := ctx.Machines.List(&machines); err != nil {
 		return err
 	}
 	ctx.Render.HTML(w, http.StatusOK, "machines/list", map[string]interface{}{
