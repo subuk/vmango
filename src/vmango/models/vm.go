@@ -37,13 +37,19 @@ func (vms *VirtualMachineList) Add(vm *VirtualMachine) {
 	vms.machines = append(vms.machines, vm)
 }
 
+type VirtualMachineDisk struct {
+	Size   uint64 `json:"size"`
+	Driver string `json:"driver"`
+}
+
 type VirtualMachine struct {
-	Name      string `json:"name"`
-	State     int    `json:"-"`
-	Uuid      string `json:"-"`
-	Memory    int    `json:"memory"`
-	Cpus      int    `json:"cpus"`
-	ImageName string `json:"image_name"`
+	Name      string              `json:"name"`
+	State     int                 `json:"-"`
+	Uuid      string              `json:"-"`
+	Memory    int                 `json:"memory"`
+	Cpus      int                 `json:"cpus"`
+	ImageName string              `json:"image_name"`
+	Disk      *VirtualMachineDisk `json:"disk"`
 }
 
 func (v *VirtualMachine) StateName() string {

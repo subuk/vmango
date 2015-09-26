@@ -21,7 +21,11 @@
 
   <devices>
     <emulator>/usr/bin/kvm-spice</emulator>
-
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='none'/>
+      <source file='{{ .VolumePath }}'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
     <input type='tablet' bus='usb'/>
     <graphics type='vnc' port='-1'/>
     <console type='pty'/>

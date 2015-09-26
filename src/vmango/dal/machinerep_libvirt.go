@@ -2,6 +2,7 @@ package dal
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alexzorin/libvirt-go.v2"
@@ -14,6 +15,33 @@ type LibvirtMachinerep struct {
 	vmtpl *template.Template
 }
 
+type diskSourceXMLConfig struct {
+	File string `xml:"file,attr"`
+}
+
+type diskTargetXMLConfig struct {
+	Device string `xml:"dev,attr"`
+	Bus    string `xml:"bus,attr"`
+}
+
+type diskDriverXMLConfig struct {
+	Name  string `xml:"name,attr"`
+	Type  string `xml:"type,attr"`
+	Cache string `xml:"cache,attr"`
+}
+
+type diskXMLConfig struct {
+	Driver diskDriverXMLConfig `xml:"driver"`
+	Target diskTargetXMLConfig `xml:"target"`
+	Source diskSourceXMLConfig `xml:"source"`
+}
+
+type domainXMLConfig struct {
+	XMLName xml.Name        `xml:"domain"`
+	Name    string          `xml:"name"`
+	Disks   []diskXMLConfig `xml:"devices>disk"`
+}
+
 func NewLibvirtMachinerep(uri string, tpl *template.Template) (*LibvirtMachinerep, error) {
 	conn, err := libvirt.NewVirConnection(uri)
 	if err != nil {
@@ -22,7 +50,7 @@ func NewLibvirtMachinerep(uri string, tpl *template.Template) (*LibvirtMachinere
 	return &LibvirtMachinerep{conn: conn, vmtpl: tpl}, nil
 }
 
-func fillVm(vm *models.VirtualMachine, domain libvirt.VirDomain) error {
+func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain libvirt.VirDomain) error {
 	name, err := domain.GetName()
 	if err != nil {
 		return err
@@ -36,6 +64,18 @@ func fillVm(vm *models.VirtualMachine, domain libvirt.VirDomain) error {
 		return err
 	}
 
+	xmlString, err := domain.GetXMLDesc(0)
+	if err != nil {
+		return err
+	}
+
+	domainConfig := domainXMLConfig{}
+	if err := xml.Unmarshal([]byte(xmlString), &domainConfig); err != nil {
+		return fmt.Errorf("failed to parse domain xml:", err)
+	}
+
+	log.WithField("name", name).WithField("domain", domainConfig).Debug("domain xml fetched")
+
 	switch info.GetState() {
 	default:
 		vm.State = models.STATE_UNKNOWN
@@ -43,6 +83,22 @@ func fillVm(vm *models.VirtualMachine, domain libvirt.VirDomain) error {
 		vm.State = models.STATE_RUNNING
 	case 5:
 		vm.State = models.STATE_STOPPED
+	}
+
+	if len(domainConfig.Disks) > 0 {
+		volume, err := store.conn.LookupStorageVolByPath(domainConfig.Disks[0].Source.File)
+		if err != nil {
+			return err
+		}
+		volumeInfo, err := volume.GetInfo()
+		if err != nil {
+			return err
+		}
+		vm.Disk = &models.VirtualMachineDisk{}
+		vm.Disk.Driver = domainConfig.Disks[0].Driver.Name
+		vm.Disk.Size = volumeInfo.GetCapacityInBytes()
+	} else {
+		vm.Disk = nil
 	}
 
 	vm.Name = name
@@ -59,7 +115,7 @@ func (store *LibvirtMachinerep) List(machines *models.VirtualMachineList) error 
 	}
 	for _, domain := range domains {
 		vm := &models.VirtualMachine{}
-		if err := fillVm(vm, domain); err != nil {
+		if err := store.fillVm(vm, domain); err != nil {
 			return err
 		}
 		machines.Add(vm)
@@ -80,17 +136,44 @@ func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error
 		}
 		return false, virErr
 	}
-	fillVm(machine, domain)
+	store.fillVm(machine, domain)
 	return true, nil
 }
 
 func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *models.Image, plan *models.Plan) error {
+
+	storagePool, err := store.conn.LookupStoragePoolByName("default")
+	if err != nil {
+		return fmt.Errorf("failed to lookup storage pool: %s", err)
+	}
+
+	volumeXML := fmt.Sprintf(`
+	<volume>
+	  <name>%s_disk.qcow2</name>
+	  <allocation>0</allocation>
+	  <capacity unit="G">2</capacity>
+	  <target>
+	  	<format type='qcow2'/>
+	  </target>
+	</volume>
+	`, machine.Name)
+
+	volume, err := storagePool.StorageVolCreateXML(volumeXML, libvirt.VIR_STORAGE_VOL_CREATE_PREALLOC_METADATA)
+	if err != nil {
+		return fmt.Errorf("failed to create storage volume: %s", err)
+	}
+	volumePath, err := volume.GetPath()
+	if err != nil {
+		return fmt.Errorf("failed to get volume path: %s", err)
+	}
+
 	var machineXml bytes.Buffer
 	vmtplContext := struct {
-		Machine *models.VirtualMachine
-		Image   *models.Image
-		Plan    *models.Plan
-	}{machine, image, plan}
+		Machine    *models.VirtualMachine
+		Image      *models.Image
+		Plan       *models.Plan
+		VolumePath string
+	}{machine, image, plan, volumePath}
 	if err := store.vmtpl.Execute(&machineXml, vmtplContext); err != nil {
 		return err
 	}
@@ -99,7 +182,7 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	if err != nil {
 		return err
 	}
-	fillVm(machine, domain)
+	store.fillVm(machine, domain)
 	return nil
 }
 
