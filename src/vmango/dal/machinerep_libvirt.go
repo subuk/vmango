@@ -52,23 +52,19 @@ func fillVm(vm *models.VirtualMachine, domain libvirt.VirDomain) error {
 	return nil
 }
 
-func (store *LibvirtMachinerep) List(machines *[]*models.VirtualMachine) (error, int) {
-	activeMachinesCount := 0;
+func (store *LibvirtMachinerep) List(machines *models.VirtualMachineList) error {
 	domains, err := store.conn.ListAllDomains(0)
 	if err != nil {
-		return err, 0
+		return err
 	}
 	for _, domain := range domains {
 		vm := &models.VirtualMachine{}
 		if err := fillVm(vm, domain); err != nil {
-			return err, 0
+			return err
 		}
-		if vm.State == models.STATE_RUNNING {
-			activeMachinesCount++;
-		}
-		*machines = append(*machines, vm)
+		machines.Add(vm)
 	}
-	return nil, activeMachinesCount
+	return nil
 }
 
 func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error) {

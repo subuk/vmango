@@ -12,7 +12,7 @@
   </thead>
   <tbody>
 
-  {{ range .Machines }}
+  {{ range .Machines.All }}
     <tr>
       <td><a href="{{ Url "machine-detail" "name" .Name }}">{{ .Name }}</a></td>
       <td>{{ .StateName }}</td>

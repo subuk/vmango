@@ -5,7 +5,7 @@ import (
 )
 
 type Machinerep interface {
-	List(*[]*models.VirtualMachine) (error, int)
+	List(*models.VirtualMachineList) error
 	Get(*models.VirtualMachine) (bool, error)
 	Create(*models.VirtualMachine, *models.Image, *models.Plan) error
 	Start(*models.VirtualMachine) error

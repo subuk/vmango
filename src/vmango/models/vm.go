@@ -10,6 +10,33 @@ const (
 	STATE_UNKNOWN = iota
 )
 
+type VirtualMachineList struct {
+	machines []*VirtualMachine
+}
+
+func (vms *VirtualMachineList) Active() *VirtualMachineList {
+	filtered := []*VirtualMachine{}
+	for _, vm := range vms.machines {
+		if vm.State == STATE_RUNNING {
+			filtered = append(filtered, vm)
+		}
+	}
+	vms.machines = filtered
+	return vms
+}
+
+func (vms *VirtualMachineList) Count() int {
+	return len(vms.machines)
+}
+
+func (vms *VirtualMachineList) All() []*VirtualMachine {
+	return vms.machines
+}
+
+func (vms *VirtualMachineList) Add(vm *VirtualMachine) {
+	vms.machines = append(vms.machines, vm)
+}
+
 type VirtualMachine struct {
 	Name      string `json:"name"`
 	State     int    `json:"-"`

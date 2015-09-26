@@ -36,7 +36,7 @@ func fillOvzVm(vm *models.VirtualMachine, info *VZInfo) {
 	}
 }
 
-func (store *OVZMachinerep) List(machines *[]*models.VirtualMachine) error {
+func (store *OVZMachinerep) List(machines *models.VirtualMachineList) error {
 	var out bytes.Buffer
 	cmd := exec.Command("vzlist", "-j", "-a")
 	cmd.Stdout = &out
@@ -51,7 +51,7 @@ func (store *OVZMachinerep) List(machines *[]*models.VirtualMachine) error {
 	for _, vzinfo := range vzinfos {
 		vm := &models.VirtualMachine{}
 		fillOvzVm(vm, vzinfo)
-		*machines = append(*machines, vm)
+		machines.Add(vm)
 	}
 	return nil
 
