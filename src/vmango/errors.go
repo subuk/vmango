@@ -31,11 +31,3 @@ type ErrBadRequest struct {
 func BadRequest(msg string) *ErrBadRequest {
 	return &ErrBadRequest{&HandlerError{msg}}
 }
-
-type ErrRedirect struct {
-	*HandlerError
-}
-
-func Redirect(url string) *ErrRedirect {
-	return &ErrRedirect{&HandlerError{url}}
-}

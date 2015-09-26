@@ -49,7 +49,5 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.ctx.Render.HTML(w, http.StatusForbidden, "403", vars)
 	case *ErrBadRequest:
 		h.ctx.Render.HTML(w, http.StatusBadRequest, "400", vars)
-	case *ErrRedirect:
-		http.Redirect(w, r, err.Error(), http.StatusFound)
 	}
 }

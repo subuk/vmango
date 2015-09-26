@@ -75,6 +75,12 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 			ImageName: image.Filename,
 		}
 
+		if exists, err := ctx.Machines.Get(vm); err != nil {
+			return err
+		} else if exists {
+			return vmango.BadRequest(fmt.Sprintf("machine with name '%s' already exists", vm.Name))
+		}
+
 		if err := ctx.Machines.Create(vm, image, plan); err != nil {
 			return fmt.Errorf("failed to create machine: %s", err)
 		}
@@ -86,7 +92,7 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 		if err := ctx.Machines.Start(vm); err != nil {
 			return fmt.Errorf("failed to start machine: %s", err)
 		}
-		return vmango.Redirect(url.Path)
+		http.Redirect(w, req, url.Path, http.StatusFound)
 	} else {
 		plans := []*models.Plan{}
 		if err := ctx.Plans.List(&plans); err != nil {
