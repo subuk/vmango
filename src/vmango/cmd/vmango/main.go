@@ -30,7 +30,7 @@ var (
 
 func main() {
 	flag.Parse()
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.InfoLevel)
 
 	router := mux.NewRouter().StrictSlash(true)
 
