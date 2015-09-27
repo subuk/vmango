@@ -11,16 +11,21 @@ import (
 	"github.com/unrolled/render"
 	"html/template"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	text_template "text/template"
 	"time"
 	"vmango"
+	"vmango/cloudmeta"
 	"vmango/dal"
 	"vmango/handlers"
 )
 
 var (
 	LISTEN_ADDR   = flag.String("listen", "0.0.0.0:8000", "Listen address")
+	META_ADDR     = flag.String("meta-listen", "192.168.122.1:8001", "Metadata server addr")
 	TEMPLATE_PATH = flag.String("template-path", "templates", "Template path")
 	STATIC_PATH   = flag.String("static-path", "static", "Static path")
 	METADB_PATH   = flag.String("metadb-path", "vmango.db", "Metadata database path")
@@ -102,6 +107,28 @@ func main() {
 	n.Use(negronilogrus.NewMiddleware())
 	n.Use(negroni.NewRecovery())
 	n.UseHandler(router)
+
+	metaserv := cloudmeta.New()
+
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, os.Interrupt)
+	signal.Notify(s, syscall.SIGTERM)
+	go func() {
+		sig := <-s
+		fmt.Println(sig, "received")
+		signal.Reset(os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
+		close(s)
+		if err := metaserv.CleanupIPTables(*META_ADDR); err != nil {
+			log.WithError(err).Warn("cannot remove metaserver iptables rules")
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}()
+
+	go func() {
+		log.WithField("address", *META_ADDR).Info("starting cloud metadata server")
+		log.Fatal(metaserv.ListenAndServe(*META_ADDR))
+	}()
 
 	log.WithField("address", *LISTEN_ADDR).Info("starting server")
 	log.Fatal(http.ListenAndServe(*LISTEN_ADDR, n))
