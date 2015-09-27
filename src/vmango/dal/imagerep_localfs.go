@@ -48,6 +48,8 @@ func (repo *LocalfsImagerep) fillLocalfsImage(image *models.Image, fileinfo os.F
 		return false
 	case "raw.img":
 		image.Type = models.IMAGE_FMT_RAW
+	case "qcow2.img":
+		image.Type = models.IMAGE_FMT_QCOW2
 	}
 	return true
 }

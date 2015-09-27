@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	IMAGE_FMT_RAW = iota
+	IMAGE_FMT_RAW   = iota
+	IMAGE_FMT_QCOW2 = iota
 )
 const (
 	IMAGE_ARCH_X86_64 = iota
@@ -63,5 +64,7 @@ func (image *Image) TypeString() string {
 		return "unknown"
 	case IMAGE_FMT_RAW:
 		return "raw"
+	case IMAGE_FMT_QCOW2:
+		return "qcow2"
 	}
 }
