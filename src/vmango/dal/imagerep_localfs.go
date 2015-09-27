@@ -18,7 +18,7 @@ func NewLocalfsImagerep(root string) *LocalfsImagerep {
 	return &LocalfsImagerep{Root: root}
 }
 
-func fillLocalfsImage(image *models.Image, fileinfo os.FileInfo) bool {
+func (repo *LocalfsImagerep) fillLocalfsImage(image *models.Image, fileinfo os.FileInfo) bool {
 
 	// ubuntu-14.04_x86_64_raw.img -> name: ubuntu-14.04, arch: x86_64, type: raw.img
 	imginfo := strings.SplitN(fileinfo.Name(), "_", 3)
@@ -32,7 +32,7 @@ func fillLocalfsImage(image *models.Image, fileinfo os.FileInfo) bool {
 	image.Size = fileinfo.Size()
 	image.Date = fileinfo.ModTime()
 	image.Filename = fileinfo.Name()
-
+	image.FullPath = filepath.Join(repo.Root, fileinfo.Name())
 	switch imginfo[1] {
 	default:
 		log.WithField("filename", fileinfo.Name()).WithField("parts", imginfo).Info("skipping unknown image architecture")
@@ -62,7 +62,7 @@ func (repo *LocalfsImagerep) List(images *[]*models.Image) error {
 			continue
 		}
 		image := &models.Image{}
-		if !fillLocalfsImage(image, fileinfo) {
+		if !repo.fillLocalfsImage(image, fileinfo) {
 			continue
 		}
 		*images = append(*images, image)
@@ -83,7 +83,7 @@ func (repo *LocalfsImagerep) Get(image *models.Image) (bool, error) {
 		return false, err
 	}
 
-	if !fillLocalfsImage(image, fileinfo) {
+	if !repo.fillLocalfsImage(image, fileinfo) {
 		return true, fmt.Errorf("invalid image")
 	}
 

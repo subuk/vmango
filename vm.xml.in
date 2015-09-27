@@ -22,7 +22,7 @@
   <devices>
     <emulator>/usr/bin/kvm-spice</emulator>
     <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2' cache='none'/>
+      <driver name='qemu' type='{{ .Image.TypeString }}' cache='none'/>
       <source file='{{ .VolumePath }}'/>
       <target dev='vda' bus='virtio'/>
     </disk>

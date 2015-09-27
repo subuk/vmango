@@ -1,6 +1,7 @@
 package models
 
 import (
+	"os"
 	"time"
 )
 
@@ -19,10 +20,15 @@ type Image struct {
 	Type     int
 	Date     time.Time
 	Filename string
+	FullPath string
 }
 
 func (image *Image) String() string {
 	return image.Name
+}
+
+func (image *Image) Stream() (*os.File, error) {
+	return os.Open(image.FullPath)
 }
 
 func (image *Image) SizeMegabytes() int {

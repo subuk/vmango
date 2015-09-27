@@ -6,6 +6,7 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alexzorin/libvirt-go.v2"
+	"io"
 	"text/template"
 	"vmango/models"
 )
@@ -150,21 +151,37 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	volumeXML := fmt.Sprintf(`
 	<volume>
 	  <name>%s_disk.qcow2</name>
-	  <allocation>0</allocation>
-	  <capacity unit="G">2</capacity>
-	  <target>
-	  	<format type='qcow2'/>
-	  </target>
+	  <capacity unit="b">1</capacity>
 	</volume>
 	`, machine.Name)
 
-	volume, err := storagePool.StorageVolCreateXML(volumeXML, libvirt.VIR_STORAGE_VOL_CREATE_PREALLOC_METADATA)
+	volume, err := storagePool.StorageVolCreateXML(volumeXML, 0)
 	if err != nil {
 		return fmt.Errorf("failed to create storage volume: %s", err)
 	}
 	volumePath, err := volume.GetPath()
 	if err != nil {
 		return fmt.Errorf("failed to get volume path: %s", err)
+	}
+
+	imageStream, err := image.Stream()
+	if err != nil {
+		return fmt.Errorf("failed to open image file: %s", err)
+	}
+	defer imageStream.Close()
+
+	virStream, err := libvirt.NewVirStream(&store.conn, 0)
+	if _, err := io.Copy(virStream, imageStream); err != nil {
+		return err
+	}
+
+	if err != nil {
+		return err
+	}
+	defer virStream.Close()
+
+	if err := volume.Upload(virStream, 0, 0, 0); err != nil {
+		return fmt.Errorf("failed to write image template: %s", err)
 	}
 
 	var machineXml bytes.Buffer
