@@ -26,6 +26,10 @@
       <source file='{{ .VolumePath }}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
+    <interface type='network'>
+      <source network='default'/>
+      <model type='virtio'/>
+    </interface>
     <input type='tablet' bus='usb'/>
     <graphics type='vnc' port='-1'/>
     <console type='pty'/>
