@@ -1,46 +1,48 @@
 {{template "header" .}}
-<form method="post" action="">
-    <div class="row">
-      <div class="col-md-9">
-        <div class="form-group">
-          <label class="control-label" for="name">Name</label>
-          <input name="Name" type="text" class="form-control" id="name">
-        </div>
+<form method="post" class="valid-form">
+  <div class="row">
+    <div class="col-md-9">
+      <div class="form-group valid-form__field-group">
+        <label for="name">Name</label>
+        <input id="name" name="Name" type="text" placeholder="Input virtual machine name" class="form-control valid-form__field-input valid-form__field-input_common">
+        <p class="help-block valid-form__field-error"></p>
       </div>
     </div>
+  </div>
 
-    <div class="row">
-      <div class="col-md-9">
-        <div class="form-group">
-          <label class="control-label" for="name">Size</label>
-          <select name="Plan" class="form-control">
-            {{ range .Plans }}
-              <option value="{{ .Name }}">{{ .Name }} ({{ .Cpus }}xCPU, {{ .MemoryMegabytes }}Mb, {{ .DiskSizeGigabytes }}GB)</option>
-            {{ end }}
-          </select>
-        </div>
+  <div class="row">
+    <div class="col-md-9">
+      <div class="form-group">
+        <label for="plan">Size</label>
+        <select id="plan" name="Plan" class="form-control">
+        {{ range .Plans }}
+          <option value="{{ .Name }}">{{ .Name }} ({{ .Cpus }}xCPU, {{ .MemoryMegabytes }}Mb, {{ .DiskSizeGigabytes }}GB)</option>
+        {{ end }}
+        </select>
       </div>
     </div>
+  </div>
 
-    <div class="row">
-      <div class="col-md-9">
-        <div class="form-group">
-          <label class="control-label" for="name">Image</label>
-          <select name="Image" class="form-control">
-            {{ range .Images }}
-              <option value="{{ .Filename }}">{{ .Name }} {{ .ArchString }}</option>
-            {{ end }}
-          </select>
-        </div>
+  <div class="row">
+    <div class="col-md-9">
+      <div class="form-group">
+        <label class="control-label" for="image">Image</label>
+        <select id="image" name="Image" class="form-control">
+        {{ range .Images }}
+          <option value="{{ .Filename }}">{{ .Name }} {{ .ArchString }}</option>
+        {{ end }}
+        </select>
       </div>
     </div>
+  </div>
 
-    <div class="row">
-      <div class="col-md-9">
-        <div class="form-group">
-          <button class="btn btn-primary btn-block" type="submit">Create machine</button>
-        </div>
+  <div class="row">
+    <div class="col-md-9">
+      <div class="form-group">
+          <button class="btn btn-primary btn-block valid-form__submit" type="submit">Create machine</button>
       </div>
     </div>
+  </div>
+
 </form>
 {{template "footer" .}}
