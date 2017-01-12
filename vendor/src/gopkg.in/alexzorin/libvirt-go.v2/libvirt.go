@@ -1,72 +1,75 @@
 package libvirt
 
 import (
+	"encoding/base64"
 	"io/ioutil"
 	"reflect"
+	"sync"
 	"unsafe"
 )
 
 /*
-#cgo LDFLAGS: -lvirt -ldl
+#cgo LDFLAGS: -lvirt
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
 #include <stdlib.h>
-
-void virErrorFuncDummy(void *userData, virErrorPtr error);
-
-int domainEventLifecycleCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                     int event, int detail, void* data);
-
-int domainEventGenericCallback_cgo(virConnectPtr c, virDomainPtr d, void* data);
-
-int domainEventRTCChangeCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                     long long utcoffset, void* data);
-
-int domainEventWatchdogCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                    int action, void* data);
-
-int domainEventIOErrorCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                   const char *srcPath, const char *devAlias,
-                                   int action, void* data);
-
-int domainEventGraphicsCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                    int phase, const virDomainEventGraphicsAddress *local,
-                                    const virDomainEventGraphicsAddress *remote,
-                                    const char *authScheme,
-                                    const virDomainEventGraphicsSubject *subject, void* data);
-
-int domainEventIOErrorReasonCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                         const char *srcPath, const char *devAlias,
-                                         int action, const char *reason, void* data);
-
-int domainEventBlockJobCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                    const char *disk, int type, int status, void* data);
-
-int domainEventDiskChangeCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                      const char *oldSrcPath, const char *newSrcPath,
-                                      const char *devAlias, int reason, void* data);
-
-int domainEventTrayChangeCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                      const char *devAlias, int reason, void* data);
-
-int domainEventReasonCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                  int reason, void* data);
-
-int domainEventBalloonChangeCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                         unsigned long long actual, void* data);
-
-int domainEventDeviceRemovedCallback_cgo(virConnectPtr c, virDomainPtr d,
-                                         const char *devAlias, void* data);
+#include "go_libvirt.h"
 */
 import "C"
 
-func init() {
-	// libvirt won't print to stderr
-	C.virSetErrorFunc(nil, C.virErrorFunc(unsafe.Pointer(C.virErrorFuncDummy)))
-}
-
 type VirConnection struct {
 	ptr C.virConnectPtr
+}
+
+// Additional data associated to the connection.
+type virConnectionData struct {
+	errCallbackId   *int
+	closeCallbackId *int
+}
+
+var connections map[C.virConnectPtr]*virConnectionData
+var connectionsLock sync.RWMutex
+
+func init() {
+	connections = make(map[C.virConnectPtr]*virConnectionData)
+}
+
+func saveConnectionData(c *VirConnection, d *virConnectionData) {
+	if c.ptr == nil {
+		return // Or panic?
+	}
+	connectionsLock.Lock()
+	defer connectionsLock.Unlock()
+	connections[c.ptr] = d
+}
+
+func getConnectionData(c *VirConnection) *virConnectionData {
+	connectionsLock.RLock()
+	d := connections[c.ptr]
+	connectionsLock.RUnlock()
+	if d != nil {
+		return d
+	}
+	d = &virConnectionData{}
+	saveConnectionData(c, d)
+	return d
+}
+
+func releaseConnectionData(c *VirConnection) {
+	if c.ptr == nil {
+		return
+	}
+	connectionsLock.Lock()
+	defer connectionsLock.Unlock()
+	delete(connections, c.ptr)
+}
+
+func GetVersion() (uint32, error) {
+	var version C.ulong
+	if err := C.virGetVersion(&version, nil, nil); err < 0 {
+		return 0, GetLastError()
+	}
+	return uint32(version), nil
 }
 
 func NewVirConnection(uri string) (VirConnection, error) {
@@ -76,6 +79,37 @@ func NewVirConnection(uri string) (VirConnection, error) {
 		defer C.free(unsafe.Pointer(cUri))
 	}
 	ptr := C.virConnectOpen(cUri)
+	if ptr == nil {
+		return VirConnection{}, GetLastError()
+	}
+	obj := VirConnection{ptr: ptr}
+	return obj, nil
+}
+
+func NewVirConnectionWithAuth(uri string, username string, password string) (VirConnection, error) {
+	var cUri *C.char
+
+	authMechs := C.authMechs()
+	defer C.free(unsafe.Pointer(authMechs))
+	cUsername := C.CString(username)
+	defer C.free(unsafe.Pointer(cUsername))
+	cPassword := C.CString(password)
+	defer C.free(unsafe.Pointer(cPassword))
+	cbData := C.authData(cUsername, C.uint(len(username)), cPassword, C.uint(len(password)))
+	defer C.free(unsafe.Pointer(cbData))
+
+	auth := C.virConnectAuth{
+		credtype:  authMechs,
+		ncredtype: C.uint(2),
+		cb:        C.virConnectAuthCallbackPtr(unsafe.Pointer(C.authCb)),
+		cbdata:    unsafe.Pointer(cbData),
+	}
+
+	if uri != "" {
+		cUri = C.CString(uri)
+		defer C.free(unsafe.Pointer(cUri))
+	}
+	ptr := C.virConnectOpenAuth(cUri, (*C.struct__virConnectAuth)(unsafe.Pointer(&auth)), C.uint(0))
 	if ptr == nil {
 		return VirConnection{}, GetLastError()
 	}
@@ -97,37 +131,69 @@ func NewVirConnectionReadOnly(uri string) (VirConnection, error) {
 	return obj, nil
 }
 
-func GetLastError() VirError {
-	var virErr VirError
-	err := C.virGetLastError()
-
-	virErr.Code = int(err.code)
-	virErr.Domain = int(err.domain)
-	virErr.Message = C.GoString(err.message)
-	virErr.Level = int(err.level)
-
-	C.virResetError(err)
-	return virErr
-}
-
 func (c *VirConnection) CloseConnection() (int, error) {
+	c.UnsetErrorFunc()
 	result := int(C.virConnectClose(c.ptr))
 	if result == -1 {
 		return result, GetLastError()
 	}
+	if result == 0 {
+		// No more reference to this connection, release data.
+		releaseConnectionData(c)
+	}
 	return result, nil
 }
 
-func (c *VirConnection) UnrefAndCloseConnection() error {
-	closeRes := 1
-	var err error
-	for closeRes > 0 {
-		closeRes, err = c.CloseConnection()
-		if err != nil {
-			return err
-		}
+type CloseCallback func(conn VirConnection, reason int, opaque func())
+type closeContext struct {
+	cb CloseCallback
+	f  func()
+}
+
+// Register a close callback for the given destination. Only one
+// callback per connection is allowed. Setting a callback will remove
+// the previous one.
+func (c *VirConnection) RegisterCloseCallback(cb CloseCallback, opaque func()) error {
+	c.UnregisterCloseCallback()
+	context := &closeContext{
+		cb: cb,
+		f:  opaque,
 	}
+	goCallbackId := registerCallbackId(context)
+	callbackPtr := unsafe.Pointer(C.closeCallback_cgo)
+	res := C.virConnectRegisterCloseCallback_cgo(c.ptr, C.virConnectCloseFunc(callbackPtr), C.long(goCallbackId))
+	if res != 0 {
+		freeCallbackId(goCallbackId)
+		return GetLastError()
+	}
+	connData := getConnectionData(c)
+	connData.closeCallbackId = &goCallbackId
 	return nil
+}
+
+func (c *VirConnection) UnregisterCloseCallback() error {
+	connData := getConnectionData(c)
+	if connData.closeCallbackId == nil {
+		return nil
+	}
+	callbackPtr := unsafe.Pointer(C.closeCallback_cgo)
+	res := C.virConnectUnregisterCloseCallback(c.ptr, C.virConnectCloseFunc(callbackPtr))
+	if res != 0 {
+		return GetLastError()
+	}
+	connData.closeCallbackId = nil
+	return nil
+}
+
+//export closeCallback
+func closeCallback(conn C.virConnectPtr, reason int, goCallbackId int) {
+	ctx := getCallbackId(goCallbackId)
+	switch cctx := ctx.(type) {
+	case *closeContext:
+		cctx.cb(VirConnection{ptr: conn}, reason, cctx.f)
+	default:
+		panic("Inappropriate callback type called")
+	}
 }
 
 func (c *VirConnection) GetCapabilities() (string, error) {
@@ -315,6 +381,16 @@ func (c *VirConnection) LookupDomainByName(id string) (VirDomain, error) {
 	return VirDomain{ptr: ptr}, nil
 }
 
+func (c *VirConnection) LookupByUUIDString(uuid string) (VirDomain, error) {
+	cUuid := C.CString(uuid)
+	defer C.free(unsafe.Pointer(cUuid))
+	ptr := C.virDomainLookupByUUIDString(c.ptr, cUuid)
+	if ptr == nil {
+		return VirDomain{}, GetLastError()
+	}
+	return VirDomain{ptr: ptr}, nil
+}
+
 func (c *VirConnection) DomainCreateXMLFromFile(xmlFile string, flags uint32) (VirDomain, error) {
 	xmlConfig, err := ioutil.ReadFile(xmlFile)
 	if err != nil {
@@ -490,6 +566,16 @@ func (c *VirConnection) NetworkDefineXML(xmlConfig string) (VirNetwork, error) {
 	return VirNetwork{ptr: ptr}, nil
 }
 
+func (c *VirConnection) NetworkCreateXML(xmlConfig string) (VirNetwork, error) {
+	cXml := C.CString(string(xmlConfig))
+	defer C.free(unsafe.Pointer(cXml))
+	ptr := C.virNetworkCreateXML(c.ptr, cXml)
+	if ptr == nil {
+		return VirNetwork{}, GetLastError()
+	}
+	return VirNetwork{ptr: ptr}, nil
+}
+
 func (c *VirConnection) LookupNetworkByName(name string) (VirNetwork, error) {
 	cName := C.CString(name)
 	defer C.free(unsafe.Pointer(cName))
@@ -498,6 +584,26 @@ func (c *VirConnection) LookupNetworkByName(name string) (VirNetwork, error) {
 		return VirNetwork{}, GetLastError()
 	}
 	return VirNetwork{ptr: ptr}, nil
+}
+
+func (c *VirConnection) LookupNetworkByUUIDString(uuid string) (VirNetwork, error) {
+	cUuid := C.CString(uuid)
+	defer C.free(unsafe.Pointer(cUuid))
+	ptr := C.virNetworkLookupByUUIDString(c.ptr, cUuid)
+	if ptr == nil {
+		return VirNetwork{}, GetLastError()
+	}
+	return VirNetwork{ptr: ptr}, nil
+}
+
+func (c *VirConnection) SetKeepAlive(interval int, count uint) error {
+	res := int(C.virConnectSetKeepAlive(c.ptr, C.int(interval), C.uint(count)))
+	switch res {
+	case 0:
+		return nil
+	default:
+		return GetLastError()
+	}
 }
 
 func (c *VirConnection) GetSysinfo(flags uint) (string, error) {
@@ -685,6 +791,29 @@ func (c *VirConnection) SecretDefineXML(xmlConfig string, flags uint32) (VirSecr
 	return VirSecret{ptr: ptr}, nil
 }
 
+func (c *VirConnection) SecretSetValue(uuid, value string) error {
+	cUuid := C.CString(uuid)
+	defer C.free(unsafe.Pointer(cUuid))
+	ptr := C.virSecretLookupByUUIDString(c.ptr, cUuid)
+	if ptr == nil {
+		return GetLastError()
+	}
+
+	secret, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		return err
+	}
+	cSecret := C.CString(string(secret))
+	defer C.free(unsafe.Pointer(cSecret))
+
+	res := C.virSecretSetValue(ptr, (*C.uchar)(unsafe.Pointer(cSecret)), C.size_t(len(secret)), 0)
+	if res != 0 {
+		return GetLastError()
+	}
+
+	return nil
+}
+
 func (c *VirConnection) LookupSecretByUUIDString(uuid string) (VirSecret, error) {
 	cUuid := C.CString(uuid)
 	defer C.free(unsafe.Pointer(cUuid))
@@ -803,76 +932,4 @@ func (c *VirConnection) ListAllStoragePools(flags uint32) ([]VirStoragePool, err
 	}
 	C.free(unsafe.Pointer(cList))
 	return pools, nil
-}
-
-type DomainEventCallback func(c *VirConnection, d *VirDomain,
-	event interface{}, f func()) int
-
-type domainCallbackContext struct {
-	cb *DomainEventCallback
-	f  func()
-}
-
-func (c *VirConnection) DomainEventRegister(dom VirDomain,
-	eventId int,
-	callback *DomainEventCallback,
-	opaque func()) int {
-	var callbackPtr unsafe.Pointer
-	context := domainCallbackContext{
-		cb: callback,
-		f:  opaque,
-	}
-
-	switch eventId {
-	case VIR_DOMAIN_EVENT_ID_LIFECYCLE:
-		callbackPtr = unsafe.Pointer(C.domainEventLifecycleCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_REBOOT:
-	case VIR_DOMAIN_EVENT_ID_CONTROL_ERROR:
-		callbackPtr = unsafe.Pointer(C.domainEventGenericCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_RTC_CHANGE:
-		callbackPtr = unsafe.Pointer(C.domainEventRTCChangeCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_WATCHDOG:
-		callbackPtr = unsafe.Pointer(C.domainEventWatchdogCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_IO_ERROR:
-		callbackPtr = unsafe.Pointer(C.domainEventIOErrorCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_GRAPHICS:
-		callbackPtr = unsafe.Pointer(C.domainEventGraphicsCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_IO_ERROR_REASON:
-		callbackPtr = unsafe.Pointer(C.domainEventIOErrorReasonCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_BLOCK_JOB:
-		// TODO Post 1.2.4, uncomment later
-		// case VIR_DOMAIN_EVENT_ID_BLOCK_JOB_2:
-		callbackPtr = unsafe.Pointer(C.domainEventBlockJobCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_DISK_CHANGE:
-		callbackPtr = unsafe.Pointer(C.domainEventDiskChangeCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_TRAY_CHANGE:
-		callbackPtr = unsafe.Pointer(C.domainEventTrayChangeCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_PMWAKEUP:
-	case VIR_DOMAIN_EVENT_ID_PMSUSPEND:
-	case VIR_DOMAIN_EVENT_ID_PMSUSPEND_DISK:
-		callbackPtr = unsafe.Pointer(C.domainEventReasonCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_BALLOON_CHANGE:
-		callbackPtr = unsafe.Pointer(C.domainEventBalloonChangeCallback_cgo)
-	case VIR_DOMAIN_EVENT_ID_DEVICE_REMOVED:
-		callbackPtr = unsafe.Pointer(C.domainEventDeviceRemovedCallback_cgo)
-	default:
-	}
-	ret := C.virConnectDomainEventRegisterAny(c.ptr, dom.ptr, C.VIR_DOMAIN_EVENT_ID_LIFECYCLE,
-		C.virConnectDomainEventGenericCallback(callbackPtr),
-		unsafe.Pointer(&context),
-		nil)
-	return int(ret)
-}
-
-func (c *VirConnection) DomainEventDeregister(callbackId int) int {
-	// Deregister the callback
-	return int(C.virConnectDomainEventDeregisterAny(c.ptr, C.int(callbackId)))
-}
-
-func EventRegisterDefaultImpl() int {
-	return int(C.virEventRegisterDefaultImpl())
-}
-
-func EventRunDefaultImpl() int {
-	return int(C.virEventRunDefaultImpl())
 }

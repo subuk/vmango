@@ -1,8 +1,9 @@
 package libvirt
 
 /*
-#cgo LDFLAGS: -lvirt -ldl
+#cgo LDFLAGS: -lvirt-qemu -lvirt
 #include <libvirt/libvirt.h>
+#include <libvirt/libvirt-qemu.h>
 #include <libvirt/virterror.h>
 #include <stdlib.h>
 */
@@ -29,6 +30,19 @@ type VirDomainInfo struct {
 type VirTypedParameter struct {
 	Name  string
 	Value interface{}
+}
+
+type VirDomainMemoryStat struct {
+	Tag int32
+	Val uint64
+}
+
+type VirVcpuInfo struct {
+	Number  uint32
+	State   int32
+	CpuTime uint64
+	Cpu     int32
+	CpuMap  []uint32
 }
 
 type VirTypedParameters []VirTypedParameter
@@ -89,6 +103,14 @@ func (d *VirDomain) Create() error {
 	return nil
 }
 
+func (d *VirDomain) CreateWithFlags(flags uint) error {
+	result := C.virDomainCreateWithFlags(d.ptr, C.uint(flags))
+	if result == -1 {
+		return GetLastError()
+	}
+	return nil
+}
+
 func (d *VirDomain) Destroy() error {
 	result := C.virDomainDestroy(d.ptr)
 	if result == -1 {
@@ -115,6 +137,17 @@ func (d *VirDomain) Reboot(flags uint) error {
 
 func (d *VirDomain) IsActive() (bool, error) {
 	result := C.virDomainIsActive(d.ptr)
+	if result == -1 {
+		return false, GetLastError()
+	}
+	if result == 1 {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (d *VirDomain) IsPersistent() (bool, error) {
+	result := C.virDomainIsPersistent(d.ptr)
 	if result == -1 {
 		return false, GetLastError()
 	}
@@ -305,7 +338,10 @@ func (d *VirDomain) GetInterfaceParameters(device string, params *VirTypedParame
 		cParams = nil
 	}
 
-	result := int(C.virDomainGetInterfaceParameters(d.ptr, C.CString(device), (C.virTypedParameterPtr)(cParams), (*C.int)(unsafe.Pointer(nParams)), C.uint(flags)))
+	cDevice := C.CString(device)
+	defer C.free(unsafe.Pointer(cDevice))
+	result := int(C.virDomainGetInterfaceParameters(d.ptr, cDevice,
+		(C.virTypedParameterPtr)(cParams), (*C.int)(unsafe.Pointer(nParams)), C.uint(flags)))
 	if result == -1 {
 		return result, GetLastError()
 	}
@@ -356,6 +392,14 @@ func (d *VirDomain) SetMetadata(metaDataType int, metaDataCont, uriKey, uri stri
 
 func (d *VirDomain) Undefine() error {
 	result := C.virDomainUndefine(d.ptr)
+	if result == -1 {
+		return GetLastError()
+	}
+	return nil
+}
+
+func (d *VirDomain) UndefineFlags(flags uint) error {
+	result := C.virDomainUndefineFlags(d.ptr, C.uint(flags))
 	if result == -1 {
 		return GetLastError()
 	}
@@ -490,6 +534,16 @@ func (d *VirDomain) DetachDeviceFlags(xml string, flags uint) error {
 	return nil
 }
 
+func (d *VirDomain) UpdateDeviceFlags(xml string, flags uint) error {
+	cXml := C.CString(xml)
+	defer C.free(unsafe.Pointer(cXml))
+	result := C.virDomainUpdateDeviceFlags(d.ptr, cXml, C.uint(flags))
+	if result == -1 {
+		return GetLastError()
+	}
+	return nil
+}
+
 func (d *VirDomain) Screenshot(stream *VirStream, screen, flags uint) (string, error) {
 	cType := C.virDomainScreenshot(d.ptr, stream.ptr, C.uint(screen), C.uint(flags))
 	if cType == nil {
@@ -536,6 +590,13 @@ func (d *VirDomain) BlockStatsFlags(disk string, params *VirTypedParameters, nPa
 	return int(cParamsLen), nil
 }
 
+type VirDomainBlockStats struct {
+	RdReq   int64
+	WrReq   int64
+	RdBytes int64
+	WrBytes int64
+}
+
 type VirDomainInterfaceStats struct {
 	RxBytes   int64
 	RxPackets int64
@@ -545,6 +606,28 @@ type VirDomainInterfaceStats struct {
 	TxPackets int64
 	TxErrs    int64
 	TxDrop    int64
+}
+
+func (d *VirDomain) BlockStats(path string) (VirDomainBlockStats, error) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+
+	size := C.size_t(unsafe.Sizeof(C.struct__virDomainBlockStats{}))
+
+	cStats := (C.virDomainBlockStatsPtr)(C.malloc(size))
+	defer C.free(unsafe.Pointer(cStats))
+
+	result := C.virDomainBlockStats(d.ptr, cPath, (C.virDomainBlockStatsPtr)(cStats), size)
+
+	if result != 0 {
+		return VirDomainBlockStats{}, GetLastError()
+	}
+	return VirDomainBlockStats{
+		WrReq:   int64(cStats.wr_req),
+		RdReq:   int64(cStats.rd_req),
+		RdBytes: int64(cStats.rd_bytes),
+		WrBytes: int64(cStats.wr_bytes),
+	}, nil
 }
 
 func (d *VirDomain) InterfaceStats(path string) (VirDomainInterfaceStats, error) {
@@ -571,4 +654,170 @@ func (d *VirDomain) InterfaceStats(path string) (VirDomainInterfaceStats, error)
 		TxErrs:    int64(cStats.tx_errs),
 		TxDrop:    int64(cStats.tx_drop),
 	}, nil
+}
+
+func (d *VirDomain) MemoryStats(nrStats uint32, flags uint32) ([]VirDomainMemoryStat, error) {
+	ptr := make([]C.virDomainMemoryStatStruct, nrStats)
+
+	result := C.virDomainMemoryStats(
+		d.ptr, (C.virDomainMemoryStatPtr)(unsafe.Pointer(&ptr[0])),
+		C.uint(nrStats), C.uint(flags))
+
+	if result == -1 {
+		return []VirDomainMemoryStat{}, GetLastError()
+	}
+
+	out := make([]VirDomainMemoryStat, result)
+	for i := 0; i < int(result); i++ {
+		out = append(out, VirDomainMemoryStat{
+			Tag: int32(ptr[i].tag),
+			Val: uint64(ptr[i].val),
+		})
+	}
+	return out, nil
+}
+
+func (d *VirDomain) GetVcpus(maxInfo int32) ([]VirVcpuInfo, error) {
+	ptr := make([]C.virVcpuInfo, maxInfo)
+
+	result := C.virDomainGetVcpus(
+		d.ptr, (C.virVcpuInfoPtr)(unsafe.Pointer(&ptr[0])),
+		C.int(maxInfo), nil, C.int(0))
+
+	if result == -1 {
+		return []VirVcpuInfo{}, GetLastError()
+	}
+
+	out := make([]VirVcpuInfo, 0)
+	for i := 0; i < int(result); i++ {
+		out = append(out, VirVcpuInfo{
+			Number:  uint32(ptr[i].number),
+			State:   int32(ptr[i].state),
+			CpuTime: uint64(ptr[i].cpuTime),
+			Cpu:     int32(ptr[i].cpu),
+		})
+	}
+
+	return out, nil
+}
+
+// libvirt-domain.h: VIR_CPU_MAPLEN
+func virCpuMapLen(cpu uint32) C.int {
+	return C.int((cpu + 7) / 8)
+}
+
+// extractCpuMask extracts an individual cpumask from a slice of cpumasks
+// and parses it into a slice of CPU ids
+func extractCpuMask(bytesCpuMaps []byte, n, mapLen int) []uint32 {
+	const byteSize = uint(8)
+
+	// Repslice the big array to separate only mask number 'n'
+	cpuMap := bytesCpuMaps[n*mapLen : (n+1)*mapLen]
+
+	out := make([]uint32, 0)
+	for i, b := range cpuMap { // iterate over bytes of the mask
+		for j := uint(0); j < byteSize; j++ { // iterate over bits in this byte
+			if (b>>j)&0x1 == 1 {
+				out = append(out, uint32(j+uint(i)*byteSize))
+			}
+		}
+	}
+
+	return out
+}
+
+func (d *VirDomain) GetVcpusCpuMap(maxInfo int, maxCPUs uint32) ([]VirVcpuInfo, error) {
+	ptr := make([]C.virVcpuInfo, maxInfo)
+
+	mapLen := virCpuMapLen(maxCPUs)                    // Length of CPUs bitmask in bytes
+	bufSize := int(mapLen) * int(maxInfo)              // Length of the array of 'maxinfo' bitmasks
+	cpuMaps := (*C.uchar)(C.malloc(C.size_t(bufSize))) // Array itself
+	defer C.free(unsafe.Pointer(cpuMaps))
+
+	result := C.virDomainGetVcpus(
+		d.ptr, (C.virVcpuInfoPtr)(unsafe.Pointer(&ptr[0])),
+		C.int(maxInfo), cpuMaps, mapLen)
+
+	if result == -1 {
+		return nil, GetLastError()
+	}
+
+	// Convert to golang []byte for easier handling
+	bytesCpuMaps := C.GoBytes(unsafe.Pointer(cpuMaps), C.int(bufSize))
+
+	out := make([]VirVcpuInfo, 0)
+	for i := 0; i < int(result); i++ {
+		out = append(out, VirVcpuInfo{
+			Number:  uint32(ptr[i].number),
+			State:   int32(ptr[i].state),
+			CpuTime: uint64(ptr[i].cpuTime),
+			Cpu:     int32(ptr[i].cpu),
+			CpuMap:  extractCpuMask(bytesCpuMaps, i, int(mapLen)),
+		})
+	}
+
+	return out, nil
+}
+
+func (d *VirDomain) GetVcpusFlags(flags uint32) (int32, error) {
+	result := C.virDomainGetVcpusFlags(d.ptr, C.uint(flags))
+	if result == -1 {
+		return 0, GetLastError()
+	}
+	return int32(result), nil
+}
+
+func (d *VirDomain) QemuMonitorCommand(flags uint32, command string) (string, error) {
+	var cResult *C.char
+	cCommand := C.CString(command)
+	defer C.free(unsafe.Pointer(cCommand))
+	result := C.virDomainQemuMonitorCommand(d.ptr, cCommand, &cResult, C.uint(flags))
+
+	if result != 0 {
+		return "", GetLastError()
+	}
+
+	rstring := C.GoString(cResult)
+	C.free(unsafe.Pointer(cResult))
+	return rstring, nil
+}
+
+func cpuMask(cpuMap []uint32, maxCPUs uint32) (*C.uchar, C.int) {
+	const byteSize = uint(8)
+
+	mapLen := virCpuMapLen(maxCPUs) // Length of CPUs bitmask in bytes
+	bytesCpuMap := make([]byte, mapLen)
+
+	for _, c := range cpuMap {
+		by := uint(c) / byteSize
+		bi := uint(c) % byteSize
+		bytesCpuMap[by] |= 1 << bi
+	}
+
+	return (*C.uchar)(&bytesCpuMap[0]), mapLen
+}
+
+func (d *VirDomain) PinVcpu(vcpu uint, cpuMap []uint32, maxCPUs uint32) error {
+
+	cpumap, maplen := cpuMask(cpuMap, maxCPUs)
+
+	result := C.virDomainPinVcpu(d.ptr, C.uint(vcpu), cpumap, maplen)
+
+	if result == -1 {
+		return GetLastError()
+	}
+
+	return nil
+}
+
+func (d *VirDomain) PinVcpuFlags(vcpu uint, cpuMap []uint32, flags uint, maxCPUs uint32) error {
+	cpumap, maplen := cpuMask(cpuMap, maxCPUs)
+
+	result := C.virDomainPinVcpuFlags(d.ptr, C.uint(vcpu), cpumap, maplen, C.uint(flags))
+
+	if result == -1 {
+		return GetLastError()
+	}
+
+	return nil
 }

@@ -1,7 +1,7 @@
 package libvirt
 
 /*
-#cgo LDFLAGS: -lvirt -ldl
+#cgo LDFLAGS: -lvirt 
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
 #include <stdlib.h>
@@ -132,3 +132,13 @@ func (v *VirStorageVol) Download(stream *VirStream, offset, length uint64, flags
 	}
 	return nil
 }
+
+func (v *VirStorageVol) LookupPoolByVolume() (VirStoragePool, error) {
+	poolPtr := C.virStoragePoolLookupByVolume(v.ptr)
+	if poolPtr == nil {
+		return VirStoragePool{}, GetLastError()
+	}
+	return VirStoragePool{ptr: poolPtr}, nil
+}
+
+

@@ -31,7 +31,9 @@ func TestStorageVolGetInfo(t *testing.T) {
 	defer func() {
 		pool.Undefine()
 		pool.Free()
-		conn.CloseConnection()
+		if res, _ := conn.CloseConnection(); res != 0 {
+			t.Errorf("CloseConnection() == %d, expected 0", res)
+		}
 	}()
 	if err := pool.Create(0); err != nil {
 		t.Error(err)
@@ -57,7 +59,9 @@ func TestStorageVolGetKey(t *testing.T) {
 	defer func() {
 		pool.Undefine()
 		pool.Free()
-		conn.CloseConnection()
+		if res, _ := conn.CloseConnection(); res != 0 {
+			t.Errorf("CloseConnection() == %d, expected 0", res)
+		}
 	}()
 	if err := pool.Create(0); err != nil {
 		t.Error(err)
@@ -83,7 +87,9 @@ func TestStorageVolGetName(t *testing.T) {
 	defer func() {
 		pool.Undefine()
 		pool.Free()
-		conn.CloseConnection()
+		if res, _ := conn.CloseConnection(); res != 0 {
+			t.Errorf("CloseConnection() == %d, expected 0", res)
+		}
 	}()
 	if err := pool.Create(0); err != nil {
 		t.Error(err)
@@ -109,7 +115,9 @@ func TestStorageVolGetPath(t *testing.T) {
 	defer func() {
 		pool.Undefine()
 		pool.Free()
-		conn.CloseConnection()
+		if res, _ := conn.CloseConnection(); res != 0 {
+			t.Errorf("CloseConnection() == %d, expected 0", res)
+		}
 	}()
 	if err := pool.Create(0); err != nil {
 		t.Error(err)
@@ -135,7 +143,9 @@ func TestStorageVolGetXMLDesc(t *testing.T) {
 	defer func() {
 		pool.Undefine()
 		pool.Free()
-		conn.CloseConnection()
+		if res, _ := conn.CloseConnection(); res != 0 {
+			t.Errorf("CloseConnection() == %d, expected 0", res)
+		}
 	}()
 	if err := pool.Create(0); err != nil {
 		t.Error(err)
@@ -153,5 +163,50 @@ func TestStorageVolGetXMLDesc(t *testing.T) {
 	}()
 	if _, err := vol.GetXMLDesc(0); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPoolLookupByVolume(t *testing.T) {
+	pool, conn := buildTestStoragePool("")
+	defer func() {
+		pool.Undefine()
+		pool.Free()
+		if res, _ := conn.CloseConnection(); res != 0 {
+			t.Errorf("CloseConnection() == %d, expected 0", res)
+		}
+	}()
+	if err := pool.Create(0); err != nil {
+		t.Error(err)
+		return
+	}
+	defer pool.Destroy()
+	vol, err := pool.StorageVolCreateXML(testStorageVolXML("", "default-pool"), 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		vol.Delete(VIR_STORAGE_VOL_DELETE_NORMAL)
+		vol.Free()
+	}()
+
+	retPool, err := vol.LookupPoolByVolume()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer retPool.Free()
+
+	poolUUID, err := pool.GetUUIDString()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	retPoolUUID, err := retPool.GetUUIDString()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if retPoolUUID != poolUUID {
+		t.Fail()
 	}
 }
