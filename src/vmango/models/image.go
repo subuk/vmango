@@ -15,17 +15,17 @@ const (
 )
 
 type Image struct {
-	Name     string
+	OS       string
 	Arch     int
 	Size     int64
 	Type     int
 	Date     time.Time
-	Filename string
+	FullName string
 	FullPath string
 }
 
 func (image *Image) String() string {
-	return image.Name
+	return image.OS
 }
 
 func (image *Image) Stream() (*os.File, error) {

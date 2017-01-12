@@ -4,7 +4,7 @@
 <table class="table">
   <thead>
     <tr>
-      <th>Name</th>
+      <th>OS</th>
       <th>Arch</th>
       <th>Size</th>
       <th>Type</th>
@@ -15,7 +15,7 @@
 
   {{ range .Images }}
     <tr>
-      <td>{{ .Name }}</td>
+      <td>{{ .OS }}</td>
       <td>{{ .ArchString }}</td>
       <td>{{ .SizeMegabytes }}Mb</td>
       <td>{{ .TypeString }}</td>

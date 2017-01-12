@@ -61,7 +61,7 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 			return vmango.BadRequest(fmt.Sprintf(`plan "%s" not found`, form.Plan))
 		}
 
-		image := &models.Image{Filename: form.Image}
+		image := &models.Image{FullName: form.Image}
 		if exists, err := ctx.Images.Get(image); err != nil {
 			return err
 		} else if !exists {
@@ -72,7 +72,7 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 			Name:      form.Name,
 			Memory:    plan.Memory,
 			Cpus:      plan.Cpus,
-			ImageName: image.Filename,
+			ImageName: image.FullName,
 		}
 
 		if exists, err := ctx.Machines.Get(vm); err != nil {

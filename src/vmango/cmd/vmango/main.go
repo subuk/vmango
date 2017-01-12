@@ -26,7 +26,7 @@ var (
 	TEMPLATE_PATH = flag.String("template-path", "templates", "Template path")
 	STATIC_PATH   = flag.String("static-path", "static", "Static path")
 	METADB_PATH   = flag.String("metadb-path", "vmango.db", "Metadata database path")
-	IMAGES_PATH   = flag.String("images-path", "images", "Machine images repository path")
+	IMAGES_VOLUME = flag.String("images-volume", "vmango-images", "Machine images repository path")
 	VM_TEMPLATE   = flag.String("vm-template", "vm.xml.in", "Virtual machine configuration template")
 )
 
@@ -74,7 +74,7 @@ func main() {
 		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
 	}
 
-	imagerep := dal.NewLocalfsImagerep(*IMAGES_PATH)
+	imagerep := dal.NewLibvirtImagerep(virtConn, *IMAGES_VOLUME)
 
 	metadb, err := bolt.Open(*METADB_PATH, 0600, nil)
 	if err != nil {
