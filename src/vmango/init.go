@@ -2,7 +2,6 @@ package vmango
 
 import (
 	"github.com/Sirupsen/logrus"
-	"github.com/boltdb/bolt"
 	"github.com/gorilla/mux"
 	"github.com/unrolled/render"
 	"net/http"
@@ -16,7 +15,6 @@ type Context struct {
 	Machines dal.Machinerep
 	Images   dal.Imagerep
 	Logger   *logrus.Logger
-	Meta     *bolt.DB
 	IPPool   dal.IPPool
 }
 
