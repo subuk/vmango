@@ -23,7 +23,6 @@ import (
 var (
 	LISTEN_ADDR   = flag.String("listen", "0.0.0.0:8000", "Listen address")
 	LIBVIRT_URL   = flag.String("libvirt-url", "qemu:///system", "Libvirt connection url")
-	META_ADDR     = flag.String("meta-listen", "192.168.122.1:8001", "Metadata server addr")
 	TEMPLATE_PATH = flag.String("template-path", "templates", "Template path")
 	STATIC_PATH   = flag.String("static-path", "static", "Static path")
 	METADB_PATH   = flag.String("metadb-path", "vmango.db", "Metadata database path")
