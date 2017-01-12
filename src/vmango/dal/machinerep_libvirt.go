@@ -44,11 +44,7 @@ type domainXMLConfig struct {
 	Disks   []diskXMLConfig `xml:"devices>disk"`
 }
 
-func NewLibvirtMachinerep(uri string, tpl *template.Template) (*LibvirtMachinerep, error) {
-	conn, err := libvirt.NewVirConnection(uri)
-	if err != nil {
-		return nil, err
-	}
+func NewLibvirtMachinerep(conn libvirt.VirConnection, tpl *template.Template) (*LibvirtMachinerep, error) {
 	return &LibvirtMachinerep{conn: conn, vmtpl: tpl}, nil
 }
 

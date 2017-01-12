@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/meatballhat/negroni-logrus"
 	"github.com/unrolled/render"
+	"gopkg.in/alexzorin/libvirt-go.v2"
 	"html/template"
 	"net/http"
 	"strings"
@@ -64,7 +65,12 @@ func main() {
 	if err != nil {
 		log.WithError(err).WithField("filename", *VM_TEMPLATE).Fatal("failed to parse machine template")
 	}
-	machines, err := dal.NewLibvirtMachinerep(*LIBVIRT_URL, vmtpl)
+	virtConn, err := libvirt.NewVirConnection(*LIBVIRT_URL)
+	if err != nil {
+		log.WithError(err).Fatal("failed to connect to libvirt")
+	}
+
+	machines, err := dal.NewLibvirtMachinerep(virtConn, vmtpl)
 	if err != nil {
 		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
 	}
