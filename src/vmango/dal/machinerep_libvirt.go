@@ -5,7 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"gopkg.in/alexzorin/libvirt-go.v2"
+	"github.com/libvirt/libvirt-go"
 	"io"
 	"os"
 	"text/template"
@@ -13,7 +13,7 @@ import (
 )
 
 type LibvirtMachinerep struct {
-	conn  libvirt.VirConnection
+	conn  *libvirt.Connect
 	vmtpl *template.Template
 }
 
@@ -44,11 +44,11 @@ type domainXMLConfig struct {
 	Disks   []diskXMLConfig `xml:"devices>disk"`
 }
 
-func NewLibvirtMachinerep(conn libvirt.VirConnection, tpl *template.Template) (*LibvirtMachinerep, error) {
+func NewLibvirtMachinerep(conn *libvirt.Connect, tpl *template.Template) (*LibvirtMachinerep, error) {
 	return &LibvirtMachinerep{conn: conn, vmtpl: tpl}, nil
 }
 
-func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain libvirt.VirDomain) error {
+func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvirt.Domain) error {
 	name, err := domain.GetName()
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain libvirt
 
 	log.WithField("name", name).WithField("domain", domainConfig).Debug("domain xml fetched")
 
-	switch info.GetState() {
+	switch info.State {
 	default:
 		vm.State = models.STATE_UNKNOWN
 	case 1:
@@ -94,15 +94,15 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain libvirt
 		}
 		vm.Disk = &models.VirtualMachineDisk{}
 		vm.Disk.Driver = domainConfig.Disks[0].Driver.Name
-		vm.Disk.Size = volumeInfo.GetCapacityInBytes()
+		vm.Disk.Size = volumeInfo.Capacity
 	} else {
 		vm.Disk = nil
 	}
 
 	vm.Name = name
 	vm.Uuid = fmt.Sprintf("%x", uuid)
-	vm.Memory = int(info.GetMaxMem())
-	vm.Cpus = int(info.GetNrVirtCpu())
+	vm.Memory = int(info.Memory)
+	vm.Cpus = int(info.NrVirtCpu)
 	return nil
 }
 
@@ -113,7 +113,7 @@ func (store *LibvirtMachinerep) List(machines *models.VirtualMachineList) error 
 	}
 	for _, domain := range domains {
 		vm := &models.VirtualMachine{}
-		if err := store.fillVm(vm, domain); err != nil {
+		if err := store.fillVm(vm, &domain); err != nil {
 			return err
 		}
 		machines.Add(vm)
@@ -128,8 +128,8 @@ func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error
 
 	domain, err := store.conn.LookupDomainByName(machine.Name)
 	if err != nil {
-		virErr := err.(libvirt.VirError)
-		if virErr.Code == libvirt.VIR_ERR_NO_DOMAIN {
+		virErr := err.(libvirt.Error)
+		if virErr.Code == libvirt.ERR_NO_DOMAIN {
 			return false, nil
 		}
 		return false, virErr

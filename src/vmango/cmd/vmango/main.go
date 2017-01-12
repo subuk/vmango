@@ -7,9 +7,9 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/mux"
+	"github.com/libvirt/libvirt-go"
 	"github.com/meatballhat/negroni-logrus"
 	"github.com/unrolled/render"
-	"gopkg.in/alexzorin/libvirt-go.v2"
 	"html/template"
 	"net/http"
 	"strings"
@@ -64,7 +64,7 @@ func main() {
 	if err != nil {
 		log.WithError(err).WithField("filename", *VM_TEMPLATE).Fatal("failed to parse machine template")
 	}
-	virtConn, err := libvirt.NewVirConnection(*LIBVIRT_URL)
+	virtConn, err := libvirt.NewConnect(*LIBVIRT_URL)
 	if err != nil {
 		log.WithError(err).Fatal("failed to connect to libvirt")
 	}
