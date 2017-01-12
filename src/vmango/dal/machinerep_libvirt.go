@@ -6,8 +6,6 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/libvirt/libvirt-go"
-	"io"
-	"os"
 	"text/template"
 	"vmango/models"
 )
@@ -139,42 +137,37 @@ func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error
 }
 
 func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *models.Image, plan *models.Plan) error {
-
 	storagePool, err := store.conn.LookupStoragePoolByName("default")
 	if err != nil {
-		return fmt.Errorf("failed to lookup storage pool: %s", err)
+		return fmt.Errorf("failed to lookup vm storage pool: %s", err)
+	}
+
+	imagePool, err := store.conn.LookupStoragePoolByName(image.PoolName)
+	if err != nil {
+		return fmt.Errorf("failed to lookup image storage pool: %s", err)
 	}
 
 	volumeXML := fmt.Sprintf(`
 	<volume>
+	  <target>
+	  	<format type="%s" />
+	  </target>
 	  <name>%s_disk.%s</name>
-	  <capacity unit="b">1</capacity>
+	  <capacity unit="G">%d</capacity>
 	</volume>
-	`, machine.Name, image.TypeString())
-
-	volume, err := storagePool.StorageVolCreateXML(volumeXML, 0)
+	`, image.TypeString(), machine.Name, image.TypeString(), plan.DiskSizeGigabytes())
+	imageVolume, err := imagePool.LookupStorageVolByName(image.FullName)
 	if err != nil {
-		return fmt.Errorf("failed to create storage volume: %s", err)
+		return fmt.Errorf("failed to lookup image volume: %s", err)
+	}
+
+	volume, err := storagePool.StorageVolCreateXMLFrom(volumeXML, imageVolume, 0)
+	if err != nil {
+		return fmt.Errorf("failed to clone image: %s", err)
 	}
 	volumePath, err := volume.GetPath()
 	if err != nil {
-		return fmt.Errorf("failed to get volume path: %s", err)
-	}
-
-	imageStream, err := image.Stream()
-	if err != nil {
-		return fmt.Errorf("failed to open image file: %s", err)
-	}
-	defer imageStream.Close()
-
-	vmdriveStream, err := os.Create(volumePath)
-	if err != nil {
-		return fmt.Errorf("failed to open vm drive: %s", err)
-	}
-	defer vmdriveStream.Close()
-
-	if _, err := io.Copy(vmdriveStream, imageStream); err != nil {
-		return fmt.Errorf("failed to copy image content to vm drive: %s", err)
+		return fmt.Errorf("failed to get machine volume path: %s", err)
 	}
 
 	var machineXml bytes.Buffer

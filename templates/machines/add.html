@@ -29,7 +29,7 @@
         <label class="control-label" for="image">Image</label>
         <select id="image" name="Image" class="form-control">
         {{ range .Images }}
-          <option value="{{ .Filename }}">{{ .Name }} {{ .ArchString }}</option>
+          <option value="{{ .FullName }}">{{ .OS }} {{ .ArchString }}</option>
         {{ end }}
         </select>
       </div>

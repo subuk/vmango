@@ -22,6 +22,7 @@ type Image struct {
 	Date     time.Time
 	FullName string
 	FullPath string
+	PoolName string
 }
 
 func (image *Image) String() string {

@@ -45,6 +45,8 @@ func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.Stor
 	image.Size = int64(info.Allocation)
 	image.FullPath = fullpath
 	image.FullName = volumeName
+	image.PoolName = repo.pool
+
 	switch imginfo[1] {
 	default:
 		logger.Info("skipping image with unknown architecture")
