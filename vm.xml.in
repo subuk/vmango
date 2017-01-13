@@ -26,6 +26,14 @@
       <source file='{{ .VolumePath }}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file="{{ .ConfigDrive }}" />
+      <target dev='hdc' bus='ide'/>
+      <readonly/>
+      <alias name='ide0-1-0'/>
+      <address type='drive' controller='0' bus='1' unit='0'/>
+    </disk>
     <interface type='network'>
       <source network='default'/>
       <model type='virtio'/>

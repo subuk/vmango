@@ -6,6 +6,10 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/libvirt/libvirt-go"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"text/template"
 	"vmango/models"
 )
@@ -75,10 +79,13 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	switch info.State {
 	default:
 		vm.State = models.STATE_UNKNOWN
-	case 1:
+	case libvirt.DOMAIN_RUNNING:
 		vm.State = models.STATE_RUNNING
-	case 5:
+	case libvirt.DOMAIN_SHUTDOWN:
 		vm.State = models.STATE_STOPPED
+	case libvirt.DOMAIN_SHUTOFF:
+		vm.State = models.STATE_STOPPED
+
 	}
 
 	if len(domainConfig.Disks) > 0 {
@@ -136,6 +143,89 @@ func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error
 	return true, nil
 }
 
+func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine, pool *libvirt.StoragePool) (*libvirt.StorageVol, error) {
+	tmpdir, err := ioutil.TempDir("", "")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmpdir)
+	metadataRoot := filepath.Join(tmpdir, "openstack", "latest")
+	if err := os.MkdirAll(metadataRoot, 0755); err != nil {
+		return nil, err
+	}
+	md, err := os.Create(filepath.Join(metadataRoot, "meta_data.json"))
+	if err != nil {
+		return nil, err
+	}
+	md.WriteString(fmt.Sprintf(`{
+    "availability_zone": "none",
+    "files": [
+    ],
+    "hostname": "%s",
+    "launch_index": 0,
+    "name": "%s",
+    "meta": {
+        "role": "webservers",
+        "essential": "false"
+    },
+    "public_keys": {
+        "mykey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDAvKEhzpqnZ7ipUZkx43In/YoNuvG/HUqR0oCLk/Mil0R533TCDP9ZOiJOrWPhvQc3EOy6mJi5h9KBfxoGt0EbLkkL5Bq5Bb+NvbsxMXmNpgFkE6Yul+yJzRvzQJsvUk8B0vptDfQE2z3+LHkcN/WjMIVUhBC/hB+7d7THC2/TJ+o0CgCXXSkCJ3FqsjiZWEb77pLGnQUV5pp3n4tpR7Aoe9c1KZplXNt8hnWGUJN/gtLLmO6ouORnbRRE9yuPoLJz/r7GMmQQM9VOPyDBelpob4X7fiz0c5L+BCtvWjrZo7vVCFRcpVpBbNUiw5seK3qLUhaOVwL8GOfHTtsFpA7h kubuzzzz+book@gmail.com\n"
+    },
+    "uuid": "0cae2cdb-e041-4f26-835b-f9602df0edf3"}
+    `, machine.Name, machine.Name))
+	if err := md.Close(); err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(
+		"mkisofs", "-R", "-V", "config-2", "-o",
+		filepath.Join(tmpdir, "drive.iso"), tmpdir,
+	)
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+	volumeXML := fmt.Sprintf(`
+	<volume>
+	  <target>
+	  	<format type="raw" />
+	  </target>
+	  <name>%s_config.iso</name>
+	  <capacity unit="b">1</capacity>
+	</volume>`, machine.Name)
+	volume, err := pool.StorageVolCreateXML(volumeXML, 0)
+	if err != nil {
+		return nil, err
+	}
+	content, err := os.Open(filepath.Join(tmpdir, "drive.iso"))
+	if err != nil {
+		return nil, err
+	}
+	contentSize, err := content.Seek(0, os.SEEK_END)
+	if err != nil {
+		return nil, err
+	}
+	_, err = content.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return nil, err
+	}
+
+	stream, err := store.conn.NewStream(0)
+	if err != nil {
+		return nil, err
+	}
+	if err := volume.Upload(stream, 0, uint64(contentSize), 0); err != nil {
+		return nil, err
+	}
+	stream.SendAll(func(stream *libvirt.Stream, n int) ([]byte, error) {
+		buf := make([]byte, n)
+		_, err := content.Read(buf)
+		return buf, err
+	})
+	// if err := stream.Finish(); err != nil {
+	// 	return nil, err
+	// }
+	return volume, nil
+}
+
 func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *models.Image, plan *models.Plan) error {
 	storagePool, err := store.conn.LookupStoragePoolByName("default")
 	if err != nil {
@@ -154,30 +244,43 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	  </target>
 	  <name>%s_disk.%s</name>
 	  <capacity unit="G">%d</capacity>
+	  <allocation unit="G">%d</allocation>
 	</volume>
-	`, image.TypeString(), machine.Name, image.TypeString(), plan.DiskSizeGigabytes())
+	`, image.TypeString(), machine.Name, image.TypeString(), plan.DiskSizeGigabytes(), plan.DiskSizeGigabytes())
 	imageVolume, err := imagePool.LookupStorageVolByName(image.FullName)
 	if err != nil {
 		return fmt.Errorf("failed to lookup image volume: %s", err)
 	}
 
-	volume, err := storagePool.StorageVolCreateXMLFrom(volumeXML, imageVolume, 0)
+	configDriveVolume, err := store.createConfigDrive(machine, storagePool)
 	if err != nil {
+		return fmt.Errorf("failed to create config drive: %s", err)
+	}
+	log.WithField("configdrive", configDriveVolume).Debug("config drive created successfully")
+	configDrivePath, err := configDriveVolume.GetPath()
+	if err != nil {
+		return err
+	}
+
+	rootVolume, err := storagePool.StorageVolCreateXMLFrom(volumeXML, imageVolume, 0)
+	if err != nil {
+		configDriveVolume.Delete(0)
 		return fmt.Errorf("failed to clone image: %s", err)
 	}
-	volumePath, err := volume.GetPath()
+	rootVolumePath, err := rootVolume.GetPath()
 	if err != nil {
 		return fmt.Errorf("failed to get machine volume path: %s", err)
 	}
-
 	var machineXml bytes.Buffer
 	vmtplContext := struct {
-		Machine    *models.VirtualMachine
-		Image      *models.Image
-		Plan       *models.Plan
-		VolumePath string
-	}{machine, image, plan, volumePath}
+		Machine     *models.VirtualMachine
+		Image       *models.Image
+		Plan        *models.Plan
+		VolumePath  string
+		ConfigDrive string
+	}{machine, image, plan, rootVolumePath, configDrivePath}
 	if err := store.vmtpl.Execute(&machineXml, vmtplContext); err != nil {
+		configDriveVolume.Delete(0)
 		return err
 	}
 	log.WithField("xml", machineXml.String()).Debug("defining domain from xml")
