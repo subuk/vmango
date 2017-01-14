@@ -267,6 +267,10 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		configDriveVolume.Delete(0)
 		return fmt.Errorf("failed to clone image: %s", err)
 	}
+	if err := rootVolume.Resize(uint64(plan.DiskSize), 0); err != nil {
+		configDriveVolume.Delete(0)
+		return fmt.Errorf("failed to resize root volume: %s", err)
+	}
 	rootVolumePath, err := rootVolume.GetPath()
 	if err != nil {
 		return fmt.Errorf("failed to get machine volume path: %s", err)
