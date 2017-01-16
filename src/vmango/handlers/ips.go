@@ -8,8 +8,8 @@ import (
 )
 
 func IPList(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
-	ips := []*models.IP{}
-	if err := ctx.IPPool.List(&ips); err != nil {
+	ips := &models.IPList{}
+	if err := ctx.IPPool.List(ips); err != nil {
 		return fmt.Errorf("failed to fetch ip list: %s", err)
 	}
 	ctx.Render.HTML(w, http.StatusOK, "ips/list", map[string]interface{}{

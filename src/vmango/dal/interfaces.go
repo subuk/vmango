@@ -22,6 +22,7 @@ type Planrep interface {
 }
 
 type IPPool interface {
-	List(*[]*models.IP) error
+	List(*models.IPList) error
 	Get(*models.IP) (bool, error)
+	Assign(*models.IP, *models.VirtualMachine) error
 }

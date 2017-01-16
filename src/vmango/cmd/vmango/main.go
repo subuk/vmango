@@ -23,6 +23,7 @@ import (
 var (
 	LISTEN_ADDR   = flag.String("listen", "0.0.0.0:8000", "Listen address")
 	LIBVIRT_URL   = flag.String("libvirt-url", "qemu:///system", "Libvirt connection url")
+	LIBVIRT_NET   = flag.String("libvirt-net", "nodhcp", "Libvirt vm network name")
 	TEMPLATE_PATH = flag.String("template-path", "templates", "Template path")
 	STATIC_PATH   = flag.String("static-path", "static", "Static path")
 	METADB_PATH   = flag.String("metadb-path", "vmango.db", "Metadata database path")
@@ -69,7 +70,7 @@ func main() {
 		log.WithError(err).Fatal("failed to connect to libvirt")
 	}
 
-	machines, err := dal.NewLibvirtMachinerep(virtConn, vmtpl)
+	machines, err := dal.NewLibvirtMachinerep(virtConn, vmtpl, *LIBVIRT_NET)
 	if err != nil {
 		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
 	}
@@ -82,7 +83,7 @@ func main() {
 	}
 
 	planrep := dal.NewBoltPlanrep(metadb)
-	ippool := dal.NewBoltIPPool(metadb)
+	ippool := dal.NewLibvirtIPPool(virtConn, *LIBVIRT_NET)
 
 	ctx := &vmango.Context{
 		Render:   renderer,

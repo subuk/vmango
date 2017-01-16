@@ -49,6 +49,8 @@ type VirtualMachine struct {
 	Memory    int                 `json:"memory"`
 	Cpus      int                 `json:"cpus"`
 	ImageName string              `json:"image_name"`
+	Ip        *IP                 `json:"ip"`
+	HWAddr    string              `json:"hwaddr"`
 	Disk      *VirtualMachineDisk `json:"disk"`
 }
 

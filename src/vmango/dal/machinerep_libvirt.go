@@ -15,8 +15,9 @@ import (
 )
 
 type LibvirtMachinerep struct {
-	conn  *libvirt.Connect
-	vmtpl *template.Template
+	conn    *libvirt.Connect
+	vmtpl   *template.Template
+	network string
 }
 
 type diskSourceXMLConfig struct {
@@ -40,14 +41,24 @@ type diskXMLConfig struct {
 	Source diskSourceXMLConfig `xml:"source"`
 }
 
-type domainXMLConfig struct {
-	XMLName xml.Name        `xml:"domain"`
-	Name    string          `xml:"name"`
-	Disks   []diskXMLConfig `xml:"devices>disk"`
+type interfaceMacXMLConfig struct {
+	Address string `xml:"address,attr"`
 }
 
-func NewLibvirtMachinerep(conn *libvirt.Connect, tpl *template.Template) (*LibvirtMachinerep, error) {
-	return &LibvirtMachinerep{conn: conn, vmtpl: tpl}, nil
+type interfaceXMLConfig struct {
+	Type string                `xml:"type,attr"`
+	Mac  interfaceMacXMLConfig `xml:"mac"`
+}
+
+type domainXMLConfig struct {
+	XMLName    xml.Name             `xml:"domain"`
+	Name       string               `xml:"name"`
+	Disks      []diskXMLConfig      `xml:"devices>disk"`
+	Interfaces []interfaceXMLConfig `xml:"devices>interface"`
+}
+
+func NewLibvirtMachinerep(conn *libvirt.Connect, tpl *template.Template, network string) (*LibvirtMachinerep, error) {
+	return &LibvirtMachinerep{conn: conn, vmtpl: tpl, network: network}, nil
 }
 
 func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvirt.Domain) error {
@@ -108,6 +119,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.Uuid = fmt.Sprintf("%x", uuid)
 	vm.Memory = int(info.Memory)
 	vm.Cpus = int(info.NrVirtCpu)
+	vm.HWAddr = domainConfig.Interfaces[0].Mac.Address
 	return nil
 }
 
@@ -128,7 +140,7 @@ func (store *LibvirtMachinerep) List(machines *models.VirtualMachineList) error 
 
 func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error) {
 	if machine.Name == "" {
-		return false, nil
+		panic("no name specified for LibvirtMachinerep.Get()")
 	}
 
 	domain, err := store.conn.LookupDomainByName(machine.Name)
@@ -171,8 +183,8 @@ func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine
     "public_keys": {
         "mykey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDAvKEhzpqnZ7ipUZkx43In/YoNuvG/HUqR0oCLk/Mil0R533TCDP9ZOiJOrWPhvQc3EOy6mJi5h9KBfxoGt0EbLkkL5Bq5Bb+NvbsxMXmNpgFkE6Yul+yJzRvzQJsvUk8B0vptDfQE2z3+LHkcN/WjMIVUhBC/hB+7d7THC2/TJ+o0CgCXXSkCJ3FqsjiZWEb77pLGnQUV5pp3n4tpR7Aoe9c1KZplXNt8hnWGUJN/gtLLmO6ouORnbRRE9yuPoLJz/r7GMmQQM9VOPyDBelpob4X7fiz0c5L+BCtvWjrZo7vVCFRcpVpBbNUiw5seK3qLUhaOVwL8GOfHTtsFpA7h kubuzzzz+book@gmail.com\n"
     },
-    "uuid": "0cae2cdb-e041-4f26-835b-f9602df0edf3"}
-    `, machine.Name, machine.Name))
+    "uuid": "%s"}
+    `, machine.Name, machine.Name, machine.Uuid))
 	if err := md.Close(); err != nil {
 		return nil, err
 	}
@@ -282,7 +294,8 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		Plan        *models.Plan
 		VolumePath  string
 		ConfigDrive string
-	}{machine, image, plan, rootVolumePath, configDrivePath}
+		Network     string
+	}{machine, image, plan, rootVolumePath, configDrivePath, store.network}
 	if err := store.vmtpl.Execute(&machineXml, vmtplContext); err != nil {
 		configDriveVolume.Delete(0)
 		return err

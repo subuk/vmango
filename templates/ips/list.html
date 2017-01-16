@@ -12,12 +12,17 @@
   </thead>
   <tbody>
 
-  {{ range .Ips }}
+  {{ range .Ips.All }}
     <tr>
       <td>{{ .Address }}</td>
       <td>{{ .Netmask }}</td>
       <td>{{ .Gateway }}</td>
-      <td>{{ .UsedBy }}</td>
+      {{ if .UsedBy }}
+      <td><a href="{{ Url "machine-detail" "name" .UsedBy }}">{{ .UsedBy }}</a></td>
+      {{ else }}
+      <td></td>
+      {{ end }}
+      <td></td>
     </tr>
   {{ end }}
   </tbody>

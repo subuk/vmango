@@ -68,11 +68,19 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 			return vmango.BadRequest(fmt.Sprintf(`image "%s" not found`, form.Image))
 		}
 
+		ip := &models.IP{}
+		if exists, err := ctx.IPPool.Get(ip); err != nil {
+			return fmt.Errorf("cannot find ip address for vm: %s", err)
+		} else if !exists {
+			return fmt.Errorf("no free ip address availaible")
+		}
+
 		vm := &models.VirtualMachine{
 			Name:      form.Name,
 			Memory:    plan.Memory,
 			Cpus:      plan.Cpus,
 			ImageName: image.FullName,
+			Ip:        ip,
 		}
 
 		if exists, err := ctx.Machines.Get(vm); err != nil {
@@ -80,17 +88,26 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 		} else if exists {
 			return vmango.BadRequest(fmt.Sprintf("machine with name '%s' already exists", vm.Name))
 		}
-
 		if err := ctx.Machines.Create(vm, image, plan); err != nil {
 			return fmt.Errorf("failed to create machine: %s", err)
 		}
+		vm = &models.VirtualMachine{Name: vm.Name}
+		if exists, err := ctx.Machines.Get(vm); err != nil {
+			return err
+		} else if !exists {
+			return fmt.Errorf("failed to fetch info for just created machine: %s")
+		}
 
+		if err := ctx.IPPool.Assign(ip, vm); err != nil {
+			return fmt.Errorf("failed to mark ip as used: %s", err)
+		}
+		ip.UsedBy = vm.Name
+		if err := ctx.Machines.Start(vm); err != nil {
+			return fmt.Errorf("failed to start machine: %s", err)
+		}
 		url, err := ctx.Router.Get("machine-list").URL()
 		if err != nil {
 			panic(err)
-		}
-		if err := ctx.Machines.Start(vm); err != nil {
-			return fmt.Errorf("failed to start machine: %s", err)
 		}
 		http.Redirect(w, req, url.Path, http.StatusFound)
 	} else {
@@ -98,8 +115,8 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 		if err := ctx.Plans.List(&plans); err != nil {
 			return fmt.Errorf("failed to fetch plan list: %s", err)
 		}
-		ips := []*models.IP{}
-		if err := ctx.IPPool.List(&ips); err != nil {
+		ips := &models.IPList{}
+		if err := ctx.IPPool.List(ips); err != nil {
 			return fmt.Errorf("failed to fetch ip list: %s", err)
 		}
 		images := []*models.Image{}

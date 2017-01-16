@@ -35,7 +35,7 @@
       <address type='drive' controller='0' bus='1' unit='0'/>
     </disk>
     <interface type='network'>
-      <source network='default'/>
+      <source network='{{ .Network }}'/>
       <model type='virtio'/>
     </interface>
     <input type='tablet' bus='usb'/>
