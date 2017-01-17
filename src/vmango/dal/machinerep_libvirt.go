@@ -309,6 +309,48 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	return nil
 }
 
+func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
+	storagePool, err := store.conn.LookupStoragePoolByName("default")
+	if err != nil {
+		return fmt.Errorf("failed to lookup vm storage pool: %s", err)
+	}
+	if err := storagePool.Refresh(0); err != nil {
+		return err
+	}
+	domain, err := store.conn.LookupDomainByName(machine.Name)
+	if err != nil {
+		return err
+	}
+	running, err := domain.IsActive()
+	if err != nil {
+		return err
+	}
+	if running {
+		if err := domain.Destroy(); err != nil {
+			return err
+		}
+	}
+	domainXMLString, err := domain.GetXMLDesc(0)
+	if err != nil {
+		return err
+	}
+
+	domainXML := domainXMLConfig{}
+	if err := xml.Unmarshal([]byte(domainXMLString), &domainXML); err != nil {
+		return fmt.Errorf("failed to parse domain xml:", err)
+	}
+	for _, disk := range domainXML.Disks {
+		volume, err := store.conn.LookupStorageVolByPath(disk.Source.File)
+		if err != nil {
+			return err
+		}
+		if err := volume.Delete(libvirt.STORAGE_VOL_DELETE_NORMAL); err != nil {
+			return err
+		}
+	}
+	return domain.Undefine()
+}
+
 func (store *LibvirtMachinerep) Start(machine *models.VirtualMachine) error {
 	domain, err := store.conn.LookupDomainByName(machine.Name)
 	if err != nil {

@@ -41,6 +41,14 @@ func (n *netIPConfig) HasHost(ip string) (bool, *netIPHost) {
 	return false, nil
 }
 
+func (n *netIPConfig) Gateway() string {
+	ip, err := getFirstSubnetIP(n.Address, n.Netmask)
+	if err != nil {
+		panic(err)
+	}
+	return ip
+}
+
 type netXMLConfig struct {
 	XMLName xml.Name    `xml:"network"`
 	Name    string      `xml:"name"`
@@ -160,11 +168,55 @@ func (pool *LibvirtIPPool) Assign(ip *models.IP, vm *models.VirtualMachine) erro
 	return network.Update(
 		libvirt.NETWORK_UPDATE_COMMAND_ADD_LAST,
 		libvirt.NETWORK_SECTION_IP_DHCP_HOST,
-		0,
+		-1,
 		fmt.Sprintf(
 			`<host mac="%s" name="%s" ip="%s" />`,
 			vm.HWAddr, vm.Name, ip.Address,
 		),
-		libvirt.NETWORK_UPDATE_AFFECT_LIVE|libvirt.NETWORK_UPDATE_AFFECT_CONFIG|libvirt.NETWORK_UPDATE_AFFECT_CURRENT,
+		libvirt.NETWORK_UPDATE_AFFECT_LIVE|libvirt.NETWORK_UPDATE_AFFECT_CONFIG,
+	)
+}
+
+func (pool *LibvirtIPPool) Fetch(vm *models.VirtualMachine) error {
+	network, err := pool.conn.LookupNetworkByName(pool.network)
+	if err != nil {
+		return err
+	}
+	xmlString, err := network.GetXMLDesc(0)
+	if err != nil {
+		return err
+	}
+	netConfig := &netXMLConfig{}
+	if err := xml.Unmarshal([]byte(xmlString), netConfig); err != nil {
+		return fmt.Errorf("failed to parse network xml:", err)
+	}
+	for _, host := range netConfig.IP.Hosts {
+		if host.Name == vm.Name {
+			vm.Ip = &models.IP{
+				Address: host.IPAddr,
+				Netmask: ipMaskToInt(netConfig.IP.Netmask),
+				Gateway: netConfig.IP.Gateway(),
+				UsedBy:  vm.Name,
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+func (pool *LibvirtIPPool) Release(ip *models.IP) error {
+	network, err := pool.conn.LookupNetworkByName(pool.network)
+	if err != nil {
+		return err
+	}
+	return network.Update(
+		libvirt.NETWORK_UPDATE_COMMAND_DELETE,
+		libvirt.NETWORK_SECTION_IP_DHCP_HOST,
+		-1,
+		fmt.Sprintf(
+			`<host ip="%s" />`,
+			ip.Address,
+		),
+		libvirt.NETWORK_UPDATE_AFFECT_LIVE|libvirt.NETWORK_UPDATE_AFFECT_CONFIG,
 	)
 }

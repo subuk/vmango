@@ -9,6 +9,42 @@ import (
 	"vmango/models"
 )
 
+func MachineDelete(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
+	machine := &models.VirtualMachine{
+		Name: mux.Vars(req)["name"],
+	}
+	if req.Method == "POST" {
+		if err := ctx.IPPool.Fetch(machine); err != nil {
+			return err
+		}
+		if err := ctx.Machines.Remove(machine); err != nil {
+			return err
+		}
+		if machine.Ip != nil {
+			if err := ctx.IPPool.Release(machine.Ip); err != nil {
+				return err
+			}
+		}
+		url, err := ctx.Router.Get("machine-list").URL()
+		if err != nil {
+			panic(err)
+		}
+		http.Redirect(w, req, url.Path, http.StatusFound)
+		return nil
+	} else {
+		if exists, err := ctx.Machines.Get(machine); err != nil {
+			return fmt.Errorf("failed to fetch machine info: %s", err)
+		} else if !exists {
+			return vmango.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
+		}
+		ctx.Render.HTML(w, http.StatusOK, "machines/delete", map[string]interface{}{
+			"Request": req,
+			"Machine": machine,
+		})
+	}
+	return nil
+}
+
 func MachineStateChange(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
 	machine := &models.VirtualMachine{
 		Name: mux.Vars(req)["name"],

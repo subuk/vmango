@@ -101,6 +101,7 @@ func main() {
 	router.Handle("/machines/add/", vmango.NewHandler(ctx, handlers.MachineAddForm)).Name("machine-add")
 	router.Handle("/machines/{name:[^/]+}/", vmango.NewHandler(ctx, handlers.MachineDetail)).Name("machine-detail")
 	router.Handle("/machines/{name:[^/]+}/{action:(start|stop)}/", vmango.NewHandler(ctx, handlers.MachineStateChange)).Name("machine-changestate")
+	router.Handle("/machines/{name:[^/]+}/delete/", vmango.NewHandler(ctx, handlers.MachineDelete)).Name("machine-delete")
 	router.Handle("/images/", vmango.NewHandler(ctx, handlers.ImageList)).Name("image-list")
 	router.Handle("/ipaddress/", vmango.NewHandler(ctx, handlers.IPList)).Name("ip-list")
 	router.Handle("/plans/", vmango.NewHandler(ctx, handlers.PlanList)).Name("plan-list")

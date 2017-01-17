@@ -29,7 +29,7 @@
                     {{ else }}
                     <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "start" }}">Start</a>
                     {{ end }}
-                    <a href="#" target="new_blank">Remove</a>
+                    <a href="{{ Url "machine-delete" "name" .Machine.Name }}">Remove</a>
                     <a href="#" target="new_blank">Resize</a>
                 </div>
             </div>

@@ -10,6 +10,7 @@ type Machinerep interface {
 	Create(*models.VirtualMachine, *models.Image, *models.Plan) error
 	Start(*models.VirtualMachine) error
 	Stop(*models.VirtualMachine) error
+	Remove(*models.VirtualMachine) error
 }
 
 type Imagerep interface {
@@ -26,4 +27,6 @@ type IPPool interface {
 	List(*models.IPList) error
 	Get(*models.IP) (bool, error)
 	Assign(*models.IP, *models.VirtualMachine) error
+	Fetch(*models.VirtualMachine) error
+	Release(*models.IP) error
 }
