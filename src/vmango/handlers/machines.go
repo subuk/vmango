@@ -9,6 +9,46 @@ import (
 	"vmango/models"
 )
 
+func MachineStateChange(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
+	machine := &models.VirtualMachine{
+		Name: mux.Vars(req)["name"],
+	}
+	if exists, err := ctx.Machines.Get(machine); err != nil {
+		return fmt.Errorf("failed to fetch machine info: %s", err)
+	} else if !exists {
+		return vmango.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
+	}
+
+	action := mux.Vars(req)["action"]
+	if req.Method == "POST" {
+		switch action {
+		case "stop":
+			if err := ctx.Machines.Stop(machine); err != nil {
+				return fmt.Errorf("failed to stop machine: %s", err)
+			}
+		case "start":
+			if err := ctx.Machines.Start(machine); err != nil {
+				return fmt.Errorf("failed to start machine: %s", err)
+			}
+		default:
+			return vmango.BadRequest(fmt.Sprintf("unknown action '%s' requested", action))
+		}
+		url, err := ctx.Router.Get("machine-detail").URL("name", machine.Name)
+		if err != nil {
+			panic(err)
+		}
+		http.Redirect(w, req, url.Path, http.StatusFound)
+		return nil
+	} else {
+		ctx.Render.HTML(w, http.StatusOK, "machines/changestate", map[string]interface{}{
+			"Request": req,
+			"Machine": machine,
+			"Action":  action,
+		})
+		return nil
+	}
+}
+
 func MachineList(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
 	machines := &models.VirtualMachineList{}
 	if err := ctx.Machines.List(machines); err != nil {

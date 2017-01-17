@@ -9,6 +9,7 @@ type Machinerep interface {
 	Get(*models.VirtualMachine) (bool, error)
 	Create(*models.VirtualMachine, *models.Image, *models.Plan) error
 	Start(*models.VirtualMachine) error
+	Stop(*models.VirtualMachine) error
 }
 
 type Imagerep interface {

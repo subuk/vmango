@@ -64,6 +64,10 @@ func (v *VirtualMachine) StateName() string {
 	return "unknown"
 }
 
+func (v *VirtualMachine) IsRunning() bool {
+	return v.State == STATE_RUNNING
+}
+
 func (v *VirtualMachine) MemoryMegabytes() int {
 	return int(v.Memory / 1024)
 }

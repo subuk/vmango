@@ -316,3 +316,11 @@ func (store *LibvirtMachinerep) Start(machine *models.VirtualMachine) error {
 	}
 	return domain.Create()
 }
+
+func (store *LibvirtMachinerep) Stop(machine *models.VirtualMachine) error {
+	domain, err := store.conn.LookupDomainByName(machine.Name)
+	if err != nil {
+		return err
+	}
+	return domain.Destroy()
+}

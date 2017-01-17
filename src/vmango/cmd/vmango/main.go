@@ -47,6 +47,7 @@ func main() {
 				"HumanizeDate": func(date time.Time) string {
 					return date.Format("Mon Jan 2 15:04:05 -0700 MST 2006")
 				},
+				"Capitalize": strings.Title,
 				"Url": func(name string, params ...string) (string, error) {
 					route := router.Get(name)
 					if route == nil {
@@ -99,6 +100,7 @@ func main() {
 	router.Handle("/machines/", vmango.NewHandler(ctx, handlers.MachineList)).Name("machine-list")
 	router.Handle("/machines/add/", vmango.NewHandler(ctx, handlers.MachineAddForm)).Name("machine-add")
 	router.Handle("/machines/{name:[^/]+}/", vmango.NewHandler(ctx, handlers.MachineDetail)).Name("machine-detail")
+	router.Handle("/machines/{name:[^/]+}/{action:(start|stop)}/", vmango.NewHandler(ctx, handlers.MachineStateChange)).Name("machine-changestate")
 	router.Handle("/images/", vmango.NewHandler(ctx, handlers.ImageList)).Name("image-list")
 	router.Handle("/ipaddress/", vmango.NewHandler(ctx, handlers.IPList)).Name("ip-list")
 	router.Handle("/plans/", vmango.NewHandler(ctx, handlers.PlanList)).Name("plan-list")

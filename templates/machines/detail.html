@@ -24,6 +24,11 @@
                 </div>
 
                 <div class="card-action">
+                    {{ if .Machine.IsRunning }}
+                    <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "stop" }}">Force stop</a>
+                    {{ else }}
+                    <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "start" }}">Start</a>
+                    {{ end }}
                     <a href="#" target="new_blank">Remove</a>
                     <a href="#" target="new_blank">Resize</a>
                 </div>
