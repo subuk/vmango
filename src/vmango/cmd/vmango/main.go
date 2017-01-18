@@ -21,26 +21,24 @@ import (
 )
 
 var (
-	LISTEN_ADDR    = flag.String("listen", "0.0.0.0:8000", "Listen address")
-	LIBVIRT_URL    = flag.String("libvirt-url", "qemu:///system", "Libvirt connection url")
-	LIBVIRT_NET    = flag.String("libvirt-net", "vmango", "Libvirt vm network name")
-	TEMPLATE_PATH  = flag.String("template-path", "templates", "Template path")
-	STATIC_PATH    = flag.String("static-path", "static", "Static path")
-	METADB_PATH    = flag.String("metadb-path", "vmango.db", "Metadata database path")
-	IMAGES_STORAGE = flag.String("images-storage", "vmango-images", "Machine images repository path")
-	VM_TEMPLATE    = flag.String("vm-template", "vm.xml.in", "Virtual machine configuration template")
+	CONFIG_PATH = flag.String("config", "vmango.conf", "Path to configuration file")
 )
 
 func main() {
 	flag.Parse()
 	log.SetLevel(log.InfoLevel)
 
+	config, err := vmango.ParseConfig(*CONFIG_PATH)
+	if err != nil {
+		log.WithError(err).WithField("filename", *CONFIG_PATH).Fatal("failed to parse config")
+	}
+
 	router := mux.NewRouter().StrictSlash(true)
 
 	renderer := render.New(render.Options{
 		Extensions:    []string{".html"},
 		IsDevelopment: true,
-		Directory:     *TEMPLATE_PATH,
+		Directory:     config.TemplatePath,
 		Funcs: []template.FuncMap{
 			template.FuncMap{
 				"HasPrefix": strings.HasPrefix,
@@ -62,29 +60,30 @@ func main() {
 			},
 		},
 	})
-	vmtpl, err := text_template.ParseFiles(*VM_TEMPLATE)
+
+	vmtpl, err := text_template.ParseFiles(config.Hypervisor.VmTemplate)
 	if err != nil {
-		log.WithError(err).WithField("filename", *VM_TEMPLATE).Fatal("failed to parse machine template")
+		log.WithError(err).WithField("filename", config.Hypervisor.VmTemplate).Fatal("failed to parse machine template")
 	}
-	virtConn, err := libvirt.NewConnect(*LIBVIRT_URL)
+	virtConn, err := libvirt.NewConnect(config.Hypervisor.Url)
 	if err != nil {
 		log.WithError(err).Fatal("failed to connect to libvirt")
 	}
 
-	machines, err := dal.NewLibvirtMachinerep(virtConn, vmtpl, *LIBVIRT_NET)
+	machines, err := dal.NewLibvirtMachinerep(virtConn, vmtpl, config.Hypervisor.Network)
 	if err != nil {
 		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
 	}
 
-	imagerep := dal.NewLibvirtImagerep(virtConn, *IMAGES_STORAGE)
+	imagerep := dal.NewLibvirtImagerep(virtConn, config.Hypervisor.ImageStoragePool)
 
-	metadb, err := bolt.Open(*METADB_PATH, 0600, nil)
+	metadb, err := bolt.Open(config.DbPath, 0600, nil)
 	if err != nil {
 		log.WithError(err).Fatal("failed to open metadata db")
 	}
 
 	planrep := dal.NewBoltPlanrep(metadb)
-	ippool := dal.NewLibvirtIPPool(virtConn, *LIBVIRT_NET)
+	ippool := dal.NewLibvirtIPPool(virtConn, config.Hypervisor.Network)
 
 	ctx := &vmango.Context{
 		Render:   renderer,
@@ -106,13 +105,13 @@ func main() {
 	router.Handle("/ipaddress/", vmango.NewHandler(ctx, handlers.IPList)).Name("ip-list")
 	router.Handle("/plans/", vmango.NewHandler(ctx, handlers.PlanList)).Name("plan-list")
 
-	router.HandleFunc("/static{name:.*}", handlers.MakeStaticHandler(*STATIC_PATH)).Name("static")
+	router.HandleFunc("/static{name:.*}", handlers.MakeStaticHandler(config.StaticPath)).Name("static")
 
 	n := negroni.New()
 	n.Use(negronilogrus.NewMiddleware())
 	n.Use(negroni.NewRecovery())
 	n.UseHandler(router)
 
-	log.WithField("address", *LISTEN_ADDR).Info("starting server")
-	log.Fatal(http.ListenAndServe(*LISTEN_ADDR, n))
+	log.WithField("address", config.Listen).Info("starting server")
+	log.Fatal(http.ListenAndServe(config.Listen, n))
 }
