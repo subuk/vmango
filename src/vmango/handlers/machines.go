@@ -106,6 +106,9 @@ func MachineDetail(ctx *vmango.Context, w http.ResponseWriter, req *http.Request
 	} else if !exists {
 		return vmango.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
 	}
+	if err := ctx.IPPool.Fetch(machine); err != nil {
+		return err
+	}
 
 	ctx.Render.HTML(w, http.StatusOK, "machines/detail", map[string]interface{}{
 		"Request": req,

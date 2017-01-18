@@ -20,6 +20,9 @@
                     <li role="presentation">
                       <a>Cpus: {{ .Machine.Cpus }}</a>
                     </li>
+                    <li role="presentation">
+                      <a>IP: {{ if .Machine.Ip }} {{ .Machine.Ip.Address }} {{ else }} None {{ end }}</a>
+                    </li>
                   </ul>
                 </div>
 
