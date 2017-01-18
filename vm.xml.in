@@ -1,4 +1,4 @@
-<domain type='qemu'>
+<domain type='kvm'>
   <name>{{ .Machine.Name }}</name>
   <currentMemory unit="b">{{ .Plan.Memory }}</currentMemory>
   <memory unit="b">{{ .Plan.Memory }}</memory>

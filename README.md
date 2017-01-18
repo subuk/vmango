@@ -1,45 +1,101 @@
 # vmango
 
-vmango is a virtual machines management web interface written using [Go](http://golang.org/).
+Vmango is a virtual machines management web interface written using [Go](http://golang.org/).
 
-## Development installation
-### For Ubuntu 14.04
+Current features:
 
-Install Go 1.5
+* KVM via libvirt
+* Digitalocean-style interface
+* Support for cloud OS images (with cloud-init installed)
+* IP address management
 
-    cd /usr/local
-    sudo wget https://storage.googleapis.com/golang/go1.5.1.linux-amd64.tar.gz
-    sudo tar xf go1.5.1.linux-amd64.tar.gz
+Planned features:
 
-Install libvirt enviroment and relogin:
+* Backups
+* SSH keys management
+* DNS zones management
+* Other virtualization platforms
+* Multiple virtualization servers
+* Elastic IP addresses and port forwarding
+* Native packages for linux distributions
+
+Hypervisor requirements:
+
+* Libvirt 0.10+ (centos6+, ubuntu14.04+, debian8+)
+
+## Development hypervisor configuration (Ubuntu 14.04/16.04)
 
     sudo apt-get install libvirt-dev libvirt-bin qemu-kvm virt-manager qemu-system
     sudo usermod -aG libvirtd [username]
+    newgrp libvirtd
+
+Define libvirt network
+
+    virsh net-define network.xml
+
+Define libvirt images storage:
+    
+    sudo mkdir -p /var/lib/libvirt/images/vmango-images
+    virsh pool-define storage-pool-images.xml
+
+Install dhcp lease monitor hook (symlink doesn't work due to Apparmor restrictions):
+    
+    sudo cp qemu-hook.py /etc/libvirt/hooks/qemu
+
+Download vm images (file names matter!)
+
+    wget -O- http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2.xz |unxz - > Centos-7_amd64_qcow2.img
+    wget -O- https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img  > Ubuntu-16.04_amd64_qcow2.img
+    sudo chown root. *_qcow2.img
+    sudo mv Centos-7_amd64_qcow2.img /var/lib/libvirt/images/vmango-images/
+    sudo mv Ubuntu-16.04_amd64_qcow2.img /var/lib/libvirt/images/vmango-images/
+    virsh pool-refresh vmango-images
+
+If your processor doesn't support hardware acceleration, change type from "kvm" to "qemu" in the first line of vm.xml.in (or you will get an error during first machine creation):
+
+    <domain type='qemu'> 
+
+## Development environment
+
+### Ubuntu (local hypervisor)
+
+Install Go 1.7
+
+    cd /usr/local
+    sudo wget https://storage.googleapis.com/golang/go1.7.4.linux-amd64.tar.gz
+    sudo tar xf go1.7.4.linux-amd64.tar.gz
 
 Compile
 
     make all
 
-Create test ip addresses and plans
+Create plans
 
     ./bin/vmango-add-plan --name=5 --memory=512 --disk=20 --cpus=1
     ./bin/vmango-add-plan --name=10 --memory=1024 --disk=30 --cpus=1
-    ./bin/vmango-add-plan --name=20 --memory=2048 --disk=40 --cpus=2
-    ./bin/vmango-add-plan --name=40 --memory=4096 --disk=60 --cpus=2
-    ./bin/vmango-add-ip --mask=24 --gw=192.168.123.1 --ip=192.168.123.101
-    ./bin/vmango-add-ip --mask=24 --gw=192.168.123.1 --ip=192.168.123.102
-    ./bin/vmango-add-ip --mask=24 --gw=192.168.123.1 --ip=192.168.123.103
-    ./bin/vmango-add-ip --mask=24 --gw=192.168.123.2 --ip=192.168.123.104
-    ./bin/vmango-add-ip --mask=24 --gw=192.168.123.1 --ip=192.168.123.105
 
-Download vm images
+Run app:
 
-    mkdir images    
-    wget -O- http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-20150628_01.qcow2.xz |unxz - > images/Centos-7_amd64_qcow2.img
-    wget -O- https://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img  > images/Ubuntu-14.04_amd64_qcow2.img
+    ./bin/vmango
 
-Run app
 
-    sudo ./bin/vmango
-    # or better
-    make && sudo ./bin/vmango
+### MacOS (remote hypervisor)
+
+Install Go compiler
+
+    brew install go
+
+Compile 
+
+    make all
+
+Create plans
+
+    ./bin/vmango-add-plan --name=5 --memory=512 --disk=20 --cpus=1
+    ./bin/vmango-add-plan --name=10 --memory=1024 --disk=30 --cpus=1
+
+Steal server with Ubuntu 14.04 and install libvirt/kvm on it following the instructions above.
+
+Run app with remote url:
+
+    ./bin/vmango --libvirt-url='qemu+ssh://user@host/system'

@@ -21,14 +21,14 @@ import (
 )
 
 var (
-	LISTEN_ADDR   = flag.String("listen", "0.0.0.0:8000", "Listen address")
-	LIBVIRT_URL   = flag.String("libvirt-url", "qemu:///system", "Libvirt connection url")
-	LIBVIRT_NET   = flag.String("libvirt-net", "nodhcp", "Libvirt vm network name")
-	TEMPLATE_PATH = flag.String("template-path", "templates", "Template path")
-	STATIC_PATH   = flag.String("static-path", "static", "Static path")
-	METADB_PATH   = flag.String("metadb-path", "vmango.db", "Metadata database path")
-	IMAGES_VOLUME = flag.String("images-volume", "vmango-images", "Machine images repository path")
-	VM_TEMPLATE   = flag.String("vm-template", "vm.xml.in", "Virtual machine configuration template")
+	LISTEN_ADDR    = flag.String("listen", "0.0.0.0:8000", "Listen address")
+	LIBVIRT_URL    = flag.String("libvirt-url", "qemu:///system", "Libvirt connection url")
+	LIBVIRT_NET    = flag.String("libvirt-net", "vmango", "Libvirt vm network name")
+	TEMPLATE_PATH  = flag.String("template-path", "templates", "Template path")
+	STATIC_PATH    = flag.String("static-path", "static", "Static path")
+	METADB_PATH    = flag.String("metadb-path", "vmango.db", "Metadata database path")
+	IMAGES_STORAGE = flag.String("images-storage", "vmango-images", "Machine images repository path")
+	VM_TEMPLATE    = flag.String("vm-template", "vm.xml.in", "Virtual machine configuration template")
 )
 
 func main() {
@@ -76,7 +76,7 @@ func main() {
 		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
 	}
 
-	imagerep := dal.NewLibvirtImagerep(virtConn, *IMAGES_VOLUME)
+	imagerep := dal.NewLibvirtImagerep(virtConn, *IMAGES_STORAGE)
 
 	metadb, err := bolt.Open(*METADB_PATH, 0600, nil)
 	if err != nil {
