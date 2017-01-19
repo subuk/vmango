@@ -94,6 +94,10 @@ Install Go compiler
 
     brew install go
 
+Install libvirt library
+
+    brew install libvirt
+
 Compile 
 
     make
