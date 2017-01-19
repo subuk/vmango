@@ -15,12 +15,6 @@ import (
 	"vmango/models"
 )
 
-type LibvirtMachinerep struct {
-	conn    *libvirt.Connect
-	vmtpl   *template.Template
-	network string
-}
-
 type diskSourceXMLConfig struct {
 	File string `xml:"file,attr"`
 }
@@ -64,8 +58,15 @@ type domainXMLConfig struct {
 	SSHKeys    []sshKeyConfig       `xml:"metadata>md>sshkeys>key"`
 }
 
-func NewLibvirtMachinerep(conn *libvirt.Connect, tpl *template.Template, network string) (*LibvirtMachinerep, error) {
-	return &LibvirtMachinerep{conn: conn, vmtpl: tpl, network: network}, nil
+type LibvirtMachinerep struct {
+	conn        *libvirt.Connect
+	vmtpl       *template.Template
+	network     string
+	storagePool string
+}
+
+func NewLibvirtMachinerep(conn *libvirt.Connect, tpl *template.Template, network, pool string) (*LibvirtMachinerep, error) {
+	return &LibvirtMachinerep{conn: conn, vmtpl: tpl, network: network, storagePool: pool}, nil
 }
 
 func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvirt.Domain) error {
@@ -266,7 +267,7 @@ func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine
 }
 
 func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *models.Image, plan *models.Plan) error {
-	storagePool, err := store.conn.LookupStoragePoolByName("default")
+	storagePool, err := store.conn.LookupStoragePoolByName(store.storagePool)
 	if err != nil {
 		return fmt.Errorf("failed to lookup vm storage pool: %s", err)
 	}
@@ -337,7 +338,7 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 }
 
 func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
-	storagePool, err := store.conn.LookupStoragePoolByName("default")
+	storagePool, err := store.conn.LookupStoragePoolByName(store.storagePool)
 	if err != nil {
 		return fmt.Errorf("failed to lookup vm storage pool: %s", err)
 	}

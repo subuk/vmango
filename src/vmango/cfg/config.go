@@ -8,6 +8,7 @@ import (
 type HypervisorConfig struct {
 	Url              string `hcl:"url"`
 	ImageStoragePool string `hcl:"image_storage_pool"`
+	RootStoragePool  string `hcl:"root_storage_pool"`
 	Network          string `hcl:"network"`
 	VmTemplate       string `hcl:"vm_template"`
 }
