@@ -97,15 +97,17 @@ type LibvirtMachinerep struct {
 	voltpl      *template.Template
 	network     string
 	storagePool string
+	ignoreVms   []string
 }
 
-func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Template, network, pool string) (*LibvirtMachinerep, error) {
+func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Template, network, pool string, ignoreVms []string) (*LibvirtMachinerep, error) {
 	return &LibvirtMachinerep{
 		conn:        conn,
 		vmtpl:       vmtpl,
 		voltpl:      voltpl,
 		network:     network,
 		storagePool: pool,
+		ignoreVms:   ignoreVms,
 	}, nil
 }
 
@@ -175,12 +177,28 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	return nil
 }
 
+func (store *LibvirtMachinerep) isIgnored(name string) bool {
+	for _, ignored := range store.ignoreVms {
+		if name == ignored {
+			return true
+		}
+	}
+	return false
+}
+
 func (store *LibvirtMachinerep) List(machines *models.VirtualMachineList) error {
 	domains, err := store.conn.ListAllDomains(0)
 	if err != nil {
 		return err
 	}
 	for _, domain := range domains {
+		domainName, err := domain.GetName()
+		if err != nil {
+			panic(err)
+		}
+		if store.isIgnored(domainName) {
+			continue
+		}
 		vm := &models.VirtualMachine{}
 		if err := store.fillVm(vm, &domain); err != nil {
 			return err

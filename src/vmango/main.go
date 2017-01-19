@@ -65,7 +65,10 @@ func main() {
 		log.WithError(err).Fatal("failed to connect to libvirt")
 	}
 
-	machines, err := dal.NewLibvirtMachinerep(virtConn, vmtpl, voltpl, config.Hypervisor.Network, config.Hypervisor.RootStoragePool)
+	machines, err := dal.NewLibvirtMachinerep(
+		virtConn, vmtpl, voltpl, config.Hypervisor.Network,
+		config.Hypervisor.RootStoragePool, config.Hypervisor.IgnoreVms,
+	)
 	if err != nil {
 		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
 	}
