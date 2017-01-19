@@ -67,7 +67,7 @@ Install Go 1.7
 
 Compile
 
-    make all
+    make
 
 Run app:
 
@@ -82,10 +82,20 @@ Install Go compiler
 
 Compile 
 
-    make all
+    make
 
 Steal server with Ubuntu 14.04 and install libvirt/kvm on it following the instructions above.
 
-Run app with remote url:
+Change hypervisor url in config file (vmango.conf) to remote location
 
-    ./bin/vmango --libvirt-url='qemu+ssh://user@host/system'
+    ...
+    hypervisor {
+        ...
+        url = "qemu+ssh://user@host/system"
+        ...
+    }
+    ...
+
+Run app 
+
+    ./bin/vmango 
