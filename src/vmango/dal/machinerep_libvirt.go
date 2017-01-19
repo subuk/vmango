@@ -11,12 +11,24 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"text/template"
 	"vmango/models"
 )
 
 type diskSourceXMLConfig struct {
 	File string `xml:"file,attr"`
+	Dev  string `xml:"dev,attr"`
+}
+
+func (source diskSourceXMLConfig) Path() string {
+	if source.File != "" {
+		return source.File
+	}
+	if source.Dev != "" {
+		return source.Dev
+	}
+	return ""
 }
 
 type diskTargetXMLConfig struct {
@@ -31,9 +43,22 @@ type diskDriverXMLConfig struct {
 }
 
 type diskXMLConfig struct {
+	Device string              `xml:"device,attr"`
 	Driver diskDriverXMLConfig `xml:"driver"`
 	Target diskTargetXMLConfig `xml:"target"`
 	Source diskSourceXMLConfig `xml:"source"`
+}
+
+type diskListXMLConfig []diskXMLConfig
+
+func (disks diskListXMLConfig) Root() diskXMLConfig {
+	for _, disk := range disks {
+		if disk.Device != "cdrom" && strings.HasSuffix(disk.Source.Path(), "_disk") {
+			return disk
+		}
+	}
+	msg := fmt.Sprintf("no root disk found")
+	panic(msg)
 }
 
 type interfaceMacXMLConfig struct {
@@ -53,7 +78,7 @@ type sshKeyConfig struct {
 type domainXMLConfig struct {
 	XMLName    xml.Name             `xml:"domain"`
 	Name       string               `xml:"name"`
-	Disks      []diskXMLConfig      `xml:"devices>disk"`
+	Disks      diskListXMLConfig    `xml:"devices>disk"`
 	Interfaces []interfaceXMLConfig `xml:"devices>interface"`
 	SSHKeys    []sshKeyConfig       `xml:"metadata>md>sshkeys>key"`
 }
@@ -115,7 +140,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	}
 
 	if len(domainConfig.Disks) > 0 {
-		volume, err := store.conn.LookupStorageVolByPath(domainConfig.Disks[0].Source.File)
+		volume, err := store.conn.LookupStorageVolByPath(domainConfig.Disks.Root().Source.Path())
 		if err != nil {
 			return err
 		}
@@ -124,7 +149,8 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 			return err
 		}
 		vm.Disk = &models.VirtualMachineDisk{}
-		vm.Disk.Driver = domainConfig.Disks[0].Driver.Name
+		vm.Disk.Driver = domainConfig.Disks.Root().Driver.Name
+		vm.Disk.Type = domainConfig.Disks.Root().Driver.Type
 		vm.Disk.Size = volumeInfo.Capacity
 	} else {
 		vm.Disk = nil
@@ -314,10 +340,6 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		configDriveVolume.Delete(0)
 		return fmt.Errorf("failed to clone image: %s", err)
 	}
-	if err := rootVolume.Resize(uint64(plan.DiskSize), 0); err != nil {
-		configDriveVolume.Delete(0)
-		return fmt.Errorf("failed to resize root volume: %s", err)
-	}
 	rootVolumePath, err := rootVolume.GetPath()
 	if err != nil {
 		return fmt.Errorf("failed to get machine volume path: %s", err)
@@ -341,6 +363,12 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		return err
 	}
 	store.fillVm(machine, domain)
+	if machine.Disk.Type == "qcow2" {
+		if err := rootVolume.Resize(uint64(plan.DiskSize), 0); err != nil {
+			configDriveVolume.Delete(0)
+			return fmt.Errorf("failed to resize root volume: %s", err)
+		}
+	}
 	return nil
 }
 
@@ -375,9 +403,13 @@ func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
 		return fmt.Errorf("failed to parse domain xml:", err)
 	}
 	for _, disk := range domainXML.Disks {
-		volume, err := store.conn.LookupStorageVolByPath(disk.Source.File)
+		lookupKey := disk.Source.Path()
+		if lookupKey == "" {
+			return fmt.Errorf("cannot find lookup key for volume '%s'", lookupKey)
+		}
+		volume, err := store.conn.LookupStorageVolByPath(lookupKey)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to lookup domain disk by key '%s': %s", lookupKey, err)
 		}
 		if err := volume.Delete(libvirt.STORAGE_VOL_DELETE_NORMAL); err != nil {
 			return err

@@ -40,6 +40,7 @@ func (vms *VirtualMachineList) Add(vm *VirtualMachine) {
 type VirtualMachineDisk struct {
 	Size   uint64 `json:"size"`
 	Driver string `json:"driver"`
+	Type   string `json:"type"`
 }
 
 type VirtualMachine struct {
