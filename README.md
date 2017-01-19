@@ -40,7 +40,7 @@ Define libvirt images storage:
 
 Install dhcp lease monitor hook (symlink doesn't work due to Apparmor restrictions):
     
-    sudo cp qemu-hook.py /etc/libvirt/hooks/qemu
+    sudo cp qemu-hook-lease-monitor.py /etc/libvirt/hooks/qemu
 
 Download vm images (file names matter!)
 
