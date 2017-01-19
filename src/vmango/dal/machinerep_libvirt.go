@@ -52,12 +52,20 @@ type diskXMLConfig struct {
 type diskListXMLConfig []diskXMLConfig
 
 func (disks diskListXMLConfig) Root() diskXMLConfig {
+	var candidates []diskXMLConfig
 	for _, disk := range disks {
-		if disk.Device != "cdrom" && strings.HasSuffix(disk.Source.Path(), "_disk") {
+		if disk.Device == "cdrom" {
+			continue
+		}
+		if strings.HasSuffix(disk.Source.Path(), "_disk") {
 			return disk
 		}
+		candidates = append(candidates, disk)
 	}
-	msg := fmt.Sprintf("no root disk found")
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+	msg := fmt.Sprintf("cannot determine root disk from: %s", disks)
 	panic(msg)
 }
 
