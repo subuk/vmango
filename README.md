@@ -55,9 +55,7 @@ If your processor doesn't support hardware acceleration, change type from "kvm" 
 
     <domain type='qemu'> 
 
-## Development environment
-
-### User passwords
+## User passwords
 
 User passwords stored in config file in hashed form (golang.org/x/crypto/bcrypt). For adding new user or change password for existing, generate a new one with `vmango genpw` utility:
 
@@ -70,6 +68,8 @@ Copy output and insert into config file:
         password = "$2a$10$uztHNVBxZ08LBmboJpAqguN4gZSymgmjaJ2xPHKwAqH.ukgaplb96"
     }
     ...
+
+## Development environment
 
 ### Ubuntu (local hypervisor)
 
