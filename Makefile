@@ -6,6 +6,8 @@ PACKAGES = $(shell cd src/vmango; find -type d|sed 's,^./,,' | sed 's,/,@,g' |se
 TEST_ARGS = -race
 test_coverage_targets = $(addprefix test-coverage-, $(PACKAGES))
 
+default: bin/vmango
+
 debug:
 	@echo $(test_coverage_targets)
 
@@ -32,5 +34,3 @@ show-coverage-text:
 
 clean:
 	rm -rf bin/ vendor/pkg/ vendor/bin pkg/
-
-all: bin/vmango
