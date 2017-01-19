@@ -69,11 +69,6 @@ Compile
 
     make all
 
-Create plans
-
-    ./bin/vmango-add-plan --name=5 --memory=512 --disk=20 --cpus=1
-    ./bin/vmango-add-plan --name=10 --memory=1024 --disk=30 --cpus=1
-
 Run app:
 
     ./bin/vmango
@@ -88,11 +83,6 @@ Install Go compiler
 Compile 
 
     make all
-
-Create plans
-
-    ./bin/vmango-add-plan --name=5 --memory=512 --disk=20 --cpus=1
-    ./bin/vmango-add-plan --name=10 --memory=1024 --disk=30 --cpus=1
 
 Steal server with Ubuntu 14.04 and install libvirt/kvm on it following the instructions above.
 

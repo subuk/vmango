@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"github.com/boltdb/bolt"
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/mux"
 	"github.com/libvirt/libvirt-go"
@@ -16,6 +15,7 @@ import (
 	text_template "text/template"
 	"time"
 	"vmango"
+	"vmango/cfg"
 	"vmango/dal"
 	"vmango/handlers"
 )
@@ -28,7 +28,7 @@ func main() {
 	flag.Parse()
 	log.SetLevel(log.InfoLevel)
 
-	config, err := vmango.ParseConfig(*CONFIG_PATH)
+	config, err := cfg.ParseConfig(*CONFIG_PATH)
 	if err != nil {
 		log.WithError(err).WithField("filename", *CONFIG_PATH).Fatal("failed to parse config")
 	}
@@ -76,13 +76,7 @@ func main() {
 	}
 
 	imagerep := dal.NewLibvirtImagerep(virtConn, config.Hypervisor.ImageStoragePool)
-
-	metadb, err := bolt.Open(config.DbPath, 0600, nil)
-	if err != nil {
-		log.WithError(err).Fatal("failed to open metadata db")
-	}
-
-	planrep := dal.NewBoltPlanrep(metadb)
+	planrep := dal.NewConfigPlanrep(config.Plans)
 	ippool := dal.NewLibvirtIPPool(virtConn, config.Hypervisor.Network)
 
 	ctx := &vmango.Context{

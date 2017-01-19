@@ -1,4 +1,4 @@
-package vmango
+package cfg
 
 import (
 	"github.com/hashicorp/hcl"
@@ -12,6 +12,13 @@ type HypervisorConfig struct {
 	VmTemplate       string `hcl:"vm_template"`
 }
 
+type PlanConfig struct {
+	Name     string `hcl:",key"`
+	Memory   int    `hcl:"memory"`
+	Cpus     int    `hcl:"cpus"`
+	DiskSize int    `hcl:"disk_size"`
+}
+
 type Config struct {
 	Listen       string `hcl:"listen"`
 	TemplatePath string `hcl:"template_path"`
@@ -19,6 +26,7 @@ type Config struct {
 	DbPath       string `hcl:"db_path"`
 
 	Hypervisor HypervisorConfig `hcl:"hypervisor"`
+	Plans      []PlanConfig     `hcl:"plan"`
 }
 
 func ParseConfig(filename string) (*Config, error) {
