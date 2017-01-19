@@ -277,6 +277,16 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		return fmt.Errorf("failed to lookup image storage pool: %s", err)
 	}
 
+	configDriveVolume, err := store.createConfigDrive(machine, storagePool)
+	if err != nil {
+		return fmt.Errorf("failed to create config drive: %s", err)
+	}
+	log.WithField("configdrive", configDriveVolume).Debug("config drive created successfully")
+	configDrivePath, err := configDriveVolume.GetPath()
+	if err != nil {
+		return err
+	}
+
 	volumeXML := fmt.Sprintf(`
 	<volume>
 	  <target>
@@ -290,16 +300,6 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	imageVolume, err := imagePool.LookupStorageVolByName(image.FullName)
 	if err != nil {
 		return fmt.Errorf("failed to lookup image volume: %s", err)
-	}
-
-	configDriveVolume, err := store.createConfigDrive(machine, storagePool)
-	if err != nil {
-		return fmt.Errorf("failed to create config drive: %s", err)
-	}
-	log.WithField("configdrive", configDriveVolume).Debug("config drive created successfully")
-	configDrivePath, err := configDriveVolume.GetPath()
-	if err != nil {
-		return err
 	}
 
 	rootVolume, err := storagePool.StorageVolCreateXMLFrom(volumeXML, imageVolume, 0)
