@@ -7,14 +7,6 @@ bin/vmango: $(SOURCES)
 	GOPATH=$(GOPATH) go get vmango/...
 	GOPATH=$(GOPATH) go build -o bin/vmango vmango/cmd/vmango
 
-bin/vmango-add-ip: src/vmango/cmd/vmango-add-ip/*.go
-	GOPATH=$(GOPATH) go get vmango
-	GOPATH=$(GOPATH) go build -o bin/vmango-add-ip vmango/cmd/vmango-add-ip
-
-bin/vmango-add-plan: src/vmango/cmd/vmango-add-plan/*.go
-	GOPATH=$(GOPATH) go get vmango
-	GOPATH=$(GOPATH) go build -o bin/vmango-add-plan vmango/cmd/vmango-add-plan
-
 test:
 	GOPATH=$(GOPATH) go get github.com/stretchr/testify/mock
 	GOPATH=$(GOPATH) go get github.com/stretchr/testify/assert
@@ -39,4 +31,4 @@ test-race:
 clean:
 	rm -rf bin/ vendor/pkg/ vendor/bin pkg/
 
-all: bin/vmango bin/vmango-add-ip bin/vmango-add-plan
+all: bin/vmango
