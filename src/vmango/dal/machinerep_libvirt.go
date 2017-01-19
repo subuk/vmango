@@ -336,16 +336,6 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		return fmt.Errorf("failed to lookup image storage pool: %s", err)
 	}
 
-	configDriveVolume, err := store.createConfigDrive(machine, storagePool)
-	if err != nil {
-		return fmt.Errorf("failed to create config drive: %s", err)
-	}
-	log.WithField("configdrive", configDriveVolume).Debug("config drive created successfully")
-	configDrivePath, err := configDriveVolume.GetPath()
-	if err != nil {
-		return err
-	}
-
 	var volumeXML bytes.Buffer
 	voltplContext := struct {
 		Machine *models.VirtualMachine
@@ -363,32 +353,51 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	log.WithField("xml", volumeXML.String()).Debug("defining volume from xml")
 	rootVolume, err := storagePool.StorageVolCreateXMLFrom(volumeXML.String(), imageVolume, 0)
 	if err != nil {
-		configDriveVolume.Delete(0)
 		return fmt.Errorf("failed to clone image: %s", err)
 	}
 	rootVolumePath, err := rootVolume.GetPath()
 	if err != nil {
 		return fmt.Errorf("failed to get machine volume path: %s", err)
 	}
-	var machineXml bytes.Buffer
+	var domainCreationXml bytes.Buffer
 	vmtplContext := struct {
-		Machine     *models.VirtualMachine
-		Image       *models.Image
-		Plan        *models.Plan
-		VolumePath  string
-		ConfigDrive string
-		Network     string
-	}{machine, image, plan, rootVolumePath, configDrivePath, store.network}
-	if err := store.vmtpl.Execute(&machineXml, vmtplContext); err != nil {
-		configDriveVolume.Delete(0)
+		Machine    *models.VirtualMachine
+		Image      *models.Image
+		Plan       *models.Plan
+		VolumePath string
+		Network    string
+	}{machine, image, plan, rootVolumePath, store.network}
+	if err := store.vmtpl.Execute(&domainCreationXml, vmtplContext); err != nil {
 		return err
 	}
-	log.WithField("xml", machineXml.String()).Debug("defining domain from xml")
-	domain, err := store.conn.DomainDefineXML(machineXml.String())
+	log.WithField("xml", domainCreationXml.String()).Debug("defining domain from xml")
+	domain, err := store.conn.DomainDefineXML(domainCreationXml.String())
 	if err != nil {
 		return err
 	}
 	store.fillVm(machine, domain)
+
+	log.Debug("creating config drive")
+	configDriveVolume, err := store.createConfigDrive(machine, storagePool)
+	if err != nil {
+		return fmt.Errorf("failed to create config drive: %s", err)
+	}
+	configDrivePath, err := configDriveVolume.GetPath()
+	if err != nil {
+		return err
+	}
+
+	atttachConfigDriveXML := fmt.Sprintf(`
+    <disk type='file' device='cdrom'>
+      <source file="%s" />
+      <target dev='hdc' bus='ide'/>
+      <readonly />
+    </disk>
+	`, configDrivePath)
+	if err := domain.UpdateDeviceFlags(atttachConfigDriveXML, libvirt.DOMAIN_DEVICE_MODIFY_CONFIG); err != nil {
+		return fmt.Errorf("failed to attach config drive: %s", err)
+	}
+
 	if machine.Disk.Type == "qcow2" {
 		if err := rootVolume.Resize(uint64(plan.DiskSize), 0); err != nil {
 			configDriveVolume.Delete(0)
