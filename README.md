@@ -4,6 +4,7 @@ Vmango is a virtual machines management web interface written using [Go](http://
 
 Current features:
 
+* SSH keys management and injection
 * KVM via libvirt
 * Digitalocean-style interface
 * Support for cloud OS images (with cloud-init installed)
@@ -12,7 +13,6 @@ Current features:
 Planned features:
 
 * Backups
-* SSH keys management
 * DNS zones management
 * Other virtualization platforms
 * Multiple virtualization servers
