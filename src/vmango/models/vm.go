@@ -43,6 +43,10 @@ type VirtualMachineDisk struct {
 	Type   string `json:"type"`
 }
 
+func (disk *VirtualMachineDisk) SizeGigabytes() int {
+	return int(disk.Size / 1024 / 1024 / 1024)
+}
+
 type VirtualMachine struct {
 	Name      string              `json:"name"`
 	State     int                 `json:"-"`

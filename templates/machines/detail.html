@@ -21,6 +21,9 @@
                       <a>Cpus: {{ .Machine.Cpus }}</a>
                     </li>
                     <li role="presentation">
+                      <a>Disk: {{ .Machine.Disk.SizeGigabytes }}G</a>
+                    </li>
+                    <li role="presentation">
                       <a>IP: {{ if .Machine.Ip }} {{ .Machine.Ip.Address }} {{ else }} None {{ end }}</a>
                     </li>
                     <li role="presentation">
