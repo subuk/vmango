@@ -1,32 +1,34 @@
 GOPATH = $(CURDIR)/vendor:$(CURDIR)
+GO = GOPATH=$(GOPATH) go
 SOURCES = $(shell find src/ -name *.go)
 .PHONY = clean test show-coverage-html show-coverage-text
-PACKAGES = $(shell cd src/vmango)
+PACKAGES = $(shell cd src/vmango; find -type d|sed 's,^./,,' | sed 's,/,@,g' |sed '/^\.$$/d')
+TEST_ARGS = -race
+test_coverage_targets = $(addprefix test-coverage-, $(PACKAGES))
+
+debug:
+	@echo $(test_coverage_targets)
 
 bin/vmango: $(SOURCES)
-	GOPATH=$(GOPATH) go get vmango/...
-	GOPATH=$(GOPATH) go build -o bin/vmango vmango
+	$(GO) get vmango/...
+	$(GO) build -o bin/vmango vmango
+
+test-deps:
+	$(GO) get -t vmango/...
+
+test-coverage-%: test-deps
+	$(GO) test $(TEST_ARGS) -coverprofile=coverage.$*.out --run=. vmango/$(shell echo $* | sed 's,@,/,g')
+
+test-coverage: $(test_coverage_targets)
 
 test:
-	GOPATH=$(GOPATH) go get github.com/stretchr/testify/mock
-	GOPATH=$(GOPATH) go get github.com/stretchr/testify/assert
-	GOPATH=$(GOPATH) go get github.com/stretchr/testify/suite
-	GOPATH=$(GOPATH) go test -race -coverprofile=coverage.out --run=. vmango/handlers
-
-norace-test:
-	GOPATH=$(GOPATH) go get github.com/stretchr/testify/mock
-	GOPATH=$(GOPATH) go get github.com/stretchr/testify/assert
-	GOPATH=$(GOPATH) go get github.com/stretchr/testify/suite
-	GOPATH=$(GOPATH) go test --run=. vmango
+	$(GO) test $(TEST_ARGS)  vmango/...
 
 show-coverage-html:
-	GOPATH=$(GOPATH) go tool cover -html=coverage.out
+	$(GO) tool cover -html=coverage.out
 
 show-coverage-text:
-	GOPATH=$(GOPATH) go tool cover -func=coverage.out
-
-test-race:
-	GOPATH=$(GOPATH) go test -race vmango
+	$(GO) tool cover -func=coverage.out
 
 clean:
 	rm -rf bin/ vendor/pkg/ vendor/bin pkg/

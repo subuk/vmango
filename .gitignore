@@ -4,3 +4,4 @@
 /*.sublime-*
 /images/
 /*.db
+/coverage*.out
