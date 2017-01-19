@@ -16,6 +16,7 @@ type Context struct {
 	Images   dal.Imagerep
 	Logger   *logrus.Logger
 	IPPool   dal.IPPool
+	SSHKeys  dal.SSHKeyrep
 }
 
 type HandlerFunc func(*Context, http.ResponseWriter, *http.Request) error

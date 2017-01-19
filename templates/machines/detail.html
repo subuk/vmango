@@ -23,6 +23,9 @@
                     <li role="presentation">
                       <a>IP: {{ if .Machine.Ip }} {{ .Machine.Ip.Address }} {{ else }} None {{ end }}</a>
                     </li>
+                    <li role="presentation">
+                      <a>SSH Keys: {{ range .Machine.SSHKeys }}"{{ .Name }}" {{ end }}</a>
+                    </li>
                   </ul>
                 </div>
 

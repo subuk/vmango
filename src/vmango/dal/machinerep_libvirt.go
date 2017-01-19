@@ -2,6 +2,7 @@ package dal
 
 import (
 	"bytes"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
@@ -50,11 +51,17 @@ type interfaceXMLConfig struct {
 	Mac  interfaceMacXMLConfig `xml:"mac"`
 }
 
+type sshKeyConfig struct {
+	Name   string `xml:"name,attr"`
+	Public string `xml:",chardata"`
+}
+
 type domainXMLConfig struct {
 	XMLName    xml.Name             `xml:"domain"`
 	Name       string               `xml:"name"`
 	Disks      []diskXMLConfig      `xml:"devices>disk"`
 	Interfaces []interfaceXMLConfig `xml:"devices>interface"`
+	SSHKeys    []sshKeyConfig       `xml:"metadata>md>sshkeys>key"`
 }
 
 func NewLibvirtMachinerep(conn *libvirt.Connect, tpl *template.Template, network string) (*LibvirtMachinerep, error) {
@@ -120,6 +127,9 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.Memory = int(info.Memory)
 	vm.Cpus = int(info.NrVirtCpu)
 	vm.HWAddr = domainConfig.Interfaces[0].Mac.Address
+	for _, key := range domainConfig.SSHKeys {
+		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{key.Name, key.Public})
+	}
 	return nil
 }
 
@@ -155,6 +165,20 @@ func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error
 	return true, nil
 }
 
+type openstackMetadataFile struct {
+}
+
+type openstackMetadata struct {
+	AZ          string                  `json:"availability_zone"`
+	Files       []openstackMetadataFile `json:"files"`
+	Hostname    string                  `json:"hostname"`
+	LaunchIndex uint                    `json:"launch_index"`
+	Name        string                  `json:"name"`
+	Meta        map[string]string       `json:"meta"`
+	PublicKeys  map[string]string       `json:"public_keys"`
+	UUID        string                  `json:"uuid"`
+}
+
 func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine, pool *libvirt.StoragePool) (*libvirt.StorageVol, error) {
 	tmpdir, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -169,22 +193,28 @@ func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine
 	if err != nil {
 		return nil, err
 	}
-	md.WriteString(fmt.Sprintf(`{
-    "availability_zone": "none",
-    "files": [
-    ],
-    "hostname": "%s",
-    "launch_index": 0,
-    "name": "%s",
-    "meta": {
-        "role": "webservers",
-        "essential": "false"
-    },
-    "public_keys": {
-        "mykey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDAvKEhzpqnZ7ipUZkx43In/YoNuvG/HUqR0oCLk/Mil0R533TCDP9ZOiJOrWPhvQc3EOy6mJi5h9KBfxoGt0EbLkkL5Bq5Bb+NvbsxMXmNpgFkE6Yul+yJzRvzQJsvUk8B0vptDfQE2z3+LHkcN/WjMIVUhBC/hB+7d7THC2/TJ+o0CgCXXSkCJ3FqsjiZWEb77pLGnQUV5pp3n4tpR7Aoe9c1KZplXNt8hnWGUJN/gtLLmO6ouORnbRRE9yuPoLJz/r7GMmQQM9VOPyDBelpob4X7fiz0c5L+BCtvWjrZo7vVCFRcpVpBbNUiw5seK3qLUhaOVwL8GOfHTtsFpA7h kubuzzzz+book@gmail.com\n"
-    },
-    "uuid": "%s"}
-    `, machine.Name, machine.Name, machine.Uuid))
+	metadataPubkeys := map[string]string{}
+	for _, key := range machine.SSHKeys {
+		metadataPubkeys[key.Name] = key.Public
+	}
+	metadata := &openstackMetadata{
+		AZ:          "none",
+		Files:       []openstackMetadataFile{},
+		Hostname:    machine.Name,
+		LaunchIndex: 0,
+		Name:        machine.Name,
+		Meta:        map[string]string{},
+		PublicKeys:  metadataPubkeys,
+		UUID:        machine.Uuid,
+	}
+	mdContent, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, err
+	}
+	_, err = md.Write(mdContent)
+	if err != nil {
+		return nil, err
+	}
 	if err := md.Close(); err != nil {
 		return nil, err
 	}
@@ -232,9 +262,6 @@ func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine
 		_, err := content.Read(buf)
 		return buf, err
 	})
-	// if err := stream.Finish(); err != nil {
-	// 	return nil, err
-	// }
 	return volume, nil
 }
 

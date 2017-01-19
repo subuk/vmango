@@ -39,6 +39,22 @@
   <div class="row">
     <div class="col-md-9">
       <div class="form-group">
+      <label class="control-label" for="sshkeys">SSH Keys</label>
+        {{ range .SSHKeys }}
+        <div class="checkbox">
+          <label>
+            <input id="sshkeys" type="checkbox" name="sshkey" value="{{ .Name }}">
+            {{ .Name }}
+          </label>
+        </div>
+        {{ end }}
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-9">
+      <div class="form-group">
           <button class="btn btn-primary btn-block valid-form__submit" type="submit">Create machine</button>
       </div>
     </div>

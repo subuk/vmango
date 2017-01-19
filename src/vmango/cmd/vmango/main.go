@@ -41,6 +41,14 @@ func main() {
 		Directory:     config.TemplatePath,
 		Funcs: []template.FuncMap{
 			template.FuncMap{
+				"LimitString": func(limit int, s string) string {
+					slen := len(s)
+					s = s[:limit]
+					if slen > limit {
+						s += " ..."
+					}
+					return s
+				},
 				"HasPrefix": strings.HasPrefix,
 				"HumanizeDate": func(date time.Time) string {
 					return date.Format("Mon Jan 2 15:04:05 -0700 MST 2006")
@@ -78,6 +86,7 @@ func main() {
 	imagerep := dal.NewLibvirtImagerep(virtConn, config.Hypervisor.ImageStoragePool)
 	planrep := dal.NewConfigPlanrep(config.Plans)
 	ippool := dal.NewLibvirtIPPool(virtConn, config.Hypervisor.Network)
+	sshkeyrep := dal.NewConfigSSHKeyrep(config.SSHKeys)
 
 	ctx := &vmango.Context{
 		Render:   renderer,
@@ -87,6 +96,7 @@ func main() {
 		Images:   imagerep,
 		IPPool:   ippool,
 		Plans:    planrep,
+		SSHKeys:  sshkeyrep,
 	}
 
 	router.Handle("/", vmango.NewHandler(ctx, handlers.Index)).Name("index")
@@ -98,6 +108,7 @@ func main() {
 	router.Handle("/images/", vmango.NewHandler(ctx, handlers.ImageList)).Name("image-list")
 	router.Handle("/ipaddress/", vmango.NewHandler(ctx, handlers.IPList)).Name("ip-list")
 	router.Handle("/plans/", vmango.NewHandler(ctx, handlers.PlanList)).Name("plan-list")
+	router.Handle("/ssh-keys/", vmango.NewHandler(ctx, handlers.SSHKeyList)).Name("sshkey-list")
 
 	router.HandleFunc("/static{name:.*}", handlers.MakeStaticHandler(config.StaticPath)).Name("static")
 

@@ -12,6 +12,11 @@ type HypervisorConfig struct {
 	VmTemplate       string `hcl:"vm_template"`
 }
 
+type SSHKeyConfig struct {
+	Name   string `hcl:",key"`
+	Public string `hcl:"public"`
+}
+
 type PlanConfig struct {
 	Name     string `hcl:",key"`
 	Memory   int    `hcl:"memory"`
@@ -26,6 +31,7 @@ type Config struct {
 	DbPath       string `hcl:"db_path"`
 
 	Hypervisor HypervisorConfig `hcl:"hypervisor"`
+	SSHKeys    []SSHKeyConfig   `hcl:"ssh_key"`
 	Plans      []PlanConfig     `hcl:"plan"`
 }
 

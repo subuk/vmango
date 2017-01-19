@@ -30,3 +30,8 @@ type IPPool interface {
 	Fetch(*models.VirtualMachine) error
 	Release(*models.IP) error
 }
+
+type SSHKeyrep interface {
+	List(*[]*models.SSHKey) error
+	Get(*models.SSHKey) (bool, error)
+}

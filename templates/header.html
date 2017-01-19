@@ -34,6 +34,7 @@
             {{ $imagesUrl := Url "image-list" }}
             {{ $ipsUrl := Url "ip-list" }}
             {{ $plansUrl := Url "plan-list" }}
+            {{ $sshkeysUrl := Url "sshkey-list" }}
 
             <li {{if and (HasPrefix .Request.URL.Path $machinesUrl) (not (eq .Request.URL.Path $machineAddUrl)) }}class="active"{{end}}>
               <a href="{{ $machinesUrl }}">Machines</a>
@@ -46,6 +47,9 @@
             </li>
             <li {{if HasPrefix .Request.URL.Path $plansUrl }}class="active"{{end}}>
               <a href="{{ $plansUrl }}">Plans</a>
+            </li>
+            <li {{if HasPrefix .Request.URL.Path $sshkeysUrl }}class="active"{{end}}>
+              <a href="{{ $sshkeysUrl }}">SSH Keys</a>
             </li>
           </ul>
           <ul class="nav navbar-nav navbar-right">

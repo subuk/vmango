@@ -1,0 +1,21 @@
+{{template "header" .}}
+<h1>SSH Keys</h1>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Public</th>
+    </tr>
+  </thead>
+  <tbody>
+
+  {{ range .SSHKeys }}
+    <tr>
+      <td>{{ .Name }}</td>
+      <td>{{ .Public | LimitString 100 }}</td>
+    </tr>
+  {{ end }}
+  </tbody>
+</table>
+{{template "footer" .}}

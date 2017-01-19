@@ -118,9 +118,10 @@ func MachineDetail(ctx *vmango.Context, w http.ResponseWriter, req *http.Request
 }
 
 type MachineAddFormData struct {
-	Name  string
-	Plan  string
-	Image string
+	Name   string
+	Plan   string
+	Image  string
+	SSHKey []string
 }
 
 func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
@@ -132,7 +133,6 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 		if err := schema.NewDecoder().Decode(form, req.PostForm); err != nil {
 			return vmango.BadRequest(err.Error())
 		}
-
 		plan := &models.Plan{Name: form.Plan}
 		if exists, err := ctx.Plans.Get(plan); err != nil {
 			return err
@@ -145,6 +145,16 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 			return err
 		} else if !exists {
 			return vmango.BadRequest(fmt.Sprintf(`image "%s" not found`, form.Image))
+		}
+		sshkeys := []*models.SSHKey{}
+		for _, keyName := range form.SSHKey {
+			key := models.SSHKey{Name: keyName}
+			if exists, err := ctx.SSHKeys.Get(&key); err != nil {
+				return fmt.Errorf("failed to fetch ssh key %s: %s", keyName, err)
+			} else if !exists {
+				return vmango.BadRequest(fmt.Sprintf("ssh key '%s' doesn't exist", keyName))
+			}
+			sshkeys = append(sshkeys, &key)
 		}
 
 		ip := &models.IP{}
@@ -160,6 +170,7 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 			Cpus:      plan.Cpus,
 			ImageName: image.FullName,
 			Ip:        ip,
+			SSHKeys:   sshkeys,
 		}
 
 		if exists, err := ctx.Machines.Get(vm); err != nil {
@@ -202,11 +213,16 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 		if err := ctx.Images.List(&images); err != nil {
 			return fmt.Errorf("failed to fetch images list: %s", err)
 		}
+		sshkeys := []*models.SSHKey{}
+		if err := ctx.SSHKeys.List(&sshkeys); err != nil {
+			return fmt.Errorf("failed to fetch ssh keys list: %s", err)
+		}
 		ctx.Render.HTML(w, http.StatusOK, "machines/add", map[string]interface{}{
 			"Request": req,
 			"Plans":   plans,
 			"Ips":     ips,
 			"Images":  images,
+			"SSHKeys": sshkeys,
 		})
 	}
 	return nil

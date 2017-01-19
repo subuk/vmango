@@ -52,6 +52,7 @@ type VirtualMachine struct {
 	Ip        *IP                 `json:"ip"`
 	HWAddr    string              `json:"hwaddr"`
 	Disk      *VirtualMachineDisk `json:"disk"`
+	SSHKeys   []*SSHKey           `json:"sshkeys"`
 }
 
 func (v *VirtualMachine) StateName() string {
