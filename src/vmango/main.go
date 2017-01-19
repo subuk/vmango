@@ -55,12 +55,17 @@ func main() {
 	if err != nil {
 		log.WithError(err).WithField("filename", config.Hypervisor.VmTemplate).Fatal("failed to parse machine template")
 	}
+	voltpl, err := text_template.ParseFiles(config.Hypervisor.VolTemplate)
+	if err != nil {
+		log.WithError(err).WithField("filename", config.Hypervisor.VmTemplate).Fatal("failed to parse volume template")
+	}
+
 	virtConn, err := libvirt.NewConnect(config.Hypervisor.Url)
 	if err != nil {
 		log.WithError(err).Fatal("failed to connect to libvirt")
 	}
 
-	machines, err := dal.NewLibvirtMachinerep(virtConn, vmtpl, config.Hypervisor.Network, config.Hypervisor.RootStoragePool)
+	machines, err := dal.NewLibvirtMachinerep(virtConn, vmtpl, voltpl, config.Hypervisor.Network, config.Hypervisor.RootStoragePool)
 	if err != nil {
 		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
 	}

@@ -11,6 +11,7 @@ type HypervisorConfig struct {
 	RootStoragePool  string `hcl:"root_storage_pool"`
 	Network          string `hcl:"network"`
 	VmTemplate       string `hcl:"vm_template"`
+	VolTemplate      string `hcl:"volume_template"`
 }
 
 type SSHKeyConfig struct {

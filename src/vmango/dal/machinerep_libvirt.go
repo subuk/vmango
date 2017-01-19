@@ -61,12 +61,19 @@ type domainXMLConfig struct {
 type LibvirtMachinerep struct {
 	conn        *libvirt.Connect
 	vmtpl       *template.Template
+	voltpl      *template.Template
 	network     string
 	storagePool string
 }
 
-func NewLibvirtMachinerep(conn *libvirt.Connect, tpl *template.Template, network, pool string) (*LibvirtMachinerep, error) {
-	return &LibvirtMachinerep{conn: conn, vmtpl: tpl, network: network, storagePool: pool}, nil
+func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Template, network, pool string) (*LibvirtMachinerep, error) {
+	return &LibvirtMachinerep{
+		conn:        conn,
+		vmtpl:       vmtpl,
+		voltpl:      voltpl,
+		network:     network,
+		storagePool: pool,
+	}, nil
 }
 
 func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvirt.Domain) error {
@@ -287,22 +294,22 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		return err
 	}
 
-	volumeXML := fmt.Sprintf(`
-	<volume>
-	  <target>
-	  	<format type="%s" />
-	  </target>
-	  <name>%s_disk.%s</name>
-	  <capacity unit="G">%d</capacity>
-	  <allocation unit="G">%d</allocation>
-	</volume>
-	`, image.TypeString(), machine.Name, image.TypeString(), plan.DiskSizeGigabytes(), plan.DiskSizeGigabytes())
+	var volumeXML bytes.Buffer
+	voltplContext := struct {
+		Machine *models.VirtualMachine
+		Image   *models.Image
+		Plan    *models.Plan
+	}{machine, image, plan}
+	if err := store.voltpl.Execute(&volumeXML, voltplContext); err != nil {
+		return fmt.Errorf("failed to create volume xml from template: %s", err)
+	}
 	imageVolume, err := imagePool.LookupStorageVolByName(image.FullName)
 	if err != nil {
 		return fmt.Errorf("failed to lookup image volume: %s", err)
 	}
 
-	rootVolume, err := storagePool.StorageVolCreateXMLFrom(volumeXML, imageVolume, 0)
+	log.WithField("xml", volumeXML.String()).Debug("defining volume from xml")
+	rootVolume, err := storagePool.StorageVolCreateXMLFrom(volumeXML.String(), imageVolume, 0)
 	if err != nil {
 		configDriveVolume.Delete(0)
 		return fmt.Errorf("failed to clone image: %s", err)
