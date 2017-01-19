@@ -35,3 +35,7 @@ type SSHKeyrep interface {
 	List(*[]*models.SSHKey) error
 	Get(*models.SSHKey) (bool, error)
 }
+
+type Authrep interface {
+	Get(*models.User) (bool, error)
+}

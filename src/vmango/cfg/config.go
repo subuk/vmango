@@ -24,15 +24,22 @@ type PlanConfig struct {
 	DiskSize int    `hcl:"disk_size"`
 }
 
+type AuthUserConfig struct {
+	Username     string `hcl:",key"`
+	PasswordHash string `hcl:"password"`
+}
+
 type Config struct {
-	Listen       string `hcl:"listen"`
-	TemplatePath string `hcl:"template_path"`
-	StaticPath   string `hcl:"static_path"`
-	DbPath       string `hcl:"db_path"`
+	Listen        string `hcl:"listen"`
+	TemplatePath  string `hcl:"template_path"`
+	StaticPath    string `hcl:"static_path"`
+	DbPath        string `hcl:"db_path"`
+	SessionSecret string `hcl:"session_secret"`
 
 	Hypervisor HypervisorConfig `hcl:"hypervisor"`
 	SSHKeys    []SSHKeyConfig   `hcl:"ssh_key"`
 	Plans      []PlanConfig     `hcl:"plan"`
+	Users      []AuthUserConfig `hcl:"user"`
 }
 
 func ParseConfig(filename string) (*Config, error) {

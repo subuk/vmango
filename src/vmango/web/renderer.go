@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/unrolled/render"
 	"html/template"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -23,6 +24,9 @@ func NewRenderer(templatePath string, ctx *Context) *render.Render {
 						s += " ..."
 					}
 					return s
+				},
+				"IsAuthenticated": func(req *http.Request) bool {
+					return ctx.Session(req).IsAuthenticated()
 				},
 				"HasPrefix": strings.HasPrefix,
 				"HumanizeDate": func(date time.Time) string {

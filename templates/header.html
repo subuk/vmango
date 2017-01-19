@@ -28,14 +28,17 @@
           <a class="navbar-brand" href="/">Vmango</a>
         </div>
         <div id="navbar" class="navbar-collapse collapse">
-          <ul class="nav navbar-nav">
-            {{ $machinesUrl := Url "machine-list" }}
-            {{ $machineAddUrl :=  Url "machine-add" }}
-            {{ $imagesUrl := Url "image-list" }}
-            {{ $ipsUrl := Url "ip-list" }}
-            {{ $plansUrl := Url "plan-list" }}
-            {{ $sshkeysUrl := Url "sshkey-list" }}
+          {{ $machinesUrl := Url "machine-list" }}
+          {{ $machineAddUrl :=  Url "machine-add" }}
+          {{ $imagesUrl := Url "image-list" }}
+          {{ $ipsUrl := Url "ip-list" }}
+          {{ $plansUrl := Url "plan-list" }}
+          {{ $sshkeysUrl := Url "sshkey-list" }}
+          {{ $loginUrl := Url "login" }}
+          {{ $logoutUrl := Url "logout" }}
 
+          {{ if IsAuthenticated .Request }}
+          <ul class="nav navbar-nav">
             <li {{if and (HasPrefix .Request.URL.Path $machinesUrl) (not (eq .Request.URL.Path $machineAddUrl)) }}class="active"{{end}}>
               <a href="{{ $machinesUrl }}">Machines</a>
             </li>
@@ -52,8 +55,14 @@
               <a href="{{ $sshkeysUrl }}">SSH Keys</a>
             </li>
           </ul>
+          {{ end }}
           <ul class="nav navbar-nav navbar-right">
+            {{ if IsAuthenticated .Request }}
             <li {{if HasPrefix .Request.URL.Path $machineAddUrl }}class="active"{{end}}><a href="{{ $machineAddUrl }}">Add machine</a></li>
+            <li {{if HasPrefix .Request.URL.Path $logoutUrl }}class="active"{{end}}><a href="{{ $logoutUrl }}">Logout</a></li>
+            {{ else }}
+            <li {{if HasPrefix .Request.URL.Path $loginUrl }}class="active"{{end}}><a href="{{ $loginUrl }}">Login</a></li>
+            {{ end }}
           </ul>
         </div><!--/.nav-collapse -->
       </div>

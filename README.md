@@ -57,6 +57,20 @@ If your processor doesn't support hardware acceleration, change type from "kvm" 
 
 ## Development environment
 
+### User passwords
+
+User passwords stored in config file in hashed form (golang.org/x/crypto/bcrypt). For adding new user or change password for existing, generate a new one with `vmango genpw` utility:
+
+    ./bin/vmango genpw plainsecret
+
+Copy output and insert into config file:
+       
+    ...
+    user "admin" {
+        password = "$2a$10$uztHNVBxZ08LBmboJpAqguN4gZSymgmjaJ2xPHKwAqH.ukgaplb96"
+    }
+    ...
+
 ### Ubuntu (local hypervisor)
 
 Install Go 1.7

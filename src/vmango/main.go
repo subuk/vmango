@@ -2,10 +2,13 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/negroni"
+	"github.com/gorilla/sessions"
 	"github.com/libvirt/libvirt-go"
 	"github.com/meatballhat/negroni-logrus"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	text_template "text/template"
 	"vmango/cfg"
@@ -21,6 +24,21 @@ var (
 func main() {
 	flag.Parse()
 	log.SetLevel(log.InfoLevel)
+
+	if flag.Arg(0) == "genpw" {
+		plainpw := flag.Arg(1)
+		if plainpw == "" || plainpw == "--help" || plainpw == "-h" {
+			log.Fatal("Usage: vmango genpw <password>")
+			return
+		}
+		hashed, err := bcrypt.GenerateFromPassword([]byte(plainpw), bcrypt.DefaultCost)
+		if err != nil {
+			log.WithError(err).Fatal("failed to generate hash")
+			return
+		}
+		fmt.Println(string(hashed))
+		return
+	}
 
 	config, err := cfg.ParseConfig(*CONFIG_PATH)
 	if err != nil {
@@ -51,12 +69,15 @@ func main() {
 	planrep := dal.NewConfigPlanrep(config.Plans)
 	ippool := dal.NewLibvirtIPPool(virtConn, config.Hypervisor.Network)
 	sshkeyrep := dal.NewConfigSSHKeyrep(config.SSHKeys)
+	authrep := dal.NewConfigAuthrep(config.Users)
 
 	ctx.Machines = machines
 	ctx.Images = imagerep
 	ctx.IPPool = ippool
 	ctx.Plans = planrep
 	ctx.SSHKeys = sshkeyrep
+	ctx.AuthDB = authrep
+	ctx.SessionStore = sessions.NewCookieStore([]byte(config.SessionSecret))
 
 	n := negroni.New()
 	n.Use(negronilogrus.NewMiddleware())

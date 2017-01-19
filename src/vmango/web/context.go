@@ -3,20 +3,53 @@ package web
 import (
 	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
 	"github.com/unrolled/render"
 	"net/http"
 	"vmango/dal"
 )
 
+const SESSION_NAME = "vmango"
+
+type SessionData struct {
+	*sessions.Session
+}
+
+func (session *SessionData) AuthUser() string {
+	if authuser, ok := session.Values["authuser"]; ok {
+		return authuser.(string)
+	}
+	return ""
+}
+
+func (session *SessionData) IsAuthenticated() bool {
+	return session.AuthUser() != ""
+}
+
+func (session *SessionData) SetAuthUser(username string) {
+	session.Values["authuser"] = username
+}
+
 type Context struct {
-	Render   *render.Render
-	Router   *mux.Router
+	Render       *render.Render
+	Router       *mux.Router
+	Logger       *logrus.Logger
+	SessionStore sessions.Store
+
 	Plans    dal.Planrep
 	Machines dal.Machinerep
 	Images   dal.Imagerep
-	Logger   *logrus.Logger
 	IPPool   dal.IPPool
 	SSHKeys  dal.SSHKeyrep
+	AuthDB   dal.Authrep
+}
+
+func (ctx *Context) Session(r *http.Request) *SessionData {
+	session, err := ctx.SessionStore.Get(r, SESSION_NAME)
+	if err != nil {
+		panic(err)
+	}
+	return &SessionData{Session: session}
 }
 
 type HandlerFunc func(*Context, http.ResponseWriter, *http.Request) error
@@ -31,6 +64,13 @@ func NewHandler(ctx *Context, handle HandlerFunc) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/login/" && r.URL.Path != "/login" {
+		session := h.ctx.Session(r)
+		if !session.IsAuthenticated() {
+			http.Redirect(w, r, "/login/?next="+r.URL.String(), http.StatusFound)
+			return
+		}
+	}
 	err := h.handle(h.ctx, w, r)
 	if err == nil {
 		return
