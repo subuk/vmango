@@ -1,4 +1,4 @@
-package vmango
+package web
 
 type HandlerError struct {
 	Message string

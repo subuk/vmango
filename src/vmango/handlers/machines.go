@@ -5,11 +5,11 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
 	"net/http"
-	"vmango"
 	"vmango/models"
+	"vmango/web"
 )
 
-func MachineDelete(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
+func MachineDelete(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	machine := &models.VirtualMachine{
 		Name: mux.Vars(req)["name"],
 	}
@@ -35,7 +35,7 @@ func MachineDelete(ctx *vmango.Context, w http.ResponseWriter, req *http.Request
 		if exists, err := ctx.Machines.Get(machine); err != nil {
 			return fmt.Errorf("failed to fetch machine info: %s", err)
 		} else if !exists {
-			return vmango.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
+			return web.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
 		}
 		ctx.Render.HTML(w, http.StatusOK, "machines/delete", map[string]interface{}{
 			"Request": req,
@@ -45,14 +45,14 @@ func MachineDelete(ctx *vmango.Context, w http.ResponseWriter, req *http.Request
 	return nil
 }
 
-func MachineStateChange(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
+func MachineStateChange(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	machine := &models.VirtualMachine{
 		Name: mux.Vars(req)["name"],
 	}
 	if exists, err := ctx.Machines.Get(machine); err != nil {
 		return fmt.Errorf("failed to fetch machine info: %s", err)
 	} else if !exists {
-		return vmango.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
+		return web.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
 	}
 
 	action := mux.Vars(req)["action"]
@@ -67,7 +67,7 @@ func MachineStateChange(ctx *vmango.Context, w http.ResponseWriter, req *http.Re
 				return fmt.Errorf("failed to start machine: %s", err)
 			}
 		default:
-			return vmango.BadRequest(fmt.Sprintf("unknown action '%s' requested", action))
+			return web.BadRequest(fmt.Sprintf("unknown action '%s' requested", action))
 		}
 		url, err := ctx.Router.Get("machine-detail").URL("name", machine.Name)
 		if err != nil {
@@ -85,7 +85,7 @@ func MachineStateChange(ctx *vmango.Context, w http.ResponseWriter, req *http.Re
 	}
 }
 
-func MachineList(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
+func MachineList(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	machines := &models.VirtualMachineList{}
 	if err := ctx.Machines.List(machines); err != nil {
 		return err
@@ -97,14 +97,14 @@ func MachineList(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) 
 	return nil
 }
 
-func MachineDetail(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
+func MachineDetail(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	machine := &models.VirtualMachine{
 		Name: mux.Vars(req)["name"],
 	}
 	if exists, err := ctx.Machines.Get(machine); err != nil {
 		return err
 	} else if !exists {
-		return vmango.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
+		return web.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
 	}
 	if err := ctx.IPPool.Fetch(machine); err != nil {
 		return err
@@ -124,27 +124,27 @@ type MachineAddFormData struct {
 	SSHKey []string
 }
 
-func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
+func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	if req.Method == "POST" {
 		if err := req.ParseForm(); err != nil {
 			return err
 		}
 		form := &MachineAddFormData{}
 		if err := schema.NewDecoder().Decode(form, req.PostForm); err != nil {
-			return vmango.BadRequest(err.Error())
+			return web.BadRequest(err.Error())
 		}
 		plan := &models.Plan{Name: form.Plan}
 		if exists, err := ctx.Plans.Get(plan); err != nil {
 			return err
 		} else if !exists {
-			return vmango.BadRequest(fmt.Sprintf(`plan "%s" not found`, form.Plan))
+			return web.BadRequest(fmt.Sprintf(`plan "%s" not found`, form.Plan))
 		}
 
 		image := &models.Image{FullName: form.Image}
 		if exists, err := ctx.Images.Get(image); err != nil {
 			return err
 		} else if !exists {
-			return vmango.BadRequest(fmt.Sprintf(`image "%s" not found`, form.Image))
+			return web.BadRequest(fmt.Sprintf(`image "%s" not found`, form.Image))
 		}
 		sshkeys := []*models.SSHKey{}
 		for _, keyName := range form.SSHKey {
@@ -152,7 +152,7 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 			if exists, err := ctx.SSHKeys.Get(&key); err != nil {
 				return fmt.Errorf("failed to fetch ssh key %s: %s", keyName, err)
 			} else if !exists {
-				return vmango.BadRequest(fmt.Sprintf("ssh key '%s' doesn't exist", keyName))
+				return web.BadRequest(fmt.Sprintf("ssh key '%s' doesn't exist", keyName))
 			}
 			sshkeys = append(sshkeys, &key)
 		}
@@ -176,7 +176,7 @@ func MachineAddForm(ctx *vmango.Context, w http.ResponseWriter, req *http.Reques
 		if exists, err := ctx.Machines.Get(vm); err != nil {
 			return err
 		} else if exists {
-			return vmango.BadRequest(fmt.Sprintf("machine with name '%s' already exists", vm.Name))
+			return web.BadRequest(fmt.Sprintf("machine with name '%s' already exists", vm.Name))
 		}
 		if err := ctx.Machines.Create(vm, image, plan); err != nil {
 			return fmt.Errorf("failed to create machine: %s", err)

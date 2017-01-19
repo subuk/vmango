@@ -1,4 +1,4 @@
-package vmango
+package web
 
 import (
 	"github.com/Sirupsen/logrus"

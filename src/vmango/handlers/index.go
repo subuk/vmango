@@ -2,11 +2,11 @@ package handlers
 
 import (
 	"net/http"
-	"vmango"
 	"vmango/models"
+	"vmango/web"
 )
 
-func Index(ctx *vmango.Context, w http.ResponseWriter, req *http.Request) error {
+func Index(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	machines := &models.VirtualMachineList{}
 	if err := ctx.Machines.List(machines); err != nil {
 		return err
