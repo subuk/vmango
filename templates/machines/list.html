@@ -1,25 +1,30 @@
 {{template "header" .}}
-<h1>Virtual machines</h1>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>State</th>
-      <th>CPU Cores</th>
-      <th>Memory</th>
-    </tr>
-  </thead>
-  <tbody>
+<div class="row">
+  <h1>Virtual machines</h1>
+</div>
 
-  {{ range .Machines.All }}
-    <tr>
-      <td><a href="{{ Url "machine-detail" "name" .Name }}">{{ .Name }}</a></td>
-      <td>{{ .StateName }}</td>
-      <td>{{ .Cpus }}</td>
-      <td>{{ .MemoryMegabytes }}Mb</td>
-    </tr>
-  {{ end }}
-  </tbody>
-</table>
+<div class="row">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>State</th>
+        <th>CPU Cores</th>
+        <th>Memory</th>
+      </tr>
+    </thead>
+    <tbody>
+
+    {{ range .Machines.All }}
+      <tr>
+        <td><a href="{{ Url "machine-detail" "name" .Name }}">{{ .Name }}</a></td>
+        <td>{{ .StateName }}</td>
+        <td>{{ .Cpus }}</td>
+        <td>{{ .MemoryMegabytes }}Mb</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+</div>
 {{template "footer" .}}

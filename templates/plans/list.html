@@ -1,25 +1,29 @@
 {{template "header" .}}
-<h1>Plans</h1>
+<div class="row">
+  <h1>Plans</h1>
+</div>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Memory</th>
-      <th>Cpus</th>
-      <th>Disk</th>
-    </tr>
-  </thead>
-  <tbody>
+<div class="row">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Memory</th>
+        <th>Cpus</th>
+        <th>Disk</th>
+      </tr>
+    </thead>
+    <tbody>
 
-  {{ range .Plans }}
-    <tr>
-      <td>{{ .Name }}</td>
-      <td>{{ .MemoryMegabytes }} MB</td>
-      <td>{{ .Cpus }}</td>
-      <td>{{ .DiskSizeGigabytes }} GB</td>
-    </tr>
-  {{ end }}
-  </tbody>
-</table>
+    {{ range .Plans }}
+      <tr>
+        <td>{{ .Name }}</td>
+        <td>{{ .MemoryMegabytes }} MB</td>
+        <td>{{ .Cpus }}</td>
+        <td>{{ .DiskSizeGigabytes }} GB</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+</div>
 {{template "footer" .}}

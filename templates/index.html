@@ -1,10 +1,11 @@
 {{template "header" .}}
-
-<div class="jumbotron">
-  <h1>Vmango</h1>
-  <p>virtual machines management web interface written using <a href="http://golang.org/">Go</a></p>
-  <br/>
-  <p><strong>{{ .Machines.Active.Count }}</strong> machines running now</p>
-</div>
+    <div class="row">
+      <div class="large-12 columns">
+        <h1>Welcome to Vmango</h1>
+        <p>virtual machine management interface</p>
+        <br/>
+        <p><strong>{{ .Machines.Active.Count }}</strong> machines running now</p>
+      </div>
+    </div>
 
 {{template "footer" .}}
