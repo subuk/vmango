@@ -1,25 +1,29 @@
 {{template "header" .}}
-<div class="alert alert-danger" role="alert">
-  This action cannot be undone!
+
+<div class="row">
+  <div class="callout alert" role="alert">
+    This action cannot be undone!
+  </div>
 </div>
 
-<h1>Virtual machines</h1>
+<div class="row">
+  <p>
+    Are you sure you want to remove machine <b>{{ .Machine.Name }}</b>?<br>
+    <b>All data will be erased and you cannot restore it back!</b>
+  </p>
+</div>
 
-<p>
-  Are you sure you want to remove machine <b>{{ .Machine.Name }}</b>?<br>
-  <b>All data will be erased and you cannot restore it back!</b>
-</p>
-
-<form method="post" class="valid-form" action="">
-  <div class="row">
-    <div class="col-md-9">
-      <div class="form-group">
-          <button class="btn btn-danger" type="submit">Remove</button>
-          <a class="btn btn-default" href="{{ Url "machine-detail" "name" .Machine.Name }}">Cancel</a>
+<div class="row">
+  <form method="post" class="valid-form" action="">
+    <div class="row">
+      <div class="col-md-9">
+        <div class="form-group">
+            <button class="button alert" type="submit">Remove</button>
+            <a class="button secondary" href="{{ Url "machine-detail" "name" .Machine.Name }}">Cancel</a>
+        </div>
       </div>
     </div>
-  </div>
-
-</form>
+  </form>
+</div>
 
 {{template "footer" .}}
