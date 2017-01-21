@@ -48,7 +48,7 @@
             <li {{if HasPrefix .Request.URL.Path $machineAddUrl }}class="active"{{end}}><a href="{{ $machineAddUrl }}">Add machine</a></li>
             <li><a href="{{ $logoutUrl }}">Logout</a></li>
             {{ else }}
-            <li><a href="{{ $loginUrl }}">Login</a></li>
+            <li {{if HasPrefix .Request.URL.Path $loginUrl }}class="active"{{end}}><a href="{{ $loginUrl }}">Login</a></li>
             {{ end }}
           </ul>
         </div>
