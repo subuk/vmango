@@ -83,12 +83,28 @@ type sshKeyConfig struct {
 	Public string `xml:",chardata"`
 }
 
+type graphicsXMLConfig struct {
+	Type   string `xml:"type,attr"`
+	Port   string `xml:"port,attr"`
+	Listen string `xml:"listen,attr"`
+}
+
 type domainXMLConfig struct {
 	XMLName    xml.Name             `xml:"domain"`
 	Name       string               `xml:"name"`
 	Disks      diskListXMLConfig    `xml:"devices>disk"`
 	Interfaces []interfaceXMLConfig `xml:"devices>interface"`
 	SSHKeys    []sshKeyConfig       `xml:"metadata>md>sshkeys>key"`
+	Graphics   []graphicsXMLConfig  `xml:"devices>graphics"`
+}
+
+func (domcfg domainXMLConfig) VNCAddr() string {
+	for _, g := range domcfg.Graphics {
+		if g.Type == "vnc" {
+			return fmt.Sprintf("%s:%s", g.Listen, g.Port)
+		}
+	}
+	return ""
 }
 
 type LibvirtMachinerep struct {
@@ -171,6 +187,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.Memory = int(info.Memory)
 	vm.Cpus = int(info.NrVirtCpu)
 	vm.HWAddr = domainConfig.Interfaces[0].Mac.Address
+	vm.VNCAddr = domainConfig.VNCAddr()
 	for _, key := range domainConfig.SSHKeys {
 		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{key.Name, key.Public})
 	}

@@ -26,12 +26,18 @@
 
     <div class="row">
       <h4 class="subheader">Network</h4>
-      <table>
+      <table class="unstriped">
         <tbody>
           <tr>
             <td>IP Address</td>
             <td>{{ if .Machine.Ip }}{{ .Machine.Ip.Address }}{{ else }}Unkown{{ end }}</td>
           </tr>
+          {{ if .Machine.VNCAddr }}
+          <tr>
+            <td>VNC address</td>
+            <td>{{ .Machine.VNCAddr }}</td>
+          </tr>
+          {{ end }}
         </tbody>
       </table>
     </div>

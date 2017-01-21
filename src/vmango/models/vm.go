@@ -56,6 +56,7 @@ type VirtualMachine struct {
 	ImageName string              `json:"image_name"`
 	Ip        *IP                 `json:"ip"`
 	HWAddr    string              `json:"hwaddr"`
+	VNCAddr   string              `json:"vncaddr"`
 	Disk      *VirtualMachineDisk `json:"disk"`
 	SSHKeys   []*SSHKey           `json:"sshkeys"`
 }
