@@ -8,19 +8,13 @@
   </p>
 </div>
 <div class="row">
-  <form method="post" class="valid-form" action="">
-    <div class="row">
-      <div class="col-md-9">
-        <div class="form-group">
-            {{ if eq .Action "stop" }}
-            <button class="button alert" type="submit">{{ .Action | Capitalize }}</button>
-            {{ else }}
-            <button class="button" type="submit">{{ .Action | Capitalize }}</button>
-            {{ end }}
-            <a class="button secondary" href="{{ Url "machine-detail" "name" .Machine.Name }}">Cancel</a>
-        </div>
-      </div>
-    </div>
+  <form method="post" action="">
+    {{ if eq .Action "stop" }}
+    <button class="button alert" type="submit">{{ .Action | Capitalize }}</button>
+    {{ else }}
+    <button class="button" type="submit">{{ .Action | Capitalize }}</button>
+    {{ end }}
+    <a class="button secondary" href="{{ Url "machine-detail" "name" .Machine.Name }}">Cancel</a>
   </form>
 </div>
 {{template "footer" .}}
