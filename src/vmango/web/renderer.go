@@ -19,9 +19,12 @@ func NewRenderer(templatePath string, ctx *Context) *render.Render {
 			template.FuncMap{
 				"LimitString": func(limit int, s string) string {
 					slen := len(s)
+					if slen <= limit {
+						return s
+					}
 					s = s[:limit]
 					if slen > limit {
-						s += " ..."
+						s += "..."
 					}
 					return s
 				},
@@ -33,6 +36,17 @@ func NewRenderer(templatePath string, ctx *Context) *render.Render {
 					return date.Format("Mon Jan 2 15:04:05 -0700 MST 2006")
 				},
 				"Capitalize": strings.Title,
+				"Static": func(filename string) (string, error) {
+					route := ctx.Router.Get("static")
+					if route == nil {
+						panic("no 'static' route defined")
+					}
+					url, err := route.URL("name", filename)
+					if err != nil {
+						return "", err
+					}
+					return url.Path, nil
+				},
 				"Url": func(name string, params ...string) (string, error) {
 					route := ctx.Router.Get(name)
 					if route == nil {

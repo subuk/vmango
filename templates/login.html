@@ -1,14 +1,20 @@
 {{template "header" .}}
-      <form class="form-signin" method="post" action="">
-        <h2 class="form-signin-heading">Please sign in</h2>
+<div class="row">
+  <div class="medium-6 medium-centered large-4 large-centered columns">
 
-        <label for="inputUsername" class="sr-only">Username</label>
-        <input type="text" name="username" id="inputUsername" class="form-control" placeholder="Username" required autofocus>
+    <form method="post" action="">
+      <div class="row column log-in-form">
+        <h4 class="text-center">Please sign in</h4>
+        <label>Username
+          <input name="username" type="text" placeholder="">
+        </label>
+        <label>Password
+          <input name="password" type="password" placeholder="">
+        </label>
+        <p><button type="submit" class="button expanded">Log In</button></p>
+      </div>
+    </form>
 
-        <label for="inputPassword" class="sr-only">Password</label>
-        <input type="password" name="password" id="inputPassword" class="form-control" placeholder="Password" required>
-
-        <button class="btn btn-lg btn-primary btn-block" type="submit">Sign in</button>
-      </form>
-
+  </div>
+</div>
 {{template "footer" .}}

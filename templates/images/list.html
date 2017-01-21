@@ -1,27 +1,31 @@
 {{template "header" .}}
-<h1>Disk images</h1>
+<div class="row">
+  <h1>Disk images</h1>
+</div>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>OS</th>
-      <th>Arch</th>
-      <th>Size</th>
-      <th>Type</th>
-      <th>Last updated</th>
-    </tr>
-  </thead>
-  <tbody>
+<div class="row">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>OS</th>
+        <th>Arch</th>
+        <th>Size</th>
+        <th>Type</th>
+        <th>Last updated</th>
+      </tr>
+    </thead>
+    <tbody>
 
-  {{ range .Images }}
-    <tr>
-      <td>{{ .OS }}</td>
-      <td>{{ .ArchString }}</td>
-      <td>{{ .SizeMegabytes }}Mb</td>
-      <td>{{ .TypeString }}</td>
-      <td>{{ HumanizeDate .Date }}</td>
-    </tr>
-  {{ end }}
-  </tbody>
-</table>
+    {{ range .Images }}
+      <tr>
+        <td>{{ .OS }}</td>
+        <td>{{ .ArchString }}</td>
+        <td>{{ .SizeMegabytes }}Mb</td>
+        <td>{{ .TypeString }}</td>
+        <td>{{ HumanizeDate .Date }}</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+</div>
 {{template "footer" .}}

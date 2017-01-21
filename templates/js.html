@@ -1,7 +1,15 @@
-<script src="{{ Url "static" "name" "/jquery-2.1.4.min.js"}}"></script>
-<script src="{{ Url "static" "name" "/vmango//js/consts.js"}}"></script>
-<script src="{{ Url "static" "name" "/vmango//js/utils.js"}}"></script>
-<script src="{{ Url "static" "name" "/bootstrap/js/bootstrap.min.js"}}"></script>
-<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css">
-<!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
-<script src="{{ Url "static" "name" "/vmango/js/ie10-viewport-bug-workaround.js"}}"></script>
+<script src="{{ Static "foundation/js/vendor/jquery.js" }}"></script>
+<script src="{{ Static "foundation/js/vendor/what-input.js" }}"></script>
+<script src="{{ Static "foundation/js/vendor/foundation.min.js" }}"></script>
+<script src="{{ Static "vmango/vmango.checkboxCard.js" }}"></script>
+<script>
+    $(document).foundation();
+</script>
+
+<script>
+$(function(){
+    $('.JS-CheckboxCards').each(function(idx, el){
+        Vmango.CheckboxCards(el);
+    });
+});
+</script>

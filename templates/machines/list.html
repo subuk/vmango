@@ -1,25 +1,48 @@
 {{template "header" .}}
-<h1>Virtual machines</h1>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>State</th>
-      <th>CPU Cores</th>
-      <th>Memory</th>
-    </tr>
-  </thead>
-  <tbody>
+{{ if gt .Machines.Count 0 }}
+<div class="row">
+  <h1>Virtual machines</h1>
+</div>
 
-  {{ range .Machines.All }}
-    <tr>
-      <td><a href="{{ Url "machine-detail" "name" .Name }}">{{ .Name }}</a></td>
-      <td>{{ .StateName }}</td>
-      <td>{{ .Cpus }}</td>
-      <td>{{ .MemoryMegabytes }}Mb</td>
-    </tr>
-  {{ end }}
-  </tbody>
-</table>
+<div class="row">
+  <div class="medium-12 column end">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>State</th>
+          <th>CPU Cores</th>
+          <th>Memory</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{ range .Machines.All }}
+        <tr>
+          <td><a href="{{ Url "machine-detail" "name" .Name }}">{{ .Name }}</a></td>
+          <td>{{ .StateName }}</td>
+          <td>{{ .Cpus }}</td>
+          <td>{{ .MemoryMegabytes }}Mb</td>
+        </tr>
+      {{ end }}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{{ else }}
+
+  <div class="row">
+    <div class="medium-12">
+    <p class="text-center">
+      <img src="{{ Static "vmango/linux-logo.png" }}">
+      <br>
+      <b>Looks like you don’t have any machines.</b>
+      <br>
+      <a class="button" href="{{ Url "machine-add" }}">Add</a>
+    </p>
+    </div>
+  </div>
+{{ end }}
+
 {{template "footer" .}}

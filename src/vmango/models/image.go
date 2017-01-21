@@ -2,6 +2,7 @@ package models
 
 import (
 	"os"
+	"strings"
 	"time"
 )
 
@@ -27,6 +28,13 @@ type Image struct {
 
 func (image *Image) String() string {
 	return image.OS
+}
+
+func (image *Image) OSName() string {
+	return strings.Split(image.OS, "-")[0]
+}
+func (image *Image) OSVersion() string {
+	return strings.Split(image.OS, "-")[1]
 }
 
 func (image *Image) Stream() (*os.File, error) {
