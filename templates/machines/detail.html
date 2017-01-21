@@ -59,6 +59,12 @@
           <span>Force Stop</span>
         </a>
       </li>
+      <li>
+        <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "reboot" }}">
+          <i class="fi-loop"></i>
+          <span>Reboot</span>
+        </a>
+      </li>
       {{ else }}
       <li>
         <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "start" }}">

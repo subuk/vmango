@@ -468,3 +468,11 @@ func (store *LibvirtMachinerep) Stop(machine *models.VirtualMachine) error {
 	}
 	return domain.Destroy()
 }
+
+func (store *LibvirtMachinerep) Reboot(machine *models.VirtualMachine) error {
+	domain, err := store.conn.LookupDomainByName(machine.Name)
+	if err != nil {
+		return err
+	}
+	return domain.Reboot(libvirt.DOMAIN_REBOOT_DEFAULT)
+}

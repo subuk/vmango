@@ -66,6 +66,10 @@ func MachineStateChange(ctx *web.Context, w http.ResponseWriter, req *http.Reque
 			if err := ctx.Machines.Start(machine); err != nil {
 				return fmt.Errorf("failed to start machine: %s", err)
 			}
+		case "reboot":
+			if err := ctx.Machines.Reboot(machine); err != nil {
+				return fmt.Errorf("failed to reboot machine: %s", err)
+			}
 		default:
 			return web.BadRequest(fmt.Sprintf("unknown action '%s' requested", action))
 		}

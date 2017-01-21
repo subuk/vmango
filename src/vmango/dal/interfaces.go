@@ -11,6 +11,7 @@ type Machinerep interface {
 	Start(*models.VirtualMachine) error
 	Stop(*models.VirtualMachine) error
 	Remove(*models.VirtualMachine) error
+	Reboot(*models.VirtualMachine) error
 }
 
 type Imagerep interface {
