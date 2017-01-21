@@ -78,49 +78,4 @@
     </ul>
   </div>
 </div>
-<!--
-    <div class="row">
-        <div class="col-md-9">
-            <div class="card">
-                <div class="card-image">
-                    <img class="img-responsive" src="http://i1.wp.com/desarrollador-android.com/wp-content/uploads/2015/03/wallpaper-material-design-14.png">
-                    <span class="card-title">{{ .Machine.Name }}</span>
-                </div>
-
-                <div class="card-content">
-                  <ul class="nav nav-pills">
-                    <li role="presentation">
-                      <a>{{ .Machine.StateName }}</a>
-                    </li>
-                    <li role="presentation">
-                      <a>Memory: {{ .Machine.MemoryMegabytes }}Mb</a>
-                    </li>
-                    <li role="presentation">
-                      <a>Cpus: {{ .Machine.Cpus }}</a>
-                    </li>
-                    <li role="presentation">
-                      <a>Disk: {{ .Machine.Disk.SizeGigabytes }}G</a>
-                    </li>
-                    <li role="presentation">
-                      <a>IP: {{ if .Machine.Ip }} {{ .Machine.Ip.Address }} {{ else }} None {{ end }}</a>
-                    </li>
-                    <li role="presentation">
-                      <a>SSH Keys: {{ range .Machine.SSHKeys }}"{{ .Name }}" {{ end }}</a>
-                    </li>
-                  </ul>
-                </div>
-
-                <div class="card-action">
-                    {{ if .Machine.IsRunning }}
-                    <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "stop" }}">Force stop</a>
-                    {{ else }}
-                    <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "start" }}">Start</a>
-                    {{ end }}
-                    <a href="{{ Url "machine-delete" "name" .Machine.Name }}">Remove</a>
-                    <a href="#" target="new_blank">Resize</a>
-                </div>
-            </div>
-        </div>
-    </div> -->
-
 {{template "footer" .}}
