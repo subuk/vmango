@@ -1,27 +1,26 @@
 {{template "header" .}}
-<h1>Virtual machines</h1>
-
-<p>
-  Are you sure you want to {{ .Action }} machine <b>{{ .Machine.Name }}</b>?<br>
-  {{ if eq .Action "stop" }}
-  It feels like a power loss inside a machine!
-  {{ end }}
-</p>
-
-<form method="post" class="valid-form" action="">
-  <div class="row">
-    <div class="col-md-9">
-      <div class="form-group">
-          {{ if eq .Action "stop" }}
-          <button class="btn btn-danger" type="submit">{{ .Action | Capitalize }}</button>
-          {{ else }}
-          <button class="btn btn-primary" type="submit">{{ .Action | Capitalize }}</button>
-          {{ end }}
-          <a class="btn btn-default" href="{{ Url "machine-detail" "name" .Machine.Name }}">Cancel</a>
+<div class="row">
+  <p>
+    Are you sure you want to {{ .Action }} machine <b>{{ .Machine.Name }}</b>?<br>
+    {{ if eq .Action "stop" }}
+    It feels like a power loss inside a machine!
+    {{ end }}
+  </p>
+</div>
+<div class="row">
+  <form method="post" class="valid-form" action="">
+    <div class="row">
+      <div class="col-md-9">
+        <div class="form-group">
+            {{ if eq .Action "stop" }}
+            <button class="button alert" type="submit">{{ .Action | Capitalize }}</button>
+            {{ else }}
+            <button class="button" type="submit">{{ .Action | Capitalize }}</button>
+            {{ end }}
+            <a class="button secondary" href="{{ Url "machine-detail" "name" .Machine.Name }}">Cancel</a>
+        </div>
       </div>
     </div>
-  </div>
-
-</form>
-
+  </form>
+</div>
 {{template "footer" .}}
