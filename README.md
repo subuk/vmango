@@ -22,6 +22,7 @@ Planned features:
 Hypervisor requirements:
 
 * Libvirt 0.10+ (centos6+, ubuntu14.04+, debian8+)
+* Routed network with libvirt managed dhcp server. Bridged networks not supported due to impossibility to determine machine ip address.
 
 ## Development hypervisor configuration (Ubuntu 14.04/16.04)
 
