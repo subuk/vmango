@@ -4,17 +4,23 @@
   <div class="medium-8 columns">
     <div class="row">
       <h1>{{ .Machine.Name }}</h1>
-
-      <div class="media-object">
-        <div class="media-object-section">
-          <div>
-            <img height="60" width="60" src="{{ Static "vmango/server-icon.png" }}">
+      <div class="medium-10 column">
+        <div class="media-object">
+          <div class="media-object-section">
+            <div>
+              <img height="60" width="60" src="{{ Static "vmango/server-icon.png" }}">
+            </div>
+          </div>
+          <div class="media-object-section">
+            <h5>Ubuntu 16.04 x86_64</h5>
+            <p class="subheader">{{ .Machine.MemoryMegabytes }}M RAM {{ .Machine.Disk.SizeGigabytes }}G {{ .Machine.Cpus }} CPU</p>
           </div>
         </div>
-        <div class="media-object-section">
-          <h5>Ubuntu 16.04 x86_64</h5>
-          <p class="subheader">{{ .Machine.MemoryMegabytes }}M RAM {{ .Machine.Disk.SizeGigabytes }}G {{ .Machine.Cpus }} CPU</p>
-        </div>
+      </div>
+      <div class="medium-2 column">
+        <span class="label {{ if .Machine.IsRunning }}success{{ else }}alert{{ end }}">
+          {{ .Machine.StateName | Capitalize }}
+        </span>
       </div>
     </div>
 
