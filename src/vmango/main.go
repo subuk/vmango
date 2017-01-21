@@ -19,7 +19,8 @@ import (
 )
 
 var (
-	CONFIG_PATH = flag.String("config", "vmango.conf", "Path to configuration file")
+	CONFIG_PATH    = flag.String("config", "vmango.conf", "Path to configuration file")
+	STATIC_VERSION string
 )
 
 func main() {
@@ -54,7 +55,7 @@ func main() {
 		StaticCache: staticCache,
 	}
 	ctx.Router = vmango_router.New(config.StaticPath, ctx)
-	ctx.Render = web.NewRenderer(config.TemplatePath, ctx)
+	ctx.Render = web.NewRenderer(config.TemplatePath, STATIC_VERSION, ctx)
 
 	vmtpl, err := text_template.ParseFiles(config.Hypervisor.VmTemplate)
 	if err != nil {

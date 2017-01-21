@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func NewRenderer(templatePath string, ctx *Context) *render.Render {
+func NewRenderer(templatePath, version string, ctx *Context) *render.Render {
 
 	return render.New(render.Options{
 		Extensions:    []string{".html"},
@@ -51,7 +51,7 @@ func NewRenderer(templatePath string, ctx *Context) *render.Render {
 					if err != nil {
 						return "", err
 					}
-					return url.Path, nil
+					return url.Path + "?v=" + version, nil
 				},
 				"Url": func(name string, params ...string) (string, error) {
 					route := ctx.Router.Get(name)
