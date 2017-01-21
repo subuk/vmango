@@ -1,11 +1,13 @@
 {{template "header" .}}
-    <div class="row">
-      <div class="large-12 columns">
+  <div class="row">
+    <div class="large-12 columns">
+      <div class="callout large">
         <h1>Welcome to Vmango</h1>
-        <p>virtual machine management interface</p>
+        <p class="lead">virtual machine management interface</p>
         <br/>
-        <p><strong>{{ .Machines.Active.Count }}</strong> machines running now</p>
+        <p><span class="stat">{{ .Machines.Active.Count }}</span> machines running now</p>
       </div>
     </div>
+  </div>
 
 {{template "footer" .}}

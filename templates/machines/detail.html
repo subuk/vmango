@@ -1,7 +1,79 @@
 {{template "header" .}}
 
+<div class="row">
+  <div class="medium-8 columns">
     <div class="row">
-        <!-- Card Projects -->
+      <h1>{{ .Machine.Name }}</h1>
+
+      <div class="media-object">
+        <div class="media-object-section">
+          <div>
+            <img height="60" width="60" src="{{ Static "vmango/server-icon.png" }}">
+          </div>
+        </div>
+        <div class="media-object-section">
+          <h5>Ubuntu 16.04 x86_64</h5>
+          <p class="subheader">{{ .Machine.MemoryMegabytes }}M RAM {{ .Machine.Disk.SizeGigabytes }}G {{ .Machine.Cpus }} CPU</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <h4 class="subheader">Network</h4>
+      <table>
+        <tbody>
+          <tr>
+            <td>IP Address</td>
+            <td>{{ if .Machine.Ip }}{{ .Machine.Ip.Address }}{{ else }}Unkown{{ end }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="row small-up-2 medium-up-3">
+      <h4 class="subheader">SSH Keys</h4>
+      {{ range .Machine.SSHKeys }}
+        <div class="column">
+          <div class="card">
+            <div class="card-section">
+              <span>{{ .Name }}</span>
+            </div>
+          </div>
+        </div>
+      {{ end }}
+    </div>
+
+  </div>
+  <div class="medium-4 columns end">
+    <ul class="menu vertical">
+      {{ if .Machine.IsRunning }}
+      <li>
+        <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "stop" }}">
+          <i class="fi-power"></i>
+          <span>Force Stop</span>
+        </a>
+      </li>
+      {{ else }}
+      <li>
+        <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "start" }}">
+          <i class="fi-power"></i>
+          <span>Start</span>
+        </a>
+      </li>
+      {{ end }}
+
+      <li>
+        <a href="{{ Url "machine-delete" "name" .Machine.Name }}">
+          <i class="fi-trash"></i>
+          <span>Remove</span>
+        </a>
+      </li>
+
+    </ul>
+  </div>
+</div>
+<!--
+    <div class="row">
         <div class="col-md-9">
             <div class="card">
                 <div class="card-image">
@@ -43,6 +115,6 @@
                 </div>
             </div>
         </div>
-    </div>
+    </div> -->
 
 {{template "footer" .}}
