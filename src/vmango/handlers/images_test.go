@@ -2,19 +2,23 @@ package handlers_test
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"testing"
 	"time"
 	"vmango/dal"
 	"vmango/handlers"
 	"vmango/models"
 	"vmango/testool"
-	"vmango/web"
 )
 
-func TestImageList_Ok(t *testing.T) {
-	ctx := testool.NewTestContext()
-	ctx.Images = &dal.StubImagerep{Data: []*models.Image{
+type ImageHandlersTestSuite struct {
+	suite.Suite
+	testool.WebTest
+}
+
+func (suite *ImageHandlersTestSuite) TestImageList_Ok() {
+	suite.Authenticate()
+	suite.Context.Images = &dal.StubImagerep{Data: []*models.Image{
 		{
 			FullName: "test_image.img",
 			OS:       "TestOS",
@@ -30,17 +34,25 @@ func TestImageList_Ok(t *testing.T) {
 			Date:     time.Unix(1484831107, 0),
 		},
 	}}
-	handler := web.NewHandler(ctx, handlers.ImageList)
-	rr := testool.DoGet(handler, "")
-	assert.Equal(t, 200, rr.Code, rr.Body.String())
+	rr := suite.DoGet(handlers.ImageList)
+	suite.Assert().Equal(200, rr.Code, rr.Body.String())
 }
 
-func TestImageList_RepFail(t *testing.T) {
-	ctx := testool.NewTestContext()
-	ctx.Images = &dal.StubImagerep{
+func (suite *ImageHandlersTestSuite) TestImageList_RepFail() {
+	suite.Authenticate()
+	suite.Context.Images = &dal.StubImagerep{
 		ListErr: fmt.Errorf("test repo error"),
 	}
-	handler := web.NewHandler(ctx, handlers.ImageList)
-	rr := testool.DoGet(handler, "")
-	assert.Equal(t, 500, rr.Code, rr.Body.String())
+	rr := suite.DoGet(handlers.ImageList)
+	suite.Assert().Equal(500, rr.Code, rr.Body.String())
+}
+
+func (suite *ImageHandlersTestSuite) TestImageList_AuthRequired() {
+	rr := suite.DoGet(handlers.ImageList, "/redirect")
+	suite.Assert().Equal(302, rr.Code, rr.Body.String())
+	suite.Assert().Equal(rr.Header().Get("Location"), "/login/?next=/redirect")
+}
+
+func TestImageHandlersTestSuite(t *testing.T) {
+	suite.Run(t, new(ImageHandlersTestSuite))
 }

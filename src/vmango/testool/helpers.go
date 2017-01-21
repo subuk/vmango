@@ -30,7 +30,7 @@ func NewTestContext() *web.Context {
 	ctx.Render = web.NewRenderer("", ctx)
 	ctx.Logger = logrus.New()
 	session := &sessions.Session{}
-	session.Values = map[interface{}]interface{}{"authuser": "testadmin"}
+	session.Values = map[interface{}]interface{}{}
 	ctx.SessionStore = &StubSessionStore{session}
 	return ctx
 }
