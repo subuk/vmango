@@ -81,7 +81,7 @@ Install Go 1.7
 
 Compile
 
-    make
+    make EXTRA_ASSETS_FLAGS=-debug
 
 Run app:
 
@@ -100,7 +100,7 @@ Install libvirt library
 
 Compile 
 
-    make
+    make EXTRA_ASSETS_FLAGS=-debug
 
 Steal server with Ubuntu 14.04 and install libvirt/kvm on it following the instructions above.
 

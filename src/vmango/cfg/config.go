@@ -38,6 +38,7 @@ type Config struct {
 	StaticPath    string `hcl:"static_path"`
 	DbPath        string `hcl:"db_path"`
 	SessionSecret string `hcl:"session_secret"`
+	StaticCache   string `hcl:"static_cache"`
 
 	Hypervisor HypervisorConfig `hcl:"hypervisor"`
 	SSHKeys    []SSHKeyConfig   `hcl:"ssh_key"`

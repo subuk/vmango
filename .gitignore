@@ -1,7 +1,9 @@
 /bin/
 /pkg/
 /vendor/pkg/
+/vendor/bin/
 /*.sublime-*
 /images/
 /*.db
 /coverage*.out
+/src/vmango/web/assets.go

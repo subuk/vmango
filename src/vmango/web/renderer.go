@@ -15,6 +15,12 @@ func NewRenderer(templatePath string, ctx *Context) *render.Render {
 		Extensions:    []string{".html"},
 		IsDevelopment: true,
 		Directory:     templatePath,
+		Asset: func(name string) ([]byte, error) {
+			return Asset(name)
+		},
+		AssetNames: func() []string {
+			return AssetNames()
+		},
 		Funcs: []template.FuncMap{
 			template.FuncMap{
 				"LimitString": func(limit int, s string) string {

@@ -22,6 +22,6 @@ func New(staticPath string, ctx *web.Context) *mux.Router {
 	router.Handle("/login/", web.NewHandler(ctx, handlers.Login)).Name("login")
 	router.Handle("/logout/", web.NewHandler(ctx, handlers.Logout)).Name("logout")
 
-	router.HandleFunc("/static{name:.*}", handlers.MakeStaticHandler(staticPath)).Name("static")
+	router.Handle("/static/{name:.*}", web.NewHandler(ctx, handlers.ServeAsset)).Name("static")
 	return router
 }

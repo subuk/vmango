@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/unrolled/render"
 	"net/http"
+	"time"
 	"vmango/dal"
 )
 
@@ -35,6 +36,7 @@ type Context struct {
 	Router       *mux.Router
 	Logger       *logrus.Logger
 	SessionStore sessions.Store
+	StaticCache  time.Duration
 
 	Plans    dal.Planrep
 	Machines dal.Machinerep

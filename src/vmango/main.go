@@ -11,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	text_template "text/template"
+	"time"
 	"vmango/cfg"
 	"vmango/dal"
 	"vmango/web"
@@ -44,9 +45,13 @@ func main() {
 	if err != nil {
 		log.WithError(err).WithField("filename", *CONFIG_PATH).Fatal("failed to parse config")
 	}
-
+	staticCache, err := time.ParseDuration(config.StaticCache)
+	if err != nil {
+		log.WithError(err).Fatal("failed to parse static_cache from config")
+	}
 	ctx := &web.Context{
-		Logger: log.New(),
+		Logger:      log.New(),
+		StaticCache: staticCache,
 	}
 	ctx.Router = vmango_router.New(config.StaticPath, ctx)
 	ctx.Render = web.NewRenderer(config.TemplatePath, ctx)
