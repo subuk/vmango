@@ -1,64 +1,74 @@
 {{template "header" .}}
-<form method="post" class="valid-form">
+<div class="row">
+  <div class="medium-8 column end">
   <div class="row">
-    <div class="col-md-9">
-      <div class="form-group valid-form__field-group">
-        <label for="name">Name</label>
-        <input id="name" name="Name" type="text" placeholder="Input virtual machine name" class="form-control valid-form__field-input valid-form__field-input_common">
-        <p class="help-block valid-form__field-error"></p>
-      </div>
+    <div class="medium-12">
+      <h1>Create machine</h1>
     </div>
   </div>
 
-  <div class="row">
-    <div class="col-md-9">
-      <div class="form-group">
-        <label for="plan">Size</label>
-        <select id="plan" name="Plan" class="form-control">
-        {{ range .Plans }}
-          <option value="{{ .Name }}">{{ .Name }} ({{ .Cpus }}xCPU, {{ .MemoryMegabytes }}Mb, {{ .DiskSizeGigabytes }}GB)</option>
-        {{ end }}
-        </select>
-      </div>
+  <form method="post" action="">
+      <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false">
+      <h4>Choose an image</h4>
+      {{ range .Images }}
+        <div class="column">
+          <div class="card JS-CheckboxCard">
+            <input type="checkbox" name="Image" value="{{ .FullName }}">
+            <div class="card-section text-center">
+              <img height="70" width="70" src="{{ Static "vmango/linux-logo.png" }}">
+              <br>
+              <i style="display: none;" class="icon fi-check"></i>
+              {{ .OSName }}
+              <br>
+              {{ .OSVersion }} {{ .ArchString2 }}
+            </div>
+          </div>
+        </div>
+      {{ end }}
     </div>
-  </div>
 
-  <div class="row">
-    <div class="col-md-9">
-      <div class="form-group">
-        <label class="control-label" for="image">Image</label>
-        <select id="image" name="Image" class="form-control">
-        {{ range .Images }}
-          <option value="{{ .FullName }}">{{ .OS }} {{ .ArchString }}</option>
-        {{ end }}
-        </select>
-      </div>
+    <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false">
+      <h4>Choose a size</h4>
+      {{ range .Plans }}
+        <div class="column">
+          <div class="card JS-CheckboxCard">
+          <input type="checkbox" name="Plan" value="{{ .Name }}">
+          <div class="card-section text-center">
+            <i style="display: none;" class="icon fi-check"></i>
+            <b>{{ .Name }}</b>
+            <br>
+            {{ .Cpus }}xCPU, {{ .MemoryMegabytes }}Mb, {{ .DiskSizeGigabytes }}GB
+          </div>
+          </div>
+        </div>
+      {{ end }}
     </div>
-  </div>
 
-  <div class="row">
-    <div class="col-md-9">
-      <div class="form-group">
-      <label class="control-label" for="sshkeys">SSH Keys</label>
+    <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="true">
+        <h4>Add your SSH keys</h4>
         {{ range .SSHKeys }}
-        <div class="checkbox">
-          <label>
-            <input id="sshkeys" type="checkbox" name="sshkey" value="{{ .Name }}">
-            {{ .Name }}
+        <div class="column">
+          <label for="{{ .Name }}">
+          <div class="card JS-CheckboxCard">
+            <div class="card-section">
+              <i style="display: none;" class="icon fi-check"></i>
+              <input id="{{ .Name }}" value="{{ .Name }}" name="sshkey" type="checkbox"> {{ .Name | LimitString 15 }}
+            </div>
+          </div>
           </label>
         </div>
         {{ end }}
+    </div>
+
+    <div class="row">
+      <h4>Choose a hostname</h4>
+      <div class="large-12 column">
+          <input name="Name" type="text" placeholder="Input virtual machine name" required="required">
       </div>
     </div>
-  </div>
 
-  <div class="row">
-    <div class="col-md-9">
-      <div class="form-group">
-          <button class="btn btn-primary btn-block valid-form__submit" type="submit">Create machine</button>
-      </div>
-    </div>
+    <button class="button" type="submit">Create machine</button>
+  </form>
   </div>
-
-</form>
+</div>
 {{template "footer" .}}

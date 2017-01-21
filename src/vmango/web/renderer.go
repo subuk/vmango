@@ -19,9 +19,12 @@ func NewRenderer(templatePath string, ctx *Context) *render.Render {
 			template.FuncMap{
 				"LimitString": func(limit int, s string) string {
 					slen := len(s)
+					if slen <= limit {
+						return s
+					}
 					s = s[:limit]
 					if slen > limit {
-						s += " ..."
+						s += "..."
 					}
 					return s
 				},
