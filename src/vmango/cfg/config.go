@@ -34,8 +34,6 @@ type AuthUserConfig struct {
 
 type Config struct {
 	Listen        string `hcl:"listen"`
-	TemplatePath  string `hcl:"template_path"`
-	StaticPath    string `hcl:"static_path"`
 	DbPath        string `hcl:"db_path"`
 	SessionSecret string `hcl:"session_secret"`
 	StaticCache   string `hcl:"static_cache"`

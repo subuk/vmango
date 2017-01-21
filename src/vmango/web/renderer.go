@@ -9,12 +9,11 @@ import (
 	"time"
 )
 
-func NewRenderer(templatePath, version string, ctx *Context) *render.Render {
+func NewRenderer(version string, ctx *Context) *render.Render {
 
 	return render.New(render.Options{
 		Extensions:    []string{".html"},
 		IsDevelopment: true,
-		Directory:     templatePath,
 		Asset: func(name string) ([]byte, error) {
 			return Asset(name)
 		},

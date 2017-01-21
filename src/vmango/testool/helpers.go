@@ -2,27 +2,36 @@ package testool
 
 import (
 	"github.com/Sirupsen/logrus"
+	"github.com/gorilla/sessions"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
-	"runtime"
 	"vmango/web"
 	web_router "vmango/web/router"
 )
 
+type StubSessionStore struct {
+	Session *sessions.Session
+}
+
+func (s *StubSessionStore) Get(r *http.Request, name string) (*sessions.Session, error) {
+	return s.Session, nil
+}
+func (s *StubSessionStore) New(r *http.Request, name string) (*sessions.Session, error) {
+	return s.Session, nil
+}
+func (s *StubSessionStore) Save(r *http.Request, w http.ResponseWriter, sess *sessions.Session) error {
+	return nil
+}
+
 func NewTestContext() *web.Context {
-	_, filename, _, _ := runtime.Caller(0)
-	sourceDir, err := filepath.Abs(
-		filepath.Join(filepath.Dir(filename), "../../../"),
-	)
-	if err != nil {
-		panic(err)
-	}
 	ctx := &web.Context{}
-	ctx.Router = web_router.New(filepath.Join(sourceDir, "static"), ctx)
-	ctx.Render = web.NewRenderer(filepath.Join(sourceDir, "templates"), ctx)
+	ctx.Router = web_router.New(ctx)
+	ctx.Render = web.NewRenderer("", ctx)
 	ctx.Logger = logrus.New()
+	session := &sessions.Session{}
+	session.Values = map[interface{}]interface{}{"authuser": "testadmin"}
+	ctx.SessionStore = &StubSessionStore{session}
 	return ctx
 }
 

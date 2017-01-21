@@ -6,7 +6,7 @@ import (
 	"vmango/web"
 )
 
-func New(staticPath string, ctx *web.Context) *mux.Router {
+func New(ctx *web.Context) *mux.Router {
 	router := mux.NewRouter().StrictSlash(true)
 
 	router.Handle("/", web.NewHandler(ctx, handlers.Index)).Name("index")
