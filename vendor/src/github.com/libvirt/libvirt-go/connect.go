@@ -1688,7 +1688,7 @@ func (c *Connect) GetMemoryStats(cellNum int, flags uint32) (*NodeMemoryStats, e
 	}
 
 	params := make([]C.virNodeMemoryStats, nparams)
-	ret = C.virNodeGetMemoryStats(c.ptr, C.int(cellNum), (*C.virNodeMemoryStats)(unsafe.Pointer(&params)), &nparams, C.uint(flags))
+	ret = C.virNodeGetMemoryStats(c.ptr, C.int(cellNum), (*C.virNodeMemoryStats)(unsafe.Pointer(&params[0])), &nparams, C.uint(flags))
 	if ret == -1 {
 		return nil, GetLastError()
 	}
