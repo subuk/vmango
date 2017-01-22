@@ -22,7 +22,11 @@
       <div class="row">
         <div class="top-bar-left">
           <ul class="menu">
+            {{ if eq .Request.URL.Path "/" }}
             <li class="menu-text">Vmango</li>
+            {{ else }}
+            <li><a class="menu-text" href="/">Vmango</a></li>
+            {{ end }}
             {{ if IsAuthenticated .Request }}
             <li {{if and (HasPrefix .Request.URL.Path $machinesUrl) (not (eq .Request.URL.Path $machineAddUrl)) }}class="active"{{end}}>
               <a href="{{ $machinesUrl }}">Machines</a>

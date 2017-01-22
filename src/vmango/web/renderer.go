@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var SUFFIXES = []string{"b", "K", "M", "G", "P"}
+
 func NewRenderer(version string, ctx *Context) *render.Render {
 
 	return render.New(render.Options{
@@ -22,6 +24,20 @@ func NewRenderer(version string, ctx *Context) *render.Render {
 		},
 		Funcs: []template.FuncMap{
 			template.FuncMap{
+				"HumanizeBytes": func(max int, number uint64) string {
+					i := 0
+					for {
+						if number < 1024 {
+							break
+						}
+						number = number / 1024
+						i++
+						if i >= max || i >= len(SUFFIXES) {
+							break
+						}
+					}
+					return fmt.Sprintf("%d%s", number, SUFFIXES[i])
+				},
 				"LimitString": func(limit int, s string) string {
 					slen := len(s)
 					if slen <= limit {

@@ -2,7 +2,7 @@
   <div class="row">
     <div class="large-12 columns">
       <div class="callout large">
-        <h1>Welcome to Vmango</h1>
+        <h1>Vmango</h1>
         <p class="lead">virtual machine management interface</p>
         <br/>
         <p><span class="stat">{{ .Machines.Active.Count }}</span> machines running now</p>
@@ -10,4 +10,48 @@
     </div>
   </div>
 
+
+<div class="row">
+  <div class="medium-12 column end">
+    <table>
+      <tr>
+        <td>Hostname</td>
+        <td>{{ .Server.Data.Hostname }}</td>
+      </tr>
+      <tr>
+        <td>Processor</td>
+        <td>{{ .Server.Data.Processor }} ({{ .Server.Data.Cpus }} cores)</td>
+      </tr>
+      <tr>
+        <td>Connection URI</td>
+        <td>{{ .Server.Data.LibvirtURI }}</td>
+      </tr>
+      <tr>
+        <td>Memory</td>
+        <td>{{ .Server.Data.Memory | HumanizeBytes 2 }}</td>
+      </tr>
+      <tr>
+        <td>Storage space usage ({{ .Server.Data.StorageCapacity | HumanizeBytes 4 }} total)</td>
+        <td>
+          <div class="progress {{if lt .Server.Data.StorageUsagePercent 80}}success{{ else }}alert{{ end }}">
+            <div class="progress-meter" style="width: {{ .Server.Data.StorageUsagePercent }}%">
+              <p class="progress-meter-text">{{ .Server.Data.StorageUsagePercent }}%</p>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td>Memory usage ({{ .Server.Data.MemoryTotal | HumanizeBytes 2 }} total)</td>
+        <td>
+          <div class="progress {{if lt .Server.Data.MemoryUsedPersent 80}}success{{ else }}alert{{ end }}">
+            <div class="progress-meter" style="width: {{ .Server.Data.MemoryUsedPersent }}%">
+              <p class="progress-meter-text">{{ .Server.Data.MemoryUsedPersent }}%</p>
+            </div>
+          </div>
+        </td>
+      </tr>
+
+    </table>
+  </div>
+</div>
 {{template "footer" .}}

@@ -499,3 +499,84 @@ func (store *LibvirtMachinerep) Reboot(machine *models.VirtualMachine) error {
 	}
 	return domain.Reboot(libvirt.DOMAIN_REBOOT_DEFAULT)
 }
+
+func (store *LibvirtMachinerep) ServerInfo(serverInfo *models.Server) error {
+	serverInfo.Type = "libvirt"
+	serverInfo.Data = map[string]interface{}{}
+
+	hostname, err := store.conn.GetHostname()
+	if err != nil {
+		return err
+	}
+	serverInfo.Data["Hostname"] = hostname
+
+	nodeinfo, err := store.conn.GetNodeInfo()
+	if err != nil {
+		return err
+	}
+	serverInfo.Data["Cpus"] = nodeinfo.Cpus
+	serverInfo.Data["Model"] = nodeinfo.Model
+	serverInfo.Data["Memory"] = nodeinfo.Memory * 1024
+
+	sysinfoXMLString, err := store.conn.GetSysinfo(0)
+	if err != nil {
+		return err
+	}
+	sysinfoConfig := struct {
+		ProcessorEntry []struct {
+			Name  string `xml:"name,attr"`
+			Value string `xml:",chardata"`
+		} `xml:"processor>entry"`
+	}{}
+	if err := xml.Unmarshal([]byte(sysinfoXMLString), &sysinfoConfig); err != nil {
+		return err
+	}
+	for _, entry := range sysinfoConfig.ProcessorEntry {
+		if entry.Name == "version" {
+			serverInfo.Data["Processor"] = entry.Value
+		}
+	}
+
+	vmPool, err := store.conn.LookupStoragePoolByName(store.storagePool)
+	if err != nil {
+		return err
+	}
+	vmPoolXMLString, err := vmPool.GetXMLDesc(0)
+	if err != nil {
+		return err
+	}
+	vmPoolConfig := struct {
+		Capacity   uint64 `xml:"capacity"`
+		Availaible uint64 `xml:"available"`
+		Allocation uint64 `xml:"allocation"`
+	}{}
+	if err := xml.Unmarshal([]byte(vmPoolXMLString), &vmPoolConfig); err != nil {
+		return err
+	}
+
+	serverInfo.Data["StorageCapacity"] = vmPoolConfig.Capacity
+	serverInfo.Data["StorageAllocation"] = vmPoolConfig.Allocation
+	serverInfo.Data["StorageUsagePercent"] = int((float64(vmPoolConfig.Allocation) / float64(vmPoolConfig.Capacity)) * 100)
+
+	libvirtURI, err := store.conn.GetURI()
+	if err != nil {
+		return err
+	}
+	serverInfo.Data["LibvirtURI"] = libvirtURI
+
+	memStat, err := store.conn.GetMemoryStats(libvirt.NODE_MEMORY_STATS_ALL_CELLS, 0)
+	if err != nil {
+		return err
+	}
+	memTotal := memStat.Total * 1024
+	memFree := (memStat.Free + memStat.Buffers + memStat.Cached) * 1024
+	memUsed := (memTotal - memFree)
+	memUsedPercent := int((float32(memUsed) / float32(memTotal)) * 100)
+
+	fmt.Println(memTotal, memFree, memUsed)
+	serverInfo.Data["MemoryUsed"] = memUsed
+	serverInfo.Data["MemoryFree"] = memFree
+	serverInfo.Data["MemoryTotal"] = memTotal
+	serverInfo.Data["MemoryUsedPersent"] = memUsedPercent
+	return nil
+}
