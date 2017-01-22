@@ -33,11 +33,15 @@ Hypervisor requirements:
 Define libvirt network
 
     virsh net-define network.xml
+    virsh net-start vmango
+    virsh net-autostart vmango
 
 Define libvirt images storage:
     
     sudo mkdir -p /var/lib/libvirt/images/vmango-images
     virsh pool-define storage-pool-images.xml
+    virsh pool-start vmango-images
+    virsh pool-autostart vmango-images
 
 Install dhcp lease monitor hook (symlink doesn't work due to Apparmor restrictions):
     
