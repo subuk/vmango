@@ -10,15 +10,6 @@ Current features:
 * Support for cloud OS images (with cloud-init installed)
 * IP address management
 
-Planned features:
-
-* Backups
-* DNS zones management
-* Other virtualization platforms
-* Multiple virtualization servers
-* Elastic IP addresses and port forwarding
-* Native packages for linux distributions
-
 Hypervisor server requirements:
 
 * Libvirt 0.10+ (centos6+, ubuntu14.04+, debian8+)
