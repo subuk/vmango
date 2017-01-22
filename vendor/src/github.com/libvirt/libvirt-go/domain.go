@@ -3183,8 +3183,6 @@ type DomainPerfEvents struct {
 	StalledCyclesBackend     bool
 	RefCpuCyclesSet          bool
 	RefCpuCycles             bool
-	CacheL1DSet              bool
-	CacheL1D                 bool
 }
 
 /* Remember to also update DomainStatsPerf in connect.go when adding to the stuct above */
@@ -3242,10 +3240,6 @@ func getDomainPerfEventsFieldInfo(params *DomainPerfEvents) map[string]typedPara
 		C.VIR_PERF_PARAM_REF_CPU_CYCLES: typedParamsFieldInfo{
 			set: &params.RefCpuCyclesSet,
 			b:   &params.RefCpuCycles,
-		},
-		C.VIR_PERF_PARAM_CACHE_L1D: typedParamsFieldInfo{
-			set: &params.CacheL1DSet,
-			b:   &params.CacheL1D,
 		},
 	}
 }
@@ -3893,7 +3887,7 @@ func (d *Domain) GetIOThreadInfo(flags DomainModificationImpact) ([]DomainIOThre
 	info := make([]DomainIOThreadInfo, int(ret))
 
 	for i := 0; i < int(ret); i++ {
-		cinfo := (*(**C.virDomainIOThreadInfo)(unsafe.Pointer(uintptr(unsafe.Pointer(cinfolist)) + (unsafe.Sizeof(*cinfolist) + uintptr(i)))))
+		cinfo := (*(**C.virDomainIOThreadInfo)(unsafe.Pointer(uintptr(unsafe.Pointer(cinfolist)) + (unsafe.Sizeof(*cinfolist) * uintptr(i)))))
 
 		ncpus := int(cinfo.cpumaplen * 8)
 		cpumap := make([]bool, ncpus)

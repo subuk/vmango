@@ -2253,8 +2253,6 @@ type DomainStatsPerf struct {
 	StalledCyclesBackend     uint64
 	RefCpuCyclesSet          bool
 	RefCpuCycles             uint64
-	CacheL1DSet              bool
-	CacheL1D                 uint64
 }
 
 func getDomainStatsPerfFieldInfo(params *DomainStatsPerf) map[string]typedParamsFieldInfo {
@@ -2310,10 +2308,6 @@ func getDomainStatsPerfFieldInfo(params *DomainStatsPerf) map[string]typedParams
 		"perf.ref_cpu_cycles": typedParamsFieldInfo{
 			set: &params.RefCpuCyclesSet,
 			ul:  &params.RefCpuCycles,
-		},
-		"perf.cache_l1d": typedParamsFieldInfo{
-			set: &params.CacheL1DSet,
-			ul:  &params.CacheL1D,
 		},
 	}
 }

@@ -45,10 +45,6 @@
 #define VIR_PERF_PARAM_REF_CPU_CYCLES "ref_cpu_cycles"
 #endif
 
-#ifndef VIR_PERF_PARAM_CACHE_L1D
-#define VIR_PERF_PARAM_CACHE_L1D "cache_l1d"
-#endif
-
 #ifndef VIR_DOMAIN_EVENT_ID_METADATA_CHANGE
 #define VIR_DOMAIN_EVENT_ID_METADATA_CHANGE 23
 #endif
