@@ -19,14 +19,31 @@ Planned features:
 * Elastic IP addresses and port forwarding
 * Native packages for linux distributions
 
-Hypervisor requirements:
+Hypervisor server requirements:
 
 * Libvirt 0.10+ (centos6+, ubuntu14.04+, debian8+)
 * Routed network with libvirt managed dhcp server. Bridged networks not supported due to impossibility to determine machine ip address.
 
-## Development hypervisor configuration (Ubuntu 14.04/16.04)
+Web interface server requirements:
+* Libvirt 1.2.0+ (Ubuntu 14.04+, debian8+, centos7+)
 
-    sudo apt-get install libvirt-dev libvirt-bin qemu-kvm virt-manager qemu-system
+## User passwords
+
+User passwords stored in config file in hashed form (golang.org/x/crypto/bcrypt). For adding new user or change password for existing, generate a new one with `vmango genpw` utility:
+
+    ./bin/vmango genpw plainsecret
+
+Copy output and insert into config file:
+       
+    ...
+    user "admin" {
+        password = "$2a$10$uztHNVBxZ08LBmboJpAqguN4gZSymgmjaJ2xPHKwAqH.ukgaplb96"
+    }
+    ...
+
+## Hypervisor configuration (Ubuntu 14.04/16.04)
+
+    sudo apt-get install libvirt-bin qemu-kvm qemu-system
     sudo usermod -aG libvirtd [username]
     newgrp libvirtd
 
@@ -60,23 +77,15 @@ If your processor doesn't support hardware acceleration, change type from "kvm" 
 
     <domain type='qemu'> 
 
-## User passwords
-
-User passwords stored in config file in hashed form (golang.org/x/crypto/bcrypt). For adding new user or change password for existing, generate a new one with `vmango genpw` utility:
-
-    ./bin/vmango genpw plainsecret
-
-Copy output and insert into config file:
-       
-    ...
-    user "admin" {
-        password = "$2a$10$uztHNVBxZ08LBmboJpAqguN4gZSymgmjaJ2xPHKwAqH.ukgaplb96"
-    }
-    ...
-
 ## Development environment
 
-### Ubuntu (local hypervisor)
+### Dependencies for Ubuntu 14.04+
+
+Install libvirt and kvm
+
+    sudo apt-get install libvirt-dev libvirt-bin qemu-kvm virt-manager qemu-system
+    sudo usermod -aG libvirtd [username]
+    newgrp libvirtd
 
 Install Go 1.7
 
@@ -84,32 +93,25 @@ Install Go 1.7
     sudo wget https://storage.googleapis.com/golang/go1.7.4.linux-amd64.tar.gz
     sudo tar xf go1.7.4.linux-amd64.tar.gz
 
-Compile
+Configure libvirt as described above.
+Now you can use your own computer as hypervisor.
 
-    make EXTRA_ASSETS_FLAGS=-debug
+### Dependencies for MacOS
 
-Run app:
-
-    ./bin/vmango
-
-
-### MacOS (remote hypervisor)
-
-Install Go compiler
+Install Go compiler and libvirt C library
 
     brew install go
-
-Install libvirt library
-
     brew install libvirt
 
-Compile 
+You need a linux hypervisor somewhere in the world, because libvirt doesn't support MacOS.
+
+### Development
+
+Compile for development
 
     make EXTRA_ASSETS_FLAGS=-debug
 
-Steal server with Ubuntu 14.04 and install libvirt/kvm on it following the instructions above.
-
-Change hypervisor url in config file (vmango.conf) to remote location
+Change libvirt url in config if needed
 
     ...
     hypervisor {
@@ -119,6 +121,19 @@ Change hypervisor url in config file (vmango.conf) to remote location
     }
     ...
 
-Run app 
+Run app
 
-    ./bin/vmango 
+    ./bin/vmango
+
+View it on http://localhost:8000
+
+### Run tests
+
+Unit tests
+
+    make test
+
+Libvirt integration tests and unit tests (please, do not run tests on production servers)
+
+    VMANGO_TEST_LIBVIRT_URI=qemu:///system make test TEST_ARGS=
+
