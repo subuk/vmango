@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/unrolled/render"
 	"net/http"
+	"strings"
 	"time"
 	"vmango/dal"
 )
@@ -66,7 +67,7 @@ func NewHandler(ctx *Context, handle HandlerFunc) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/login/" && r.URL.Path != "/login" {
+	if r.URL.Path != "/login/" && r.URL.Path != "/login" && !strings.HasPrefix(r.URL.Path, "/static/") {
 		session := h.ctx.Session(r)
 		if !session.IsAuthenticated() {
 			http.Redirect(w, r, "/login/?next="+r.URL.String(), http.StatusFound)
