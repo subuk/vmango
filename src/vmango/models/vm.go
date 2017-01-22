@@ -37,6 +37,15 @@ func (vms *VirtualMachineList) Add(vm *VirtualMachine) {
 	vms.machines = append(vms.machines, vm)
 }
 
+func (vms *VirtualMachineList) Find(name string) *VirtualMachine {
+	for _, vm := range vms.machines {
+		if vm.Name == name {
+			return vm
+		}
+	}
+	return nil
+}
+
 type VirtualMachineDisk struct {
 	Size   uint64 `json:"size"`
 	Driver string `json:"driver"`

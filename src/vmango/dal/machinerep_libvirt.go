@@ -345,12 +345,12 @@ func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine
 func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *models.Image, plan *models.Plan) error {
 	storagePool, err := store.conn.LookupStoragePoolByName(store.storagePool)
 	if err != nil {
-		return fmt.Errorf("failed to lookup vm storage pool: %s", err)
+		return fmt.Errorf("failed to lookup vm storage pool: %s", err.(libvirt.Error).Message)
 	}
 
 	imagePool, err := store.conn.LookupStoragePoolByName(image.PoolName)
 	if err != nil {
-		return fmt.Errorf("failed to lookup image storage pool: %s", err)
+		return fmt.Errorf("failed to lookup image storage pool: %s", err.(libvirt.Error).Message)
 	}
 
 	var volumeXML bytes.Buffer
@@ -425,6 +425,9 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 }
 
 func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
+	if machine.Name == "" {
+		panic("no name specified for machine remove")
+	}
 	storagePool, err := store.conn.LookupStoragePoolByName(store.storagePool)
 	if err != nil {
 		return fmt.Errorf("failed to lookup vm storage pool: %s", err)
@@ -434,7 +437,7 @@ func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
 	}
 	domain, err := store.conn.LookupDomainByName(machine.Name)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to lookup domain: %s", err.(libvirt.Error).Message)
 	}
 	running, err := domain.IsActive()
 	if err != nil {
@@ -467,7 +470,10 @@ func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
 			return err
 		}
 	}
-	return domain.Undefine()
+	if err := domain.Undefine(); err != nil {
+		return fmt.Errorf("failed to undefine domain: %s", err.(libvirt.Error).Message)
+	}
+	return nil
 }
 
 func (store *LibvirtMachinerep) Start(machine *models.VirtualMachine) error {
