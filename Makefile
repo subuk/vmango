@@ -24,6 +24,10 @@ bin/vmango: $(SOURCES)
 	$(GO) get -d vmango/...
 	$(GO) build -ldflags "-w -s -X main.STATIC_VERSION=${VERSION}" -o bin/vmango vmango
 
+bin/vmango-debug: $(SOURCES)
+	$(GO) get -d vmango/...
+	$(GO) build -ldflags "-X main.STATIC_VERSION=${VERSION}" -o bin/vmango-debug vmango
+
 test-deps:
 	$(GO) get -t vmango/...
 
