@@ -3,11 +3,11 @@ GO = GOPATH=$(GOPATH) go
 SOURCES = $(shell find src/ -name *.go) src/vmango/web/assets.go Makefile
 ASSETS = $(shell find templates/ static/)
 .PHONY = clean test show-coverage-html show-coverage-text
-PACKAGES = $(shell cd src/vmango; find -type d|sed 's,^./,,' | sed 's,/,@,g' |sed '/^\.$$/d')
+PACKAGES = $(shell cd src/vmango; find . -type d|sed 's,^./,,' | sed 's,/,@,g' |sed '/^\.$$/d')
 TEST_ARGS = -race
 test_coverage_targets = $(addprefix test-coverage-, $(PACKAGES))
 EXTRA_ASSETS_FLAGS =
-VERSION = "$(shell git describe --tags)"
+VERSION = $(shell git describe --tags)
 
 default: bin/vmango
 
