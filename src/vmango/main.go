@@ -102,6 +102,12 @@ func main() {
 	n.Use(negroni.NewRecovery())
 	n.UseHandler(ctx.Router)
 
-	log.WithField("address", config.Listen).Info("starting server")
-	log.Fatal(http.ListenAndServe(config.Listen, n))
+	if config.SSLKey != "" && config.SSLCert != "" {
+		log.WithField("address", config.Listen).Info("starting SSL server")
+		log.Fatal(http.ListenAndServeTLS(config.Listen, config.SSLCert, config.SSLKey, n))
+	} else {
+		log.WithField("address", config.Listen).Info("starting server")
+		log.Fatal(http.ListenAndServe(config.Listen, n))
+	}
+
 }

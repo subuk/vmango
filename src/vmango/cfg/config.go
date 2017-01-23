@@ -38,6 +38,8 @@ type Config struct {
 	SessionSecret string `hcl:"session_secret"`
 	StaticCache   string `hcl:"static_cache"`
 	Debug         bool   `hcl:"debug"`
+	SSLKey        string `hcl:"ssl_key"`
+	SSLCert       string `hcl:"ssl_cert"`
 
 	Hypervisor HypervisorConfig `hcl:"hypervisor"`
 	SSHKeys    []SSHKeyConfig   `hcl:"ssh_key"`
