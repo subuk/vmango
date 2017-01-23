@@ -22,6 +22,7 @@ func NewRenderer(version string, ctx *Context) *render.Render {
 		AssetNames: func() []string {
 			return AssetNames()
 		},
+		IndentJSON: true,
 		Funcs: []template.FuncMap{
 			template.FuncMap{
 				"HumanizeBytes": func(max int, number uint64) string {

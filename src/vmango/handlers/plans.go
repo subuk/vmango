@@ -12,9 +12,8 @@ func PlanList(ctx *web.Context, w http.ResponseWriter, req *http.Request) error 
 	if err := ctx.Plans.List(&plans); err != nil {
 		return fmt.Errorf("failed to fetch plan list: %s", err)
 	}
-	ctx.Render.HTML(w, http.StatusOK, "plans/list", map[string]interface{}{
-		"Request": req,
-		"Plans":   plans,
+	ctx.RenderResponse(w, req, http.StatusOK, "plans/list", map[string]interface{}{
+		"Plans": plans,
 	})
 	return nil
 }

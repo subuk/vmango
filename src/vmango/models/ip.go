@@ -1,5 +1,9 @@
 package models
 
+import (
+	"encoding/json"
+)
+
 type IP struct {
 	Address string
 	Gateway string
@@ -9,6 +13,10 @@ type IP struct {
 
 type IPList struct {
 	addresses []*IP
+}
+
+func (ips *IPList) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ips.addresses)
 }
 
 func (ips *IPList) All() []*IP {

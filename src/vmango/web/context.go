@@ -47,6 +47,17 @@ type Context struct {
 	AuthDB   dal.Authrep
 }
 
+func (ctx *Context) RenderResponse(w http.ResponseWriter, req *http.Request, status int, name string, binding map[string]interface{}) {
+	format := req.URL.Query().Get("format")
+	switch format {
+	case "json":
+		ctx.Render.JSON(w, status, binding)
+	default:
+		binding["Request"] = req
+		ctx.Render.HTML(w, status, name, binding)
+	}
+}
+
 func (ctx *Context) Session(r *http.Request) *SessionData {
 	session, err := ctx.SessionStore.Get(r, SESSION_NAME)
 	if err != nil {

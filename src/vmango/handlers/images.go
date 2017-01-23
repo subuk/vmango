@@ -12,9 +12,8 @@ func ImageList(ctx *web.Context, w http.ResponseWriter, req *http.Request) error
 	if err := ctx.Images.List(&images); err != nil {
 		return fmt.Errorf("failed to fetch images list: %s", err)
 	}
-	ctx.Render.HTML(w, http.StatusOK, "images/list", map[string]interface{}{
-		"Request": req,
-		"Images":  images,
+	ctx.RenderResponse(w, req, http.StatusOK, "images/list", map[string]interface{}{
+		"Images": images,
 	})
 	return nil
 }

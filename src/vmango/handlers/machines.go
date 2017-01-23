@@ -13,6 +13,12 @@ func MachineDelete(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 	machine := &models.VirtualMachine{
 		Name: mux.Vars(req)["name"],
 	}
+	if exists, err := ctx.Machines.Get(machine); err != nil {
+		return fmt.Errorf("failed to fetch machine info: %s", err)
+	} else if !exists {
+		return web.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
+	}
+
 	if req.Method == "POST" {
 		if err := ctx.IPPool.Fetch(machine); err != nil {
 			return err
@@ -32,11 +38,6 @@ func MachineDelete(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 		http.Redirect(w, req, url.Path, http.StatusFound)
 		return nil
 	} else {
-		if exists, err := ctx.Machines.Get(machine); err != nil {
-			return fmt.Errorf("failed to fetch machine info: %s", err)
-		} else if !exists {
-			return web.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
-		}
 		ctx.Render.HTML(w, http.StatusOK, "machines/delete", map[string]interface{}{
 			"Request": req,
 			"Machine": machine,
@@ -94,8 +95,7 @@ func MachineList(ctx *web.Context, w http.ResponseWriter, req *http.Request) err
 	if err := ctx.Machines.List(machines); err != nil {
 		return err
 	}
-	ctx.Render.HTML(w, http.StatusOK, "machines/list", map[string]interface{}{
-		"Request":  req,
+	ctx.RenderResponse(w, req, http.StatusOK, "machines/list", map[string]interface{}{
 		"Machines": machines,
 	})
 	return nil
@@ -113,9 +113,7 @@ func MachineDetail(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 	if err := ctx.IPPool.Fetch(machine); err != nil {
 		return err
 	}
-
-	ctx.Render.HTML(w, http.StatusOK, "machines/detail", map[string]interface{}{
-		"Request": req,
+	ctx.RenderResponse(w, req, http.StatusOK, "machines/detail", map[string]interface{}{
 		"Machine": machine,
 	})
 	return nil

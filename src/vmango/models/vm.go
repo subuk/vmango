@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 )
 
@@ -11,7 +12,11 @@ const (
 )
 
 type VirtualMachineList struct {
-	machines []*VirtualMachine
+	machines []*VirtualMachine `json:"Machines"`
+}
+
+func (vms *VirtualMachineList) MarshalJSON() ([]byte, error) {
+	return json.Marshal(vms.machines)
 }
 
 func (vms *VirtualMachineList) Active() *VirtualMachineList {
@@ -47,9 +52,9 @@ func (vms *VirtualMachineList) Find(name string) *VirtualMachine {
 }
 
 type VirtualMachineDisk struct {
-	Size   uint64 `json:"size"`
-	Driver string `json:"driver"`
-	Type   string `json:"type"`
+	Size   uint64
+	Driver string
+	Type   string
 }
 
 func (disk *VirtualMachineDisk) SizeGigabytes() int {
@@ -57,17 +62,17 @@ func (disk *VirtualMachineDisk) SizeGigabytes() int {
 }
 
 type VirtualMachine struct {
-	Name      string              `json:"name"`
-	State     int                 `json:"-"`
-	Uuid      string              `json:"-"`
-	Memory    int                 `json:"memory"`
-	Cpus      int                 `json:"cpus"`
-	ImageName string              `json:"image_name"`
-	Ip        *IP                 `json:"ip"`
-	HWAddr    string              `json:"hwaddr"`
-	VNCAddr   string              `json:"vncaddr"`
-	Disk      *VirtualMachineDisk `json:"disk"`
-	SSHKeys   []*SSHKey           `json:"sshkeys"`
+	Name      string
+	State     int `json:"-"`
+	Uuid      string
+	Memory    int
+	Cpus      int
+	ImageName string `json:"-"`
+	Ip        *IP
+	HWAddr    string
+	VNCAddr   string
+	Disk      *VirtualMachineDisk
+	SSHKeys   []*SSHKey
 }
 
 func (v *VirtualMachine) StateName() string {

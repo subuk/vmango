@@ -6,10 +6,8 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/sessions"
 	"github.com/libvirt/libvirt-go"
-	"io"
 	"io/ioutil"
 	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"runtime"
 	"vmango/web"
@@ -39,21 +37,6 @@ func NewTestContext() *web.Context {
 	session.Values = map[interface{}]interface{}{}
 	ctx.SessionStore = &StubSessionStore{session}
 	return ctx
-}
-
-func DoRequest(handler *web.Handler, method, url string, body io.Reader) *httptest.ResponseRecorder {
-	rr := httptest.NewRecorder()
-	req, err := http.NewRequest(method, url, body)
-	if err != nil {
-		panic(err)
-	}
-	handler.ServeHTTP(rr, req)
-	return rr
-
-}
-
-func DoGet(handler *web.Handler, url string) *httptest.ResponseRecorder {
-	return DoRequest(handler, "GET", url, nil)
 }
 
 func SourceDir() string {

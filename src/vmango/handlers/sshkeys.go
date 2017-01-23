@@ -12,8 +12,7 @@ func SSHKeyList(ctx *web.Context, w http.ResponseWriter, req *http.Request) erro
 	if err := ctx.SSHKeys.List(&keys); err != nil {
 		return fmt.Errorf("failed to fetch ssh keys list: %s", err)
 	}
-	ctx.Render.HTML(w, http.StatusOK, "sshkeys/list", map[string]interface{}{
-		"Request": req,
+	ctx.RenderResponse(w, req, http.StatusOK, "sshkeys/list", map[string]interface{}{
 		"SSHKeys": keys,
 	})
 	return nil

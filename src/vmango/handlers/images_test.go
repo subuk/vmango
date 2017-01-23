@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 	"vmango/dal"
-	"vmango/handlers"
 	"vmango/models"
 	"vmango/testool"
 )
@@ -34,7 +33,7 @@ func (suite *ImageHandlersTestSuite) TestImageList_Ok() {
 			Date:     time.Unix(1484831107, 0),
 		},
 	}}
-	rr := suite.DoGet(handlers.ImageList)
+	rr := suite.DoGet("/images/")
 	suite.Assert().Equal(200, rr.Code, rr.Body.String())
 }
 
@@ -43,14 +42,14 @@ func (suite *ImageHandlersTestSuite) TestImageList_RepFail() {
 	suite.Context.Images = &dal.StubImagerep{
 		ListErr: fmt.Errorf("test repo error"),
 	}
-	rr := suite.DoGet(handlers.ImageList)
+	rr := suite.DoGet("/images/")
 	suite.Assert().Equal(500, rr.Code, rr.Body.String())
 }
 
 func (suite *ImageHandlersTestSuite) TestImageList_AuthRequired() {
-	rr := suite.DoGet(handlers.ImageList, "/redirect")
+	rr := suite.DoGet("/images/")
 	suite.Assert().Equal(302, rr.Code, rr.Body.String())
-	suite.Assert().Equal(rr.Header().Get("Location"), "/login/?next=/redirect")
+	suite.Assert().Equal(rr.Header().Get("Location"), "/login/?next=/images/")
 }
 
 func TestImageHandlersTestSuite(t *testing.T) {
