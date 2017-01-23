@@ -2,6 +2,8 @@
 <script src="{{ Static "foundation/js/vendor/what-input.js" }}"></script>
 <script src="{{ Static "foundation/js/vendor/foundation.min.js" }}"></script>
 <script src="{{ Static "vmango/vmango.checkboxCard.js" }}"></script>
+<script src="{{ Static "vmango/vmango.reactiveMenu.js" }}"></script>
+<script src="{{ Static "vmango/vmango.reactiveForm.js" }}"></script>
 <script>
     $(document).foundation();
 </script>
@@ -10,6 +12,12 @@
 $(function(){
     $('.JS-CheckboxCards').each(function(idx, el){
         Vmango.CheckboxCards(el);
+    });
+    $('.JS-ReactiveMenu').each(function(idx, el){
+        Vmango.ReactiveMenu(el);
+    });
+    $('.JS-ReactiveForm').each(function(idx, el){
+        Vmango.ReactiveForm(el);
     });
 });
 </script>

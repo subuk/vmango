@@ -7,7 +7,7 @@
     </div>
   </div>
 
-  <form method="post" action="">
+  <form class="JS-ReactiveForm" method="post" action="">
       <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false">
       <h4>Choose an image</h4>
       {{ range .Images }}
@@ -67,7 +67,7 @@
       </div>
     </div>
 
-    <button class="button" type="submit">Create machine</button>
+    <button class="button" data-loading="<i class='fi fi-loop'></i> Creating machine..." type="submit">Create machine</button>
   </form>
   </div>
 </div>
