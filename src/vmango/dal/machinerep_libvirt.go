@@ -184,7 +184,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 
 	vm.Name = name
 	vm.Uuid = fmt.Sprintf("%x", uuid)
-	vm.Memory = int(info.Memory)
+	vm.Memory = int(info.Memory * 1024)
 	vm.Cpus = int(info.NrVirtCpu)
 	vm.HWAddr = domainConfig.Interfaces[0].Mac.Address
 	vm.VNCAddr = domainConfig.VNCAddr()

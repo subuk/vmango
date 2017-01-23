@@ -85,7 +85,7 @@ func (v *VirtualMachine) IsRunning() bool {
 }
 
 func (v *VirtualMachine) MemoryMegabytes() int {
-	return int(v.Memory / 1024)
+	return int(v.Memory / 1024 / 1024)
 }
 
 func (v *VirtualMachine) String() string {
