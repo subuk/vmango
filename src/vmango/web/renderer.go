@@ -11,11 +11,11 @@ import (
 
 var SUFFIXES = []string{"b", "K", "M", "G", "P"}
 
-func NewRenderer(version string, ctx *Context) *render.Render {
+func NewRenderer(version string, debug bool, ctx *Context) *render.Render {
 
 	return render.New(render.Options{
 		Extensions:    []string{".html"},
-		IsDevelopment: true,
+		IsDevelopment: debug,
 		Asset: func(name string) ([]byte, error) {
 			return Asset(name)
 		},

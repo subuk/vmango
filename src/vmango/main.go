@@ -55,7 +55,11 @@ func main() {
 		StaticCache: staticCache,
 	}
 	ctx.Router = vmango_router.New(ctx)
-	ctx.Render = web.NewRenderer(STATIC_VERSION, ctx)
+	staticVersion := STATIC_VERSION
+	if config.Debug {
+		staticVersion = ""
+	}
+	ctx.Render = web.NewRenderer(staticVersion, config.Debug, ctx)
 
 	vmtpl, err := text_template.ParseFiles(config.Hypervisor.VmTemplate)
 	if err != nil {

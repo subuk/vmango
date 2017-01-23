@@ -31,7 +31,7 @@ func (s *StubSessionStore) Save(r *http.Request, w http.ResponseWriter, sess *se
 func NewTestContext() *web.Context {
 	ctx := &web.Context{}
 	ctx.Router = web_router.New(ctx)
-	ctx.Render = web.NewRenderer("", ctx)
+	ctx.Render = web.NewRenderer("", true, ctx)
 	ctx.Logger = logrus.New()
 	session := &sessions.Session{}
 	session.Values = map[interface{}]interface{}{}
