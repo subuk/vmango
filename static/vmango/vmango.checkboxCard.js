@@ -48,46 +48,5 @@
             $checkboxEl.prop("checked", newState);
             $checkboxEl.trigger('change');
         });
-
-        // $checkboxEls.hide();
-        // $cardEls.each(function(idx, el){
-        //     var $el = $(el),
-        //         $icon = $el.find('.icon');
-
-        //     if ($el.find('input[type=checkbox]').prop('checked')){
-        //         $el.css({'border-color': 'green'})
-        //         $icon.show();
-        //     }
-        // })
-        // $cardEls.on('click', function($event){
-        //     var $el = $(this),
-        //         $checkbox = $el.find('input[type=checkbox]'),
-        //         $icon = $el.find('.icon');
-
-        //     $event.preventDefault();
-        //     if($checkbox.prop('checked')){
-        //         $checkbox.prop('checked', false);
-        //         $el.css({'border-color': defaultColor})
-        //         $icon.hide();
-
-        //         if (!multiple) {
-        //             $(checked).each(function(idx, $el){
-        //                 $el.prop('checked', false);
-        //                 $el.css({'border-color': defaultColor});
-        //             })
-        //         }
-
-        //         checked = $.grep(checked, function(value){
-        //             return value.attr('value') != $checkbox.attr('value');
-        //         })
-        //     } else {
-        //         $checkbox.prop('checked', true);
-        //         $el.css({'border-color': 'green'})
-        //         $icon.show();
-        //         if (!multiple){
-        //             checked.push($checkbox);
-        //         }
-        //     }
-        // });
     }
 })(window);
