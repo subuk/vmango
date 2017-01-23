@@ -78,7 +78,6 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
 	expected := `{
       "Machine": {
           "Name": "test-detail-json",
-          "Uuid": "123uuid",
           "Memory": 456,
           "Cpus": 1,
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},

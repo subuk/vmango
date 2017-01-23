@@ -86,7 +86,6 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 	expected := `{
       "Machines": [{
           "Name": "test",
-          "Uuid": "123uuid",
           "Memory": 456,
           "Cpus": 1,
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
@@ -102,7 +101,6 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
           ]
         }, {
           "Name": "hello",
-          "Uuid": "321uuid",
           "Memory": 67897,
           "Cpus": 4,
           "HWAddr": "xx:xx:xx",
