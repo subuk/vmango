@@ -10,6 +10,8 @@ import (
 	"github.com/meatballhat/negroni-logrus"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
+	"os"
+	"path/filepath"
 	text_template "text/template"
 	"time"
 	"vmango/cfg"
@@ -20,6 +22,7 @@ import (
 
 var (
 	CONFIG_PATH    = flag.String("config", "vmango.conf", "Path to configuration file")
+	CHECK_CONFIG   = flag.Bool("check", false, "Validate configuration file and exit")
 	STATIC_VERSION string
 )
 
@@ -46,9 +49,16 @@ func main() {
 	if err != nil {
 		log.WithError(err).WithField("filename", *CONFIG_PATH).Fatal("failed to parse config")
 	}
+	if err := config.Sanitize(filepath.Dir(*CONFIG_PATH)); err != nil {
+		fmt.Fprintf(os.Stderr, "config validation failed, %s\n", err)
+		os.Exit(1)
+	}
 	staticCache, err := time.ParseDuration(config.StaticCache)
 	if err != nil {
 		log.WithError(err).Fatal("failed to parse static_cache from config")
+	}
+	if *CHECK_CONFIG {
+		os.Exit(0)
 	}
 	ctx := &web.Context{
 		Logger:      log.New(),
