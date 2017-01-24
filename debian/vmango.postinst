@@ -1,0 +1,9 @@
+#!/bin/sh
+
+case "$1" in
+    configure)
+        adduser --system --group --home /var/lib/vmango vmango
+    ;;
+esac
+
+#DEBHELPER#

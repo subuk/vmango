@@ -1,0 +1,5 @@
+vmango (0.2.0) vmango; urgency=medium
+
+  * Initial debian package
+
+ -- Matvey Kruglov <kubuzzzz@gmail.com>  Thu, 24 Jan 2017 15:07:11 +0300

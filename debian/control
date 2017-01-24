@@ -1,0 +1,11 @@
+Source: vmango
+Maintainer: Matvey Kruglov <kubuzzzz@gmail.com>
+Section: Web
+Priority: optional
+Build-Depends: cdbs, libvirt-dev (>=1.2.0), debhelper (>=9), dh-systemd
+Standards-Version: 3.9.1
+
+Package: vmango
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: Web interface and API for KVM virtual machines management
