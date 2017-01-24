@@ -1,6 +1,6 @@
 GOPATH = $(CURDIR)/vendor:$(CURDIR)
 GO = GOPATH=$(GOPATH) go
-SOURCES = $(shell find src/ -name *.go) src/vmango/web/assets.go Makefile
+SOURCES = $(shell find src/ -name *.go) src/vmango/web/assets.go
 ASSETS = $(shell find templates/ static/)
 .PHONY = clean test show-coverage-html show-coverage-text
 PACKAGES = $(shell cd src/vmango; find . -type d|sed 's,^./,,' | sed 's,/,@,g' |sed '/^\.$$/d')
@@ -8,6 +8,8 @@ TEST_ARGS = -race
 test_coverage_targets = $(addprefix test-coverage-, $(PACKAGES))
 EXTRA_ASSETS_FLAGS =
 VERSION = $(shell git describe --tags)
+DESTDIR =
+INSTALL = install
 
 default: bin/vmango
 
@@ -44,6 +46,14 @@ show-coverage-html:
 
 show-coverage-text:
 	$(GO) tool cover -func=coverage.out
+
+install: bin/vmango
+	mkdir -p $(DESTDIR)/usr/bin
+	mkdir -p $(DESTDIR)/etc/vmango
+	$(INSTALL) -m 0755 -o root bin/vmango $(DESTDIR)/usr/bin/vmango
+	$(INSTALL) -m 0644 -o root vmango.dist.conf $(DESTDIR)/etc/vmango/vmango.conf
+	$(INSTALL) -m 0644 -o root vm.dist.xml.in $(DESTDIR)/etc/vmango/vm.xml.in
+	$(INSTALL) -m 0644 -o root volume.dist.xml.in $(DESTDIR)/etc/vmango/volume.xml.in
 
 clean:
 	rm -rf bin/ vendor/pkg/ vendor/bin pkg/ src/vmango/web/assets.go
