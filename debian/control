@@ -7,5 +7,5 @@ Standards-Version: 3.9.1
 
 Package: vmango
 Architecture: any
-Depends: ${misc:Depends}, ${shlibs:Depends}
+Depends: genisoimage, ${misc:Depends}, ${shlibs:Depends}
 Description: Web interface and API for KVM virtual machines management
