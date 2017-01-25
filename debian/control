@@ -9,3 +9,8 @@ Package: vmango
 Architecture: any
 Depends: genisoimage, ${misc:Depends}, ${shlibs:Depends}
 Description: Web interface and API for KVM virtual machines management
+
+Package: vmango-libvirt-kvm
+Architecture: all
+Depends: libvirt-bin, qemu-kvm, dnsmasq-utils, ${misc:Depends}, ${shlibs:Depends}
+Description: Vmango dependencies and hooks for libvirt/kvm hypervisor
