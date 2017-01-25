@@ -1,187 +1,52 @@
+// +build integration
+
 package dal_test
 
 import (
 	"encoding/xml"
-	"fmt"
 	"github.com/libvirt/libvirt-go"
 	"github.com/stretchr/testify/suite"
-	"os"
+	"regexp"
 	"strings"
 	"testing"
-	"text/template"
 	"vmango/dal"
 	"vmango/models"
 	"vmango/testool"
 )
 
-const TEST_URI_ENV_KEY = "VMANGO_TEST_LIBVIRT_URI"
-
-const VOLUME_TEMPLATE = `
-<volume>
-  <target>
-    <format type="{{ .Image.TypeString }}" />
-  </target>
-  <name>{{ .Machine.Name }}_disk</name>
-  <key>{{ .Machine.Name }}_disk.{{ .Image.TypeString }}</key>
-  <capacity unit="G">{{ .Plan.DiskSizeGigabytes }}</capacity>
-  <allocation unit="G">{{ .Plan.DiskSizeGigabytes }}</allocation>
-</volume>
-`
-
-const VM_TEMPLATE = `
-<domain type='kvm'>
-  <name>{{ .Machine.Name }}</name>
-  <currentMemory unit="b">{{ .Plan.Memory }}</currentMemory>
-  <metadata>
-    <vmango:md xmlns:vmango="http://vmango.org/schema/md">
-      <vmango:sshkeys>
-        {{ range .Machine.SSHKeys }}
-        <vmango:key name="{{ .Name }}">{{ .Public }}</vmango:key>
-        {{ end }}
-      </vmango:sshkeys>
-    </vmango:md>
-  </metadata>
-  <memory unit="b">{{ .Plan.Memory }}</memory>
-  <os>
-    <type arch='{{ .Image.ArchString2 }}'>hvm</type>
-    <boot dev='hd'/>
-  </os>
-  <features>
-    <acpi/>
-    <apic/>
-    <pae/>
-  </features>
-  <clock offset="utc"/>
-
-  <on_poweroff>destroy</on_poweroff>
-  <on_reboot>restart</on_reboot>
-  <on_crash>restart</on_crash>
-
-  <vcpu>{{ .Plan.Cpus }}</vcpu>
-
-  <devices>
-    <emulator>/usr/bin/kvm-spice</emulator>
-    <disk type='file' device='disk'>
-      <driver name='qemu' type='{{ .Image.TypeString }}' cache='none'/>
-      <source file='{{ .VolumePath }}'/>
-      <target dev='vda' bus='virtio'/>
-    </disk>
-    <disk type='file' device='cdrom'>
-      <driver name='qemu' type='raw'/>
-      <target dev='hdc' bus='ide'/>
-      <readonly/>
-    </disk>
-    <interface type='network'>
-      <source network='{{ .Network }}'/>
-      <model type='virtio'/>
-    </interface>
-    <input type='tablet' bus='usb'/>
-    <graphics type='vnc' port='-1'/>
-    <console type='pty'/>
-    <sound model='ac97'/>
-    <video>
-      <model type='cirrus'/>
-    </video>
-  </devices>
-</domain>
-`
-
 type MachinerepLibvirtSuite struct {
 	suite.Suite
-	VMTpl      *template.Template
-	VolTpl     *template.Template
-	Network    string
-	VmPool     string
-	ImagePool  string
-	VirConnect *libvirt.Connect
-
-	domains  []*libvirt.Domain
-	networks []*libvirt.Network
-	pools    []*libvirt.StoragePool
+	testool.LibvirtTest
 }
 
-func (suite *MachinerepLibvirtSuite) SetupTest() {
-	suite.VMTpl = template.Must(template.New("vm.xml.in").Parse(VM_TEMPLATE))
-	suite.VolTpl = template.Must(template.New("volume.xml.in").Parse(VOLUME_TEMPLATE))
-	suite.VmPool = "vmango-vms-test"
-	suite.ImagePool = "vmango-images-test"
-	suite.Network = "vmango"
-
-	uri := os.Getenv(TEST_URI_ENV_KEY)
-	if uri == "" {
-		suite.FailNow(fmt.Sprintf("no %s specified", TEST_URI_ENV_KEY))
-		uri = fmt.Sprintf("test:///%s/libvirt_testxml/node.xml", testool.SourceDir())
-	}
-	virConn, err := libvirt.NewConnect(uri)
-	if err != nil {
-		panic(err)
-	}
-
-	suite.VirConnect = virConn
-	for _, name := range []string{"vms", "images"} {
-		pool, err := testool.CreatePool(virConn, name)
-		if err != nil {
-			pool, _ := virConn.LookupStoragePoolByName("vmango-" + name + "-test")
-			suite.pools = append(suite.pools, pool)
-			suite.TearDownTest()
-		}
-		suite.Require().NoError(err)
-		suite.pools = append(suite.pools, pool)
-	}
-	for _, name := range []string{"one_disk", "one_config.iso", "two_disk", "two_config.iso"} {
-		suite.Require().NoError(testool.CreateVolume(virConn, suite.VmPool, name))
-	}
-	for _, name := range []string{"one", "two"} {
-		domain, err := testool.CreateDomain(virConn, name)
-		suite.Require().NoError(err)
-		suite.domains = append(suite.domains, domain)
-	}
-	for _, name := range []string{"vmango"} {
-		network, err := testool.CreateNetwork(virConn, name)
-		suite.Require().NoError(err)
-		suite.networks = append(suite.networks, network)
+func (suite *MachinerepLibvirtSuite) SetupSuite() {
+	suite.LibvirtTest.SetupSuite()
+	suite.LibvirtTest.Fixtures.Domains = []string{"one", "two"}
+	suite.LibvirtTest.Fixtures.Networks = []string{"vmango-test"}
+	suite.LibvirtTest.Fixtures.Pools = []testool.LibvirtTestPoolFixture{
+		{
+			Name:    "vmango-vms-test",
+			Volumes: []string{"one_disk", "one_config.iso", "two_disk", "two_config.iso"},
+		},
+		{
+			Name:    "vmango-images-test",
+			Volumes: []string{},
+		},
 	}
 }
 
-func (suite *MachinerepLibvirtSuite) TearDownTest() {
-	suite.T().Log("teardown called")
-	for _, domain := range suite.domains {
-		suite.T().Log("Destroying domain:", domain)
-		domain.Destroy()
-		domain.Undefine()
-	}
-	for _, network := range suite.networks {
-		suite.T().Log("Destroying network:", network)
-		network.Destroy()
-		network.Undefine()
-	}
-
-	for _, pool := range suite.pools {
-		suite.T().Log("Destroying pool:", pool)
-		vols, err := pool.ListStorageVolumes()
-		suite.Require().NoError(err)
-		for _, volName := range vols {
-			vol, _ := pool.LookupStorageVolByName(volName)
-			vol.Delete(0)
-		}
-		pool.Destroy()
-		pool.Undefine()
-	}
-	suite.pools = []*libvirt.StoragePool{}
-	suite.networks = []*libvirt.Network{}
-	suite.domains = []*libvirt.Domain{}
-	suite.VirConnect.Close()
-}
-
-func (suite *MachinerepLibvirtSuite) CreateRep(ignoreVms ...string) *dal.LibvirtMachinerep {
-	repo, err := dal.NewLibvirtMachinerep(
-		suite.VirConnect, suite.VMTpl, suite.VolTpl,
-		suite.Network, suite.VmPool, ignoreVms,
-	)
+func MustRepo(repo *dal.LibvirtMachinerep, err error) *dal.LibvirtMachinerep {
 	if err != nil {
 		panic(err)
 	}
 	return repo
+}
+
+func (suite *MachinerepLibvirtSuite) CreateRep() *dal.LibvirtMachinerep {
+	return MustRepo(dal.NewLibvirtMachinerep(
+		suite.VirConnect, suite.VMTpl, suite.VolTpl,
+		suite.Fixtures.Networks[0], suite.Fixtures.Pools[0].Name, []string{},
+	))
 }
 
 func (suite *MachinerepLibvirtSuite) TestListOk() {
@@ -229,7 +94,11 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 }
 
 func (suite *MachinerepLibvirtSuite) TestIgnoredOk() {
-	repo := suite.CreateRep("one")
+	repo := MustRepo(dal.NewLibvirtMachinerep(
+		suite.VirConnect, suite.VMTpl, suite.VolTpl,
+		suite.Fixtures.Networks[0], suite.Fixtures.Pools[0].Name,
+		[]string{"one"},
+	))
 	machines := &models.VirtualMachineList{}
 	err := repo.List(machines)
 	suite.Require().NoError(err)
@@ -291,9 +160,15 @@ func (suite *MachinerepLibvirtSuite) TestRemoveOk() {
 	suite.Require().Contains(err.(libvirt.Error).Message, "Domain not found")
 
 	_, err = suite.VirConnect.LookupStorageVolByPath("/var/lib/libvirt/images/one_disk")
-	suite.Require().Equal(err.(libvirt.Error).Message, "Storage volume not found: no storage vol with matching path '/var/lib/libvirt/images/one_disk'")
+	expected := "Storage volume not found: no storage vol with matching path '?/var/lib/libvirt/images/one_disk'?"
+	actual := err.(libvirt.Error).Message
+	suite.Require().Regexp(regexp.MustCompile(expected), actual)
+
 	_, err = suite.VirConnect.LookupStorageVolByPath("/var/lib/libvirt/images/one_config.iso")
-	suite.Require().Equal(err.(libvirt.Error).Message, "Storage volume not found: no storage vol with matching path '/var/lib/libvirt/images/one_config.iso'")
+	expected = "Storage volume not found: no storage vol with matching path '?/var/lib/libvirt/images/one_config.iso'?"
+	actual = err.(libvirt.Error).Message
+	suite.Require().Regexp(regexp.MustCompile(expected), actual)
+	// suite.Require().Equal(expected, actual)
 }
 
 func (suite *MachinerepLibvirtSuite) TestRemoveNotFoundFail() {
@@ -323,10 +198,13 @@ func (suite *MachinerepLibvirtSuite) TestCreateNoImagePoolFail() {
 }
 
 func (suite *MachinerepLibvirtSuite) TestCreateNoVMPoolFail() {
-	suite.VmPool = "doesntexist"
-	repo := suite.CreateRep()
+	repo := MustRepo(dal.NewLibvirtMachinerep(
+		suite.VirConnect, suite.VMTpl, suite.VolTpl,
+		suite.Fixtures.Networks[0], "doesntexist",
+		[]string{"one"},
+	))
 	machine := &models.VirtualMachine{}
-	image := &models.Image{PoolName: suite.ImagePool}
+	image := &models.Image{PoolName: suite.Fixtures.Pools[1].Name}
 	plan := &models.Plan{}
 	err := repo.Create(machine, image, plan)
 	suite.Require().EqualError(err, "failed to lookup vm storage pool: Storage pool not found: no storage pool with matching name 'doesntexist'")
@@ -338,10 +216,10 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 		OS:       "Ubuntu-12.04",
 		Arch:     models.IMAGE_ARCH_X86_64,
 		Type:     models.IMAGE_FMT_QCOW2,
-		PoolName: suite.ImagePool,
+		PoolName: suite.Fixtures.Pools[1].Name,
 		FullName: "test-image",
 	}
-	if err := testool.CreateVolume(suite.VirConnect, suite.ImagePool, image.FullName); err != nil {
+	if err := testool.CreateVolume(suite.VirConnect, suite.Fixtures.Pools[1].Name, image.FullName); err != nil {
 		suite.FailNow("failed to create image volume", err.Error())
 	}
 
@@ -362,7 +240,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	suite.Require().NoError(err)
 	domain, err := suite.VirConnect.LookupDomainByName("test-create")
 	suite.Require().NoError(err)
-	suite.domains = append(suite.domains, domain)
+	suite.AddCleanup(domain)
 	domainXMLString, err := domain.GetXMLDesc(0)
 	suite.Require().NoError(err)
 	domainConfig := struct {
@@ -402,8 +280,5 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 }
 
 func TestMachinerepLibvirtSuite(t *testing.T) {
-	if os.Getenv(TEST_URI_ENV_KEY) == "" {
-		t.Skip(fmt.Sprintf("Skipping libvirt machinerep tests due to env var %s not set", TEST_URI_ENV_KEY))
-	}
 	suite.Run(t, new(MachinerepLibvirtSuite))
 }
