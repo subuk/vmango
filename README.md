@@ -34,7 +34,7 @@ Copy output and insert into config file:
 
 ## Hypervisor configuration (Ubuntu 14.04/16.04)
 
-    sudo apt-get install libvirt-bin qemu-kvm qemu-system
+    sudo apt-get install libvirt-bin qemu-kvm qemu-system dnsmasq-utils
     sudo usermod -aG libvirtd [username]
     newgrp libvirtd
 
@@ -74,7 +74,7 @@ If your processor doesn't support hardware acceleration, change type from "kvm" 
 
 Install libvirt and kvm
 
-    sudo apt-get install libvirt-dev libvirt-bin qemu-kvm virt-manager qemu-system
+    sudo apt-get install libvirt-dev libvirt-bin qemu-kvm virt-manager qemu-system dnsmasq-utils genisoimage
     sudo usermod -aG libvirtd [username]
     newgrp libvirtd
 
@@ -89,10 +89,11 @@ Now you can use your own computer as hypervisor.
 
 ### Dependencies for MacOS
 
-Install Go compiler and libvirt C library
+Install Go compiler, libvirt C library and mkisofs util (for configdrive creation)
 
     brew install go
     brew install libvirt
+    brew install dvdrtools
 
 You need a linux hypervisor somewhere in the world, because libvirt doesn't support MacOS.
 
@@ -126,5 +127,5 @@ Unit tests
 
 Libvirt integration tests and unit tests (please, do not run tests on production servers)
 
-    VMANGO_TEST_LIBVIRT_URI=qemu:///system make test TEST_ARGS=
+    VMANGO_TEST_LIBVIRT_URI=qemu:///system make test TEST_ARGS='-tags integration'
 
