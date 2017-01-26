@@ -1,0 +1,48 @@
+%define userid vmango
+%define groupid vmango
+
+Summary: KVM virtual machines management
+Name: vmango
+Version: @@_VERSION_@@
+Release: @@_RELEASE_@@%{dist}
+Source0: http://vmango.org/download/vmango-%{version}.tar.gz
+Source1: vmango.service
+License: GPLv3
+Group: Applications/System
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
+Requires(pre): /usr/sbin/useradd /usr/sbin/groupadd /usr/bin/getent
+BuildRequires: make, libvirt-devel >= 1.2.0, gcc
+%{?el7:BuildRequires: systemd}
+%{?systemd_requires}
+
+%description
+Web interface and API for KVM virtual machines management
+
+%prep
+%setup -q
+
+%build
+make VERSION=%{version}
+
+%install
+make install DESTDIR=%{buildroot}
+install -d %{buildroot}/%{_unitdir}/
+cp %{_sourcedir}/vmango.service %{buildroot}/%{_unitdir}/
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%pre
+/usr/bin/getent group %{groupid} || /usr/sbin/groupadd --system %{groupid}
+/usr/bin/getent passwd %{userid} || /usr/sbin/useradd --system --home-dir /var/lib/%{userid} --shell /bin/false --gid %{groupid} %{userid}
+
+%files
+%attr(755,root,root) /usr/bin/vmango
+%config(noreplace) /etc/vmango/vm.xml.in
+%config(noreplace) /etc/vmango/vmango.conf
+%config(noreplace) /etc/vmango/volume.xml.in
+%attr(644,root,root) %{_unitdir}/vmango.service
+
+%changelog
+* Wed Jan 25 2017 22:43:11 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.2.0-1
+- Initial RPM release
