@@ -55,5 +55,23 @@ install: bin/vmango
 	$(INSTALL) -m 0644 -o root vm.dist.xml.in $(DESTDIR)/etc/vmango/vm.xml.in
 	$(INSTALL) -m 0644 -o root volume.dist.xml.in $(DESTDIR)/etc/vmango/volume.xml.in
 
+package-deb-%:
+	echo "FROM $*" > "dockerfile.build.$*"
+	cat dockerfile.deb.in >> "dockerfile.build.$*"
+	docker build -f "dockerfile.build.$*" -t "vmango-build-$*" .
+	rm -rf "native-packages/$*"
+	mkdir -p "native-packages/$*"
+	docker run --rm "vmango-build-$*" /bin/bash -c 'tar -C /packages -cf - .' | tar -C "./native-packages/$*" -xf -
+
+package-rpm-%:
+	echo "FROM $*" > "dockerfile.build.$*"
+	cat dockerfile.rpm.in >> "dockerfile.build.$*"
+	docker build -f "dockerfile.build.$*" -t "vmango-build-$*" .
+	rm -rf "native-packages/$*"
+	mkdir -p "native-packages/$*"
+	docker run --rm "vmango-build-$*" /bin/bash -c 'tar -C /packages -cf - .' | tar -C "./native-packages/$*" -xf -
+
+package-all: package-deb-ubuntu\:14.04 package-deb-ubuntu\:16.04 package-deb-debian\:8 package-rpm-centos\:7
+
 clean:
-	rm -rf bin/ vendor/pkg/ vendor/bin pkg/ src/vmango/web/assets.go
+	rm -rf bin/ vendor/pkg/ vendor/bin pkg/ src/vmango/web/assets.go dockerfile.build.*
