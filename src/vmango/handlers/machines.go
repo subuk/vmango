@@ -119,7 +119,7 @@ func MachineDetail(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 	return nil
 }
 
-type MachineAddFormData struct {
+type machineAddFormData struct {
 	Name   string
 	Plan   string
 	Image  string
@@ -131,7 +131,7 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		if err := req.ParseForm(); err != nil {
 			return err
 		}
-		form := &MachineAddFormData{}
+		form := &machineAddFormData{}
 		if err := schema.NewDecoder().Decode(form, req.PostForm); err != nil {
 			return web.BadRequest(err.Error())
 		}
