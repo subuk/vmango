@@ -183,12 +183,6 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		if err := ctx.Machines.Create(vm, image, plan); err != nil {
 			return fmt.Errorf("failed to create machine: %s", err)
 		}
-		vm = &models.VirtualMachine{Name: vm.Name}
-		if exists, err := ctx.Machines.Get(vm); err != nil {
-			return err
-		} else if !exists {
-			return fmt.Errorf("failed to fetch info for just created machine: %s")
-		}
 
 		if err := ctx.IPPool.Assign(ip, vm); err != nil {
 			return fmt.Errorf("failed to mark ip as used: %s", err)
