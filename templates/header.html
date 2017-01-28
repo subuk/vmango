@@ -13,7 +13,6 @@
     {{ $machineAddUrl :=  Url "machine-add" }}
     {{ $imagesUrl := Url "image-list" }}
     {{ $ipsUrl := Url "ip-list" }}
-    {{ $sshkeysUrl := Url "sshkey-list" }}
     {{ $loginUrl := Url "login" }}
     {{ $logoutUrl := Url "logout" }}
 
@@ -35,9 +34,6 @@
             </li>
             <li {{if HasPrefix .Request.URL.Path $ipsUrl }}class="active"{{end}}>
               <a href="{{ $ipsUrl }}">IP Addresses</a>
-            </li>
-            <li {{if HasPrefix .Request.URL.Path $sshkeysUrl }}class="active"{{end}}>
-              <a href="{{ $sshkeysUrl }}">SSH Keys</a>
             </li>
             {{ end }}
           </ul>

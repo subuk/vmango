@@ -17,7 +17,6 @@ func New(ctx *web.Context) *mux.Router {
 	router.Handle("/machines/{name:[^/]+}/delete/", web.NewHandler(ctx, handlers.MachineDelete)).Name("machine-delete")
 	router.Handle("/images/", web.NewHandler(ctx, handlers.ImageList)).Name("image-list")
 	router.Handle("/ipaddress/", web.NewHandler(ctx, handlers.IPList)).Name("ip-list")
-	router.Handle("/ssh-keys/", web.NewHandler(ctx, handlers.SSHKeyList)).Name("sshkey-list")
 	router.Handle("/login/", web.NewHandler(ctx, handlers.Login)).Name("login")
 	router.Handle("/logout/", web.NewHandler(ctx, handlers.Logout)).Name("logout")
 
