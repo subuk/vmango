@@ -18,7 +18,7 @@ const (
 type Image struct {
 	OS       string
 	Arch     int
-	Size     int64
+	Size     uint64
 	Type     int
 	Date     time.Time
 	FullName string

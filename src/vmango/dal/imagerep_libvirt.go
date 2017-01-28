@@ -1,12 +1,52 @@
 package dal
 
 import (
+	"encoding/xml"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/libvirt/libvirt-go"
+	"strconv"
 	"strings"
+	"time"
 	"vmango/models"
 )
+
+type volumeXMLConfig struct {
+	Name       string `xml:"name"`
+	Allocation uint64 `xml:"allocation"`
+	Target     struct {
+		Path       string `xml:"path"`
+		Timestamps struct {
+			MTimeRaw string `xml:"mtime"`
+		} `xml:"timestamps"`
+		Format struct {
+			Type string `xml:"type,attr"`
+		} `xml:"format"`
+	} `xml:"target"`
+}
+
+func (v volumeXMLConfig) LastModified() time.Time {
+	parts := strings.SplitN(v.Target.Timestamps.MTimeRaw, ".", 2)
+	if len(parts) == 1 {
+		sec, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			return time.Time{}
+		}
+		return time.Unix(sec, 0)
+	} else if len(parts) == 2 {
+		sec, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			return time.Time{}
+		}
+		nsec, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return time.Time{}
+		}
+		return time.Unix(sec, nsec)
+	}
+	return time.Time{}
+
+}
 
 type LibvirtImagerep struct {
 	pool string
@@ -17,56 +57,46 @@ func NewLibvirtImagerep(conn *libvirt.Connect, name string) *LibvirtImagerep {
 	return &LibvirtImagerep{pool: name, conn: conn}
 }
 
-func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.StorageVol) bool {
-	volumeName, err := volume.GetName()
+func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.StorageVol) error {
+	volumeXMLString, err := volume.GetXMLDesc(0)
 	if err != nil {
-		log.WithField("volume", volume).Info("cannot get image name, skipping")
-		return false
+		return err
 	}
-	logger := log.WithField("volume", volumeName)
-
-	imginfo := strings.SplitN(volumeName, "_", 3)
-	if len(imginfo) != 3 {
-		logger.Warning("skipping image with invalid name")
-		return false
-	}
-	fullpath, err := volume.GetPath()
-	if err != nil {
-		logger.Warning("cannot get image path, skipping")
-		return false
-	}
-	info, err := volume.GetInfo()
-	if err != nil {
-		logger.Warning("cannot get image path, skipping")
-		return false
+	volumeConfig := volumeXMLConfig{}
+	if err := xml.Unmarshal([]byte(volumeXMLString), &volumeConfig); err != nil {
+		return fmt.Errorf("failed to parse volume xml: %s", err)
 	}
 
-	image.OS = imginfo[0]
-	image.Size = int64(info.Allocation)
-	image.FullPath = fullpath
-	image.FullName = volumeName
-	image.PoolName = repo.pool
+	imginfo := strings.SplitN(volumeConfig.Name, "_", 3)
+	if len(imginfo) < 2 {
+		return fmt.Errorf("invalid name")
+	}
 
 	switch imginfo[1] {
 	default:
-		logger.Info("skipping image with unknown architecture")
-		return false
+		return fmt.Errorf("unknown arch")
 	case "amd64":
 		image.Arch = models.IMAGE_ARCH_X86_64
 	case "i386":
 		image.Arch = models.IMAGE_ARCH_X86
 	}
-	switch imginfo[2] {
+	switch volumeConfig.Target.Format.Type {
 	default:
-		logger.Warning("skipping image with unknown type")
-		return false
-	case "raw.img":
+		return fmt.Errorf("unknown type")
+	case "raw":
 		image.Type = models.IMAGE_FMT_RAW
-	case "qcow2.img":
+	case "qcow2":
 		image.Type = models.IMAGE_FMT_QCOW2
 	}
 
-	return true
+	image.OS = imginfo[0]
+	image.Size = volumeConfig.Allocation
+	image.FullPath = volumeConfig.Target.Path
+	image.FullName = volumeConfig.Name
+	image.PoolName = repo.pool
+	image.Date = volumeConfig.LastModified()
+
+	return nil
 }
 
 func (repo *LibvirtImagerep) List(images *[]*models.Image) error {
@@ -80,7 +110,8 @@ func (repo *LibvirtImagerep) List(images *[]*models.Image) error {
 	}
 	for _, volume := range volumes {
 		image := &models.Image{}
-		if !repo.fillImage(image, &volume) {
+		if err := repo.fillImage(image, &volume); err != nil {
+			log.WithError(err).Warn("skipping volume")
 			continue
 		}
 		*images = append(*images, image)
@@ -104,8 +135,8 @@ func (repo *LibvirtImagerep) Get(image *models.Image) (bool, error) {
 		return false, err
 	}
 
-	if !repo.fillImage(image, volume) {
-		return true, fmt.Errorf("invalid image")
+	if err := repo.fillImage(image, volume); err != nil {
+		return true, fmt.Errorf("invalid image: %s", err)
 	}
 
 	return true, nil
