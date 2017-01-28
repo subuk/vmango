@@ -42,7 +42,6 @@ type Context struct {
 	Plans    dal.Planrep
 	Machines dal.Machinerep
 	Images   dal.Imagerep
-	IPPool   dal.IPPool
 	SSHKeys  dal.SSHKeyrep
 	AuthDB   dal.Authrep
 }

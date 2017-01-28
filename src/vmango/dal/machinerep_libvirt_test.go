@@ -6,7 +6,6 @@ import (
 	"encoding/xml"
 	"github.com/libvirt/libvirt-go"
 	"github.com/stretchr/testify/suite"
-	"regexp"
 	"strings"
 	"testing"
 	"vmango/dal"
@@ -55,7 +54,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Require().NoError(err)
 	suite.Require().Equal(machines.Count(), 2)
 	oneVm := machines.Find("one")
-	suite.NotNil(oneVm)
+	suite.Require().NotNil(oneVm)
 	suite.Equal("one", oneVm.Name)
 	suite.Equal(models.STATE_RUNNING, oneVm.State)
 	suite.Equal("fb6c4f622cf346239aee23f0005eb5fb", oneVm.Uuid)
@@ -71,10 +70,10 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("test", oneVm.SSHKeys[0].Name)
 	expectedKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDXJjuFhloSumFjJRrrZfSinBE0q4e/o0nKzt4QfkD3VR56rrrrCtjHh+/wcZcIdm9I9QODxoFoSSvrPNOzLj0lfF0f64Ic7fUnC4hhRBEeyo/03KVpUQcHWHjeex+5OHQXa8s5Xy/dytZkhdvDYOCgEpMgC2tU6tk/mVuk84Q03QEnSYJQuIgj8VwvxC+22aGSpLzXtenpdXr+O8s7dkuhHQjl1w6WbiLADv0I06bFwW8iB6p7aHZCqJUYAUYa4XaCjXdVwoKAE/J23s17XCZzY10YmBIikRQQIjpvRIbHArzO0om4++2KMnY8m6xoMp2imyceD/0fIVlAqhLTEaBP test@vmango"
 	suite.Equal(expectedKey, oneVm.SSHKeys[0].Public)
-	suite.Nil(oneVm.Ip)
+	suite.Equal("192.168.128.130", oneVm.Ip.Address)
 
 	twoVm := machines.Find("two")
-	suite.NotNil(twoVm)
+	suite.Require().NotNil(twoVm)
 	suite.Equal("two", twoVm.Name)
 	suite.Equal(models.STATE_RUNNING, twoVm.State)
 	suite.Equal("c72cb377301a4f2aa34c547f70872b55", twoVm.Uuid)
@@ -147,7 +146,7 @@ func (suite *MachinerepLibvirtSuite) TestGetNoNameFail() {
 	})
 }
 
-func (suite *MachinerepLibvirtSuite) TestRemoveOk() {
+func (suite *MachinerepLibvirtSuite) TestRemoveWithIPOk() {
 	repo := suite.CreateRep()
 	machine := &models.VirtualMachine{Name: "one"}
 	suite.T().Log("Waiting for domain")
@@ -160,15 +159,10 @@ func (suite *MachinerepLibvirtSuite) TestRemoveOk() {
 	suite.Require().Contains(err.(libvirt.Error).Message, "Domain not found")
 
 	_, err = suite.VirConnect.LookupStorageVolByPath("/var/lib/libvirt/images/one_disk")
-	expected := "Storage volume not found: no storage vol with matching path '?/var/lib/libvirt/images/one_disk'?"
-	actual := err.(libvirt.Error).Message
-	suite.Require().Regexp(regexp.MustCompile(expected), actual)
+	suite.Require().Equal(libvirt.ERR_NO_STORAGE_VOL, err.(libvirt.Error).Code)
 
 	_, err = suite.VirConnect.LookupStorageVolByPath("/var/lib/libvirt/images/one_config.iso")
-	expected = "Storage volume not found: no storage vol with matching path '?/var/lib/libvirt/images/one_config.iso'?"
-	actual = err.(libvirt.Error).Message
-	suite.Require().Regexp(regexp.MustCompile(expected), actual)
-	// suite.Require().Equal(expected, actual)
+	suite.Require().Equal(libvirt.ERR_NO_STORAGE_VOL, err.(libvirt.Error).Code)
 }
 
 func (suite *MachinerepLibvirtSuite) TestRemoveNotFoundFail() {

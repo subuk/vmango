@@ -95,13 +95,11 @@ func main() {
 
 	imagerep := dal.NewLibvirtImagerep(virtConn, config.Hypervisor.ImageStoragePool)
 	planrep := dal.NewConfigPlanrep(config.Plans)
-	ippool := dal.NewLibvirtIPPool(virtConn, config.Hypervisor.Network)
 	sshkeyrep := dal.NewConfigSSHKeyrep(config.SSHKeys)
 	authrep := dal.NewConfigAuthrep(config.Users)
 
 	ctx.Machines = machines
 	ctx.Images = imagerep
-	ctx.IPPool = ippool
 	ctx.Plans = planrep
 	ctx.SSHKeys = sshkeyrep
 	ctx.AuthDB = authrep

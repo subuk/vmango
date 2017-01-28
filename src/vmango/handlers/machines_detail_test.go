@@ -18,16 +18,13 @@ func DETAIL_URL(name string) string {
 type MachineDetailHandlerTestSuite struct {
 	suite.Suite
 	testool.WebTest
-	Repo   *dal.StubMachinerep
-	IPPool *dal.StubIPPool
+	Repo *dal.StubMachinerep
 }
 
 func (suite *MachineDetailHandlerTestSuite) SetupTest() {
 	suite.WebTest.SetupTest()
 	suite.Repo = &dal.StubMachinerep{}
-	suite.IPPool = &dal.StubIPPool{}
 	suite.Context.Machines = suite.Repo
-	suite.Context.IPPool = suite.IPPool
 }
 
 func (suite *MachineDetailHandlerTestSuite) TestAuthRequired() {

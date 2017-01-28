@@ -107,6 +107,33 @@ func (domcfg domainXMLConfig) VNCAddr() string {
 	return ""
 }
 
+type netXMLConfig struct {
+	XMLName xml.Name `xml:"network"`
+	Name    string   `xml:"name"`
+	IP      struct {
+		Address string `xml:"address,attr"`
+		Netmask string `xml:"netmask,attr"`
+		Hosts   []struct {
+			Name   string `xml:"name,attr"`
+			HWAddr string `xml:"mac,attr"`
+			IPAddr string `xml:"ip,attr"`
+		} `xml:"dhcp>host"`
+		DHCPRange struct {
+			Start string `xml:"start,attr"`
+			End   string `xml:"end,attr"`
+		} `xml:"dhcp>range"`
+	} `xml:"ip"`
+}
+
+func (n netXMLConfig) HasHost(ip string) bool {
+	for _, host := range n.IP.Hosts {
+		if host.IPAddr == ip {
+			return true
+		}
+	}
+	return false
+}
+
 type LibvirtMachinerep struct {
 	conn        *libvirt.Connect
 	vmtpl       *template.Template
@@ -127,7 +154,73 @@ func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Templat
 	}, nil
 }
 
-func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvirt.Domain) error {
+func (store *LibvirtMachinerep) assignIP(vm *models.VirtualMachine) error {
+	network, err := store.conn.LookupNetworkByName(store.network)
+	if err != nil {
+		return err
+	}
+	xmlString, err := network.GetXMLDesc(0)
+	if err != nil {
+		return err
+	}
+	networkConfig := netXMLConfig{}
+	if err := xml.Unmarshal([]byte(xmlString), &networkConfig); err != nil {
+		return fmt.Errorf("failed to parse network xml:", err)
+	}
+	addrs, err := listIPRange(
+		networkConfig.IP.DHCPRange.Start,
+		networkConfig.IP.DHCPRange.End,
+		networkConfig.IP.Address,
+		networkConfig.IP.Netmask,
+	)
+	if err != nil {
+		return err
+	}
+	var ip *models.IP
+	for _, addr := range addrs {
+		if has := networkConfig.HasHost(addr); !has {
+			ip = &models.IP{Address: addr}
+			break
+		}
+	}
+	if ip == nil {
+		return fmt.Errorf("failed to find free IP address")
+	}
+
+	return network.Update(
+		libvirt.NETWORK_UPDATE_COMMAND_ADD_LAST,
+		libvirt.NETWORK_SECTION_IP_DHCP_HOST,
+		-1,
+		fmt.Sprintf(
+			`<host mac="%s" name="%s" ip="%s" />`,
+			vm.HWAddr, vm.Name, ip.Address,
+		),
+		libvirt.NETWORK_UPDATE_AFFECT_LIVE|libvirt.NETWORK_UPDATE_AFFECT_CONFIG,
+	)
+}
+
+func (store *LibvirtMachinerep) releaseIP(vm *models.VirtualMachine) error {
+	network, err := store.conn.LookupNetworkByName(store.network)
+	if err != nil {
+		return err
+	}
+	if vm.Ip == nil {
+		log.WithField("machine", vm.Name).Warn("no ip to release")
+		return nil
+	}
+	return network.Update(
+		libvirt.NETWORK_UPDATE_COMMAND_DELETE,
+		libvirt.NETWORK_SECTION_IP_DHCP_HOST,
+		-1,
+		fmt.Sprintf(
+			`<host mac="%s" name="%s" ip="%s" />`,
+			vm.HWAddr, vm.Name, vm.Ip.Address,
+		),
+		libvirt.NETWORK_UPDATE_AFFECT_LIVE|libvirt.NETWORK_UPDATE_AFFECT_CONFIG,
+	)
+}
+
+func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvirt.Domain, network *libvirt.Network) error {
 	name, err := domain.GetName()
 	if err != nil {
 		return err
@@ -141,13 +234,13 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 		return err
 	}
 
-	xmlString, err := domain.GetXMLDesc(0)
+	domainXMLString, err := domain.GetXMLDesc(0)
 	if err != nil {
 		return err
 	}
 
 	domainConfig := domainXMLConfig{}
-	if err := xml.Unmarshal([]byte(xmlString), &domainConfig); err != nil {
+	if err := xml.Unmarshal([]byte(domainXMLString), &domainConfig); err != nil {
 		return fmt.Errorf("failed to parse domain xml:", err)
 	}
 
@@ -191,6 +284,21 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	for _, key := range domainConfig.SSHKeys {
 		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{key.Name, key.Public})
 	}
+
+	networkXMLString, err := network.GetXMLDesc(0)
+	if err != nil {
+		return err
+	}
+	networkConfig := netXMLConfig{}
+	if err := xml.Unmarshal([]byte(networkXMLString), &networkConfig); err != nil {
+		return fmt.Errorf("failed to parse network xml:", err)
+	}
+	for _, host := range networkConfig.IP.Hosts {
+		if host.HWAddr == vm.HWAddr {
+			vm.Ip = &models.IP{Address: host.IPAddr}
+		}
+	}
+
 	return nil
 }
 
@@ -208,6 +316,11 @@ func (store *LibvirtMachinerep) List(machines *models.VirtualMachineList) error 
 	if err != nil {
 		return err
 	}
+	network, err := store.conn.LookupNetworkByName(store.network)
+	if err != nil {
+		return err
+	}
+
 	for _, domain := range domains {
 		domainName, err := domain.GetName()
 		if err != nil {
@@ -217,7 +330,7 @@ func (store *LibvirtMachinerep) List(machines *models.VirtualMachineList) error 
 			continue
 		}
 		vm := &models.VirtualMachine{}
-		if err := store.fillVm(vm, &domain); err != nil {
+		if err := store.fillVm(vm, &domain, network); err != nil {
 			return err
 		}
 		machines.Add(vm)
@@ -229,7 +342,10 @@ func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error
 	if machine.Name == "" {
 		panic("no name specified for LibvirtMachinerep.Get()")
 	}
-
+	network, err := store.conn.LookupNetworkByName(store.network)
+	if err != nil {
+		return false, fmt.Errorf("failed to find network '%s'", err)
+	}
 	domain, err := store.conn.LookupDomainByName(machine.Name)
 	if err != nil {
 		virErr := err.(libvirt.Error)
@@ -238,7 +354,7 @@ func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error
 		}
 		return false, virErr
 	}
-	store.fillVm(machine, domain)
+	store.fillVm(machine, domain, network)
 	return true, nil
 }
 
@@ -353,6 +469,11 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		return fmt.Errorf("failed to lookup image storage pool: %s", err.(libvirt.Error).Message)
 	}
 
+	network, err := store.conn.LookupNetworkByName(store.network)
+	if err != nil {
+		return err
+	}
+
 	var volumeXML bytes.Buffer
 	voltplContext := struct {
 		Machine *models.VirtualMachine
@@ -392,7 +513,12 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	if err != nil {
 		return err
 	}
-	store.fillVm(machine, domain)
+	if err := store.fillVm(machine, domain, network); err != nil {
+		return err
+	}
+	if err := store.assignIP(machine); err != nil {
+		return err
+	}
 
 	log.Debug("creating config drive")
 	configDriveVolume, err := store.createConfigDrive(machine, storagePool)
@@ -421,7 +547,7 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 			return fmt.Errorf("failed to resize root volume: %s", err)
 		}
 	}
-	return nil
+	return store.fillVm(machine, domain, network)
 }
 
 func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
@@ -469,6 +595,9 @@ func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
 		if err := volume.Delete(libvirt.STORAGE_VOL_DELETE_NORMAL); err != nil {
 			return err
 		}
+	}
+	if err := store.releaseIP(machine); err != nil {
+		return fmt.Errorf("failed to release machine ip: %s", err)
 	}
 	if err := domain.Undefine(); err != nil {
 		return fmt.Errorf("failed to undefine domain: %s", err.(libvirt.Error).Message)

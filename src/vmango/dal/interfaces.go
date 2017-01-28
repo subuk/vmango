@@ -25,14 +25,6 @@ type Planrep interface {
 	Get(*models.Plan) (bool, error)
 }
 
-type IPPool interface {
-	List(*models.IPList) error
-	Get(*models.IP) (bool, error)
-	Assign(*models.IP, *models.VirtualMachine) error
-	Fetch(*models.VirtualMachine) error
-	Release(*models.IP) error
-}
-
 type SSHKeyrep interface {
 	List(*[]*models.SSHKey) error
 	Get(*models.SSHKey) (bool, error)

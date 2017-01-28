@@ -12,7 +12,6 @@
     {{ $machinesUrl := Url "machine-list" }}
     {{ $machineAddUrl :=  Url "machine-add" }}
     {{ $imagesUrl := Url "image-list" }}
-    {{ $ipsUrl := Url "ip-list" }}
     {{ $loginUrl := Url "login" }}
     {{ $logoutUrl := Url "logout" }}
 
@@ -31,9 +30,6 @@
             </li>
             <li {{if HasPrefix .Request.URL.Path $imagesUrl }}class="active"{{end}}>
               <a href="{{ $imagesUrl }}">Images</a>
-            </li>
-            <li {{if HasPrefix .Request.URL.Path $ipsUrl }}class="active"{{end}}>
-              <a href="{{ $ipsUrl }}">IP Addresses</a>
             </li>
             {{ end }}
           </ul>

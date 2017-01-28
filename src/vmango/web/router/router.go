@@ -16,7 +16,6 @@ func New(ctx *web.Context) *mux.Router {
 	router.Handle("/machines/{name:[^/]+}/{action:(start|stop|reboot)}/", web.NewHandler(ctx, handlers.MachineStateChange)).Name("machine-changestate")
 	router.Handle("/machines/{name:[^/]+}/delete/", web.NewHandler(ctx, handlers.MachineDelete)).Name("machine-delete")
 	router.Handle("/images/", web.NewHandler(ctx, handlers.ImageList)).Name("image-list")
-	router.Handle("/ipaddress/", web.NewHandler(ctx, handlers.IPList)).Name("ip-list")
 	router.Handle("/login/", web.NewHandler(ctx, handlers.Login)).Name("login")
 	router.Handle("/logout/", web.NewHandler(ctx, handlers.Logout)).Name("logout")
 

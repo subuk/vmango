@@ -19,16 +19,13 @@ func DELETE_URL(name string) string {
 type MachineDeleteHandlerTestSuite struct {
 	suite.Suite
 	testool.WebTest
-	Repo   *dal.StubMachinerep
-	IPPool *dal.StubIPPool
+	Repo *dal.StubMachinerep
 }
 
 func (suite *MachineDeleteHandlerTestSuite) SetupTest() {
 	suite.WebTest.SetupTest()
 	suite.Repo = &dal.StubMachinerep{}
-	suite.IPPool = &dal.StubIPPool{}
 	suite.Context.Machines = suite.Repo
-	suite.Context.IPPool = suite.IPPool
 }
 
 func (suite *MachineDeleteHandlerTestSuite) TestAuthRequired() {

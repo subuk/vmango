@@ -134,8 +134,11 @@ func CreateNetwork(conn *libvirt.Connect, name string) (*libvirt.Network, error)
 	if err != nil {
 		return nil, err
 	}
-	network, err := conn.NetworkCreateXML(string(networkXMLConfig))
+	network, err := conn.NetworkDefineXML(string(networkXMLConfig))
 	if err != nil {
+		return nil, err
+	}
+	if err := network.Create(); err != nil {
 		return nil, err
 	}
 	return network, nil
@@ -147,8 +150,12 @@ func CreatePool(conn *libvirt.Connect, name string) (*libvirt.StoragePool, error
 	if err != nil {
 		return nil, err
 	}
-	pool, err := conn.StoragePoolCreateXML(string(poolXMLConfig), 0)
+
+	pool, err := conn.StoragePoolDefineXML(string(poolXMLConfig), 0)
 	if err != nil {
+		return nil, err
+	}
+	if err := pool.Create(0); err != nil {
 		return nil, err
 	}
 	return pool, nil

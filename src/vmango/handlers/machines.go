@@ -20,16 +20,8 @@ func MachineDelete(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 	}
 
 	if req.Method == "POST" {
-		if err := ctx.IPPool.Fetch(machine); err != nil {
-			return err
-		}
 		if err := ctx.Machines.Remove(machine); err != nil {
 			return err
-		}
-		if machine.Ip != nil {
-			if err := ctx.IPPool.Release(machine.Ip); err != nil {
-				return err
-			}
 		}
 		url, err := ctx.Router.Get("machine-list").URL()
 		if err != nil {
@@ -110,9 +102,6 @@ func MachineDetail(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 	} else if !exists {
 		return web.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
 	}
-	if err := ctx.IPPool.Fetch(machine); err != nil {
-		return err
-	}
 	ctx.RenderResponse(w, req, http.StatusOK, "machines/detail", map[string]interface{}{
 		"Machine": machine,
 	})
@@ -159,19 +148,11 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 			sshkeys = append(sshkeys, &key)
 		}
 
-		ip := &models.IP{}
-		if exists, err := ctx.IPPool.Get(ip); err != nil {
-			return fmt.Errorf("cannot find ip address for vm: %s", err)
-		} else if !exists {
-			return fmt.Errorf("no free ip address availaible")
-		}
-
 		vm := &models.VirtualMachine{
 			Name:      form.Name,
 			Memory:    plan.Memory,
 			Cpus:      plan.Cpus,
 			ImageName: image.FullName,
-			Ip:        ip,
 			SSHKeys:   sshkeys,
 		}
 
@@ -183,11 +164,6 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		if err := ctx.Machines.Create(vm, image, plan); err != nil {
 			return fmt.Errorf("failed to create machine: %s", err)
 		}
-
-		if err := ctx.IPPool.Assign(ip, vm); err != nil {
-			return fmt.Errorf("failed to mark ip as used: %s", err)
-		}
-		ip.UsedBy = vm.Name
 		if err := ctx.Machines.Start(vm); err != nil {
 			return fmt.Errorf("failed to start machine: %s", err)
 		}
@@ -201,10 +177,6 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		if err := ctx.Plans.List(&plans); err != nil {
 			return fmt.Errorf("failed to fetch plan list: %s", err)
 		}
-		ips := &models.IPList{}
-		if err := ctx.IPPool.List(ips); err != nil {
-			return fmt.Errorf("failed to fetch ip list: %s", err)
-		}
 		images := []*models.Image{}
 		if err := ctx.Images.List(&images); err != nil {
 			return fmt.Errorf("failed to fetch images list: %s", err)
@@ -216,7 +188,6 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		ctx.Render.HTML(w, http.StatusOK, "machines/add", map[string]interface{}{
 			"Request": req,
 			"Plans":   plans,
-			"Ips":     ips,
 			"Images":  images,
 			"SSHKeys": sshkeys,
 		})
