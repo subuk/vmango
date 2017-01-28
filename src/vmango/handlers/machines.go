@@ -197,7 +197,7 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		if err := ctx.Machines.Start(vm); err != nil {
 			return fmt.Errorf("failed to start machine: %s", err)
 		}
-		url, err := ctx.Router.Get("machine-list").URL()
+		url, err := ctx.Router.Get("machine-detail").URL("name", vm.Name)
 		if err != nil {
 			panic(err)
 		}
