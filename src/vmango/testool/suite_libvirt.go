@@ -132,14 +132,6 @@ func (suite *LibvirtTest) SetupTest() {
 		}
 	}
 
-	for _, name := range suite.Fixtures.Domains {
-		domain, err := CreateDomain(suite.VirConnect, name)
-		if err != nil {
-			suite.TearDownTest()
-			log.Panicf("cannot create test domain %s: %s", name, err)
-		}
-		suite.AddCleanup(domain)
-	}
 	for _, name := range suite.Fixtures.Networks {
 		network, err := CreateNetwork(suite.VirConnect, name)
 		if err != nil {
@@ -147,6 +139,15 @@ func (suite *LibvirtTest) SetupTest() {
 			log.Panicf("cannot create test network %s: %s", name, err)
 		}
 		suite.AddCleanup(network)
+	}
+
+	for _, name := range suite.Fixtures.Domains {
+		domain, err := CreateDomain(suite.VirConnect, name)
+		if err != nil {
+			suite.TearDownTest()
+			log.Panicf("cannot create test domain %s: %s", name, err)
+		}
+		suite.AddCleanup(domain)
 	}
 }
 

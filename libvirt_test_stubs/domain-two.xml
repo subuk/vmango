@@ -45,13 +45,12 @@
     <controller type='usb' index='0'>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
     </controller>
-    <controller type='pci' index='0' model='pci-root'/>
     <controller type='ide' index='0'>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
     </controller>
     <interface type='network'>
       <mac address='52:54:00:2e:54:29'/>
-      <source network='vmango'/>
+      <source network='vmango-test'/>
       <model type='virtio'/>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
     </interface>
@@ -63,7 +62,6 @@
     </console>
     <input type='tablet' bus='usb'/>
     <input type='mouse' bus='ps2'/>
-    <input type='keyboard' bus='ps2'/>
     <graphics type='vnc' port='5901' autoport='yes' listen='127.0.0.1'>
        <listen type='address' address='127.0.0.1'/>
     </graphics>

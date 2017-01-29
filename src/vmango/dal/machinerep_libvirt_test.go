@@ -194,7 +194,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateNoImagePoolFail() {
 	image := &models.Image{PoolName: "doesntexist"}
 	plan := &models.Plan{}
 	err := repo.Create(machine, image, plan)
-	suite.Require().EqualError(err, "failed to lookup image storage pool: Storage pool not found: no storage pool with matching name 'doesntexist'")
+	suite.Contains(err.Error(), "failed to lookup image storage pool: Storage pool not found: ")
 }
 
 func (suite *MachinerepLibvirtSuite) TestCreateNoVMPoolFail() {
@@ -207,7 +207,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateNoVMPoolFail() {
 	image := &models.Image{PoolName: suite.Fixtures.Pools[1].Name}
 	plan := &models.Plan{}
 	err := repo.Create(machine, image, plan)
-	suite.Require().EqualError(err, "failed to lookup vm storage pool: Storage pool not found: no storage pool with matching name 'doesntexist'")
+	suite.Contains(err.Error(), "failed to lookup vm storage pool: Storage pool not found: ")
 }
 
 func (suite *MachinerepLibvirtSuite) TestCreateOk() {
