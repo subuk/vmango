@@ -34,7 +34,9 @@ Response example
             "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
             "HWAddr": "hw:hw:hw",
             "VNCAddr": "vnc",
-            "Disk": {
+            "OS": "Ubuntu-14.04",
+            "Arch": "x86_64",
+            "RootDisk": {
                 "Size": 123,
                 "Driver": "hello",
                 "Type": "wow"
@@ -48,8 +50,10 @@ Response example
             "Cpus": 4,
             "HWAddr": "xx:xx:xx",
             "VNCAddr": "VVV",
+            "OS": "Centos-7",
+            "Arch": "x86_64",
             "Ip": {"Address": "2.2.2.2", "Gateway": "", "Netmask": 0, "UsedBy": ""},
-            "Disk": {
+            "RootDisk": {
                 "Size": 321,
                 "Driver": "ehlo",
                 "Type": "www"
@@ -74,7 +78,9 @@ Response example
             "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
             "HWAddr": "hw:hw:hw",
             "VNCAddr": "vnc",
-            "Disk": {
+            "OS": "Ubuntu-12.04",
+            "Arch": "x86_64",
+            "RootDisk": {
                 "Size": 123,
                 "Driver": "hello",
                 "Type": "wow"
