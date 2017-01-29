@@ -44,5 +44,15 @@ rm -rf $RPM_BUILD_ROOT
 %attr(644,root,root) %{_unitdir}/vmango.service
 
 %changelog
+* Sun Jan 29 2017 16:24:15 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.3.0-1
+- Simple API
+- SSL support
+- Config validation before start
+- Debian packaging
+- RPM packaging
+- Remove plan list page
+- Remove ssh keys list page
+- Remove ip list page
+
 * Wed Jan 25 2017 22:43:11 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.2.0-1
 - Initial RPM release

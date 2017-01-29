@@ -1,3 +1,16 @@
+vmango (0.3.0) vmango; urgency=medium
+
+  * Simple API
+  * SSL support
+  * Config validation before start
+  * Debian packaging
+  * RPM packaging
+  * Remove plan list page
+  * Remove ssh keys list page
+  * Remove ip list page
+
+ -- Matvey Kruglov <kubuzzzz@gmail.com>  Sun, 29 Jan 2017 16:23:34 +0300
+
 vmango (0.2.0) vmango; urgency=medium
 
   * Initial debian package
