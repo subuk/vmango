@@ -38,7 +38,7 @@ test-coverage-%: test-deps
 
 test-coverage: $(test_coverage_targets)
 
-test: src/vmango/web/assets.go test-deps
+test: lint src/vmango/web/assets.go test-deps
 	$(GO) test $(TEST_ARGS)  vmango/...
 
 show-coverage-html:
@@ -46,6 +46,9 @@ show-coverage-html:
 
 show-coverage-text:
 	$(GO) tool cover -func=coverage.out
+
+lint:
+	$(GO) vet vmango/...
 
 install: bin/vmango
 	mkdir -p $(DESTDIR)/usr/bin

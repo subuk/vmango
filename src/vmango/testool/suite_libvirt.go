@@ -194,6 +194,6 @@ func (suite *LibvirtTest) AddCleanup(obj interface{}) {
 	case *libvirt.StoragePool:
 		suite.CleanupAfterTest.Pools = append(suite.CleanupAfterTest.Pools, tObj)
 	default:
-		log.Panicf("unkown object added for cleanup", tObj)
+		log.Panicf("unkown object added for cleanup: %s", tObj)
 	}
 }

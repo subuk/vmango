@@ -1,7 +1,6 @@
 package models
 
 import (
-	"encoding/json"
 	"fmt"
 )
 
@@ -11,39 +10,32 @@ const (
 	STATE_UNKNOWN = iota
 )
 
-type VirtualMachineList struct {
-	machines []*VirtualMachine `json:"Machines"`
-}
-
-func (vms *VirtualMachineList) MarshalJSON() ([]byte, error) {
-	return json.Marshal(vms.machines)
-}
+type VirtualMachineList []*VirtualMachine
 
 func (vms *VirtualMachineList) Active() *VirtualMachineList {
-	filtered := []*VirtualMachine{}
-	for _, vm := range vms.machines {
+	filtered := VirtualMachineList{}
+	for _, vm := range *vms {
 		if vm.State == STATE_RUNNING {
 			filtered = append(filtered, vm)
 		}
 	}
-	vms.machines = filtered
-	return vms
+	return &filtered
 }
 
 func (vms *VirtualMachineList) Count() int {
-	return len(vms.machines)
+	return len(*vms)
 }
 
 func (vms *VirtualMachineList) All() []*VirtualMachine {
-	return vms.machines
+	return *vms
 }
 
 func (vms *VirtualMachineList) Add(vm *VirtualMachine) {
-	vms.machines = append(vms.machines, vm)
+	*vms = append(*vms, vm)
 }
 
 func (vms *VirtualMachineList) Find(name string) *VirtualMachine {
-	for _, vm := range vms.machines {
+	for _, vm := range *vms {
 		if vm.Name == name {
 			return vm
 		}

@@ -41,7 +41,9 @@ func (repo *StubMachinerep) Get(vm *models.VirtualMachine) (bool, error) {
 	return repo.GetResponse.Exist, repo.GetResponse.Error
 }
 func (repo *StubMachinerep) Create(vm *models.VirtualMachine, image *models.Image, plan *models.Plan) error {
-	*vm = *repo.CreateResponse.Machine
+	if repo.CreateResponse.Machine != nil {
+		*vm = *repo.CreateResponse.Machine
+	}
 	return repo.CreateResponse.Error
 }
 func (repo *StubMachinerep) Start(*models.VirtualMachine) error {

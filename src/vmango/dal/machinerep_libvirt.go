@@ -151,7 +151,7 @@ func (store *LibvirtMachinerep) assignIP(vm *models.VirtualMachine) error {
 	}
 	networkConfig := netXMLConfig{}
 	if err := xml.Unmarshal([]byte(xmlString), &networkConfig); err != nil {
-		return fmt.Errorf("failed to parse network xml:", err)
+		return fmt.Errorf("failed to parse network xml: %s", err)
 	}
 	addrs, err := listIPRange(
 		networkConfig.IP.DHCPRange.Start,
@@ -227,7 +227,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 
 	domainConfig := domainXMLConfig{}
 	if err := xml.Unmarshal([]byte(domainXMLString), &domainConfig); err != nil {
-		return fmt.Errorf("failed to parse domain xml:", err)
+		return fmt.Errorf("failed to parse domain xml: %s", err)
 	}
 
 	log.WithField("name", name).WithField("domain", domainConfig).Debug("domain xml fetched")
@@ -272,7 +272,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.Arch = domainConfig.Os.Type.Arch
 	vm.OS = domainConfig.OSName
 	for _, key := range domainConfig.SSHKeys {
-		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{key.Name, key.Public})
+		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{Name: key.Name, Public: key.Public})
 	}
 
 	networkXMLString, err := network.GetXMLDesc(0)
@@ -281,7 +281,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	}
 	networkConfig := netXMLConfig{}
 	if err := xml.Unmarshal([]byte(networkXMLString), &networkConfig); err != nil {
-		return fmt.Errorf("failed to parse network xml:", err)
+		return fmt.Errorf("failed to parse network xml: %s", err)
 	}
 	for _, host := range networkConfig.IP.Hosts {
 		if host.HWAddr == vm.HWAddr {
@@ -571,7 +571,7 @@ func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
 
 	domainXML := domainXMLConfig{}
 	if err := xml.Unmarshal([]byte(domainXMLString), &domainXML); err != nil {
-		return fmt.Errorf("failed to parse domain xml:", err)
+		return fmt.Errorf("failed to parse domain xml: %s", err)
 	}
 	for _, disk := range domainXML.Disks {
 		lookupKey := disk.Source.Path()
