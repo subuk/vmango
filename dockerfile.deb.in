@@ -24,4 +24,4 @@ RUN cd /tmp/buildd/vmango && dpkg-buildpackage -us -uc
 
 USER root
 RUN mkdir -p /packages
-RUN mv /tmp/buildd/*.deb /tmp/buildd/*.changes /tmp/buildd/*.dsc /tmp/buildd/*.tar.gz /packages
+RUN mv /tmp/buildd/*.deb /tmp/buildd/*.changes /tmp/buildd/*.dsc /tmp/buildd/*.tar* /packages
