@@ -31,71 +31,51 @@ func (source diskSourceXMLConfig) Path() string {
 	return ""
 }
 
-type diskTargetXMLConfig struct {
-	Device string `xml:"dev,attr"`
-	Bus    string `xml:"bus,attr"`
-}
-
-type diskDriverXMLConfig struct {
-	Name  string `xml:"name,attr"`
-	Type  string `xml:"type,attr"`
-	Cache string `xml:"cache,attr"`
-}
-
-type diskXMLConfig struct {
-	Device string              `xml:"device,attr"`
-	Driver diskDriverXMLConfig `xml:"driver"`
-	Target diskTargetXMLConfig `xml:"target"`
+type domainDiskXMLConfig struct {
+	Device string `xml:"device,attr"`
+	Driver struct {
+		Name  string `xml:"name,attr"`
+		Type  string `xml:"type,attr"`
+		Cache string `xml:"cache,attr"`
+	} `xml:"driver"`
+	Target struct {
+		Device string `xml:"dev,attr"`
+		Bus    string `xml:"bus,attr"`
+	} `xml:"target"`
 	Source diskSourceXMLConfig `xml:"source"`
 }
 
-type diskListXMLConfig []diskXMLConfig
+type domainXMLConfig struct {
+	XMLName    xml.Name              `xml:"domain"`
+	Name       string                `xml:"name"`
+	Disks      []domainDiskXMLConfig `xml:"devices>disk"`
+	Interfaces []struct {
+		Type string `xml:"type,attr"`
+		Mac  struct {
+			Address string `xml:"address,attr"`
+		} `xml:"mac"`
+	} `xml:"devices>interface"`
+	SSHKeys []struct {
+		Name   string `xml:"name,attr"`
+		Public string `xml:",chardata"`
+	} `xml:"metadata>md>sshkeys>key"`
+	Graphics []struct {
+		Type   string `xml:"type,attr"`
+		Port   string `xml:"port,attr"`
+		Listen string `xml:"listen,attr"`
+	} `xml:"devices>graphics"`
+}
 
-func (disks diskListXMLConfig) Root() diskXMLConfig {
-	var candidates []diskXMLConfig
-	for _, disk := range disks {
+func (domain *domainXMLConfig) RootDisk() *domainDiskXMLConfig {
+	for _, disk := range domain.Disks {
 		if disk.Device == "cdrom" {
 			continue
 		}
 		if strings.HasSuffix(disk.Source.Path(), "_disk") {
-			return disk
+			return &disk
 		}
-		candidates = append(candidates, disk)
 	}
-	if len(candidates) == 1 {
-		return candidates[0]
-	}
-	msg := fmt.Sprintf("cannot determine root disk from: %s", disks)
-	panic(msg)
-}
-
-type interfaceMacXMLConfig struct {
-	Address string `xml:"address,attr"`
-}
-
-type interfaceXMLConfig struct {
-	Type string                `xml:"type,attr"`
-	Mac  interfaceMacXMLConfig `xml:"mac"`
-}
-
-type sshKeyConfig struct {
-	Name   string `xml:"name,attr"`
-	Public string `xml:",chardata"`
-}
-
-type graphicsXMLConfig struct {
-	Type   string `xml:"type,attr"`
-	Port   string `xml:"port,attr"`
-	Listen string `xml:"listen,attr"`
-}
-
-type domainXMLConfig struct {
-	XMLName    xml.Name             `xml:"domain"`
-	Name       string               `xml:"name"`
-	Disks      diskListXMLConfig    `xml:"devices>disk"`
-	Interfaces []interfaceXMLConfig `xml:"devices>interface"`
-	SSHKeys    []sshKeyConfig       `xml:"metadata>md>sshkeys>key"`
-	Graphics   []graphicsXMLConfig  `xml:"devices>graphics"`
+	return nil
 }
 
 func (domcfg domainXMLConfig) VNCAddr() string {
@@ -259,20 +239,22 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	}
 
 	if len(domainConfig.Disks) > 0 {
-		volume, err := store.conn.LookupStorageVolByPath(domainConfig.Disks.Root().Source.Path())
+		rootVolumeConfig := domainConfig.RootDisk()
+		if rootVolumeConfig == nil {
+			return fmt.Errorf("failed to find root disk")
+		}
+		rootVolume, err := store.conn.LookupStorageVolByPath(rootVolumeConfig.Source.Path())
 		if err != nil {
 			return err
 		}
-		volumeInfo, err := volume.GetInfo()
+		rootVolumeInfo, err := rootVolume.GetInfo()
 		if err != nil {
 			return err
 		}
-		vm.Disk = &models.VirtualMachineDisk{}
-		vm.Disk.Driver = domainConfig.Disks.Root().Driver.Name
-		vm.Disk.Type = domainConfig.Disks.Root().Driver.Type
-		vm.Disk.Size = volumeInfo.Capacity
-	} else {
-		vm.Disk = nil
+		vm.RootDisk = &models.VirtualMachineDisk{}
+		vm.RootDisk.Driver = rootVolumeConfig.Driver.Name
+		vm.RootDisk.Type = rootVolumeConfig.Driver.Type
+		vm.RootDisk.Size = rootVolumeInfo.Capacity
 	}
 
 	vm.Name = name
@@ -541,7 +523,7 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		return fmt.Errorf("failed to attach config drive: %s", err)
 	}
 
-	if machine.Disk.Type == "qcow2" {
+	if machine.RootDisk.Type == "qcow2" {
 		if err := rootVolume.Resize(uint64(plan.DiskSize), 0); err != nil {
 			configDriveVolume.Delete(0)
 			return fmt.Errorf("failed to resize root volume: %s", err)

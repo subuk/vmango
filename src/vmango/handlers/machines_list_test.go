@@ -53,7 +53,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},
-		Disk: &models.VirtualMachineDisk{
+		RootDisk: &models.VirtualMachineDisk{
 			Size:   123,
 			Driver: "hello",
 			Type:   "wow",
@@ -72,7 +72,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 		Ip: &models.IP{
 			Address: "2.2.2.2",
 		},
-		Disk: &models.VirtualMachineDisk{
+		RootDisk: &models.VirtualMachineDisk{
 			Size:   321,
 			Driver: "ehlo",
 			Type:   "www",
@@ -93,7 +93,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "HWAddr": "hw:hw:hw",
           "VNCAddr": "vnc",
-          "Disk": {
+          "RootDisk": {
             "Size": 123,
             "Driver": "hello",
             "Type": "wow"
@@ -108,7 +108,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
           "HWAddr": "xx:xx:xx",
           "VNCAddr": "VVV",
           "Ip": {"Address": "2.2.2.2", "Gateway": "", "Netmask": 0, "UsedBy": ""},
-          "Disk": {
+          "RootDisk": {
             "Size": 321,
             "Driver": "ehlo",
             "Type": "www"

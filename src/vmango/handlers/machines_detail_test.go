@@ -38,7 +38,7 @@ func (suite *MachineDetailHandlerTestSuite) TestHTMLOk() {
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
 		Name: "test-detail-html",
-		Disk: &models.VirtualMachineDisk{
+		RootDisk: &models.VirtualMachineDisk{
 			Size:   123,
 			Driver: "hello",
 			Type:   "wow",
@@ -62,7 +62,7 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},
-		Disk: &models.VirtualMachineDisk{
+		RootDisk: &models.VirtualMachineDisk{
 			Size:   123,
 			Driver: "hello",
 			Type:   "wow",
@@ -82,7 +82,7 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "HWAddr": "hw:hw:hw",
           "VNCAddr": "vnc",
-          "Disk": {
+          "RootDisk": {
             "Size": 123,
             "Driver": "hello",
             "Type": "wow"

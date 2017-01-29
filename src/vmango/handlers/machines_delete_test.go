@@ -38,8 +38,8 @@ func (suite *MachineDeleteHandlerTestSuite) TestConfirmationOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
-		Name: "test-remove",
-		Disk: &models.VirtualMachineDisk{},
+		Name:     "test-remove",
+		RootDisk: &models.VirtualMachineDisk{},
 	}
 	rr := suite.DoGet(DELETE_URL("test-remove"))
 	suite.Equal(200, rr.Code, rr.Body.String())
@@ -65,8 +65,8 @@ func (suite *MachineDeleteHandlerTestSuite) TestActionOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
-		Name: "test-remove",
-		Disk: &models.VirtualMachineDisk{},
+		Name:     "test-remove",
+		RootDisk: &models.VirtualMachineDisk{},
 	}
 	rr := suite.DoPost(DELETE_URL("test-remove"), bytes.NewBuffer([]byte(``)))
 	suite.Equal(302, rr.Code, rr.Body.String())

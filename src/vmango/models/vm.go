@@ -71,7 +71,7 @@ type VirtualMachine struct {
 	Ip        *IP
 	HWAddr    string
 	VNCAddr   string
-	Disk      *VirtualMachineDisk
+	RootDisk  *VirtualMachineDisk
 	SSHKeys   []*SSHKey
 }
 
