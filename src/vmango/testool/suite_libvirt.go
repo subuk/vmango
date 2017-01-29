@@ -4,80 +4,12 @@ import (
 	"github.com/libvirt/libvirt-go"
 	"log"
 	"os"
+	"path/filepath"
 	"text/template"
 )
 
 const TEST_URI_ENV_KEY = "VMANGO_TEST_LIBVIRT_URI"
-
-const VOLUME_TEMPLATE = `
-<volume>
-  <target>
-    <format type="{{ .Image.TypeString }}" />
-  </target>
-  <name>{{ .Machine.Name }}_disk</name>
-  <key>{{ .Machine.Name }}_disk.{{ .Image.TypeString }}</key>
-  <capacity unit="G">{{ .Plan.DiskSizeGigabytes }}</capacity>
-  <allocation unit="G">{{ .Plan.DiskSizeGigabytes }}</allocation>
-</volume>
-`
-
-const VM_TEMPLATE = `
-<domain type='kvm'>
-  <name>{{ .Machine.Name }}</name>
-  <currentMemory unit="b">{{ .Plan.Memory }}</currentMemory>
-  <metadata>
-    <vmango:md xmlns:vmango="http://vmango.org/schema/md">
-      <vmango:sshkeys>
-        {{ range .Machine.SSHKeys }}
-        <vmango:key name="{{ .Name }}">{{ .Public }}</vmango:key>
-        {{ end }}
-      </vmango:sshkeys>
-    </vmango:md>
-  </metadata>
-  <memory unit="b">{{ .Plan.Memory }}</memory>
-  <os>
-    <type arch='{{ .Image.ArchString2 }}'>hvm</type>
-    <boot dev='hd'/>
-  </os>
-  <features>
-    <acpi/>
-    <apic/>
-    <pae/>
-  </features>
-  <clock offset="utc"/>
-
-  <on_poweroff>destroy</on_poweroff>
-  <on_reboot>restart</on_reboot>
-  <on_crash>restart</on_crash>
-
-  <vcpu>{{ .Plan.Cpus }}</vcpu>
-
-  <devices>
-    <emulator>/usr/bin/kvm-spice</emulator>
-    <disk type='file' device='disk'>
-      <driver name='qemu' type='{{ .Image.TypeString }}' cache='none'/>
-      <source file='{{ .VolumePath }}'/>
-      <target dev='vda' bus='virtio'/>
-    </disk>
-    <disk type='file' device='cdrom'>
-      <driver name='qemu' type='raw'/>
-      <target dev='hdc' bus='ide'/>
-      <readonly/>
-    </disk>
-    <interface type='network'>
-      <source network='{{ .Network }}'/>
-      <model type='virtio'/>
-    </interface>
-    <input type='tablet' bus='usb'/>
-    <graphics type='vnc' port='-1'/>
-    <console type='pty'/>
-    <sound model='ac97'/>
-    <video>
-      <model type='cirrus'/>
-    </video>
-  </devices>
-</domain>
-`
+const TEST_TYPE_ENV_KEY = "VMANGO_TEST_TYPE"
 
 type LibvirtTestPoolFixture struct {
 	Name    string
@@ -106,6 +38,9 @@ func (suite *LibvirtTest) SetupSuite() {
 	if os.Getenv(TEST_URI_ENV_KEY) == "" {
 		log.Panicf("%s must be set", TEST_URI_ENV_KEY)
 	}
+	if os.Getenv(TEST_TYPE_ENV_KEY) == "" {
+		log.Panicf("%s must be set", TEST_TYPE_ENV_KEY)
+	}
 	virConn, err := libvirt.NewConnect(os.Getenv(TEST_URI_ENV_KEY))
 	if err != nil {
 		panic(err)
@@ -114,8 +49,10 @@ func (suite *LibvirtTest) SetupSuite() {
 }
 
 func (suite *LibvirtTest) SetupTest() {
-	suite.VMTpl = template.Must(template.New("vm.xml.in").Parse(VM_TEMPLATE))
-	suite.VolTpl = template.Must(template.New("volume.xml.in").Parse(VOLUME_TEMPLATE))
+	vmTplPath := filepath.Join(SourceDir(), "fixtures/libvirt", os.Getenv(TEST_TYPE_ENV_KEY), "vm.xml.in")
+	volTplPath := filepath.Join(SourceDir(), "fixtures/libvirt", os.Getenv(TEST_TYPE_ENV_KEY), "volume.xml.in")
+	suite.VMTpl = template.Must(template.New("vm.xml.in").ParseFiles(vmTplPath))
+	suite.VolTpl = template.Must(template.New("volume.xml.in").ParseFiles(volTplPath))
 
 	for _, poolFixture := range suite.Fixtures.Pools {
 		pool, err := CreatePool(suite.VirConnect, poolFixture.Name)

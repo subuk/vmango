@@ -1,0 +1,11 @@
+<network>
+  <name>vmango-test</name>
+  <uuid>8c6f7828-c5bb-4edc-905c-dc69260bf68c</uuid>
+  <forward mode='nat' />
+  <ip address='192.168.128.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='192.168.128.128' end='192.168.128.250'/>
+      <host mac='52:54:00:2e:54:28' name='one' ip='192.168.128.130'/>
+    </dhcp>
+  </ip>
+</network>

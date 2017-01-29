@@ -8,6 +8,7 @@ import (
 	"github.com/libvirt/libvirt-go"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"vmango/web"
@@ -115,7 +116,7 @@ func CreateVolume(conn *libvirt.Connect, poolName, volName string) error {
 }
 
 func CreateDomain(conn *libvirt.Connect, name string) (*libvirt.Domain, error) {
-	domainXMLPath := fmt.Sprintf("%s/libvirt_test_stubs/domain-%s.xml", SourceDir(), name)
+	domainXMLPath := fmt.Sprintf("%s/fixtures/libvirt/%s/domain-%s.xml", SourceDir(), os.Getenv(TEST_TYPE_ENV_KEY), name)
 	domainXMLConfig, err := ioutil.ReadFile(domainXMLPath)
 	if err != nil {
 		return nil, err
@@ -131,7 +132,7 @@ func CreateDomain(conn *libvirt.Connect, name string) (*libvirt.Domain, error) {
 }
 
 func CreateNetwork(conn *libvirt.Connect, name string) (*libvirt.Network, error) {
-	networkXMLPath := fmt.Sprintf("%s/libvirt_test_stubs/network-%s.xml", SourceDir(), name)
+	networkXMLPath := fmt.Sprintf("%s/fixtures/libvirt/%s/network-%s.xml", SourceDir(), os.Getenv(TEST_TYPE_ENV_KEY), name)
 	networkXMLConfig, err := ioutil.ReadFile(networkXMLPath)
 	if err != nil {
 		return nil, err
@@ -147,7 +148,7 @@ func CreateNetwork(conn *libvirt.Connect, name string) (*libvirt.Network, error)
 }
 
 func CreatePool(conn *libvirt.Connect, name string) (*libvirt.StoragePool, error) {
-	poolXMLPath := fmt.Sprintf("%s/libvirt_test_stubs/pool-%s.xml", SourceDir(), name)
+	poolXMLPath := fmt.Sprintf("%s/fixtures/libvirt/%s/pool-%s.xml", SourceDir(), os.Getenv(TEST_TYPE_ENV_KEY), name)
 	poolXMLConfig, err := ioutil.ReadFile(poolXMLPath)
 	if err != nil {
 		return nil, err

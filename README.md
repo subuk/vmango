@@ -125,7 +125,6 @@ Unit tests
 
     make test
 
-Libvirt integration tests and unit tests (please, do not run tests on production servers)
+Libvirt integration tests tests (please, do not run tests on production servers)
 
-    VMANGO_TEST_LIBVIRT_URI=qemu:///system make test TEST_ARGS='-tags integration'
-
+    VMANGO_TEST_TYPE=ubuntu_file VMANGO_TEST_LIBVIRT_URI=qemu:///system make test TEST_ARGS='-tags integration'
