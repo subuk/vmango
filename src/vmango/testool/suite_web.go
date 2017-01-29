@@ -26,6 +26,9 @@ func (suite *WebTest) DoRequest(method, url string, body io.Reader) *httptest.Re
 	if err != nil {
 		panic(err)
 	}
+	if body != nil {
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	}
 	suite.Context.Router.ServeHTTP(rr, req)
 	return rr
 }
