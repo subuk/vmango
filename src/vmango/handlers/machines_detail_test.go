@@ -77,6 +77,7 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
 	suite.Require().Equal(200, rr.Code, rr.Body.String())
 	suite.Require().Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
 	expected := `{
+      "Title": "Machine test-detail-json",
       "Machine": {
           "Name": "test-detail-json",
           "Memory": 456,

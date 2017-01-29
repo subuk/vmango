@@ -14,6 +14,7 @@ func ImageList(ctx *web.Context, w http.ResponseWriter, req *http.Request) error
 	}
 	ctx.RenderResponse(w, req, http.StatusOK, "images/list", map[string]interface{}{
 		"Images": images,
+		"Title":  "Images",
 	})
 	return nil
 }

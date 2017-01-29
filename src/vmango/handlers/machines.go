@@ -33,6 +33,7 @@ func MachineDelete(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 		ctx.Render.HTML(w, http.StatusOK, "machines/delete", map[string]interface{}{
 			"Request": req,
 			"Machine": machine,
+			"Title":   fmt.Sprintf("Remove machine %s", machine.Name),
 		})
 	}
 	return nil
@@ -77,6 +78,7 @@ func MachineStateChange(ctx *web.Context, w http.ResponseWriter, req *http.Reque
 			"Request": req,
 			"Machine": machine,
 			"Action":  action,
+			"Title":   fmt.Sprintf("Do %s on machine %s", action, machine.Name),
 		})
 		return nil
 	}
@@ -89,6 +91,7 @@ func MachineList(ctx *web.Context, w http.ResponseWriter, req *http.Request) err
 	}
 	ctx.RenderResponse(w, req, http.StatusOK, "machines/list", map[string]interface{}{
 		"Machines": machines,
+		"Title":    "Machines",
 	})
 	return nil
 }
@@ -104,6 +107,7 @@ func MachineDetail(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 	}
 	ctx.RenderResponse(w, req, http.StatusOK, "machines/detail", map[string]interface{}{
 		"Machine": machine,
+		"Title":   fmt.Sprintf("Machine %s", machine.Name),
 	})
 	return nil
 }
@@ -190,6 +194,7 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 			"Plans":   plans,
 			"Images":  images,
 			"SSHKeys": sshkeys,
+			"Title":   "Create machine",
 		})
 	}
 	return nil

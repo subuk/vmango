@@ -88,6 +88,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 	suite.Require().Equal(200, rr.Code, rr.Body.String())
 	suite.Require().Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
 	expected := `{
+      "Title": "Machines",
       "Machines": [{
           "Name": "test",
           "Memory": 456,

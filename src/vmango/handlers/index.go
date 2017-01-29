@@ -19,6 +19,7 @@ func Index(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 		"Request":  req,
 		"Machines": machines,
 		"Server":   server,
+		"Title":    "Server info",
 	})
 	return nil
 }

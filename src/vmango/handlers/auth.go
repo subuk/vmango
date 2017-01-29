@@ -17,6 +17,7 @@ func Login(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	if req.Method != "POST" {
 		ctx.Render.HTML(w, http.StatusOK, "login", map[string]interface{}{
 			"Request": req,
+			"Title":   "Login",
 		})
 		return nil
 	}
