@@ -46,15 +46,21 @@ type domainDiskXMLConfig struct {
 }
 
 type domainXMLConfig struct {
-	XMLName    xml.Name              `xml:"domain"`
-	Name       string                `xml:"name"`
-	Disks      []domainDiskXMLConfig `xml:"devices>disk"`
+	XMLName xml.Name              `xml:"domain"`
+	Name    string                `xml:"name"`
+	Disks   []domainDiskXMLConfig `xml:"devices>disk"`
+	Os      struct {
+		Type struct {
+			Arch string `xml:"arch,attr"`
+		} `xml:"type"`
+	} `xml:"os"`
 	Interfaces []struct {
 		Type string `xml:"type,attr"`
 		Mac  struct {
 			Address string `xml:"address,attr"`
 		} `xml:"mac"`
 	} `xml:"devices>interface"`
+	OSName  string `xml:"metadata>md>os"`
 	SSHKeys []struct {
 		Name   string `xml:"name,attr"`
 		Public string `xml:",chardata"`
@@ -263,6 +269,8 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.Cpus = int(info.NrVirtCpu)
 	vm.HWAddr = domainConfig.Interfaces[0].Mac.Address
 	vm.VNCAddr = domainConfig.VNCAddr()
+	vm.Arch = domainConfig.Os.Type.Arch
+	vm.OS = domainConfig.OSName
 	for _, key := range domainConfig.SSHKeys {
 		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{key.Name, key.Public})
 	}

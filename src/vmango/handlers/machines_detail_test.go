@@ -59,6 +59,8 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
 		Cpus:    1,
 		HWAddr:  "hw:hw:hw",
 		VNCAddr: "vnc",
+		OS:      "HelloOS",
+		Arch:    "xxx",
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},
@@ -82,6 +84,8 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "HWAddr": "hw:hw:hw",
           "VNCAddr": "vnc",
+          "OS": "HelloOS",
+          "Arch": "xxx",
           "RootDisk": {
             "Size": 123,
             "Driver": "hello",

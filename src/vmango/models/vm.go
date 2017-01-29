@@ -63,6 +63,8 @@ func (disk *VirtualMachineDisk) SizeGigabytes() int {
 
 type VirtualMachine struct {
 	Name      string
+	OS        string
+	Arch      string
 	State     int    `json:"-"`
 	Uuid      string `json:"-"`
 	Memory    int

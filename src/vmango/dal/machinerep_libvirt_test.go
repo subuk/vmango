@@ -71,6 +71,8 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	expectedKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDXJjuFhloSumFjJRrrZfSinBE0q4e/o0nKzt4QfkD3VR56rrrrCtjHh+/wcZcIdm9I9QODxoFoSSvrPNOzLj0lfF0f64Ic7fUnC4hhRBEeyo/03KVpUQcHWHjeex+5OHQXa8s5Xy/dytZkhdvDYOCgEpMgC2tU6tk/mVuk84Q03QEnSYJQuIgj8VwvxC+22aGSpLzXtenpdXr+O8s7dkuhHQjl1w6WbiLADv0I06bFwW8iB6p7aHZCqJUYAUYa4XaCjXdVwoKAE/J23s17XCZzY10YmBIikRQQIjpvRIbHArzO0om4++2KMnY8m6xoMp2imyceD/0fIVlAqhLTEaBP test@vmango"
 	suite.Equal(expectedKey, oneVm.SSHKeys[0].Public)
 	suite.Equal("192.168.128.130", oneVm.Ip.Address)
+	suite.Equal("", oneVm.OS)
+	suite.Equal("x86_64", oneVm.Arch)
 
 	twoVm := machines.Find("two")
 	suite.Require().NotNil(twoVm)
@@ -90,6 +92,8 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	expectedKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDXJjuFhloSumFjJRrrZfSinBE0q4e/o0nKzt4QfkD3VR56rrrrCtjHh+/wcZcIdm9I9QODxoFoSSvrPNOzLj0lfF0f64Ic7fUnC4hhRBEeyo/03KVpUQcHWHjeex+5OHQXa8s5Xy/dytZkhdvDYOCgEpMgC2tU6tk/mVuk84Q03QEnSYJQuIgj8VwvxC+22aGSpLzXtenpdXr+O8s7dkuhHQjl1w6WbiLADv0I06bFwW8iB6p7aHZCqJUYAUYa4XaCjXdVwoKAE/J23s17XCZzY10YmBIikRQQIjpvRIbHArzO0om4++2KMnY8m6xoMp2imyceD/0fIVlAqhLTEaBP test@vmango"
 	suite.Equal(expectedKey, twoVm.SSHKeys[0].Public)
 	suite.Nil(twoVm.Ip)
+	suite.Equal("TestOS-12", twoVm.OS)
+	suite.Equal("x86_64", twoVm.Arch)
 }
 
 func (suite *MachinerepLibvirtSuite) TestIgnoredOk() {
@@ -128,6 +132,8 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	expectedKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDXJjuFhloSumFjJRrrZfSinBE0q4e/o0nKzt4QfkD3VR56rrrrCtjHh+/wcZcIdm9I9QODxoFoSSvrPNOzLj0lfF0f64Ic7fUnC4hhRBEeyo/03KVpUQcHWHjeex+5OHQXa8s5Xy/dytZkhdvDYOCgEpMgC2tU6tk/mVuk84Q03QEnSYJQuIgj8VwvxC+22aGSpLzXtenpdXr+O8s7dkuhHQjl1w6WbiLADv0I06bFwW8iB6p7aHZCqJUYAUYa4XaCjXdVwoKAE/J23s17XCZzY10YmBIikRQQIjpvRIbHArzO0om4++2KMnY8m6xoMp2imyceD/0fIVlAqhLTEaBP test@vmango"
 	suite.Equal(expectedKey, machine.SSHKeys[0].Public)
 	suite.Nil(machine.Ip)
+	suite.Equal("TestOS-12", machine.OS)
+	suite.Equal("x86_64", machine.Arch)
 }
 
 func (suite *MachinerepLibvirtSuite) TestGetNotFoundFail() {

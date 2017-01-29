@@ -50,6 +50,8 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 		Cpus:    1,
 		HWAddr:  "hw:hw:hw",
 		VNCAddr: "vnc",
+		OS:      "WoW",
+		Arch:    "x86",
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},
@@ -93,6 +95,8 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "HWAddr": "hw:hw:hw",
           "VNCAddr": "vnc",
+          "OS": "WoW",
+          "Arch": "x86",
           "RootDisk": {
             "Size": 123,
             "Driver": "hello",
@@ -105,6 +109,8 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
           "Name": "hello",
           "Memory": 67897,
           "Cpus": 4,
+          "OS": "",
+          "Arch": "",
           "HWAddr": "xx:xx:xx",
           "VNCAddr": "VVV",
           "Ip": {"Address": "2.2.2.2", "Gateway": "", "Netmask": 0, "UsedBy": ""},
