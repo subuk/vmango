@@ -1,0 +1,10 @@
+<pool type='logical'>
+  <name>vmango-vms-test</name>
+  <source>
+    <name>vmango-test</name>
+    <format type='lvm2'/>
+  </source>
+  <target>
+    <path>/dev/vmango-test</path>
+  </target>
+</pool>

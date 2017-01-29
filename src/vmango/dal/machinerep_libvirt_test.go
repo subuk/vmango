@@ -64,7 +64,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("52:54:00:2e:54:28", oneVm.HWAddr)
 	suite.Equal("127.0.0.1:5900", oneVm.VNCAddr)
 	suite.Equal(oneVm.RootDisk.Type, "raw")
-	suite.Equal(uint64(10485760), oneVm.RootDisk.Size)
+	suite.NotEqual(0, oneVm.RootDisk.Size)
 	suite.Equal("qemu", oneVm.RootDisk.Driver)
 	suite.Len(oneVm.SSHKeys, 1)
 	suite.Equal("test", oneVm.SSHKeys[0].Name)
@@ -85,7 +85,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("52:54:00:2e:54:29", twoVm.HWAddr)
 	suite.Equal("127.0.0.1:5901", twoVm.VNCAddr)
 	suite.Equal("raw", twoVm.RootDisk.Type)
-	suite.Equal(uint64(10485760), twoVm.RootDisk.Size)
+	suite.NotEqual(0, twoVm.RootDisk.Size)
 	suite.Equal("qemu", twoVm.RootDisk.Driver)
 	suite.Len(twoVm.SSHKeys, 1)
 	suite.Equal("test", twoVm.SSHKeys[0].Name)
@@ -125,7 +125,7 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	suite.Equal("52:54:00:2e:54:29", machine.HWAddr)
 	suite.Equal("127.0.0.1:5901", machine.VNCAddr)
 	suite.Equal("raw", machine.RootDisk.Type)
-	suite.Equal(uint64(10485760), machine.RootDisk.Size)
+	suite.NotEqual(0, machine.RootDisk.Size)
 	suite.Equal("qemu", machine.RootDisk.Driver)
 	suite.Len(machine.SSHKeys, 1)
 	suite.Equal("test", machine.SSHKeys[0].Name)
@@ -256,6 +256,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 			Device string `xml:"device,attr"`
 			Source struct {
 				File string `xml:"file,attr"`
+				Dev  string `xml:"dev,attr"`
 			} `xml:"source"`
 		} `xml:"devices>disk"`
 	}{}
@@ -272,8 +273,16 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	suite.Equal(domainConfig.SSHKeys[1].Public, "hello")
 	suite.Len(domainConfig.Disks, 2)
 	suite.Equal(domainConfig.Disks[0].Device, "disk")
-	suite.Equal(domainConfig.Disks[0].Type, "file")
-	suite.True(strings.HasSuffix(domainConfig.Disks[0].Source.File, "_disk"))
+
+	switch domainConfig.Disks[0].Type {
+	case "file":
+		suite.True(strings.HasSuffix(domainConfig.Disks[0].Source.File, "_disk"))
+	case "block":
+		suite.True(strings.HasSuffix(domainConfig.Disks[0].Source.Dev, "_disk"))
+	default:
+		suite.Require().FailNow("unknown domain disk type:", domainConfig.Disks[0].Type)
+	}
+
 	suite.Equal(domainConfig.Disks[1].Device, "cdrom")
 	suite.Equal(domainConfig.Disks[1].Type, "file")
 	suite.True(strings.HasSuffix(domainConfig.Disks[1].Source.File, "_config.iso"))

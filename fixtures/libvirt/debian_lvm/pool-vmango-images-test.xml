@@ -1,0 +1,11 @@
+<pool type='dir'>
+  <name>vmango-images-test</name>
+  <target>
+    <path>/var/lib/libvirt/images</path>
+    <permissions>
+      <mode>0777</mode>
+      <owner>0</owner>
+      <group>0</group>
+    </permissions>
+  </target>
+</pool>
