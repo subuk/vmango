@@ -33,9 +33,11 @@ func NewTestContext() *web.Context {
 	ctx.Router = web_router.New(ctx)
 	ctx.Render = web.NewRenderer("", true, ctx)
 	ctx.Logger = logrus.New()
-	session := &sessions.Session{}
+	store := &StubSessionStore{}
+	session := sessions.NewSession(store, "vmango")
 	session.Values = map[interface{}]interface{}{}
-	ctx.SessionStore = &StubSessionStore{session}
+	store.Session = session
+	ctx.SessionStore = store
 	return ctx
 }
 

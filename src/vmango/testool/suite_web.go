@@ -1,6 +1,7 @@
 package testool
 
 import (
+	"github.com/gorilla/sessions"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,8 +17,11 @@ func (suite *WebTest) SetupTest() {
 }
 
 func (suite *WebTest) Authenticate() {
-	store := suite.Context.SessionStore.(*StubSessionStore)
-	store.Session.Values["authuser"] = "testuser"
+	suite.Session().Values["authuser"] = "testuser"
+}
+
+func (suite *WebTest) Session() *sessions.Session {
+	return suite.Context.SessionStore.(*StubSessionStore).Session
 }
 
 func (suite *WebTest) DoRequest(method, url string, body io.Reader) *httptest.ResponseRecorder {
