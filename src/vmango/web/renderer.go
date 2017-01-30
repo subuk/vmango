@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var SUFFIXES = []string{"b", "K", "M", "G", "P"}
+var SUFFIXES = []string{"b", "K", "M", "G", "T"}
 
 func NewRenderer(version string, debug bool, ctx *Context) *render.Render {
 
@@ -28,7 +28,7 @@ func NewRenderer(version string, debug bool, ctx *Context) *render.Render {
 				"HumanizeBytes": func(max int, number uint64) string {
 					i := 0
 					for {
-						if number < 1024 {
+						if number < 10240 {
 							break
 						}
 						number = number / 1024
