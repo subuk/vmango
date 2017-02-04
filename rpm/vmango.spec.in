@@ -44,6 +44,9 @@ rm -rf $RPM_BUILD_ROOT
 %attr(644,root,root) %{_unitdir}/vmango.service
 
 %changelog
+* Sat Feb 4 2017 22:20:56 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.3.1-1
+- Fix HumanizeBytes template helper
+
 * Sun Jan 29 2017 16:24:15 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.3.0-1
 - Simple API
 - SSL support

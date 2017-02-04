@@ -1,3 +1,9 @@
+vmango (0.3.1) vmango; urgency=medium
+
+  * Fix HumanizeBytes template helper
+
+ -- Matvey Kruglov <kubuzzzz@gmail.com>  Sat, 4 Feb 2017 22:20:56 +0300
+
 vmango (0.3.0) vmango; urgency=medium
 
   * Simple API
