@@ -2,7 +2,7 @@ schema
 ======
 [![GoDoc](https://godoc.org/github.com/gorilla/schema?status.svg)](https://godoc.org/github.com/gorilla/schema) [![Build Status](https://travis-ci.org/gorilla/schema.png?branch=master)](https://travis-ci.org/gorilla/schema)
 
-Package gorilla/schema fills a struct with form values.
+Package gorilla/schema converts structs to and from form values.
 
 ## Example
 
@@ -10,7 +10,7 @@ Here's a quick example: we parse POST form values and then decode them into a st
 
 ```go
 // Set a Decoder instance as a package global, because it caches 
-// meta-data about structs, and a instance can be shared safely.
+// meta-data about structs, and an instance can be shared safely.
 var decoder = schema.NewDecoder()
 
 type Person struct {
@@ -20,21 +20,42 @@ type Person struct {
 
 func MyHandler(w http.ResponseWriter, r *http.Request) {
     err := r.ParseForm()
-
     if err != nil {
         // Handle error
     }
 
-    decoder := schema.NewDecoder()
+    var person Person
+    
     // r.PostForm is a map of our POST form values
-    err := decoder.Decode(person, r.PostForm)
-
+    err := decoder.Decode(&person, r.PostForm)
     if err != nil {
         // Handle error
     }
 
     // Do something with person.Name or person.Phone
 }
+```
+
+Conversely, contents of a struct can be encoded into form values. Here's a variant of the previous example using the Encoder:
+
+```go
+var encoder = schema.NewEncoder()
+
+func MyHttpRequest() {
+    person := Person{"Jane Doe", "555-5555"}
+    form := url.Values{}
+
+    err := encoder.Encode(person, form)
+
+    if err != nil {
+        // Handle error
+    }
+
+    // Use form values, for example, with an http client
+    client := new(http.Client)
+    res, err := client.PostForm("http://my-api.test", form)
+}
+
 ```
 
 To define custom names for fields, use a struct tag "schema". To not populate certain fields, use a dash for the name and it will be ignored:
@@ -47,7 +68,7 @@ type Person struct {
 }
 ```
 
-The supported field types in the destination struct are:
+The supported field types in the struct are:
 
 * bool
 * float variants (float32, float64)
@@ -58,7 +79,7 @@ The supported field types in the destination struct are:
 * a pointer to one of the above types
 * a slice or a pointer to a slice of one of the above types
 
-Non-supported types are simply ignored, however custom types can be registered to be converted.
+Unsupported types are simply ignored, however custom types can be registered to be converted.
 
 More examples are available on the Gorilla website: http://www.gorillatoolkit.org/pkg/schema
 

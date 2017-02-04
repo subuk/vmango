@@ -5,10 +5,12 @@
 package schema
 
 import (
+	"encoding/hex"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 type IntAlias int
@@ -31,10 +33,27 @@ type S1 struct {
 	F14 int        `schema:"f14"`
 	F15 IntAlias   `schema:"f15"`
 	F16 []IntAlias `schema:"f16"`
+	F17 S19        `schema:"f17"`
 }
 
 type S2 struct {
 	F01 *[]*int `schema:"f1"`
+}
+
+type S19 [2]byte
+
+func (id *S19) UnmarshalText(text []byte) error {
+	buf, err := hex.DecodeString(string(text))
+	if err != nil {
+		return err
+	}
+	if len(buf) > len(*id) {
+		return errors.New("out of range")
+	}
+	for i := range buf {
+		(*id)[i] = buf[i]
+	}
+	return nil
 }
 
 func TestAll(t *testing.T) {
@@ -59,6 +78,7 @@ func TestAll(t *testing.T) {
 		"f14":            {},
 		"f15":            {"151"},
 		"f16":            {"161", "162"},
+		"f17":            {"1a2b"},
 	}
 	f2 := 2
 	f41, f42 := 41, 42
@@ -124,6 +144,7 @@ func TestAll(t *testing.T) {
 		F14: 0,
 		F15: f151,
 		F16: []IntAlias{f161, f162},
+		F17: S19{0x1a, 0x2b},
 	}
 
 	s := &S1{}
@@ -311,9 +332,12 @@ func TestAll(t *testing.T) {
 	if s.F16 == nil {
 		t.Errorf("f16: nil")
 	} else if len(s.F16) != len(e.F16) {
-		t.Error("f16: expected len %d, got %d", len(e.F16), len(s.F16))
+		t.Errorf("f16: expected len %d, got %d", len(e.F16), len(s.F16))
 	} else if !reflect.DeepEqual(s.F16, e.F16) {
-		t.Error("f16: expected %v, got %v", e.F16, s.F16)
+		t.Errorf("f16: expected %v, got %v", e.F16, s.F16)
+	}
+	if s.F17 != e.F17 {
+		t.Errorf("f17: expected %v, got %v", e.F17, s.F17)
 	}
 }
 
@@ -1188,7 +1212,7 @@ func TestRegisterConverterSlice(t *testing.T) {
 	})
 	for i := range expected {
 		if got, want := expected[i], result.Multiple[i]; got != want {
-			t.Errorf("%d: got %s, want %s", got, want)
+			t.Errorf("%d: got %s, want %s", i, got, want)
 		}
 	}
 }
@@ -1329,5 +1353,198 @@ func TestNoTextUnmarshalerType(t *testing.T) {
 
 	if err := decoder.Decode(&s, data); err == nil {
 		t.Error("Not detecting when there's no converter")
+	}
+}
+
+func TestExpectedType(t *testing.T) {
+	data := map[string][]string{
+		"bools":   []string{"1", "a"},
+		"date":    []string{"invalid"},
+		"Foo.Bar": []string{"a", "b"},
+	}
+
+	type B struct {
+		Bar *int
+	}
+	type A struct {
+		Bools []bool    `schema:"bools"`
+		Date  time.Time `schema:"date"`
+		Foo   B
+	}
+
+	a := A{}
+
+	err := NewDecoder().Decode(&a, data)
+
+	e := err.(MultiError)["bools"].(ConversionError)
+	if e.Type != reflect.TypeOf(false) && e.Index == 1 {
+		t.Errorf("Expected bool, index: 1 got %+v, index: %d", e.Type, e.Index)
+	}
+	e = err.(MultiError)["date"].(ConversionError)
+	if e.Type != reflect.TypeOf(time.Time{}) {
+		t.Errorf("Expected time.Time got %+v", e.Type)
+	}
+	e = err.(MultiError)["Foo.Bar"].(ConversionError)
+	if e.Type != reflect.TypeOf(0) {
+		t.Errorf("Expected int got %+v", e.Type)
+	}
+}
+
+type R1 struct {
+	A string `schema:"a,required"`
+	B struct {
+		C int     `schema:"c,required"`
+		D float64 `schema:"d"`
+		E string  `schema:"e,required"`
+	} `schema:"b"`
+	F []string `schema:"f,required"`
+	G []int    `schema:"g,othertag"`
+	H bool     `schema:"h,required"`
+}
+
+func TestRequiredField(t *testing.T) {
+	var a R1
+	v := map[string][]string{
+		"a":   []string{"bbb"},
+		"b.c": []string{"88"},
+		"b.d": []string{"9"},
+		"f":   []string{""},
+		"h":   []string{"true"},
+	}
+	err := NewDecoder().Decode(&a, v)
+	if err == nil {
+		t.Errorf("error nil, b.e is empty expect")
+		return
+	}
+	// b.e empty
+	v["b.e"] = []string{""} // empty string
+	err = NewDecoder().Decode(&a, v)
+	if err == nil {
+		t.Errorf("error nil, b.e is empty expect")
+		return
+	}
+
+	// all fields ok
+	v["b.e"] = []string{"nonempty"}
+	err = NewDecoder().Decode(&a, v)
+	if err != nil {
+		t.Errorf("error: %v", err)
+		return
+	}
+
+	// set f empty
+	v["f"] = []string{}
+	err = NewDecoder().Decode(&a, v)
+	if err == nil {
+		t.Errorf("error nil, f is empty expect")
+		return
+	}
+	v["f"] = []string{"nonempty"}
+
+	// b.c type int with empty string
+	v["b.c"] = []string{""}
+	err = NewDecoder().Decode(&a, v)
+	if err == nil {
+		t.Errorf("error nil, b.c is empty expect")
+		return
+	}
+	v["b.c"] = []string{"3"}
+
+	// h type bool with empty string
+	v["h"] = []string{""}
+	err = NewDecoder().Decode(&a, v)
+	if err == nil {
+		t.Errorf("error nil, h is empty expect")
+		return
+	}
+}
+
+type AS1 struct {
+	A int32 `schema:"a,required"`
+	E int32 `schema:"e,required"`
+}
+type AS2 struct {
+	AS1
+	B string `schema:"b,required"`
+}
+type AS3 struct {
+	C int32 `schema:"c"`
+}
+
+type AS4 struct {
+	AS3
+	D string `schema:"d"`
+}
+
+func TestAnonymousStructField(t *testing.T) {
+	patterns := []map[string][]string{
+		{
+			"a": {"1"},
+			"e": {"2"},
+			"b": {"abc"},
+		},
+		{
+			"AS1.a": {"1"},
+			"AS1.e": {"2"},
+			"b":     {"abc"},
+		},
+	}
+	for _, v := range patterns {
+		a := AS2{}
+		err := NewDecoder().Decode(&a, v)
+		if err != nil {
+			t.Errorf("Decode failed %s, %#v", err, v)
+			continue
+		}
+		if a.A != 1 {
+			t.Errorf("A: expected %v, got %v", 1, a.A)
+		}
+		if a.E != 2 {
+			t.Errorf("E: expected %v, got %v", 2, a.E)
+		}
+		if a.B != "abc" {
+			t.Errorf("B: expected %v, got %v", "abc", a.B)
+		}
+		if a.AS1.A != 1 {
+			t.Errorf("AS1.A: expected %v, got %v", 1, a.AS1.A)
+		}
+		if a.AS1.E != 2 {
+			t.Errorf("AS1.E: expected %v, got %v", 2, a.AS1.E)
+		}
+	}
+	a := AS2{}
+	err := NewDecoder().Decode(&a, map[string][]string{
+		"e": {"2"},
+		"b": {"abc"},
+	})
+	if err == nil {
+		t.Errorf("error nil, a is empty expect")
+	}
+	patterns = []map[string][]string{
+		{
+			"c": {"1"},
+			"d": {"abc"},
+		},
+		{
+			"AS3.c": {"1"},
+			"d":     {"abc"},
+		},
+	}
+	for _, v := range patterns {
+		a := AS4{}
+		err := NewDecoder().Decode(&a, v)
+		if err != nil {
+			t.Errorf("Decode failed %s, %#v", err, v)
+			continue
+		}
+		if a.C != 1 {
+			t.Errorf("C: expected %v, got %v", 1, a.C)
+		}
+		if a.D != "abc" {
+			t.Errorf("D: expected %v, got %v", "abc", a.D)
+		}
+		if a.AS3.C != 1 {
+			t.Errorf("AS3.C: expected %v, got %v", 1, a.AS3.C)
+		}
 	}
 }
