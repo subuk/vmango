@@ -71,36 +71,40 @@ func main() {
 	}
 	ctx.Render = web.NewRenderer(staticVersion, config.Debug, ctx)
 
-	vmtpl, err := text_template.ParseFiles(config.Hypervisors[0].VmTemplate)
-	if err != nil {
-		log.WithError(err).WithField("filename", config.Hypervisors[0].VmTemplate).Fatal("failed to parse machine template")
-	}
-	voltpl, err := text_template.ParseFiles(config.Hypervisors[0].VolTemplate)
-	if err != nil {
-		log.WithError(err).WithField("filename", config.Hypervisors[0].VmTemplate).Fatal("failed to parse volume template")
+	machinereps := map[string]dal.Machinerep{}
+	imagereps := map[string]dal.Imagerep{}
+
+	for _, hConfig := range config.Hypervisors {
+		vmtpl, err := text_template.ParseFiles(hConfig.VmTemplate)
+		if err != nil {
+			log.WithError(err).WithField("hypervisor", hConfig.Name).WithField("filename", hConfig.VmTemplate).Fatal("failed to parse machine template")
+		}
+		voltpl, err := text_template.ParseFiles(hConfig.VolTemplate)
+		if err != nil {
+			log.WithError(err).WithField("hypervisor", hConfig.Name).WithField("filename", hConfig.VmTemplate).Fatal("failed to parse volume template")
+		}
+		virtConn, err := libvirt.NewConnect(hConfig.Url)
+		if err != nil {
+			log.WithError(err).WithField("hypervisor", hConfig.Name).Fatal("failed to connect to libvirt")
+		}
+		machinerep, err := dal.NewLibvirtMachinerep(
+			virtConn, vmtpl, voltpl, hConfig.Network,
+			hConfig.RootStoragePool, hConfig.Name,
+			hConfig.IgnoreVms,
+		)
+		if err != nil {
+			log.WithError(err).WithField("hypervisor", hConfig.Name).Fatal("failed to initialize hypervisor")
+		}
+		machinereps[hConfig.Name] = machinerep
+		imagereps[hConfig.Name] = dal.NewLibvirtImagerep(virtConn, hConfig.ImageStoragePool, hConfig.Name)
 	}
 
-	virtConn, err := libvirt.NewConnect(config.Hypervisors[0].Url)
-	if err != nil {
-		log.WithError(err).Fatal("failed to connect to libvirt")
-	}
-
-	machines, err := dal.NewLibvirtMachinerep(
-		virtConn, vmtpl, voltpl, config.Hypervisors[0].Network,
-		config.Hypervisors[0].RootStoragePool, config.Hypervisors[0].Name,
-		config.Hypervisors[0].IgnoreVms,
-	)
-	if err != nil {
-		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
-	}
-
-	imagerep := dal.NewLibvirtImagerep(virtConn, config.Hypervisors[0].ImageStoragePool)
 	planrep := dal.NewConfigPlanrep(config.Plans)
 	sshkeyrep := dal.NewConfigSSHKeyrep(config.SSHKeys)
 	authrep := dal.NewConfigAuthrep(config.Users)
 
-	ctx.Machines = machines
-	ctx.Images = imagerep
+	ctx.Machines = dal.NewMultiMachinerep(machinereps)
+	ctx.Images = dal.NewMultiImagerep(imagereps)
 	ctx.Plans = planrep
 	ctx.SSHKeys = sshkeyrep
 	ctx.AuthDB = authrep

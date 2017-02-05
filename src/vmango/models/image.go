@@ -15,15 +15,30 @@ const (
 	IMAGE_ARCH_X86    = iota
 )
 
+type ImageList []*Image
+
+func (images *ImageList) DistinctHypervisors() []string {
+	hypervisors := map[string]struct{}{}
+	for _, image := range *images {
+		hypervisors[image.Hypervisor] = struct{}{}
+	}
+	result := []string{}
+	for name := range hypervisors {
+		result = append(result, name)
+	}
+	return result
+}
+
 type Image struct {
-	OS       string
-	Arch     int
-	Size     uint64
-	Type     int
-	Date     time.Time
-	FullName string
-	FullPath string
-	PoolName string
+	OS         string
+	Arch       int
+	Size       uint64
+	Type       int
+	Date       time.Time
+	FullName   string
+	FullPath   string
+	PoolName   string
+	Hypervisor string
 }
 
 func (image *Image) String() string {

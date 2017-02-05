@@ -10,7 +10,7 @@ type StubImagerep struct {
 	GetErr  error
 }
 
-func (repo *StubImagerep) List(images *[]*models.Image) error {
+func (repo *StubImagerep) List(images *models.ImageList) error {
 	if repo.ListErr != nil {
 		return repo.ListErr
 	}
@@ -26,7 +26,7 @@ func (repo *StubImagerep) Get(needle *models.Image) (bool, error) {
 	}
 
 	for _, image := range repo.Data {
-		if image.FullName == needle.FullName {
+		if image.FullName == needle.FullName && image.Hypervisor == needle.Hypervisor {
 			*needle = *image
 			return true, nil
 		}

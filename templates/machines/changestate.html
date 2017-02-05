@@ -14,7 +14,7 @@
     {{ else }}
     <button class="button" type="submit">{{ .Action | Capitalize }}</button>
     {{ end }}
-    <a class="button secondary" href="{{ Url "machine-detail" "name" .Machine.Name }}">Cancel</a>
+    <a class="button secondary" href="{{ Url "machine-detail" "name" .Machine.Name "hypervisor" .Machine.Hypervisor }}">Cancel</a>
   </form>
 </div>
 {{template "footer" .}}

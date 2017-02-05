@@ -34,7 +34,7 @@ func (suite *MachineListHandlerTestSuite) TestAuthRequired() {
 func (suite *MachineListHandlerTestSuite) TestHTMLOk() {
 	suite.Authenticate()
 	suite.Repo.ListResponse.Machines = &models.VirtualMachineList{}
-	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{Name: "test"})
+	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{Name: "test", Hypervisor: "testhv"})
 	rr := suite.DoGet(LIST_URL)
 	suite.Equal(200, rr.Code, rr.Body.String())
 	suite.Equal("text/html; charset=UTF-8", rr.Header().Get("Content-Type"))

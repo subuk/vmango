@@ -27,7 +27,7 @@ func (suite *MachineCreateHandlerTestSuite) SetupTest() {
 	suite.Context.Machines = suite.Machines
 	suite.Context.Images = &dal.StubImagerep{
 		Data: []*models.Image{
-			{OS: "TestOS-1.0", Arch: models.IMAGE_ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, FullName: "TestOS-1.0_amd64.img", PoolName: "test"},
+			{OS: "TestOS-1.0", Arch: models.IMAGE_ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, FullName: "TestOS-1.0_amd64.img", PoolName: "test", Hypervisor: "test"},
 		},
 	}
 	suite.Context.SSHKeys = dal.NewConfigSSHKeyrep([]cfg.SSHKeyConfig{
@@ -55,24 +55,26 @@ func (suite *MachineCreateHandlerTestSuite) TestGetOk() {
 func (suite *MachineCreateHandlerTestSuite) TestCreateOk() {
 	suite.Authenticate()
 	data := bytes.NewBufferString((url.Values{
-		"Name":   []string{"testvm"},
-		"Plan":   []string{"test-1"},
-		"Image":  []string{"TestOS-1.0_amd64.img"},
-		"SSHKey": []string{"first"},
+		"Name":       []string{"testvm"},
+		"Plan":       []string{"test-1"},
+		"Image":      []string{"TestOS-1.0_amd64.img"},
+		"SSHKey":     []string{"first"},
+		"Hypervisor": []string{"test"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
 	suite.Equal(302, rr.Code, rr.Body.String())
-	suite.Equal(rr.Header().Get("Location"), "/machines/testvm/")
+	suite.Equal(DETAIL_URL("test", "testvm"), rr.Header().Get("Location"))
 }
 
 func (suite *MachineCreateHandlerTestSuite) TestCreateSameNameAlreadyExistFail() {
 	suite.Authenticate()
 	data := bytes.NewBufferString((url.Values{
-		"Name":   []string{"exist"},
-		"Plan":   []string{"test-1"},
-		"Image":  []string{"TestOS-1.0_amd64.img"},
-		"SSHKey": []string{"first"},
+		"Name":       []string{"exist"},
+		"Plan":       []string{"test-1"},
+		"Image":      []string{"TestOS-1.0_amd64.img"},
+		"SSHKey":     []string{"first"},
+		"Hypervisor": []string{"test"},
 	}).Encode())
 	suite.Machines.GetResponse.Exist = true
 	suite.T().Log(data)
@@ -85,10 +87,11 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateSameNameAlreadyExistFail()
 func (suite *MachineCreateHandlerTestSuite) TestCreateNoPlanFail() {
 	suite.Authenticate()
 	data := bytes.NewBufferString((url.Values{
-		"Name":   []string{"testvm"},
-		"Plan":   []string{"doesntexist"},
-		"Image":  []string{"TestOS-1.0_amd64.img"},
-		"SSHKey": []string{"first"},
+		"Name":       []string{"testvm"},
+		"Plan":       []string{"doesntexist"},
+		"Image":      []string{"TestOS-1.0_amd64.img"},
+		"SSHKey":     []string{"first"},
+		"Hypervisor": []string{"test"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
@@ -100,10 +103,11 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateNoPlanFail() {
 func (suite *MachineCreateHandlerTestSuite) TestCreateNoImageFail() {
 	suite.Authenticate()
 	data := bytes.NewBufferString((url.Values{
-		"Name":   []string{"testvm"},
-		"Plan":   []string{"test-1"},
-		"Image":  []string{"doesntexist"},
-		"SSHKey": []string{"first"},
+		"Name":       []string{"testvm"},
+		"Plan":       []string{"test-1"},
+		"Image":      []string{"doesntexist"},
+		"SSHKey":     []string{"first"},
+		"Hypervisor": []string{"test"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
@@ -115,10 +119,11 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateNoImageFail() {
 func (suite *MachineCreateHandlerTestSuite) TestCreateNoSSHKeyFail() {
 	suite.Authenticate()
 	data := bytes.NewBufferString((url.Values{
-		"Name":   []string{"testvm"},
-		"Plan":   []string{"test-1"},
-		"Image":  []string{"TestOS-1.0_amd64.img"},
-		"SSHKey": []string{"doesntexist"},
+		"Name":       []string{"testvm"},
+		"Plan":       []string{"test-1"},
+		"Image":      []string{"TestOS-1.0_amd64.img"},
+		"SSHKey":     []string{"doesntexist"},
+		"Hypervisor": []string{"test"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)

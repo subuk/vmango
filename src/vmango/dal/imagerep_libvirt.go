@@ -49,12 +49,13 @@ func (v volumeXMLConfig) LastModified() time.Time {
 }
 
 type LibvirtImagerep struct {
-	pool string
-	conn *libvirt.Connect
+	pool       string
+	hypervisor string
+	conn       *libvirt.Connect
 }
 
-func NewLibvirtImagerep(conn *libvirt.Connect, name string) *LibvirtImagerep {
-	return &LibvirtImagerep{pool: name, conn: conn}
+func NewLibvirtImagerep(conn *libvirt.Connect, name, hypervisor string) *LibvirtImagerep {
+	return &LibvirtImagerep{pool: name, conn: conn, hypervisor: hypervisor}
 }
 
 func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.StorageVol) error {
@@ -95,11 +96,11 @@ func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.Stor
 	image.FullName = volumeConfig.Name
 	image.PoolName = repo.pool
 	image.Date = volumeConfig.LastModified()
-
+	image.Hypervisor = repo.hypervisor
 	return nil
 }
 
-func (repo *LibvirtImagerep) List(images *[]*models.Image) error {
+func (repo *LibvirtImagerep) List(images *models.ImageList) error {
 	pool, err := repo.conn.LookupStoragePoolByName(repo.pool)
 	if err != nil {
 		return err

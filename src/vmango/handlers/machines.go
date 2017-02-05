@@ -10,8 +10,10 @@ import (
 )
 
 func MachineDelete(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
+	urlvars := mux.Vars(req)
 	machine := &models.VirtualMachine{
-		Name: mux.Vars(req)["name"],
+		Name:       urlvars["name"],
+		Hypervisor: urlvars["hypervisor"],
 	}
 	if exists, err := ctx.Machines.Get(machine); err != nil {
 		return fmt.Errorf("failed to fetch machine info: %s", err)
@@ -40,8 +42,10 @@ func MachineDelete(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 }
 
 func MachineStateChange(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
+	urlvars := mux.Vars(req)
 	machine := &models.VirtualMachine{
-		Name: mux.Vars(req)["name"],
+		Name:       urlvars["name"],
+		Hypervisor: urlvars["hypervisor"],
 	}
 	if exists, err := ctx.Machines.Get(machine); err != nil {
 		return fmt.Errorf("failed to fetch machine info: %s", err)
@@ -49,7 +53,7 @@ func MachineStateChange(ctx *web.Context, w http.ResponseWriter, req *http.Reque
 		return web.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
 	}
 
-	action := mux.Vars(req)["action"]
+	action := urlvars["action"]
 	if req.Method == "POST" {
 		switch action {
 		case "stop":
@@ -67,7 +71,7 @@ func MachineStateChange(ctx *web.Context, w http.ResponseWriter, req *http.Reque
 		default:
 			return web.BadRequest(fmt.Sprintf("unknown action '%s' requested", action))
 		}
-		url, err := ctx.Router.Get("machine-detail").URL("name", machine.Name)
+		url, err := ctx.Router.Get("machine-detail").URL("name", machine.Name, "hypervisor", machine.Hypervisor)
 		if err != nil {
 			panic(err)
 		}
@@ -97,8 +101,10 @@ func MachineList(ctx *web.Context, w http.ResponseWriter, req *http.Request) err
 }
 
 func MachineDetail(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
+	urlvars := mux.Vars(req)
 	machine := &models.VirtualMachine{
-		Name: mux.Vars(req)["name"],
+		Name:       urlvars["name"],
+		Hypervisor: urlvars["hypervisor"],
 	}
 	if exists, err := ctx.Machines.Get(machine); err != nil {
 		return err
@@ -113,10 +119,11 @@ func MachineDetail(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 }
 
 type machineAddFormData struct {
-	Name   string
-	Plan   string
-	Image  string
-	SSHKey []string
+	Name       string
+	Plan       string
+	Image      string
+	Hypervisor string
+	SSHKey     []string
 }
 
 func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
@@ -135,11 +142,11 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 			return web.BadRequest(fmt.Sprintf(`plan "%s" not found`, form.Plan))
 		}
 
-		image := &models.Image{FullName: form.Image}
+		image := &models.Image{FullName: form.Image, Hypervisor: form.Hypervisor}
 		if exists, err := ctx.Images.Get(image); err != nil {
 			return err
 		} else if !exists {
-			return web.BadRequest(fmt.Sprintf(`image "%s" not found`, form.Image))
+			return web.BadRequest(fmt.Sprintf(`image "%s" not found on hypervisor "%s"`, image.FullName, image.Hypervisor))
 		}
 		sshkeys := []*models.SSHKey{}
 		for _, keyName := range form.SSHKey {
@@ -153,11 +160,12 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		}
 
 		vm := &models.VirtualMachine{
-			Name:      form.Name,
-			Memory:    plan.Memory,
-			Cpus:      plan.Cpus,
-			ImageName: image.FullName,
-			SSHKeys:   sshkeys,
+			Name:       form.Name,
+			Memory:     plan.Memory,
+			Cpus:       plan.Cpus,
+			ImageName:  image.FullName,
+			SSHKeys:    sshkeys,
+			Hypervisor: image.Hypervisor,
 		}
 
 		if exists, err := ctx.Machines.Get(vm); err != nil {
@@ -171,7 +179,7 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		if err := ctx.Machines.Start(vm); err != nil {
 			return fmt.Errorf("failed to start machine: %s", err)
 		}
-		url, err := ctx.Router.Get("machine-detail").URL("name", vm.Name)
+		url, err := ctx.Router.Get("machine-detail").URL("name", vm.Name, "hypervisor", vm.Hypervisor)
 		if err != nil {
 			panic(err)
 		}
@@ -181,8 +189,8 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		if err := ctx.Plans.List(&plans); err != nil {
 			return fmt.Errorf("failed to fetch plan list: %s", err)
 		}
-		images := []*models.Image{}
-		if err := ctx.Images.List(&images); err != nil {
+		images := &models.ImageList{}
+		if err := ctx.Images.List(images); err != nil {
 			return fmt.Errorf("failed to fetch images list: %s", err)
 		}
 		sshkeys := []*models.SSHKey{}

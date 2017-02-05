@@ -20,7 +20,7 @@
       <tbody>
       {{ range .Machines.All }}
         <tr>
-          <td><a href="{{ Url "machine-detail" "name" .Name }}">{{ .Name }}</a></td>
+          <td><a href="{{ Url "machine-detail" "name" .Name "hypervisor" .Hypervisor }}">{{ .Name }}</a></td>
           <td>{{ .StateName }}</td>
           <td>{{ .Cpus }}</td>
           <td>{{ .MemoryMegabytes }}Mb</td>

@@ -16,7 +16,7 @@ type Machinerep interface {
 }
 
 type Imagerep interface {
-	List(*[]*models.Image) error
+	List(*models.ImageList) error
 	Get(*models.Image) (bool, error)
 }
 

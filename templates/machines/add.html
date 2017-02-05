@@ -9,6 +9,20 @@
 
   <form class="JS-ReactiveForm" method="post" action="">
       <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false">
+        <h4>Choose a hypervisor</h4>
+        {{ range .Images.DistinctHypervisors }}
+          <div class="column">
+            <div class="card JS-CheckboxCard">
+              <div class="card-section text-center">
+                <i style="display: none;" class="icon fi-check"></i>
+                <input type="checkbox" name="Hypervisor" value="{{ . }}"> {{ . }}
+              </div>
+            </div>
+          </div>
+        {{ end }}
+      </div>
+
+      <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false">
       <h4>Choose an image</h4>
       {{ range .Images }}
         <div class="column">
@@ -18,9 +32,9 @@
               <img height="70" width="70" src="{{ Static "vmango/linux-logo.png" }}">
               <br>
               <i style="display: none;" class="icon fi-check"></i>
-              {{ .OSName }}
+              {{ .OSName }} {{ .OSVersion }}
               <br>
-              {{ .OSVersion }} {{ .ArchString2 }}
+               {{ .ArchString2 }} <span class="label secondary"> {{ .Hypervisor }} </span>
             </div>
           </div>
         </div>

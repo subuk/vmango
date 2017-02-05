@@ -1,6 +1,7 @@
 package dal
 
 import (
+	"fmt"
 	"vmango/models"
 )
 
@@ -41,21 +42,36 @@ func (repo *StubMachinerep) Get(vm *models.VirtualMachine) (bool, error) {
 	return repo.GetResponse.Exist, repo.GetResponse.Error
 }
 func (repo *StubMachinerep) Create(vm *models.VirtualMachine, image *models.Image, plan *models.Plan) error {
+	if vm.Hypervisor == "" {
+		return fmt.Errorf("hypervisor not set")
+	}
 	if repo.CreateResponse.Machine != nil {
 		*vm = *repo.CreateResponse.Machine
 	}
 	return repo.CreateResponse.Error
 }
-func (repo *StubMachinerep) Start(*models.VirtualMachine) error {
+func (repo *StubMachinerep) Start(vm *models.VirtualMachine) error {
+	if vm.Hypervisor == "" {
+		return fmt.Errorf("hypervisor not set")
+	}
 	return repo.StartResponse
 }
-func (repo *StubMachinerep) Stop(*models.VirtualMachine) error {
+func (repo *StubMachinerep) Stop(vm *models.VirtualMachine) error {
+	if vm.Hypervisor == "" {
+		return fmt.Errorf("hypervisor not set")
+	}
 	return repo.StopResponse
 }
-func (repo *StubMachinerep) Remove(*models.VirtualMachine) error {
+func (repo *StubMachinerep) Remove(vm *models.VirtualMachine) error {
+	if vm.Hypervisor == "" {
+		return fmt.Errorf("hypervisor not set")
+	}
 	return repo.RemoveResponse
 }
-func (repo *StubMachinerep) Reboot(*models.VirtualMachine) error {
+func (repo *StubMachinerep) Reboot(vm *models.VirtualMachine) error {
+	if vm.Hypervisor == "" {
+		return fmt.Errorf("hypervisor not set")
+	}
 	return repo.RebootResponse
 }
 func (repo *StubMachinerep) ServerInfo(server *models.Server) error {

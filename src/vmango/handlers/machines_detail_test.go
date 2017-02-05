@@ -11,8 +11,8 @@ import (
 	"vmango/testool"
 )
 
-func DETAIL_URL(name string) string {
-	return fmt.Sprintf("/machines/%s/", name)
+func DETAIL_URL(hypervisor, name string) string {
+	return fmt.Sprintf("/machines/%s/%s/", hypervisor, name)
 }
 
 type MachineDetailHandlerTestSuite struct {
@@ -28,23 +28,24 @@ func (suite *MachineDetailHandlerTestSuite) SetupTest() {
 }
 
 func (suite *MachineDetailHandlerTestSuite) TestAuthRequired() {
-	rr := suite.DoGet(DETAIL_URL("hello"))
+	rr := suite.DoGet(DETAIL_URL("testhv", "hello"))
 	suite.Equal(302, rr.Code, rr.Body.String())
-	suite.Equal(rr.Header().Get("Location"), "/login/?next="+DETAIL_URL("hello"))
+	suite.Equal(rr.Header().Get("Location"), "/login/?next="+DETAIL_URL("testhv", "hello"))
 }
 
 func (suite *MachineDetailHandlerTestSuite) TestHTMLOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
-		Name: "test-detail-html",
+		Name:       "test-detail-html",
+		Hypervisor: "testhv",
 		RootDisk: &models.VirtualMachineDisk{
 			Size:   123,
 			Driver: "hello",
 			Type:   "wow",
 		},
 	}
-	rr := suite.DoGet(DETAIL_URL("test-detail-html"))
+	rr := suite.DoGet(DETAIL_URL("testhv", "test-detail-html"))
 	suite.Equal("text/html; charset=UTF-8", rr.Header().Get("Content-Type"))
 	suite.Equal(200, rr.Code, rr.Body.String())
 }
@@ -74,7 +75,7 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
 			{Name: "test", Public: "keykeykey"},
 		},
 	}
-	rr := suite.DoGet(DETAIL_URL("test-detail-json") + "?format=json")
+	rr := suite.DoGet(DETAIL_URL("testhv", "test-detail-json") + "?format=json")
 	suite.Require().Equal(200, rr.Code, rr.Body.String())
 	suite.Require().Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
 	expected := `{
@@ -105,14 +106,14 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
 func (suite *MachineDetailHandlerTestSuite) TestRepFail() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Error = fmt.Errorf("test error")
-	rr := suite.DoGet(DETAIL_URL("hello"))
+	rr := suite.DoGet(DETAIL_URL("testhv", "hello"))
 	suite.Equal(500, rr.Code, rr.Body.String())
 }
 
 func (suite *MachineDetailHandlerTestSuite) TestMachineNotFoundFail() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = false
-	rr := suite.DoGet(DETAIL_URL("doesntexist"))
+	rr := suite.DoGet(DETAIL_URL("testhv", "doesntexist"))
 	suite.Equal(404, rr.Code, rr.Body.String())
 }
 
