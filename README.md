@@ -2,6 +2,8 @@
 
 Vmango is a virtual machines management web interface written using [Go](http://golang.org/).
 
+Documentation: https://vmango.org/docs/
+
 Current features:
 
 * SSH keys management and injection
@@ -18,60 +20,10 @@ Hypervisor server requirements:
 Web interface server requirements:
 * Libvirt 1.2.0+ (Ubuntu 14.04+, debian8+, centos7+)
 
-## Installation
 
-Please, set session_secret in /etc/vmango/vmango.conf after installation. It blank by default, so service won't start.
+## Development
 
-To start service, use:
-
-    sudo service vmango start
-
-To view logs via journalctl you can use the following command:
-
-    journalctl -t vmango -o cat
-
-
-### Ubuntu 14.04/16.04
-
-    echo deb https://dl.vmango.org/ubuntu $(lsb_release -c -s) main |sudo tee /etc/apt/sources.list.d/vmango.list
-    wget -O- https://dl.vmango.org/repo.key | sudo apt-key add -
-    sudo apt-get install apt-transport-https
-    sudo apt-get update
-    sudo apt-get install vmango
-
-### Debian 8
-
-    echo deb https://dl.vmango.org/debian jessie main |sudo tee /etc/apt/sources.list.d/vmango.list
-    wget -O- https://dl.vmango.org/repo.key | sudo apt-key add -
-    sudo apt-get install apt-transport-https
-    sudo apt-get update
-    sudo apt-get install vmango
-
-### CentOS 7
-
-    sudo wget -O /etc/yum.repos.d/vmango.repo https://dl.vmango.org/centos/el7/vmango.repo
-    sudo yum install vmango
-
-## Conventions about VM configurations
-
-* Root disk of machine has suffix '_disk'
-* Machine has only one network interface
-
-## User passwords
-
-User passwords stored in config file in hashed form (golang.org/x/crypto/bcrypt). For adding new user or change password for existing, generate a new one with `vmango genpw` utility:
-
-    ./bin/vmango genpw plainsecret
-
-Copy output and insert into config file:
-       
-    ...
-    user "admin" {
-        password = "$2a$10$uztHNVBxZ08LBmboJpAqguN4gZSymgmjaJ2xPHKwAqH.ukgaplb96"
-    }
-    ...
-
-## Hypervisor configuration (Ubuntu 14.04/16.04)
+### Hypervisor configuration (Ubuntu 14.04/16.04)
 
     sudo apt-get install libvirt-bin qemu-kvm qemu-system dnsmasq-utils
     sudo usermod -aG libvirtd [username]
@@ -106,8 +58,6 @@ Download vm images (file names matter!)
 If your processor doesn't support hardware acceleration, change type from "kvm" to "qemu" in the first line of vm.xml.in (or you will get an error during first machine creation):
 
     <domain type='qemu'> 
-
-## Development environment
 
 ### Dependencies for Ubuntu 14.04+
 
