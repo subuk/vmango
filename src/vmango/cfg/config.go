@@ -10,6 +10,7 @@ import (
 )
 
 type HypervisorConfig struct {
+	Name             string   `hcl:",key"`
 	Url              string   `hcl:"url"`
 	ImageStoragePool string   `hcl:"image_storage_pool"`
 	RootStoragePool  string   `hcl:"root_storage_pool"`
@@ -44,10 +45,10 @@ type Config struct {
 	SSLKey        string `hcl:"ssl_key"`
 	SSLCert       string `hcl:"ssl_cert"`
 
-	Hypervisor HypervisorConfig `hcl:"hypervisor"`
-	SSHKeys    []SSHKeyConfig   `hcl:"ssh_key"`
-	Plans      []PlanConfig     `hcl:"plan"`
-	Users      []AuthUserConfig `hcl:"user"`
+	Hypervisors []HypervisorConfig `hcl:"hypervisor"`
+	SSHKeys     []SSHKeyConfig     `hcl:"ssh_key"`
+	Plans       []PlanConfig       `hcl:"plan"`
+	Users       []AuthUserConfig   `hcl:"user"`
 }
 
 func ResolveFilename(root string, filename string) string {
@@ -67,34 +68,40 @@ func FileAvailaible(filename string) error {
 
 func (config *Config) Sanitize(root string) error {
 	errors := &multierror.Error{}
-	if config.Hypervisor.VmTemplate == "" {
-		errors = multierror.Append(errors, fmt.Errorf("hypervisor.vm_template required"))
-	}
-	if config.Hypervisor.ImageStoragePool == "" {
-		errors = multierror.Append(errors, fmt.Errorf("hypervisor.image_storage_pool required"))
-	}
-	if config.Hypervisor.RootStoragePool == "" {
-		errors = multierror.Append(errors, fmt.Errorf("hypervisor.root_storage_pool required"))
-	}
-	if config.Hypervisor.Network == "" {
-		errors = multierror.Append(errors, fmt.Errorf("hypervisor.network required"))
-	}
-	if config.Hypervisor.VmTemplate == "" {
-		errors = multierror.Append(errors, fmt.Errorf("hypervisor.vm_template required"))
-	}
-	if config.Hypervisor.VolTemplate == "" {
-		errors = multierror.Append(errors, fmt.Errorf("hypervisor.volume_template required"))
-	}
+	names := map[string]struct{}{}
+	for _, hypervisor := range config.Hypervisors {
+		if _, exist := names[hypervisor.Name]; exist {
+			errors = multierror.Append(errors, fmt.Errorf("duplicated hypervisor name '%s'", hypervisor.Name))
+		}
+		names[hypervisor.Name] = struct{}{}
+		if hypervisor.VmTemplate == "" {
+			errors = multierror.Append(errors, fmt.Errorf("hypervisor.%s.vm_template required", hypervisor.Name))
+		}
+		if hypervisor.ImageStoragePool == "" {
+			errors = multierror.Append(errors, fmt.Errorf("hypervisor.%s.image_storage_pool required", hypervisor.Name))
+		}
+		if hypervisor.RootStoragePool == "" {
+			errors = multierror.Append(errors, fmt.Errorf("hypervisor.%s.root_storage_pool required", hypervisor.Name))
+		}
+		if hypervisor.Network == "" {
+			errors = multierror.Append(errors, fmt.Errorf("hypervisor.%s.network required", hypervisor.Name))
+		}
+		if hypervisor.VmTemplate == "" {
+			errors = multierror.Append(errors, fmt.Errorf("hypervisor.%s.vm_template required", hypervisor.Name))
+		}
+		if hypervisor.VolTemplate == "" {
+			errors = multierror.Append(errors, fmt.Errorf("hypervisor.%s.volume_template required", hypervisor.Name))
+		}
 
-	config.Hypervisor.VmTemplate = ResolveFilename(root, config.Hypervisor.VmTemplate)
-	if err := FileAvailaible(config.Hypervisor.VmTemplate); err != nil {
-		errors = multierror.Append(errors, fmt.Errorf("failed to stat hypervisor.vm_template: %s", err))
+		hypervisor.VmTemplate = ResolveFilename(root, hypervisor.VmTemplate)
+		if err := FileAvailaible(hypervisor.VmTemplate); err != nil {
+			errors = multierror.Append(errors, fmt.Errorf("failed to stat hypervisor.%s.vm_template: %s", hypervisor.Name, err))
+		}
+		hypervisor.VolTemplate = ResolveFilename(root, hypervisor.VolTemplate)
+		if err := FileAvailaible(hypervisor.VolTemplate); err != nil {
+			errors = multierror.Append(errors, fmt.Errorf("failed to stat hypervisor.%s.volume_template: %s", hypervisor.Name, err))
+		}
 	}
-	config.Hypervisor.VolTemplate = ResolveFilename(root, config.Hypervisor.VolTemplate)
-	if err := FileAvailaible(config.Hypervisor.VolTemplate); err != nil {
-		errors = multierror.Append(errors, fmt.Errorf("failed to stat hypervisor.volume_template: %s", err))
-	}
-
 	if config.SessionSecret == "" {
 		errors = multierror.Append(errors, fmt.Errorf("session_secret required"))
 	}

@@ -71,29 +71,29 @@ func main() {
 	}
 	ctx.Render = web.NewRenderer(staticVersion, config.Debug, ctx)
 
-	vmtpl, err := text_template.ParseFiles(config.Hypervisor.VmTemplate)
+	vmtpl, err := text_template.ParseFiles(config.Hypervisors[0].VmTemplate)
 	if err != nil {
-		log.WithError(err).WithField("filename", config.Hypervisor.VmTemplate).Fatal("failed to parse machine template")
+		log.WithError(err).WithField("filename", config.Hypervisors[0].VmTemplate).Fatal("failed to parse machine template")
 	}
-	voltpl, err := text_template.ParseFiles(config.Hypervisor.VolTemplate)
+	voltpl, err := text_template.ParseFiles(config.Hypervisors[0].VolTemplate)
 	if err != nil {
-		log.WithError(err).WithField("filename", config.Hypervisor.VmTemplate).Fatal("failed to parse volume template")
+		log.WithError(err).WithField("filename", config.Hypervisors[0].VmTemplate).Fatal("failed to parse volume template")
 	}
 
-	virtConn, err := libvirt.NewConnect(config.Hypervisor.Url)
+	virtConn, err := libvirt.NewConnect(config.Hypervisors[0].Url)
 	if err != nil {
 		log.WithError(err).Fatal("failed to connect to libvirt")
 	}
 
 	machines, err := dal.NewLibvirtMachinerep(
-		virtConn, vmtpl, voltpl, config.Hypervisor.Network,
-		config.Hypervisor.RootStoragePool, config.Hypervisor.IgnoreVms,
+		virtConn, vmtpl, voltpl, config.Hypervisors[0].Network,
+		config.Hypervisors[0].RootStoragePool, config.Hypervisors[0].IgnoreVms,
 	)
 	if err != nil {
 		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")
 	}
 
-	imagerep := dal.NewLibvirtImagerep(virtConn, config.Hypervisor.ImageStoragePool)
+	imagerep := dal.NewLibvirtImagerep(virtConn, config.Hypervisors[0].ImageStoragePool)
 	planrep := dal.NewConfigPlanrep(config.Plans)
 	sshkeyrep := dal.NewConfigSSHKeyrep(config.SSHKeys)
 	authrep := dal.NewConfigAuthrep(config.Users)
