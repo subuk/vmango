@@ -11,6 +11,7 @@ Current features:
 * Digitalocean-style interface
 * Support for cloud OS images (with cloud-init installed)
 * IP address management
+* Simple API
 
 Hypervisor server requirements:
 
