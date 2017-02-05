@@ -53,14 +53,15 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
-		Name:    "test-detail-json",
-		Uuid:    "123uuid",
-		Memory:  456,
-		Cpus:    1,
-		HWAddr:  "hw:hw:hw",
-		VNCAddr: "vnc",
-		OS:      "HelloOS",
-		Arch:    "xxx",
+		Name:       "test-detail-json",
+		Uuid:       "123uuid",
+		Hypervisor: "stub",
+		Memory:     456,
+		Cpus:       1,
+		HWAddr:     "hw:hw:hw",
+		VNCAddr:    "vnc",
+		OS:         "HelloOS",
+		Arch:       "xxx",
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},
@@ -84,6 +85,7 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
           "Cpus": 1,
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "HWAddr": "hw:hw:hw",
+          "Hypervisor": "stub",
           "VNCAddr": "vnc",
           "OS": "HelloOS",
           "Arch": "xxx",

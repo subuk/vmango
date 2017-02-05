@@ -126,15 +126,17 @@ type LibvirtMachinerep struct {
 	voltpl      *template.Template
 	network     string
 	storagePool string
+	hypervisor  string
 	ignoreVms   []string
 }
 
-func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Template, network, pool string, ignoreVms []string) (*LibvirtMachinerep, error) {
+func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Template, network, pool, hypervisor string, ignoreVms []string) (*LibvirtMachinerep, error) {
 	return &LibvirtMachinerep{
 		conn:        conn,
 		vmtpl:       vmtpl,
 		voltpl:      voltpl,
 		network:     network,
+		hypervisor:  hypervisor,
 		storagePool: pool,
 		ignoreVms:   ignoreVms,
 	}, nil
@@ -271,6 +273,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.VNCAddr = domainConfig.VNCAddr()
 	vm.Arch = domainConfig.Os.Type.Arch
 	vm.OS = domainConfig.OSName
+	vm.Hypervisor = store.hypervisor
 	for _, key := range domainConfig.SSHKeys {
 		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{Name: key.Name, Public: key.Public})
 	}

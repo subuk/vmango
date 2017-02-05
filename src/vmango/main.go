@@ -87,7 +87,8 @@ func main() {
 
 	machines, err := dal.NewLibvirtMachinerep(
 		virtConn, vmtpl, voltpl, config.Hypervisors[0].Network,
-		config.Hypervisors[0].RootStoragePool, config.Hypervisors[0].IgnoreVms,
+		config.Hypervisors[0].RootStoragePool, config.Hypervisors[0].Name,
+		config.Hypervisors[0].IgnoreVms,
 	)
 	if err != nil {
 		log.WithError(err).Fatal("failed to initialize libvirt-kvm machines")

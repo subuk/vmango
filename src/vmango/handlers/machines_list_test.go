@@ -44,14 +44,15 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 	suite.Authenticate()
 	suite.Repo.ListResponse.Machines = &models.VirtualMachineList{}
 	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{
-		Name:    "test",
-		Uuid:    "123uuid",
-		Memory:  456,
-		Cpus:    1,
-		HWAddr:  "hw:hw:hw",
-		VNCAddr: "vnc",
-		OS:      "WoW",
-		Arch:    "x86",
+		Name:       "test",
+		Uuid:       "123uuid",
+		Memory:     456,
+		Cpus:       1,
+		HWAddr:     "hw:hw:hw",
+		Hypervisor: "stub",
+		VNCAddr:    "vnc",
+		OS:         "WoW",
+		Arch:       "x86",
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},
@@ -65,12 +66,13 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 		},
 	})
 	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{
-		Name:    "hello",
-		Uuid:    "321uuid",
-		Memory:  67897,
-		Cpus:    4,
-		HWAddr:  "xx:xx:xx",
-		VNCAddr: "VVV",
+		Name:       "hello",
+		Uuid:       "321uuid",
+		Memory:     67897,
+		Cpus:       4,
+		HWAddr:     "xx:xx:xx",
+		Hypervisor: "stub",
+		VNCAddr:    "VVV",
 		Ip: &models.IP{
 			Address: "2.2.2.2",
 		},
@@ -95,6 +97,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
           "Cpus": 1,
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "HWAddr": "hw:hw:hw",
+          "Hypervisor": "stub",
           "VNCAddr": "vnc",
           "OS": "WoW",
           "Arch": "x86",
@@ -113,6 +116,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
           "OS": "",
           "Arch": "",
           "HWAddr": "xx:xx:xx",
+          "Hypervisor": "stub",
           "VNCAddr": "VVV",
           "Ip": {"Address": "2.2.2.2", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "RootDisk": {

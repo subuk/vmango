@@ -13,6 +13,8 @@ import (
 	"vmango/testool"
 )
 
+const HYPERVISOR_NAME = "main"
+
 type MachinerepLibvirtSuite struct {
 	suite.Suite
 	testool.LibvirtTest
@@ -42,9 +44,11 @@ func MustRepo(repo *dal.LibvirtMachinerep, err error) *dal.LibvirtMachinerep {
 }
 
 func (suite *MachinerepLibvirtSuite) CreateRep() *dal.LibvirtMachinerep {
+
 	return MustRepo(dal.NewLibvirtMachinerep(
 		suite.VirConnect, suite.VMTpl, suite.VolTpl,
-		suite.Fixtures.Networks[0], suite.Fixtures.Pools[0].Name, []string{},
+		suite.Fixtures.Networks[0], suite.Fixtures.Pools[0].Name, HYPERVISOR_NAME,
+		[]string{},
 	))
 }
 
@@ -73,6 +77,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("192.168.128.130", oneVm.Ip.Address)
 	suite.Equal("", oneVm.OS)
 	suite.Equal("x86_64", oneVm.Arch)
+	suite.Equal("main", oneVm.Hypervisor)
 
 	twoVm := machines.Find("two")
 	suite.Require().NotNil(twoVm)
@@ -94,12 +99,13 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Nil(twoVm.Ip)
 	suite.Equal("TestOS-12", twoVm.OS)
 	suite.Equal("x86_64", twoVm.Arch)
+	suite.Equal("main", oneVm.Hypervisor)
 }
 
 func (suite *MachinerepLibvirtSuite) TestIgnoredOk() {
 	repo := MustRepo(dal.NewLibvirtMachinerep(
 		suite.VirConnect, suite.VMTpl, suite.VolTpl,
-		suite.Fixtures.Networks[0], suite.Fixtures.Pools[0].Name,
+		suite.Fixtures.Networks[0], suite.Fixtures.Pools[0].Name, HYPERVISOR_NAME,
 		[]string{"one"},
 	))
 	machines := &models.VirtualMachineList{}
@@ -134,6 +140,7 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	suite.Nil(machine.Ip)
 	suite.Equal("TestOS-12", machine.OS)
 	suite.Equal("x86_64", machine.Arch)
+	suite.Equal("main", machine.Hypervisor)
 }
 
 func (suite *MachinerepLibvirtSuite) TestGetNotFoundFail() {
@@ -200,7 +207,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateNoImagePoolFail() {
 func (suite *MachinerepLibvirtSuite) TestCreateNoVMPoolFail() {
 	repo := MustRepo(dal.NewLibvirtMachinerep(
 		suite.VirConnect, suite.VMTpl, suite.VolTpl,
-		suite.Fixtures.Networks[0], "doesntexist",
+		suite.Fixtures.Networks[0], "doesntexist", HYPERVISOR_NAME,
 		[]string{"one"},
 	))
 	machine := &models.VirtualMachine{}
