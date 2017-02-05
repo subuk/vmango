@@ -126,6 +126,26 @@ type machineAddFormData struct {
 	SSHKey     []string
 }
 
+func (data *machineAddFormData) Validate() error {
+	errors := schema.MultiError{}
+	if data.Name == "" {
+		errors["Name"] = fmt.Errorf("name required")
+	}
+	if data.Plan == "" {
+		errors["Plan"] = fmt.Errorf("plan required")
+	}
+	if data.Image == "" {
+		errors["Image"] = fmt.Errorf("image required")
+	}
+	if data.Hypervisor == "" {
+		errors["Hypervisor"] = fmt.Errorf("hypervisor required")
+	}
+	if len(errors) <= 0 {
+		return nil
+	}
+	return errors
+}
+
 func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	if req.Method == "POST" {
 		if err := req.ParseForm(); err != nil {
@@ -133,6 +153,9 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		}
 		form := &machineAddFormData{}
 		if err := schema.NewDecoder().Decode(form, req.PostForm); err != nil {
+			return web.BadRequest(err.Error())
+		}
+		if err := form.Validate(); err != nil {
 			return web.BadRequest(err.Error())
 		}
 		plan := &models.Plan{Name: form.Plan}
