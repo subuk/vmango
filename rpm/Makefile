@@ -6,7 +6,7 @@ specfile: $(NAME).spec.in
 	sed -e "s/@@_VERSION_@@/$(VERSION)/g" -e "s/@@_RELEASE_@@/$(RELEASE)/g" $(NAME).spec.in > $(NAME).spec
 
 sources: specfile
-	tar -C ../ --exclude=native-packages --exclude=.git --exclude debian --transform "s,^\.,$(NAME)-$(VERSION)," -czf $(NAME)-$(VERSION).tar.gz .
+	tar -C ../ --exclude=rpm/*.tar.gz --exclude=native-packages --exclude=.git --exclude debian --transform "s,^\.,$(NAME)-$(VERSION)," -czf $(NAME)-$(VERSION).tar.gz .
 	spectool -g vmango.spec
 
 clean:
