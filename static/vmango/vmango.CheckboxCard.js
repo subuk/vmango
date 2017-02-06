@@ -1,7 +1,9 @@
 (function(exports){
     exports.Vmango = exports.Vmango || {};
     exports.Vmango.CheckboxCards = function(selector){
-        var multiple = $(selector).attr('data-CheckboxCards-Multiple') === "true",
+        var $rootEl = $(selector),
+            multiple = $rootEl.attr('data-CheckboxCards-Multiple') === "true",
+            autoselect = $rootEl.attr('data-CheckboxCards-AutoSelect') === "true",
             $cardEls = $('.JS-CheckboxCard', selector),
             defaultColor = $cardEls.first().css('border-color'),
             $checkboxEls = $cardEls.find('input[type=checkbox]');
@@ -33,20 +35,36 @@
         });
 
         $cardEls.on('click', function($event){
-            var newState, $allChecked,
+            var newState, $allChecked, $dependEls, dependsShowSelector,
                 $el = $(this),
-                $checkboxEl = $el.find('input[type=checkbox]');
+                $checkboxEl = $el.find('input[type=checkbox]'),
+                dependSelector = $el.attr('data-CheckboxCards-Depends');
+
 
             $event.preventDefault();
-            newState = !$checkboxEl.prop("checked")
+            newState = !$checkboxEl.prop("checked");
+            if (!multiple && !newState) {
+                return
+            }
             if (!multiple){
                 $allChecked = $cardEls.find('input[type=checkbox]:checked');
                 $allChecked.prop('checked', false);
                 $allChecked.trigger('change');
-
             }
             $checkboxEl.prop("checked", newState);
             $checkboxEl.trigger('change');
+
+            if (dependSelector != "") {
+                $dependEls = $(dependSelector).find('.JS-CheckboxCard'),
+                dependsShowSelector = $el.attr('data-CheckboxCards-Depends-ShowOnly');
+                $dependEls.hide();
+                $dependEls.filter(dependsShowSelector).show();
+            }
         });
+
+        if (autoselect && $checkboxEls.find(":selected").length <= 0){
+            $cardEls.first().trigger('click');
+        }
+
     }
 })(window);

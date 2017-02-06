@@ -8,36 +8,38 @@
   </div>
 
   <form class="JS-ReactiveForm" method="post" action="">
-      <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false">
+      <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false" data-CheckboxCards-AutoSelect="true">
         <h4>Choose a hypervisor</h4>
-        {{ range .Images.DistinctHypervisors }}
+        {{ range .Hypervisors }}
           <div class="column">
-            <div class="card JS-CheckboxCard">
+            <div class="card JS-CheckboxCard" data-CheckboxCards-Depends="#ImageSelect" data-CheckboxCards-Depends-ShowOnly="[data-Hypervisor='{{ .Name }}']">
               <div class="card-section text-center">
                 <i style="display: none;" class="icon fi-check"></i>
-                <input type="checkbox" name="Hypervisor" value="{{ . }}"> {{ . }}
+                <input type="checkbox" name="Hypervisor" value="{{ .Name }}"> {{ .Name }}
               </div>
             </div>
           </div>
         {{ end }}
       </div>
 
-      <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false">
+      <div id="ImageSelect" class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false">
       <h4>Choose an image</h4>
-      {{ range .Images.Distinct }}
-        <div class="column">
-          <div class="card JS-CheckboxCard">
-            <input type="checkbox" name="Image" value="{{ .FullName }}">
-            <div class="card-section text-center">
-              <img height="70" width="70" src="{{ Static "vmango/linux-logo.png" }}">
-              <br>
-              <i style="display: none;" class="icon fi-check"></i>
-              {{ .OSName }} {{ .OSVersion }}
-              <br>
-               {{ .ArchString2 }}
+        {{ range $hypervisor, $images := .Images }}
+          {{ range $images }}
+            <div class="column">
+              <div data-Hypervisor="{{ $hypervisor }}" class="card JS-CheckboxCard">
+                <input type="checkbox" name="Image" value="{{ .FullName }}">
+                <div class="card-section text-center">
+                  <img height="70" width="70" src="{{ Static "vmango/linux-logo.png" }}">
+                  <br>
+                  <i style="display: none;" class="icon fi-check"></i>
+                  {{ .OSName }} {{ .OSVersion }}
+                  <br>
+                   {{ .ArchString2 }}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+        {{ end }}
       {{ end }}
     </div>
 

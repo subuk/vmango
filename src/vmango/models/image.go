@@ -17,31 +17,6 @@ const (
 
 type ImageList []*Image
 
-func (images *ImageList) DistinctHypervisors() []string {
-	hypervisors := map[string]struct{}{}
-	for _, image := range *images {
-		hypervisors[image.Hypervisor] = struct{}{}
-	}
-	result := []string{}
-	for name := range hypervisors {
-		result = append(result, name)
-	}
-	return result
-}
-
-func (images *ImageList) Distinct() *ImageList {
-	result := ImageList{}
-	imageNames := map[string]struct{}{}
-	for _, image := range *images {
-		if _, exist := imageNames[image.FullName]; exist {
-			continue
-		}
-		imageNames[image.FullName] = struct{}{}
-		result = append(result, image)
-	}
-	return &result
-}
-
 type Image struct {
 	OS         string
 	Arch       int

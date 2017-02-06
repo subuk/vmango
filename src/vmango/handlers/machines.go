@@ -229,22 +229,25 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		if err := ctx.Plans.List(&plans); err != nil {
 			return fmt.Errorf("failed to fetch plan list: %s", err)
 		}
-		images := &models.ImageList{}
+		images := map[string]*models.ImageList{}
 		for _, hypervisor := range ctx.Hypervisors {
-			if err := hypervisor.Images.List(images); err != nil {
+			hvImages := &models.ImageList{}
+			if err := hypervisor.Images.List(hvImages); err != nil {
 				return fmt.Errorf("failed to fetch images list from hypervisor %s: %s", hypervisor.Name, err)
 			}
+			images[hypervisor.Name] = hvImages
 		}
 		sshkeys := []*models.SSHKey{}
 		if err := ctx.SSHKeys.List(&sshkeys); err != nil {
 			return fmt.Errorf("failed to fetch ssh keys list: %s", err)
 		}
 		ctx.Render.HTML(w, http.StatusOK, "machines/add", map[string]interface{}{
-			"Request": req,
-			"Plans":   plans,
-			"Images":  images,
-			"SSHKeys": sshkeys,
-			"Title":   "Create machine",
+			"Request":     req,
+			"Plans":       plans,
+			"Images":      images,
+			"Hypervisors": ctx.Hypervisors,
+			"SSHKeys":     sshkeys,
+			"Title":       "Create machine",
 		})
 	}
 	return nil
