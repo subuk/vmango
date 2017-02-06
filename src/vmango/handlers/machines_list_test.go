@@ -22,7 +22,10 @@ type MachineListHandlerTestSuite struct {
 func (suite *MachineListHandlerTestSuite) SetupTest() {
 	suite.WebTest.SetupTest()
 	suite.Repo = &dal.StubMachinerep{}
-	suite.Context.Machines = suite.Repo
+	suite.Context.Hypervisors.Add(&dal.Hypervisor{
+		Name:     "test1",
+		Machines: suite.Repo,
+	})
 }
 
 func (suite *MachineListHandlerTestSuite) TestAuthRequired() {

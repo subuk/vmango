@@ -24,12 +24,24 @@ type MachineCreateHandlerTestSuite struct {
 func (suite *MachineCreateHandlerTestSuite) SetupTest() {
 	suite.WebTest.SetupTest()
 	suite.Machines = &dal.StubMachinerep{}
-	suite.Context.Machines = suite.Machines
-	suite.Context.Images = &dal.StubImagerep{
-		Data: []*models.Image{
-			{OS: "TestOS-1.0", Arch: models.IMAGE_ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, FullName: "TestOS-1.0_amd64.img", PoolName: "test", Hypervisor: "test"},
+	suite.Context.Hypervisors.Add(&dal.Hypervisor{
+		Name:     "test1",
+		Machines: suite.Machines,
+		Images: &dal.StubImagerep{
+			Data: []*models.Image{
+				{OS: "TestOS-1.0", Arch: models.IMAGE_ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, FullName: "TestOS-1.0_amd64.img", PoolName: "test", Hypervisor: "test1"},
+			},
 		},
-	}
+	})
+	suite.Context.Hypervisors.Add(&dal.Hypervisor{
+		Name:     "test2",
+		Machines: suite.Machines,
+		Images: &dal.StubImagerep{
+			Data: []*models.Image{
+				{OS: "TestOS-1.0", Arch: models.IMAGE_ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, FullName: "TestOS-1.0_amd64.img", PoolName: "test", Hypervisor: "test2"},
+			},
+		},
+	})
 	suite.Context.SSHKeys = dal.NewConfigSSHKeyrep([]cfg.SSHKeyConfig{
 		{Name: "first", Public: "hello"},
 	})
@@ -54,17 +66,18 @@ func (suite *MachineCreateHandlerTestSuite) TestGetOk() {
 
 func (suite *MachineCreateHandlerTestSuite) TestCreateOk() {
 	suite.Authenticate()
+	suite.Machines.Hypervisor = "test1"
 	data := bytes.NewBufferString((url.Values{
 		"Name":       []string{"testvm"},
 		"Plan":       []string{"test-1"},
 		"Image":      []string{"TestOS-1.0_amd64.img"},
 		"SSHKey":     []string{"first"},
-		"Hypervisor": []string{"test"},
+		"Hypervisor": []string{"test1"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
 	suite.Equal(302, rr.Code, rr.Body.String())
-	suite.Equal(DETAIL_URL("test", "testvm"), rr.Header().Get("Location"))
+	suite.Equal(DETAIL_URL("test1", "testvm"), rr.Header().Get("Location"))
 }
 
 func (suite *MachineCreateHandlerTestSuite) TestCreateSameNameAlreadyExistFail() {
@@ -74,7 +87,7 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateSameNameAlreadyExistFail()
 		"Plan":       []string{"test-1"},
 		"Image":      []string{"TestOS-1.0_amd64.img"},
 		"SSHKey":     []string{"first"},
-		"Hypervisor": []string{"test"},
+		"Hypervisor": []string{"test1"},
 	}).Encode())
 	suite.Machines.GetResponse.Exist = true
 	suite.T().Log(data)
@@ -91,7 +104,7 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateNoPlanFail() {
 		"Plan":       []string{"doesntexist"},
 		"Image":      []string{"TestOS-1.0_amd64.img"},
 		"SSHKey":     []string{"first"},
-		"Hypervisor": []string{"test"},
+		"Hypervisor": []string{"test2"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
@@ -107,12 +120,28 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateNoImageFail() {
 		"Plan":       []string{"test-1"},
 		"Image":      []string{"doesntexist"},
 		"SSHKey":     []string{"first"},
-		"Hypervisor": []string{"test"},
+		"Hypervisor": []string{"test1"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
 	suite.Equal(400, rr.Code, rr.Body.String())
 	suite.Contains(rr.Body.String(), "image &#34;doesntexist&#34; not found")
+	suite.Equal(rr.Header().Get("Location"), "")
+}
+
+func (suite *MachineCreateHandlerTestSuite) TestCreateNoHypervisorFail() {
+	suite.Authenticate()
+	data := bytes.NewBufferString((url.Values{
+		"Name":       []string{"testvm"},
+		"Plan":       []string{"test-1"},
+		"Image":      []string{"TestOS-1.0_amd64.img"},
+		"SSHKey":     []string{"first"},
+		"Hypervisor": []string{"doesntexist"},
+	}).Encode())
+	suite.T().Log(data)
+	rr := suite.DoPost(CREATE_URL, data)
+	suite.Equal(400, rr.Code, rr.Body.String())
+	suite.Contains(rr.Body.String(), "hypervisor &#34;doesntexist&#34; not found")
 	suite.Equal(rr.Header().Get("Location"), "")
 }
 
@@ -123,7 +152,7 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateNoSSHKeyFail() {
 		"Plan":       []string{"test-1"},
 		"Image":      []string{"TestOS-1.0_amd64.img"},
 		"SSHKey":     []string{"doesntexist"},
-		"Hypervisor": []string{"test"},
+		"Hypervisor": []string{"test1"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)

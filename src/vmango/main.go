@@ -71,8 +71,7 @@ func main() {
 	}
 	ctx.Render = web.NewRenderer(staticVersion, config.Debug, ctx)
 
-	machinereps := map[string]dal.Machinerep{}
-	imagereps := map[string]dal.Imagerep{}
+	hypervisors := dal.HypervisorList{}
 
 	for _, hConfig := range config.Hypervisors {
 		vmtpl, err := text_template.ParseFiles(hConfig.VmTemplate)
@@ -95,16 +94,19 @@ func main() {
 		if err != nil {
 			log.WithError(err).WithField("hypervisor", hConfig.Name).Fatal("failed to initialize hypervisor")
 		}
-		machinereps[hConfig.Name] = machinerep
-		imagereps[hConfig.Name] = dal.NewLibvirtImagerep(virtConn, hConfig.ImageStoragePool, hConfig.Name)
+		imagerep := dal.NewLibvirtImagerep(virtConn, hConfig.ImageStoragePool, hConfig.Name)
+		hypervisors.Add(&dal.Hypervisor{
+			Name:     hConfig.Name,
+			Machines: machinerep,
+			Images:   imagerep,
+		})
 	}
 
 	planrep := dal.NewConfigPlanrep(config.Plans)
 	sshkeyrep := dal.NewConfigSSHKeyrep(config.SSHKeys)
 	authrep := dal.NewConfigAuthrep(config.Users)
 
-	ctx.Machines = dal.NewMultiMachinerep(machinereps)
-	ctx.Images = dal.NewMultiImagerep(imagereps)
+	ctx.Hypervisors = hypervisors
 	ctx.Plans = planrep
 	ctx.SSHKeys = sshkeyrep
 	ctx.AuthDB = authrep

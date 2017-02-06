@@ -25,7 +25,10 @@ type MachineDeleteHandlerTestSuite struct {
 func (suite *MachineDeleteHandlerTestSuite) SetupTest() {
 	suite.WebTest.SetupTest()
 	suite.Repo = &dal.StubMachinerep{}
-	suite.Context.Machines = suite.Repo
+	suite.Context.Hypervisors.Add(&dal.Hypervisor{
+		Name:     "testhv",
+		Machines: suite.Repo,
+	})
 }
 
 func (suite *MachineDeleteHandlerTestSuite) TestAuthRequired() {
