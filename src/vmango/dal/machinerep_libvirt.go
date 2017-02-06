@@ -696,7 +696,6 @@ func (store *LibvirtMachinerep) ServerInfo(serverInfoList *models.ServerList) er
 	memUsed := (memTotal - memFree)
 	memUsedPercent := int((float32(memUsed) / float32(memTotal)) * 100)
 
-	fmt.Println(memTotal, memFree, memUsed)
 	serverInfo.Data["MemoryUsed"] = memUsed
 	serverInfo.Data["MemoryFree"] = memFree
 	serverInfo.Data["MemoryTotal"] = memTotal

@@ -23,12 +23,18 @@ import (
 var (
 	CONFIG_PATH    = flag.String("config", "vmango.conf", "Path to configuration file")
 	CHECK_CONFIG   = flag.Bool("check", false, "Validate configuration file and exit")
+	LOG_LEVEL      = flag.String("loglevel", "info", "Log level. One of panic,fatal,error,warn,info,debug")
 	STATIC_VERSION string
 )
 
 func main() {
 	flag.Parse()
-	log.SetLevel(log.InfoLevel)
+	logLevel, err := log.ParseLevel(*LOG_LEVEL)
+	fmt.Println(logLevel)
+	if err != nil {
+		log.WithError(err).Fatal("failed to parse loglevel")
+	}
+	log.SetLevel(logLevel)
 
 	if flag.Arg(0) == "genpw" {
 		plainpw := flag.Arg(1)
@@ -61,7 +67,7 @@ func main() {
 		os.Exit(0)
 	}
 	ctx := &web.Context{
-		Logger:      log.New(),
+		Logger:      log.StandardLogger(),
 		StaticCache: staticCache,
 	}
 	ctx.Router = vmango_router.New(ctx)
@@ -113,7 +119,7 @@ func main() {
 	ctx.SessionStore = sessions.NewCookieStore([]byte(config.SessionSecret))
 
 	n := negroni.New()
-	n.Use(negronilogrus.NewMiddleware())
+	n.Use(negronilogrus.NewCustomMiddleware(logLevel, &log.TextFormatter{}, "web"))
 	n.Use(negroni.NewRecovery())
 	n.UseHandler(ctx.Router)
 
