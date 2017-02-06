@@ -24,7 +24,7 @@
 
       <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false">
       <h4>Choose an image</h4>
-      {{ range .Images }}
+      {{ range .Images.Distinct }}
         <div class="column">
           <div class="card JS-CheckboxCard">
             <input type="checkbox" name="Image" value="{{ .FullName }}">
@@ -34,7 +34,7 @@
               <i style="display: none;" class="icon fi-check"></i>
               {{ .OSName }} {{ .OSVersion }}
               <br>
-               {{ .ArchString2 }} <span class="label secondary"> {{ .Hypervisor }} </span>
+               {{ .ArchString2 }}
             </div>
           </div>
         </div>

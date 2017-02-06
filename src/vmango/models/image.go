@@ -29,6 +29,19 @@ func (images *ImageList) DistinctHypervisors() []string {
 	return result
 }
 
+func (images *ImageList) Distinct() *ImageList {
+	result := ImageList{}
+	imageNames := map[string]struct{}{}
+	for _, image := range *images {
+		if _, exist := imageNames[image.FullName]; exist {
+			continue
+		}
+		imageNames[image.FullName] = struct{}{}
+		result = append(result, image)
+	}
+	return &result
+}
+
 type Image struct {
 	OS         string
 	Arch       int
