@@ -11,7 +11,7 @@ func Index(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	if err := ctx.Machines.List(machines); err != nil {
 		return err
 	}
-	servers := []*models.Server{}
+	servers := models.ServerList{}
 	if err := ctx.Machines.ServerInfo(&servers); err != nil {
 		return err
 	}

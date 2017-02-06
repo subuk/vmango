@@ -71,7 +71,7 @@ func (multirep *MultiMachinerep) Reboot(vm *models.VirtualMachine) error {
 	}
 	return repo.Reboot(vm)
 }
-func (multirep *MultiMachinerep) ServerInfo(servers *[]*models.Server) error {
+func (multirep *MultiMachinerep) ServerInfo(servers *models.ServerList) error {
 	for repoName, repo := range multirep.repos {
 		if err := repo.ServerInfo(servers); err != nil {
 			return fmt.Errorf("failed to query repo %s: %s", repoName, err)

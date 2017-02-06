@@ -20,8 +20,8 @@ type StubMachinerep struct {
 		Error   error
 	}
 	ServerInfoResponse struct {
-		Server *models.Server
-		Error  error
+		Servers *models.ServerList
+		Error   error
 	}
 	StartResponse  error
 	StopResponse   error
@@ -74,7 +74,7 @@ func (repo *StubMachinerep) Reboot(vm *models.VirtualMachine) error {
 	}
 	return repo.RebootResponse
 }
-func (repo *StubMachinerep) ServerInfo(server *models.Server) error {
-	*server = *repo.ServerInfoResponse.Server
+func (repo *StubMachinerep) ServerInfo(servers *models.ServerList) error {
+	*servers = *repo.ServerInfoResponse.Servers
 	return repo.ServerInfoResponse.Error
 }

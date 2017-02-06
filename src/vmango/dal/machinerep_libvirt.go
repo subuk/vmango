@@ -622,7 +622,7 @@ func (store *LibvirtMachinerep) Reboot(machine *models.VirtualMachine) error {
 	return domain.Reboot(libvirt.DOMAIN_REBOOT_DEFAULT)
 }
 
-func (store *LibvirtMachinerep) ServerInfo(serverInfoList *[]*models.Server) error {
+func (store *LibvirtMachinerep) ServerInfo(serverInfoList *models.ServerList) error {
 	serverInfo := &models.Server{}
 	serverInfo.Type = "libvirt"
 	serverInfo.Data = map[string]interface{}{}
