@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"vmango/models"
 	"vmango/web"
@@ -8,17 +9,20 @@ import (
 
 func Index(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	machines := &models.VirtualMachineList{}
-	if err := ctx.Machines.List(machines); err != nil {
-		return err
+	servers := &models.ServerList{}
+	for _, hypervisor := range ctx.Hypervisors {
+		if err := hypervisor.Machines.List(machines); err != nil {
+			return fmt.Errorf("failed to query hypervisor %s: %s", hypervisor.Name, err)
+		}
+		if err := hypervisor.Machines.ServerInfo(servers); err != nil {
+			return fmt.Errorf("failed to query hypervisor %s: %s", hypervisor.Name, err)
+		}
 	}
-	server := &models.Server{}
-	if err := ctx.Machines.ServerInfo(server); err != nil {
-		return err
-	}
+
 	ctx.Render.HTML(w, http.StatusOK, "index", map[string]interface{}{
 		"Request":  req,
 		"Machines": machines,
-		"Server":   server,
+		"Servers":  servers,
 		"Title":    "Server info",
 	})
 	return nil

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"vmango/dal"
 	"vmango/web"
 	web_router "vmango/web/router"
 )
@@ -34,6 +35,7 @@ func NewTestContext() *web.Context {
 	ctx.Router = web_router.New(ctx)
 	ctx.Render = web.NewRenderer("", true, ctx)
 	ctx.Logger = logrus.New()
+	ctx.Hypervisors = dal.HypervisorList{}
 	store := &StubSessionStore{}
 	session := sessions.NewSession(store, "vmango")
 	session.Values = map[interface{}]interface{}{}

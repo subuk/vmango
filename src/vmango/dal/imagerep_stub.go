@@ -10,7 +10,7 @@ type StubImagerep struct {
 	GetErr  error
 }
 
-func (repo *StubImagerep) List(images *[]*models.Image) error {
+func (repo *StubImagerep) List(images *models.ImageList) error {
 	if repo.ListErr != nil {
 		return repo.ListErr
 	}

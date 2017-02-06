@@ -39,11 +39,10 @@ type Context struct {
 	SessionStore sessions.Store
 	StaticCache  time.Duration
 
-	Plans    dal.Planrep
-	Machines dal.Machinerep
-	Images   dal.Imagerep
-	SSHKeys  dal.SSHKeyrep
-	AuthDB   dal.Authrep
+	Plans       dal.Planrep
+	Hypervisors dal.HypervisorList
+	SSHKeys     dal.SSHKeyrep
+	AuthDB      dal.Authrep
 }
 
 func (ctx *Context) RenderResponse(w http.ResponseWriter, req *http.Request, status int, name string, binding map[string]interface{}) {

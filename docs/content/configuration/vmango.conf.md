@@ -23,7 +23,7 @@ All vm configuration templates are golang text templates: https://golang.org/pkg
 
 ## Hypervisor
 
-**hypervisor** - Hypervisor definition, must be used only once.
+**hypervisor** - Hypervisor definition, may be specified multiple times.
 
 **hypervisor.url** - Libvirt connection URL.
 
@@ -53,7 +53,7 @@ Execution context:
 
 Example:
 
-    hypervisor {
+    hypervisor "LOCAL1" {
         url = "qemu:///system"
         image_storage_pool = "vmango-images"
         root_storage_pool = "default"

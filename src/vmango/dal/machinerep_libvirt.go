@@ -126,15 +126,17 @@ type LibvirtMachinerep struct {
 	voltpl      *template.Template
 	network     string
 	storagePool string
+	hypervisor  string
 	ignoreVms   []string
 }
 
-func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Template, network, pool string, ignoreVms []string) (*LibvirtMachinerep, error) {
+func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Template, network, pool, hypervisor string, ignoreVms []string) (*LibvirtMachinerep, error) {
 	return &LibvirtMachinerep{
 		conn:        conn,
 		vmtpl:       vmtpl,
 		voltpl:      voltpl,
 		network:     network,
+		hypervisor:  hypervisor,
 		storagePool: pool,
 		ignoreVms:   ignoreVms,
 	}, nil
@@ -271,6 +273,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.VNCAddr = domainConfig.VNCAddr()
 	vm.Arch = domainConfig.Os.Type.Arch
 	vm.OS = domainConfig.OSName
+	vm.Hypervisor = store.hypervisor
 	for _, key := range domainConfig.SSHKeys {
 		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{Name: key.Name, Public: key.Public})
 	}
@@ -619,7 +622,8 @@ func (store *LibvirtMachinerep) Reboot(machine *models.VirtualMachine) error {
 	return domain.Reboot(libvirt.DOMAIN_REBOOT_DEFAULT)
 }
 
-func (store *LibvirtMachinerep) ServerInfo(serverInfo *models.Server) error {
+func (store *LibvirtMachinerep) ServerInfo(serverInfoList *models.ServerList) error {
+	serverInfo := &models.Server{}
 	serverInfo.Type = "libvirt"
 	serverInfo.Data = map[string]interface{}{}
 
@@ -697,5 +701,13 @@ func (store *LibvirtMachinerep) ServerInfo(serverInfo *models.Server) error {
 	serverInfo.Data["MemoryFree"] = memFree
 	serverInfo.Data["MemoryTotal"] = memTotal
 	serverInfo.Data["MemoryUsedPersent"] = memUsedPercent
+
+	domains, err := store.conn.ListAllDomains(0)
+	if err != nil {
+		return err
+	}
+	serverInfo.Data["MachineCount"] = len(domains)
+
+	*serverInfoList = append(*serverInfoList, serverInfo)
 	return nil
 }

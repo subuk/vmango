@@ -12,6 +12,7 @@
         <th>Size</th>
         <th>Type</th>
         <th>Last updated</th>
+        <th>Hypervisor</th>
       </tr>
     </thead>
     <tbody>
@@ -23,6 +24,7 @@
         <td>{{ .SizeMegabytes }}Mb</td>
         <td>{{ .TypeString }}</td>
         <td>{{ HumanizeDate .Date }}</td>
+        <td>{{ .Hypervisor }}</td>
       </tr>
     {{ end }}
     </tbody>

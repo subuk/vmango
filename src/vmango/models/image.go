@@ -15,15 +15,18 @@ const (
 	IMAGE_ARCH_X86    = iota
 )
 
+type ImageList []*Image
+
 type Image struct {
-	OS       string
-	Arch     int
-	Size     uint64
-	Type     int
-	Date     time.Time
-	FullName string
-	FullPath string
-	PoolName string
+	OS         string
+	Arch       int
+	Size       uint64
+	Type       int
+	Date       time.Time
+	FullName   string
+	FullPath   string
+	PoolName   string
+	Hypervisor string
 }
 
 func (image *Image) String() string {

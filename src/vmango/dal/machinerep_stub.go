@@ -5,6 +5,7 @@ import (
 )
 
 type StubMachinerep struct {
+	Hypervisor   string
 	ListResponse struct {
 		Machines *models.VirtualMachineList
 		Error    error
@@ -19,8 +20,8 @@ type StubMachinerep struct {
 		Error   error
 	}
 	ServerInfoResponse struct {
-		Server *models.Server
-		Error  error
+		Servers *models.ServerList
+		Error   error
 	}
 	StartResponse  error
 	StopResponse   error
@@ -44,21 +45,22 @@ func (repo *StubMachinerep) Create(vm *models.VirtualMachine, image *models.Imag
 	if repo.CreateResponse.Machine != nil {
 		*vm = *repo.CreateResponse.Machine
 	}
+	vm.Hypervisor = repo.Hypervisor
 	return repo.CreateResponse.Error
 }
-func (repo *StubMachinerep) Start(*models.VirtualMachine) error {
+func (repo *StubMachinerep) Start(vm *models.VirtualMachine) error {
 	return repo.StartResponse
 }
-func (repo *StubMachinerep) Stop(*models.VirtualMachine) error {
+func (repo *StubMachinerep) Stop(vm *models.VirtualMachine) error {
 	return repo.StopResponse
 }
-func (repo *StubMachinerep) Remove(*models.VirtualMachine) error {
+func (repo *StubMachinerep) Remove(vm *models.VirtualMachine) error {
 	return repo.RemoveResponse
 }
-func (repo *StubMachinerep) Reboot(*models.VirtualMachine) error {
+func (repo *StubMachinerep) Reboot(vm *models.VirtualMachine) error {
 	return repo.RebootResponse
 }
-func (repo *StubMachinerep) ServerInfo(server *models.Server) error {
-	*server = *repo.ServerInfoResponse.Server
+func (repo *StubMachinerep) ServerInfo(servers *models.ServerList) error {
+	*servers = *repo.ServerInfoResponse.Servers
 	return repo.ServerInfoResponse.Error
 }

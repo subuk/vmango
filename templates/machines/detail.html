@@ -13,7 +13,7 @@
           </div>
           <div class="media-object-section">
             <h5>{{ .Machine.OS }} {{ .Machine.Arch }}</h5>
-            <p class="subheader">{{ .Machine.MemoryMegabytes }}M RAM {{ .Machine.RootDisk.SizeGigabytes }}G {{ .Machine.Cpus }} CPU</p>
+            <p class="subheader">{{ .Machine.MemoryMegabytes }}M Memory / {{ .Machine.RootDisk.SizeGigabytes }}G Disk / {{ .Machine.Cpus }} CPU / {{ .Machine.Hypervisor }}</p>
           </div>
         </div>
       </div>
@@ -60,20 +60,20 @@
     <ul class="menu vertical">
       {{ if .Machine.IsRunning }}
       <li>
-        <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "stop" }}">
+        <a href="{{ Url "machine-changestate" "name" .Machine.Name "hypervisor" .Machine.Hypervisor "action" "stop" }}">
           <i class="fi-power"></i>
           <span>Force Stop</span>
         </a>
       </li>
       <li>
-        <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "reboot" }}">
+        <a href="{{ Url "machine-changestate" "name" .Machine.Name "hypervisor" .Machine.Hypervisor "action" "reboot" }}">
           <i class="fi-loop"></i>
           <span>Reboot</span>
         </a>
       </li>
       {{ else }}
       <li>
-        <a href="{{ Url "machine-changestate" "name" .Machine.Name "action" "start" }}">
+        <a href="{{ Url "machine-changestate" "name" .Machine.Name "hypervisor" .Machine.Hypervisor "action" "start" }}">
           <i class="fi-power"></i>
           <span>Start</span>
         </a>
@@ -81,7 +81,7 @@
       {{ end }}
 
       <li>
-        <a href="{{ Url "machine-delete" "name" .Machine.Name }}">
+        <a href="{{ Url "machine-delete" "name" .Machine.Name "hypervisor" .Machine.Hypervisor }}">
           <i class="fi-trash"></i>
           <span>Remove</span>
         </a>
