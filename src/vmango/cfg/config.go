@@ -69,7 +69,8 @@ func FileAvailaible(filename string) error {
 func (config *Config) Sanitize(root string) error {
 	errors := &multierror.Error{}
 	names := map[string]struct{}{}
-	for _, hypervisor := range config.Hypervisors {
+	for index := range config.Hypervisors {
+		hypervisor := &config.Hypervisors[index]
 		if _, exist := names[hypervisor.Name]; exist {
 			errors = multierror.Append(errors, fmt.Errorf("duplicated hypervisor name '%s'", hypervisor.Name))
 		}
