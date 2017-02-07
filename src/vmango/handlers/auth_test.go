@@ -13,6 +13,7 @@ import (
 )
 
 const LOGIN_URL = "/login/"
+const LOGOUT_URL = "/logout/"
 
 type LoginHandlerTestSuite struct {
 	suite.Suite
@@ -72,6 +73,14 @@ func (suite *LoginHandlerTestSuite) TestInvalidPasswordFail() {
 	rr := suite.DoPost(LOGIN_URL, data)
 	suite.Equal(400, rr.Code, rr.Body.String())
 	suite.Contains(rr.Body.String(), "authentication failed")
+}
+
+func (suite *LoginHandlerTestSuite) TestLogoutOk() {
+	suite.Authenticate()
+	rr := suite.DoGet(LOGOUT_URL)
+	suite.Equal(302, rr.Code, rr.Body.String())
+	suite.Equal("/login/", rr.Header().Get("Location"))
+	suite.Equal("", suite.Session().Values["authuser"])
 }
 
 func TestLoginHandlerTestSuite(t *testing.T) {

@@ -62,6 +62,6 @@ func Logout(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	if err := session.Save(req, w); err != nil {
 		return err
 	}
-	http.Redirect(w, req, "/login", http.StatusFound)
+	http.Redirect(w, req, "/login/", http.StatusFound)
 	return nil
 }
