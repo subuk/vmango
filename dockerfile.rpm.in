@@ -7,6 +7,7 @@ RUN tar -xf go1.7.4.linux-amd64.tar.gz
 
 ADD . /tmp/buildd/vmango/
 RUN cd /tmp/buildd/vmango/rpm/ && make sources
+RUN rm -f /etc/yum.repos.d/CentOS-Sources.repo
 RUN yum-builddep -y /tmp/buildd/vmango/rpm/vmango.spec
 
 ENV HOME /home/builder
