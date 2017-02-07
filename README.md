@@ -14,6 +14,7 @@ Current features:
 * Support for cloud OS images (with cloud-init installed)
 * IP address management
 * Simple API
+* Custom userdata for cloud-init
 
 Hypervisor server requirements:
 

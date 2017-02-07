@@ -9,6 +9,11 @@
         <vmango:key name="{{ .Name }}">{{ .Public }}</vmango:key>
         {{ end }}
       </vmango:sshkeys>
+      <vmango:userdata>
+        <![CDATA[
+          {{ .Machine.Userdata }}
+        ]]>
+      </vmango:userdata>
     </vmango:md>
   </metadata>
   <memory unit="b">{{ .Plan.Memory }}</memory>

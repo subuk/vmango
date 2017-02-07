@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
 	"net/http"
+	"strings"
 	"vmango/models"
 	"vmango/web"
 )
@@ -135,11 +136,13 @@ type machineAddFormData struct {
 	Plan       string
 	Image      string
 	Hypervisor string
+	Userdata   string
 	SSHKey     []string
 }
 
 func (data *machineAddFormData) Validate() error {
 	errors := schema.MultiError{}
+	data.Userdata = strings.TrimSpace(data.Userdata) + "\n"
 	if data.Name == "" {
 		errors["Name"] = fmt.Errorf("name required")
 	}
@@ -170,7 +173,6 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		if err := form.Validate(); err != nil {
 			return web.BadRequest(err.Error())
 		}
-
 		hypervisor := ctx.Hypervisors.Get(form.Hypervisor)
 		if hypervisor == nil {
 			return web.BadRequest(fmt.Sprintf(`hypervisor "%s" not found`, form.Hypervisor))
@@ -206,6 +208,7 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 			Cpus:      plan.Cpus,
 			ImageName: image.FullName,
 			SSHKeys:   sshkeys,
+			Userdata:  form.Userdata,
 		}
 
 		if exists, err := hypervisor.Machines.Get(vm); err != nil {

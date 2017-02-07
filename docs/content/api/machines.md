@@ -69,6 +69,7 @@ Parameters:
 * Plan (string): Plan name
 * Image (string): Image full name (see [Images]({{< ref "api/images.md#List" >}}))
 * SSHKey ([]string): List of key ssh names
+* Userdata (string): Userdata for cloud-init (more about formats in [cloud-init documentation](http://cloudinit.readthedocs.io/en/latest/topics/format.html))
 
 Curl example:
 
