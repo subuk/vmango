@@ -44,6 +44,9 @@ rm -rf $RPM_BUILD_ROOT
 %attr(644,root,root) %{_unitdir}/vmango.service
 
 %changelog
+* Wed Feb 8 2017 00:31:12 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.4.1-1
+- Fix relative config filenames resolving
+
 * Wed Feb 8 2017 00:10:25 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.4.0-1
 - Ability to set userdata for new machines
 - Multiple hypervisors
