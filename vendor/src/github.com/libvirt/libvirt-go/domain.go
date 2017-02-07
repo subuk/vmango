@@ -1281,12 +1281,16 @@ func (d *Domain) SetMetadata(metaDataType DomainMetadataType, metaDataCont, uriK
 	var cUriKey *C.char
 	var cUri *C.char
 
-	cMetaDataCont = C.CString(metaDataCont)
-	defer C.free(unsafe.Pointer(cMetaDataCont))
+	if metaDataCont != "" {
+		cMetaDataCont = C.CString(metaDataCont)
+		defer C.free(unsafe.Pointer(cMetaDataCont))
+	}
 
 	if metaDataType == DOMAIN_METADATA_ELEMENT {
-		cUriKey = C.CString(uriKey)
-		defer C.free(unsafe.Pointer(cUriKey))
+		if uriKey != "" {
+			cUriKey = C.CString(uriKey)
+			defer C.free(unsafe.Pointer(cUriKey))
+		}
 		cUri = C.CString(uri)
 		defer C.free(unsafe.Pointer(cUri))
 	}

@@ -816,3 +816,58 @@ func TestParserCPUString(t *testing.T) {
 		}
 	}
 }
+
+func TestSetMetadata(t *testing.T) {
+	xmlns := "http://libvirt.org/xmlns/libvirt-go/test"
+	xmlprefix := "test"
+	meta := "<blob/>"
+
+	dom, conn := buildTestDomain()
+	defer func() {
+		dom.Free()
+		if res, _ := conn.Close(); res != 0 {
+			t.Errorf("Close() == %d, expected 0", res)
+		}
+	}()
+	if err := dom.Create(); err != nil {
+		t.Error(err)
+		return
+	}
+	defer dom.Destroy()
+
+	data, err := dom.GetMetadata(DOMAIN_METADATA_ELEMENT, xmlns, DOMAIN_AFFECT_LIVE)
+	if err == nil {
+		t.Errorf("Expected an error for missing metadata")
+		return
+	}
+
+	err = dom.SetMetadata(DOMAIN_METADATA_ELEMENT, meta, xmlprefix, xmlns, DOMAIN_AFFECT_LIVE)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	data, err = dom.GetMetadata(DOMAIN_METADATA_ELEMENT, xmlns, DOMAIN_AFFECT_LIVE)
+	if err != nil {
+		t.Errorf("Unexpected an error for metadata")
+		return
+	}
+
+	if data != meta {
+		t.Errorf("Metadata %s doesn't match %s", data, meta)
+		return
+	}
+
+	err = dom.SetMetadata(DOMAIN_METADATA_ELEMENT, "", "", xmlns, DOMAIN_AFFECT_LIVE)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	data, err = dom.GetMetadata(DOMAIN_METADATA_ELEMENT, xmlns, DOMAIN_AFFECT_LIVE)
+	if err == nil {
+		t.Errorf("Expected an error for deleted metadata")
+		return
+	}
+
+}

@@ -188,4 +188,11 @@ virDomainPtr virDomainDefineXMLFlagsCompat(virConnectPtr conn,
 #define VIR_CONNECT_BASELINE_CPU_MIGRATABLE 1 << 1
 #endif
 
+/* 3.1.0 */
+
+#ifndef VIR_CONNECT_LIST_STORAGE_POOLS_VSTORAGE
+#define VIR_CONNECT_LIST_STORAGE_POOLS_VSTORAGE 1 << 18
+#endif
+
+
 #endif /* LIBVIRT_GO_CONNECT_COMPAT_H__ */

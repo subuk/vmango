@@ -112,6 +112,7 @@ const (
 	CONNECT_LIST_STORAGE_POOLS_SHEEPDOG     = ConnectListAllStoragePoolsFlags(C.VIR_CONNECT_LIST_STORAGE_POOLS_SHEEPDOG)
 	CONNECT_LIST_STORAGE_POOLS_GLUSTER      = ConnectListAllStoragePoolsFlags(C.VIR_CONNECT_LIST_STORAGE_POOLS_GLUSTER)
 	CONNECT_LIST_STORAGE_POOLS_ZFS          = ConnectListAllStoragePoolsFlags(C.VIR_CONNECT_LIST_STORAGE_POOLS_ZFS)
+	CONNECT_LIST_STORAGE_POOLS_VSTORAGE     = ConnectListAllStoragePoolsFlags(C.VIR_CONNECT_LIST_STORAGE_POOLS_VSTORAGE)
 )
 
 type ConnectBaselineCPUFlags int
@@ -1502,7 +1503,7 @@ func (c *Connect) GetCPUStats(cpuNum int, flags uint32) (*NodeCPUStats, error) {
 	}
 
 	params := make([]C.virNodeCPUStats, nparams)
-	ret = C.virNodeGetCPUStats(c.ptr, C.int(cpuNum), (*C.virNodeCPUStats)(unsafe.Pointer(&params)), &nparams, C.uint(flags))
+	ret = C.virNodeGetCPUStats(c.ptr, C.int(cpuNum), (*C.virNodeCPUStats)(unsafe.Pointer(&params[0])), &nparams, C.uint(flags))
 	if ret == -1 {
 		return nil, GetLastError()
 	}
