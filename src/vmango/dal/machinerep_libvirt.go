@@ -60,8 +60,9 @@ type domainXMLConfig struct {
 			Address string `xml:"address,attr"`
 		} `xml:"mac"`
 	} `xml:"devices>interface"`
-	OSName  string `xml:"metadata>md>os"`
-	SSHKeys []struct {
+	OSName   string `xml:"metadata>md>os"`
+	Userdata string `xml:"metadata>md>userdata"`
+	SSHKeys  []struct {
 		Name   string `xml:"name,attr"`
 		Public string `xml:",chardata"`
 	} `xml:"metadata>md>sshkeys>key"`
@@ -274,6 +275,8 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.Arch = domainConfig.Os.Type.Arch
 	vm.OS = domainConfig.OSName
 	vm.Hypervisor = store.hypervisor
+	vm.Userdata = strings.TrimSpace(domainConfig.Userdata) + "\n"
+
 	for _, key := range domainConfig.SSHKeys {
 		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{Name: key.Name, Public: key.Public})
 	}
@@ -375,6 +378,10 @@ func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine
 	if err := os.MkdirAll(metadataRoot, 0755); err != nil {
 		return nil, err
 	}
+	ud, err := os.Create(filepath.Join(metadataRoot, "user_data"))
+	if err != nil {
+		return nil, err
+	}
 	md, err := os.Create(filepath.Join(metadataRoot, "meta_data.json"))
 	if err != nil {
 		return nil, err
@@ -404,6 +411,14 @@ func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine
 	if err := md.Close(); err != nil {
 		return nil, err
 	}
+	_, err = ud.Write([]byte(machine.Userdata))
+	if err != nil {
+		return nil, err
+	}
+	if err := ud.Close(); err != nil {
+		return nil, err
+	}
+
 	cmd := exec.Command(
 		"mkisofs", "-R", "-V", "config-2", "-o",
 		filepath.Join(tmpdir, "drive.iso"), tmpdir,

@@ -56,6 +56,7 @@ func (disk *VirtualMachineDisk) SizeGigabytes() int {
 type VirtualMachine struct {
 	Name       string
 	Hypervisor string
+	Userdata   string `json:"-"`
 	OS         string
 	Arch       string
 	State      int    `json:"-"`
