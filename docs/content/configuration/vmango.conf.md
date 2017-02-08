@@ -1,5 +1,5 @@
 +++
-weight = 5
+weight = 1
 title = "vmango.conf"
 date = "2017-02-05T17:59:37+03:00"
 toc = true
@@ -30,6 +30,8 @@ All vm configuration templates are golang text templates: https://golang.org/pkg
 **hypervisor.image_storage_pool** - Libvirt storage pool name for VM images.
 
 **hypervisor.root_storage_pool** - Libvirt storage pool name for root disks.
+
+**hypervisor.ignored_vms** - List of ignored virtual machines names.
 
 **hypervisor.network** - Libvirt network name.
 
