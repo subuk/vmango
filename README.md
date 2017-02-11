@@ -4,6 +4,11 @@
 
 Vmango is a virtual machines management web interface written using [Go](http://golang.org/).
 
+The main goal of project is not to provide a hypervisor configuration tool,
+because that problem already solved by many configuration management systems
+like Ansible or Puppet, but provide a convenient way to manage virtual
+machines on existing hypervisors.
+
 Documentation: https://vmango.org/docs/
 
 Current features:

@@ -27,6 +27,9 @@
     {
         list-style-type: none;
     }
+    #body .padding {
+        padding: 6rem 20rem;
+    }
 </style>
   </head>
   <body class="" data-url="/">
@@ -36,6 +39,21 @@
       <div class="padding highlightable">
         <h1>Vmango</h1>
         <p>
+          Interface for virtual machines management.
+        </p>
+        <p>
+          The main goal of project is not to provide a hypervisor configuration tool, because
+          that problem already solved by many configuration management systems like <a href="https://www.ansible.com/">Ansible</a>
+          or <a href="https://puppet.com/">Puppet</a>, but provide a convenient way to manage virtual machines on existing hypervisors.
+        </p>
+        <p>
+          It uses openstack compatible image format, is simple to install and stores all information
+          about machines directly inside the hypervisor. If you have a handful of servers with
+          virtual machines and don't want to install complex systems like <a href="https://www.openstack.org">Openstack</a> or <a href="https://www.ovirt.org">oVirt</a>,
+          you definitly should try it.
+        </p>
+        <br>
+        <p>
           <a href="installation/packages/">Installation</a> |
           <a href="configuration/vmango.conf/">Configuration</a> |
           <a href="api/auth/">API</a>
@@ -43,5 +61,8 @@
     </div>
 
     </section>
+    <!-- Partial intended to be overwritten to add javacript -->
+    <a href="https://github.com/subuk/vmango"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/365986a132ccd6a44c23a9169022c0b5c890c387/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f7265645f6161303030302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png"></a>
+
   </body>
 </html>

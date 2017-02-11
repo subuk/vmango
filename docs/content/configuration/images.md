@@ -22,3 +22,12 @@ Will be parsed as:
 * ImageFormat: qcow2
 
 If there any errors during image name parsing, it will be skipped with warning in logs.
+
+Machine images are fully compatible with openstack. Many linux distributions have prebuild images for it:
+
+* Ubuntu https://cloud-images.ubuntu.com/
+* Centos https://cloud.centos.org/centos/
+* OpenSUSE http://download.opensuse.org/repositories/Cloud:/Images:/ (with Openstack suffix)
+* Arch http://linuximages.de/openstack/arch/
+
+More about images format you can read in [openstack documentation](http://docs.openstack.org/image-guide/).

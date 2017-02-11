@@ -47,3 +47,5 @@ Since vmango doesn't require database, you can change domain configuration or ev
 
 * Metadata section must be filled
 * Root drive filename of machine must ends with `_disk`
+
+Inside machine you can access metadata in [configdrive](http://docs.openstack.org/user-guide/cli-config-drive.html) style - mount cdrom and view files in `<mountpoint>/openstack/latest` directory. There must be at least `meta_data.json` file. If you provide a userdata during machine creation, it will be availaible in `<mountpoint>/openstack/latest/user_data` file.
