@@ -16,6 +16,10 @@ func DELETE_URL(hypervisor, name string) string {
 	return fmt.Sprintf("/machines/%s/%s/delete/", hypervisor, name)
 }
 
+func DELETE_API_URL(hypervisor, name string) string {
+	return fmt.Sprintf("/api/machines/%s/%s/", hypervisor, name)
+}
+
 type MachineDeleteHandlerTestSuite struct {
 	suite.Suite
 	testool.WebTest
@@ -31,10 +35,38 @@ func (suite *MachineDeleteHandlerTestSuite) SetupTest() {
 	})
 }
 
-func (suite *MachineDeleteHandlerTestSuite) TestAuthRequired() {
+func (suite *MachineDeleteHandlerTestSuite) TestGetAuthRequired() {
 	rr := suite.DoGet(DELETE_URL("testhv", "hello"))
 	suite.Equal(302, rr.Code, rr.Body.String())
 	suite.Equal(rr.Header().Get("Location"), "/login/?next="+DELETE_URL("testhv", "hello"))
+}
+
+func (suite *MachineDeleteHandlerTestSuite) TestPostAuthRequired() {
+	rr := suite.DoPost(DELETE_URL("testhv", "hello"), nil)
+	suite.Equal(302, rr.Code, rr.Body.String())
+	suite.Equal(rr.Header().Get("Location"), "/login/?next="+DELETE_URL("testhv", "hello"))
+}
+
+func (suite *MachineDeleteHandlerTestSuite) TestGetAPIAuthRequired() {
+	rr := suite.DoGet(DELETE_API_URL("testhv", "hello"))
+	suite.Equal(401, rr.Code, rr.Body.String())
+	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
+	suite.JSONEq(`{"Error": "Authentication failed"}`, rr.Body.String())
+}
+
+func (suite *MachineDeleteHandlerTestSuite) TestPostAPINotImplemented() {
+	suite.APIAuthenticate("admin", "secret")
+	rr := suite.DoPost(DELETE_API_URL("testhv", "hello"), nil)
+	suite.Equal(501, rr.Code, rr.Body.String())
+	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
+	suite.JSONEq(`{"Error": "Not implemented"}`, rr.Body.String())
+}
+
+func (suite *MachineDeleteHandlerTestSuite) TestDeleteAPIAuthRequired() {
+	rr := suite.DoDelete(DELETE_API_URL("testhv", "hello"))
+	suite.Equal(401, rr.Code, rr.Body.String())
+	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
+	suite.JSONEq(`{"Error": "Authentication failed"}`, rr.Body.String())
 }
 
 func (suite *MachineDeleteHandlerTestSuite) TestConfirmationOk() {
@@ -77,6 +109,19 @@ func (suite *MachineDeleteHandlerTestSuite) TestActionOk() {
 	suite.Equal(302, rr.Code, rr.Body.String())
 }
 
+func (suite *MachineDeleteHandlerTestSuite) TestAPIActionOk() {
+	suite.APIAuthenticate("admin", "secret")
+	suite.Repo.GetResponse.Exist = true
+	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
+		Name:       "test-remove",
+		RootDisk:   &models.VirtualMachineDisk{},
+		Hypervisor: "testhv",
+	}
+	rr := suite.DoDelete(DELETE_API_URL("testhv", "test-remove"))
+	suite.Equal(204, rr.Code, rr.Body.String())
+	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
+	suite.JSONEq(`{"Message": "Machine test-remove deleted"}`, rr.Body.String())
+}
 func (suite *MachineDeleteHandlerTestSuite) TestActionNoMachineFail() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = false

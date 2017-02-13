@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"github.com/gorilla/csrf"
 	"github.com/gorilla/schema"
 	"net/http"
 	"vmango/models"
@@ -11,6 +12,7 @@ import (
 type loginFormData struct {
 	Username string
 	Password string
+	CSRF     string
 }
 
 func Login(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
@@ -64,4 +66,12 @@ func Logout(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	}
 	http.Redirect(w, req, "/login/", http.StatusFound)
 	return nil
+}
+
+func CSRFFailed(ctx *web.Context, w http.ResponseWriter, r *http.Request) error {
+	errorText := fmt.Sprintf("%s - %s",
+		http.StatusText(http.StatusForbidden),
+		csrf.FailureReason(r),
+	)
+	return web.Forbidden(errorText)
 }

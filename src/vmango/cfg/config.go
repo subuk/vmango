@@ -122,6 +122,10 @@ func (config *Config) Sanitize(root string) error {
 	return errors.ErrorOrNil()
 }
 
+func (cfg *Config) IsTLS() bool {
+	return cfg.SSLKey != "" && cfg.SSLCert != ""
+}
+
 func ParseConfig(filename string) (*Config, error) {
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {

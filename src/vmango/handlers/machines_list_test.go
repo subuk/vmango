@@ -12,6 +12,7 @@ import (
 )
 
 const LIST_URL = "/machines/"
+const LIST_API_URL = "/api/machines/"
 
 type MachineListHandlerTestSuite struct {
 	suite.Suite
@@ -34,6 +35,13 @@ func (suite *MachineListHandlerTestSuite) TestAuthRequired() {
 	suite.Equal(rr.Header().Get("Location"), "/login/?next="+LIST_URL)
 }
 
+func (suite *MachineListHandlerTestSuite) TestAPIAuthRequired() {
+	rr := suite.DoGet(LIST_API_URL)
+	suite.Equal(401, rr.Code, rr.Body.String())
+	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
+	suite.JSONEq(`{"Error": "Authentication failed"}`, rr.Body.String())
+}
+
 func (suite *MachineListHandlerTestSuite) TestHTMLOk() {
 	suite.Authenticate()
 	suite.Repo.ListResponse.Machines = &models.VirtualMachineList{}
@@ -44,7 +52,7 @@ func (suite *MachineListHandlerTestSuite) TestHTMLOk() {
 }
 
 func (suite *MachineListHandlerTestSuite) TestJSONOk() {
-	suite.Authenticate()
+	suite.APIAuthenticate("admin", "secret")
 	suite.Repo.ListResponse.Machines = &models.VirtualMachineList{}
 	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{
 		Name:       "test",
@@ -89,7 +97,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 		},
 	})
 
-	rr := suite.DoGet(LIST_URL + "?format=json")
+	rr := suite.DoGet(LIST_API_URL)
 	suite.Require().Equal(200, rr.Code, rr.Body.String())
 	suite.Require().Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
 	expected := `{

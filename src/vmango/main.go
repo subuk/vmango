@@ -5,6 +5,7 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/negroni"
+	"github.com/gorilla/csrf"
 	"github.com/gorilla/sessions"
 	"github.com/libvirt/libvirt-go"
 	"github.com/meatballhat/negroni-logrus"
@@ -16,6 +17,7 @@ import (
 	"time"
 	"vmango/cfg"
 	"vmango/dal"
+	"vmango/handlers"
 	"vmango/web"
 	vmango_router "vmango/web/router"
 )
@@ -30,7 +32,7 @@ var (
 func main() {
 	flag.Parse()
 	logLevel, err := log.ParseLevel(*LOG_LEVEL)
-	fmt.Println(logLevel)
+
 	if err != nil {
 		log.WithError(err).Fatal("failed to parse loglevel")
 	}
@@ -70,7 +72,18 @@ func main() {
 		Logger:      log.StandardLogger(),
 		StaticCache: staticCache,
 	}
-	ctx.Router = vmango_router.New(ctx)
+
+	csrfErrorHandler := web.NewHandler(ctx, handlers.CSRFFailed)
+	csrfOptions := []csrf.Option{
+		csrf.FieldName("csrf"),
+		csrf.ErrorHandler(csrfErrorHandler),
+	}
+	if !config.IsTLS() {
+		csrfOptions = append(csrfOptions, csrf.Secure(false))
+	}
+	csrfProtect := csrf.Protect([]byte(config.SessionSecret), csrfOptions...)
+
+	ctx.Router = vmango_router.New(ctx, csrfProtect)
 	staticVersion := STATIC_VERSION
 	if config.Debug {
 		staticVersion = ""
@@ -123,7 +136,7 @@ func main() {
 	n.Use(negroni.NewRecovery())
 	n.UseHandler(ctx.Router)
 
-	if config.SSLKey != "" && config.SSLCert != "" {
+	if config.IsTLS() {
 		log.WithField("address", config.Listen).Info("starting SSL server")
 		log.Fatal(http.ListenAndServeTLS(config.Listen, config.SSLCert, config.SSLKey, n))
 	} else {

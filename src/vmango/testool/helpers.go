@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"vmango/cfg"
 	"vmango/dal"
 	"vmango/web"
 	web_router "vmango/web/router"
@@ -30,10 +31,19 @@ func (s *StubSessionStore) Save(r *http.Request, w http.ResponseWriter, sess *se
 	return nil
 }
 
+func StubCsrfProtect() web_router.CSRFProtector {
+	return func(handler http.Handler) http.Handler {
+		return handler
+	}
+}
+
 func NewTestContext() *web.Context {
 	ctx := &web.Context{}
-	ctx.Router = web_router.New(ctx)
+	ctx.Router = web_router.New(ctx, StubCsrfProtect())
 	ctx.Render = web.NewRenderer("", true, ctx)
+	ctx.AuthDB = dal.NewConfigAuthrep([]cfg.AuthUserConfig{
+		{Username: "admin", PasswordHash: "$2a$10$K6XfNbM2e5Tn/etSW7HpvuCAsWT62Y1Zrcituk9U1ktAHHVYh5kBS"},
+	})
 	ctx.Logger = logrus.New()
 	ctx.Hypervisors = dal.HypervisorList{}
 	store := &StubSessionStore{}

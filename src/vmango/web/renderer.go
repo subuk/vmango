@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"github.com/gorilla/csrf"
 	"github.com/unrolled/render"
 	"html/template"
 	"net/http"
@@ -25,6 +26,9 @@ func NewRenderer(version string, debug bool, ctx *Context) *render.Render {
 		IndentJSON: true,
 		Funcs: []template.FuncMap{
 			template.FuncMap{
+				"CSRFField": func(req *http.Request) template.HTML {
+					return csrf.TemplateField(req)
+				},
 				"HumanizeBytes": func(max int, number uint64) string {
 					i := 0
 					for {

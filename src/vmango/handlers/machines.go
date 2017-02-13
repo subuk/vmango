@@ -25,15 +25,13 @@ func MachineDelete(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 		return web.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
 	}
 
-	if req.Method == "POST" {
+	if req.Method == "POST" || req.Method == "DELETE" {
 		if err := hypervisor.Machines.Remove(machine); err != nil {
 			return err
 		}
-		url, err := ctx.Router.Get("machine-list").URL()
-		if err != nil {
-			panic(err)
-		}
-		http.Redirect(w, req, url.Path, http.StatusFound)
+		ctx.RenderDeleted(w, req, map[string]interface{}{
+			"Message": fmt.Sprintf("Machine %s deleted", machine.Name),
+		}, "machine-list")
 		return nil
 	} else {
 		ctx.Render.HTML(w, http.StatusOK, "machines/delete", map[string]interface{}{
@@ -62,7 +60,7 @@ func MachineStateChange(ctx *web.Context, w http.ResponseWriter, req *http.Reque
 	}
 
 	action := urlvars["action"]
-	if req.Method == "POST" {
+	if req.Method == "POST" || req.Method == "PUT" {
 		switch action {
 		case "stop":
 			if err := hypervisor.Machines.Stop(machine); err != nil {
@@ -79,11 +77,9 @@ func MachineStateChange(ctx *web.Context, w http.ResponseWriter, req *http.Reque
 		default:
 			return web.BadRequest(fmt.Sprintf("unknown action '%s' requested", action))
 		}
-		url, err := ctx.Router.Get("machine-detail").URL("name", machine.Name, "hypervisor", machine.Hypervisor)
-		if err != nil {
-			panic(err)
-		}
-		http.Redirect(w, req, url.Path, http.StatusFound)
+		ctx.RenderRedirect(w, req, map[string]interface{}{
+			"Message": fmt.Sprintf("Action %s done for machine %s", action, machine.Name),
+		}, "machine-detail", "name", machine.Name, "hypervisor", machine.Hypervisor)
 		return nil
 	} else {
 		ctx.Render.HTML(w, http.StatusOK, "machines/changestate", map[string]interface{}{
@@ -138,6 +134,7 @@ type machineAddFormData struct {
 	Hypervisor string
 	Userdata   string
 	SSHKey     []string
+	CSRF       string
 }
 
 func (data *machineAddFormData) Validate() error {
@@ -222,11 +219,9 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		if err := hypervisor.Machines.Start(vm); err != nil {
 			return fmt.Errorf("failed to start machine: %s", err)
 		}
-		url, err := ctx.Router.Get("machine-detail").URL("name", vm.Name, "hypervisor", vm.Hypervisor)
-		if err != nil {
-			panic(err)
-		}
-		http.Redirect(w, req, url.Path, http.StatusFound)
+		ctx.RenderCreated(w, req, map[string]interface{}{
+			"Message": fmt.Sprintf("Machine %s created", vm.Name),
+		}, "machine-detail", "name", vm.Name, "hypervisor", vm.Hypervisor)
 	} else {
 		plans := []*models.Plan{}
 		if err := ctx.Plans.List(&plans); err != nil {

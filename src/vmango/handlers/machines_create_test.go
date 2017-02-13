@@ -14,6 +14,7 @@ import (
 )
 
 const CREATE_URL = "/machines/add/"
+const CREATE_API_URL = "/api/machines/"
 
 type MachineCreateHandlerTestSuite struct {
 	suite.Suite
@@ -51,10 +52,23 @@ func (suite *MachineCreateHandlerTestSuite) SetupTest() {
 	})
 }
 
-func (suite *MachineCreateHandlerTestSuite) TestAuthRequired() {
+func (suite *MachineCreateHandlerTestSuite) TestGetAuthRequired() {
 	rr := suite.DoGet(CREATE_URL)
 	suite.Equal(302, rr.Code, rr.Body.String())
 	suite.Equal(rr.Header().Get("Location"), "/login/?next="+CREATE_URL)
+}
+
+func (suite *MachineCreateHandlerTestSuite) TestPostAuthRequired() {
+	rr := suite.DoPost(CREATE_URL, nil)
+	suite.Equal(302, rr.Code, rr.Body.String())
+	suite.Equal(rr.Header().Get("Location"), "/login/?next="+CREATE_URL)
+}
+
+func (suite *MachineCreateHandlerTestSuite) TestPostAPIAuthRequired() {
+	rr := suite.DoPost(CREATE_API_URL, nil)
+	suite.Equal(401, rr.Code, rr.Body.String())
+	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
+	suite.JSONEq(`{"Error": "Authentication failed"}`, rr.Body.String())
 }
 
 func (suite *MachineCreateHandlerTestSuite) TestGetOk() {
@@ -78,6 +92,24 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateOk() {
 	rr := suite.DoPost(CREATE_URL, data)
 	suite.Equal(302, rr.Code, rr.Body.String())
 	suite.Equal(DETAIL_URL("test1", "testvm"), rr.Header().Get("Location"))
+}
+
+func (suite *MachineCreateHandlerTestSuite) TestCreateAPIOk() {
+	suite.APIAuthenticate("admin", "secret")
+	suite.Machines.Hypervisor = "test1"
+	data := bytes.NewBufferString((url.Values{
+		"Name":       []string{"testvm"},
+		"Plan":       []string{"test-1"},
+		"Image":      []string{"TestOS-1.0_amd64.img"},
+		"SSHKey":     []string{"first"},
+		"Hypervisor": []string{"test1"},
+	}).Encode())
+	suite.T().Log(data)
+	rr := suite.DoPost(CREATE_API_URL, data)
+	suite.Equal(201, rr.Code, rr.Body.String())
+	suite.Equal(DETAIL_API_URL("test1", "testvm"), rr.Header().Get("Location"))
+	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
+	suite.JSONEq(`{"Message": "Machine testvm created"}`, rr.Body.String())
 }
 
 func (suite *MachineCreateHandlerTestSuite) TestCreateSameNameAlreadyExistFail() {
