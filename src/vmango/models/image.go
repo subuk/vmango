@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"time"
@@ -27,6 +28,30 @@ type Image struct {
 	FullPath   string
 	PoolName   string
 	Hypervisor string
+}
+
+func (image *Image) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		OS         string
+		Arch       int
+		Size       uint64
+		Type       int
+		Date       time.Time
+		FullName   string
+		FullPath   string
+		PoolName   string
+		Hypervisor string
+	}{
+		OS:         image.OS,
+		Arch:       image.Arch,
+		Size:       image.Size,
+		Type:       image.Type,
+		Date:       image.Date.In(time.UTC),
+		FullName:   image.FullName,
+		FullPath:   image.FullPath,
+		PoolName:   image.PoolName,
+		Hypervisor: image.Hypervisor,
+	})
 }
 
 func (image *Image) String() string {
