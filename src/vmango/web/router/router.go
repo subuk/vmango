@@ -30,7 +30,7 @@ func addWebRoutes(router *mux.Router, ctx *web.Context, csrfProtect CSRFProtecto
 	router.Handle("/machines/", machineList).Name("machine-list")
 
 	machineAdd := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
-		handlers.MachineAddForm, web.LimitMethods("GET", "HAED", "POST"),
+		handlers.MachineAddForm, web.LimitMethods("GET", "HEAD", "POST"),
 		web.SessionAuthenticationRequired,
 	)))
 	router.Handle("/machines/add/", machineAdd).Name("machine-add")
