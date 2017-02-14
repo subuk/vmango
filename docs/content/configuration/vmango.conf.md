@@ -1,5 +1,5 @@
 +++
-weight = 1
+weight = 15
 title = "vmango.conf"
 date = "2017-02-05T17:59:37+03:00"
 toc = true
@@ -23,9 +23,17 @@ All vm configuration templates are golang text templates: https://golang.org/pkg
 
 ## Hypervisor
 
+{{% notice info %}}
+If you use SSH connection url, make sure it present in known_hosts file and remote user has permissions to access libvirt socket.
+{{% /notice %}}
+
+{{% notice tip %}}
+Libvirt socket path can be changed via ?socket=/path/to/libvirt-sock url option.
+{{% /notice %}}
+
 **hypervisor** - Hypervisor definition, may be specified multiple times.
 
-**hypervisor.url** - Libvirt connection URL.
+**hypervisor.url** - Libvirt connection URL. 
 
 **hypervisor.image_storage_pool** - Libvirt storage pool name for VM images.
 
