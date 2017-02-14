@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"strings"
 )
 
 const (
@@ -91,4 +92,8 @@ func (v *VirtualMachine) MemoryMegabytes() int {
 
 func (v *VirtualMachine) String() string {
 	return fmt.Sprintf("<VirtualMachine %s>", v.Name)
+}
+
+func (v *VirtualMachine) HasUserdata() bool {
+	return strings.TrimSpace(v.Userdata) != ""
 }

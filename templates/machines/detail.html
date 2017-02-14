@@ -55,7 +55,7 @@
       {{ end }}
     </div>
 
-    {{ if not (eq .Machine.Userdata "") }}
+    {{ if .Machine.HasUserdata }}
     <div class="row small-up-2 medium-up-3">
       <h4 class="subheader">Userdata</h4>
       <textarea rows="20" disabled="disabled">{{ .Machine.Userdata }}</textarea>
