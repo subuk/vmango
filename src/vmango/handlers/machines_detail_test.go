@@ -15,6 +15,10 @@ func DETAIL_URL(hypervisor, name string) string {
 	return fmt.Sprintf("/machines/%s/%s/", hypervisor, name)
 }
 
+func DETAIL_API_URL(hypervisor, name string) string {
+	return fmt.Sprintf("/api/machines/%s/%s/", hypervisor, name)
+}
+
 type MachineDetailHandlerTestSuite struct {
 	suite.Suite
 	testool.WebTest
@@ -36,6 +40,13 @@ func (suite *MachineDetailHandlerTestSuite) TestAuthRequired() {
 	suite.Equal(rr.Header().Get("Location"), "/login/?next="+DETAIL_URL("testhv", "hello"))
 }
 
+func (suite *MachineDetailHandlerTestSuite) TestAPIAuthRequired() {
+	rr := suite.DoGet(DETAIL_API_URL("testhv", "hello"))
+	suite.Equal(401, rr.Code, rr.Body.String())
+	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
+	suite.JSONEq(`{"Error": "Authentication failed"}`, rr.Body.String())
+}
+
 func (suite *MachineDetailHandlerTestSuite) TestHTMLOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
@@ -53,8 +64,8 @@ func (suite *MachineDetailHandlerTestSuite) TestHTMLOk() {
 	suite.Equal(200, rr.Code, rr.Body.String())
 }
 
-func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
-	suite.Authenticate()
+func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
+	suite.APIAuthenticate("admin", "secret")
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
 		Name:       "test-detail-json",
@@ -78,7 +89,7 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
 			{Name: "test", Public: "keykeykey"},
 		},
 	}
-	rr := suite.DoGet(DETAIL_URL("testhv", "test-detail-json") + "?format=json")
+	rr := suite.DoGet(DETAIL_API_URL("testhv", "test-detail-json"))
 	suite.Require().Equal(200, rr.Code, rr.Body.String())
 	suite.Require().Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
 	expected := `{
@@ -104,6 +115,64 @@ func (suite *MachineDetailHandlerTestSuite) TestJSONOk() {
       }
   }`
 	suite.JSONEq(expected, rr.Body.String())
+}
+
+func (suite *MachineDetailHandlerTestSuite) TestPostNotAllowed() {
+	suite.Authenticate()
+	suite.Repo.GetResponse.Exist = true
+	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
+		Name:       "hello",
+		Uuid:       "123uuid",
+		Hypervisor: "stub",
+		Memory:     456,
+		Cpus:       1,
+		HWAddr:     "hw:hw:hw",
+		VNCAddr:    "vnc",
+		OS:         "HelloOS",
+		Arch:       "xxx",
+		Ip: &models.IP{
+			Address: "1.1.1.1",
+		},
+		RootDisk: &models.VirtualMachineDisk{
+			Size:   123,
+			Driver: "hello",
+			Type:   "wow",
+		},
+		SSHKeys: []*models.SSHKey{
+			{Name: "test", Public: "keykeykey"},
+		},
+	}
+	rr := suite.DoPost(DETAIL_URL("testhv", "hello"), nil)
+	suite.Equal(501, rr.Code, rr.Body.String())
+}
+
+func (suite *MachineDetailHandlerTestSuite) TestPostAPINotAllowed() {
+	suite.APIAuthenticate("admin", "secret")
+	suite.Repo.GetResponse.Exist = true
+	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
+		Name:       "hello",
+		Uuid:       "123uuid",
+		Hypervisor: "stub",
+		Memory:     456,
+		Cpus:       1,
+		HWAddr:     "hw:hw:hw",
+		VNCAddr:    "vnc",
+		OS:         "HelloOS",
+		Arch:       "xxx",
+		Ip: &models.IP{
+			Address: "1.1.1.1",
+		},
+		RootDisk: &models.VirtualMachineDisk{
+			Size:   123,
+			Driver: "hello",
+			Type:   "wow",
+		},
+		SSHKeys: []*models.SSHKey{
+			{Name: "test", Public: "keykeykey"},
+		},
+	}
+	rr := suite.DoPost(DETAIL_API_URL("testhv", "hello"), nil)
+	suite.Equal(501, rr.Code, rr.Body.String())
 }
 
 func (suite *MachineDetailHandlerTestSuite) TestRepFail() {

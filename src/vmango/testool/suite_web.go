@@ -10,10 +10,18 @@ import (
 
 type WebTest struct {
 	Context *web.Context
+	Headers http.Header
 }
 
 func (suite *WebTest) SetupTest() {
 	suite.Context = NewTestContext()
+	suite.Headers = http.Header{}
+}
+
+func (suite *WebTest) APIAuthenticate(username, password string) *WebTest {
+	suite.Headers.Add("X-Vmango-User", username)
+	suite.Headers.Add("X-Vmango-Pass", password)
+	return suite
 }
 
 func (suite *WebTest) Authenticate() {
@@ -30,6 +38,7 @@ func (suite *WebTest) DoRequest(method, url string, body io.Reader) *httptest.Re
 	if err != nil {
 		panic(err)
 	}
+	req.Header = suite.Headers
 	if body != nil {
 		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	}
@@ -43,4 +52,8 @@ func (suite *WebTest) DoGet(url string) *httptest.ResponseRecorder {
 
 func (suite *WebTest) DoPost(url string, body io.Reader) *httptest.ResponseRecorder {
 	return suite.DoRequest("POST", url, body)
+}
+
+func (suite *WebTest) DoDelete(url string) *httptest.ResponseRecorder {
+	return suite.DoRequest("DELETE", url, nil)
 }

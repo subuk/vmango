@@ -6,9 +6,9 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/unrolled/render"
 	"net/http"
-	"strings"
 	"time"
 	"vmango/dal"
+	"vmango/models"
 )
 
 const SESSION_NAME = "vmango"
@@ -45,10 +45,69 @@ type Context struct {
 	AuthDB      dal.Authrep
 }
 
-func (ctx *Context) RenderResponse(w http.ResponseWriter, req *http.Request, status int, name string, binding map[string]interface{}) {
-	format := req.URL.Query().Get("format")
+func (ctx *Context) RenderRedirect(w http.ResponseWriter, req *http.Request, bindings map[string]interface{}, routeName string, params ...string) {
+	format, ok := req.Context().Value("format").(int)
+	if !ok {
+		format = FORMAT_HTML
+	}
 	switch format {
-	case "json":
+	default:
+		url, err := ctx.Router.Get(routeName).URLPath(params...)
+		if err != nil {
+			panic(err)
+		}
+		http.Redirect(w, req, url.Path, http.StatusFound)
+	case FORMAT_JSON_API:
+		ctx.Render.JSON(w, http.StatusOK, bindings)
+	}
+}
+
+func (ctx *Context) RenderDeleted(w http.ResponseWriter, req *http.Request, bindings map[string]interface{}, routeName string, params ...string) {
+	format, ok := req.Context().Value("format").(int)
+	if !ok {
+		format = FORMAT_HTML
+	}
+	switch format {
+	default:
+		url, err := ctx.Router.Get(routeName).URLPath(params...)
+		if err != nil {
+			panic(err)
+		}
+		http.Redirect(w, req, url.Path, http.StatusFound)
+	case FORMAT_JSON_API:
+		ctx.Render.JSON(w, http.StatusNoContent, bindings)
+	}
+}
+
+func (ctx *Context) RenderCreated(w http.ResponseWriter, req *http.Request, bindings map[string]interface{}, routeName string, params ...string) {
+	format, ok := req.Context().Value("format").(int)
+	if !ok {
+		format = FORMAT_HTML
+	}
+	switch format {
+	default:
+		url, err := ctx.Router.Get(routeName).URLPath(params...)
+		if err != nil {
+			panic(err)
+		}
+		http.Redirect(w, req, url.Path, http.StatusFound)
+	case FORMAT_JSON_API:
+		url, err := ctx.Router.Get("api-" + routeName).URLPath(params...)
+		if err != nil {
+			panic(err)
+		}
+		w.Header().Set("Location", url.Path)
+		ctx.Render.JSON(w, http.StatusCreated, bindings)
+	}
+}
+
+func (ctx *Context) RenderResponse(w http.ResponseWriter, req *http.Request, status int, name string, binding map[string]interface{}) {
+	format, ok := req.Context().Value("format").(int)
+	if !ok {
+		format = FORMAT_HTML
+	}
+	switch format {
+	case FORMAT_JSON_API:
 		ctx.Render.JSON(w, status, binding)
 	default:
 		binding["Request"] = req
@@ -64,6 +123,26 @@ func (ctx *Context) Session(r *http.Request) *SessionData {
 	return &SessionData{Session: session}
 }
 
+func (ctx *Context) CheckAPIAuth(req *http.Request) bool {
+	username := req.Header.Get("X-Vmango-User")
+	if username == "" {
+		return false
+	}
+	password := req.Header.Get("X-Vmango-Pass")
+	if password == "" {
+		return false
+	}
+	user := &models.User{Name: username}
+	if exist, err := ctx.AuthDB.Get(user); err != nil {
+		logrus.WithError(err).Warning("failed to fetch user")
+		return false
+	} else if !exist {
+		logrus.WithField("username", username).Warning("Basic auth failed: no user found")
+		return false
+	}
+	return user.CheckPassword(password)
+}
+
 type HandlerFunc func(*Context, http.ResponseWriter, *http.Request) error
 
 type Handler struct {
@@ -76,29 +155,24 @@ func NewHandler(ctx *Context, handle HandlerFunc) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/login/" && r.URL.Path != "/login" && !strings.HasPrefix(r.URL.Path, "/static/") {
-		session := h.ctx.Session(r)
-		if !session.IsAuthenticated() {
-			http.Redirect(w, r, "/login/?next="+r.URL.String(), http.StatusFound)
-			return
-		}
-	}
 	err := h.handle(h.ctx, w, r)
 	if err == nil {
 		return
 	}
 
-	vars := map[string]interface{}{"Request": r, "Error": err.Error()}
+	vars := map[string]interface{}{"Error": err.Error()}
 
 	switch err.(type) {
 	default:
 		h.ctx.Logger.WithField("error", err).Warn("failed to handle request")
-		h.ctx.Render.HTML(w, http.StatusInternalServerError, "500", vars)
+		h.ctx.RenderResponse(w, r, http.StatusInternalServerError, "500", vars)
 	case *ErrNotFound:
-		h.ctx.Render.HTML(w, http.StatusNotFound, "404", vars)
+		h.ctx.RenderResponse(w, r, http.StatusNotFound, "404", vars)
 	case *ErrForbidden:
-		h.ctx.Render.HTML(w, http.StatusForbidden, "403", vars)
+		h.ctx.RenderResponse(w, r, http.StatusForbidden, "403", vars)
 	case *ErrBadRequest:
-		h.ctx.Render.HTML(w, http.StatusBadRequest, "400", vars)
+		h.ctx.RenderResponse(w, r, http.StatusBadRequest, "400", vars)
+	case *ErrNotImplemented:
+		h.ctx.RenderResponse(w, r, http.StatusNotImplemented, "501", vars)
 	}
 }

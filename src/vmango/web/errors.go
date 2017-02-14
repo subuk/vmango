@@ -31,3 +31,11 @@ type ErrBadRequest struct {
 func BadRequest(msg string) *ErrBadRequest {
 	return &ErrBadRequest{&HandlerError{msg}}
 }
+
+type ErrNotImplemented struct {
+	*HandlerError
+}
+
+func NotImplemented() *ErrNotImplemented {
+	return &ErrNotImplemented{&HandlerError{"Not implemented"}}
+}

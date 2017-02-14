@@ -8,13 +8,13 @@ toc = true
 
 ## List
 
-*GET /images/?format=json*
+*GET /api/images/*
 
 Success http code: 200
 
 Curl example:
 
-    curl "http://vmango.example.org/images/?format=json"
+    curl "http://vmango.example.org/api/images/"
 
 Response
 

@@ -7,7 +7,7 @@
     </div>
   </div>
 
-  <form class="JS-ReactiveForm" method="post" action="">
+  <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
       <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false" data-CheckboxCards-AutoSelect="true">
         <h4>Choose a hypervisor</h4>
         {{ range .Hypervisors }}

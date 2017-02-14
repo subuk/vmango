@@ -8,7 +8,7 @@
   </p>
 </div>
 <div class="row">
-  <form method="post" action="">
+  <form method="post" action="">{{ CSRFField .Request }}
     {{ if eq .Action "stop" }}
     <button class="button alert" type="submit">{{ .Action | Capitalize }}</button>
     {{ else }}

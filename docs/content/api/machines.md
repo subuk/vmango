@@ -7,13 +7,13 @@ toc = true
 
 ## List
 
-*GET /machines/?format=json*
+*GET /api/machines/*
 
 Success http code: 200
 
 Curl example:
 
-    curl "http://vmango.example.org/machines/?format=json"
+    curl "http://vmango.example.org/api/machines/"
 
 Response
 
@@ -59,9 +59,9 @@ Response
 
 ## Create
 
-*POST /machines/add/*
+*POST /api/machines/*
 
-Success http codes: 302
+Success http codes: 201
 
 Parameters:
 
@@ -69,24 +69,28 @@ Parameters:
 * Plan (string): Plan name
 * Image (string): Image full name (see [Images]({{< ref "api/images.md#List" >}}))
 * SSHKey ([]string): List of key ssh names
+* Hypervisor (string): Create machine on this hypervisor
 * Userdata (string): Userdata for cloud-init (more about formats in [cloud-init documentation](http://cloudinit.readthedocs.io/en/latest/topics/format.html))
 
 Curl example:
 
     curl -X POST \
-    -d 'Name=testapi&Plan=medium&Image=Centos-7_amd64_qcow2.img&SSHKey=home' \
-    "http://vmango.example.org/machines/add/"
+    -d 'Name=testapi&Plan=medium&Image=Centos-7_amd64_qcow2.img&SSHKey=test&SSHKey=home&Hypervisor=LCL1&Userdata=hello' \
+    "http://vmango.example.org/api/machines/"
 
+Response example
+
+    {"Message": "Machine testvm created"}
 
 ## Details
 
-*GET /machines/{name}/?format=json*
+*GET /api/machines/{hypervisor}/{name}/*
 
 Success http code: 200
 
 Curl example:
 
-    curl "http://vmango.example.org/machines/testapi/?format=json"
+    curl "http://vmango.example.org/api/machines/LCL1/testapi/"
 
 Response example
 
@@ -114,50 +118,49 @@ Response example
 
 ## Delete
 
-*POST /machines/{name}/delete/*
+*DELETE /api/machines/{hypervisor}/{name}/*
 
-Success http code: 302
+Success http code: 204
 
 No parameters.
 
 Curl example:
 
-    curl -X POST "http://vmango.example.org/machines/add/"
+    curl -X DELETE "http://vmango.example.org/api/machines/LCL1/testvm/"
 
 ## Start
 
-*POST /machines/{name}/start/*
+*POST /api/machines/{hypervisor}/{name}/start/*
 
-Success http code: 302
+Success http code: 200
 
 No parameters.
 
 Curl example:
 
-    curl -X POST "http://vmango.example.org/machines/testapi/start/"
-
+    curl -X POST "http://vmango.example.org/api/machines/LCL1/testapi/start/"
 
 ## Stop
 
-*POST /machines/{name}/stop/*
+*POST /api/machines/{hypervisor}/{name}/stop/*
 
-Success http code: 302
+Success http code: 200
 
 No parameters.
 
 Curl example:
 
-    curl -X POST "http://vmango.example.org/machines/testapi/stop/"
+    curl -X POST "http://vmango.example.org/api/machines/LCL1/testapi/stop/"
 
 ## Reboot
 
-*POST /machines/{name}/reboot/*
+*POST /api/machines/{hypervisor}/{name}/reboot/*
 
-Success http code: 302
+Success http code: 200
 
 No parameters.
 
 Curl example:
 
-    curl -X POST "http://vmango.example.org/machines/testapi/reboot/"
+    curl -X POST "http://vmango.example.org/api/machines/LCL1/testapi/reboot/"
 
