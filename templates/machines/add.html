@@ -1,97 +1,116 @@
 {{template "header" .}}
-<div class="row">
-  <div class="medium-8 column end">
-  <div class="row">
-    <div class="medium-12">
-      <h1>Create machine</h1>
-    </div>
-  </div>
+<!-- Breadcrumb -->
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "machine-list" }}">Machines</a></li>
+  <li class="breadcrumb-item">Create</li>
+</ol>
 
-  <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
-      <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false" data-CheckboxCards-AutoSelect="true">
-        <h4>Choose a hypervisor</h4>
-        {{ range .Hypervisors }}
-          <div class="column">
-            <div class="card JS-CheckboxCard" data-CheckboxCards-Depends="#ImageSelect" data-CheckboxCards-Depends-ShowOnly="[data-Hypervisor='{{ .Name }}']">
-              <div class="card-section text-center">
-                <i style="display: none;" class="icon fi-check"></i>
-                <input type="checkbox" name="Hypervisor" value="{{ .Name }}"> {{ .Name }}
-              </div>
-            </div>
-          </div>
-        {{ end }}
-      </div>
+<div class="container">
 
-      <div id="ImageSelect" class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false">
-      <h4>Choose an image</h4>
-        {{ range $hypervisor, $images := .Images }}
-          {{ range $images }}
-            <div class="column">
-              <div data-Hypervisor="{{ $hypervisor }}" class="card JS-CheckboxCard">
-                <input type="checkbox" name="Image" value="{{ .FullName }}">
-                <div class="card-section text-center">
-                  <img height="70" width="70" src="{{ Static "vmango/linux-logo.png" }}">
-                  <br>
-                  <i style="display: none;" class="icon fi-check"></i>
-                  {{ .OSName }} {{ .OSVersion }}
-                  <br>
-                   {{ .ArchString2 }}
+  <div class="card border-0">
+    <div class="card-block">
+      <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
+
+        <div class="form-group row JS-CheckboxCards" data-CheckboxCards-AutoSelect="true">
+          <div class="col-lg-9 col-md-12">
+            <h4>Choose a hypervisor</h4>
+
+            <div class="form-group d-flex flex-wrap">
+              {{ range .Hypervisors }}
+              <div style="min-width: 200px;" class="mr-2 card JS-CheckboxCard" data-CheckboxCards-Depends="#ImageSelect" data-CheckboxCards-Depends-ShowOnly="[data-Hypervisor='{{ .Name }}']">
+                <div class="card-block p-1 text-center">
+                  <input type="checkbox" name="Hypervisor" value="{{ .Name }}"> {{ .Name }}
                 </div>
               </div>
+              {{ end }}
             </div>
-        {{ end }}
-      {{ end }}
-    </div>
 
-    <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="false">
-      <h4>Choose a size</h4>
-      {{ range .Plans }}
-        <div class="column">
-          <div class="card JS-CheckboxCard">
-          <input type="checkbox" name="Plan" value="{{ .Name }}">
-          <div class="card-section text-center">
-            <i style="display: none;" class="icon fi-check"></i>
-            <b>{{ .Name }}</b>
-            <br>
-            {{ .Cpus }}xCPU, {{ .MemoryMegabytes }}Mb, {{ .DiskSizeGigabytes }}GB
-          </div>
           </div>
         </div>
-      {{ end }}
-    </div>
 
-    <div class="row small-up-2 medium-up-3 JS-CheckboxCards" data-CheckboxCards-Multiple="true">
-        <h4>Add your SSH keys</h4>
-        {{ range .SSHKeys }}
-        <div class="column">
-          <label for="{{ .Name }}">
-          <div class="card JS-CheckboxCard">
-            <div class="card-section">
-              <i style="display: none;" class="icon fi-check"></i>
-              <input id="{{ .Name }}" value="{{ .Name }}" name="sshkey" type="checkbox"> {{ .Name | LimitString 15 }}
+        <div id="ImageSelect" class="form-group row JS-CheckboxCards">
+          <div class="col-lg-9 col-md-12">
+            <h4>Choose an image</h4>
+
+            <div class="form-group d-flex flex-wrap">
+              {{ range $hypervisor, $images := .Images }}
+              {{ range $images }}
+              <div data-Hypervisor="{{ $hypervisor }}" style="min-width: 180px;" class="text-center mr-2 card JS-CheckboxCard">
+                <input type="checkbox" name="Image" value="{{ .FullName }}">
+                <div class="card-block">
+                  <img src="{{ Static "vmango/img/linux-logo.png" }}" width="70" height="70"> <br>
+                  {{ .OSName }} {{ .OSVersion }}<br>
+                  {{ .ArchString2 }}
+                </div>
+              </div>
+              {{ end }}
+              {{ end }}
+            </div>
+
+          </div>
+        </div>
+
+        <div class="form-group row JS-CheckboxCards">
+          <div class="col-lg-9 col-md-12">
+            <h4>Choose a size</h4>
+            <div class="form-group d-flex flex-wrap">
+
+              {{ range .Plans }}
+              <div class="mr-2 card JS-CheckboxCard">
+                <input type="checkbox" name="Plan" value="{{ .Name }}">
+                <div class="card-header">{{ .Name | Capitalize }}</div>
+                <div class="card-block d-flex flex-wrap">
+                  <div class="mr-1">Memory<br>{{ .MemoryMegabytes }}Mb</div>
+                  <div class="mr-1">Disk<br>{{ .DiskSizeGigabytes }}Gb</div>
+                  <div class="mr-1">CPUs<br>{{ .Cpus }}</div>
+                </div>
+              </div>
+              {{ end }}
+
+
             </div>
           </div>
-          </label>
         </div>
-        {{ end }}
-    </div>
 
-    <div class="row">
-      <h4>Specify a userdata</h4>
-      <div class="large-12 column">
-        <textarea rows="20" name="Userdata"></textarea>
-      </div>
-    </div>
+        <div class="form-group row JS-CheckboxCards" data-CheckboxCards-Multiple="true">
+          <div class="col-md-12">
+            <h4>Add your SSH keys</h4>
+            <div class="form-group d-flex flex-wrap">
+              {{ range .SSHKeys  }}
+              <div style="min-width: 200px;" class="mr-2 card JS-CheckboxCard">
+                <div class="card-block p-1 text-center">
+                  <input id="{{ .Name }}" value="{{ .Name }}" name="SSHKey" type="checkbox"> {{ .Name | LimitString 15 }}
+                </div>
+              </div>
+              {{ end }}
+            </div>
+          </div>
+        </div>
 
-    <div class="row">
-      <h4>Choose a hostname</h4>
-      <div class="large-12 column">
-          <input name="Name" type="text" placeholder="Input virtual machine name" required="required">
-      </div>
-    </div>
+        <div class="form-group row">
+          <div class="col-lg-8 col-md-12">
+            <h4>Specify a userdata</h4>
+            <textarea name="Userdata" class="form-control" id="Userdata" rows="6"></textarea>
+          </div>
+        </div>
 
-    <button class="button" data-loading="<i class='fi fi-loop'></i> Creating machine..." type="submit">Create machine</button>
-  </form>
+        <div class="form-group row">
+          <div class="col-lg-4 col-xs-12">
+            <h4>Choose a hostname</h4>
+            <input required="required" class="form-control" name="Name" id="Name" aria-describedby="nameHelp">
+            <small id="nameHelp" class="form-text text-muted">Title and operating system hostname of the machine.</small>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-md-12">
+            <button class="btn btn-primary" data-loading="<i class='icon-refresh icons'></i> Creating machine..." type="submit">Create machine</button>
+          </div>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
+
 {{template "footer" .}}

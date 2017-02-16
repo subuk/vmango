@@ -1,50 +1,68 @@
-<!doctype html>
-<html class="no-js" lang="en" dir="ltr">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ .Title }}</title>
-    <link rel="icon" href="{{ Url "static" "name" "vmango/favicon.ico" }}">
-    {{template "css" }}
-  </head>
-  <body>
-    {{ $machinesUrl := Url "machine-list" }}
-    {{ $machineAddUrl :=  Url "machine-add" }}
-    {{ $imagesUrl := Url "image-list" }}
-    {{ $loginUrl := Url "login" }}
-    {{ $logoutUrl := Url "logout" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="CoreUI - Open Source Bootstrap Admin Template">
+  <meta name="author" content="Łukasz Holeczek">
+  <meta name="keyword" content="Bootstrap,Admin,Template,Open,Source,AngularJS,Angular,Angular2,jQuery,CSS,HTML,RWD,Dashboard">
+  <link rel="icon" href="{{ Url "static" "name" "vmango/img/favicon.png" }}">
+  <title>{{ .Title }} — Vmango</title>
+  {{ template "css" }}
+</head>
 
-    <div class="JS-ReactiveMenu top-bar">
-      <div class="row">
-        <div class="top-bar-left">
-          <ul class="menu">
-            {{ if eq .Request.URL.Path "/" }}
-            <li class="menu-text">Vmango</li>
-            {{ else }}
-            <li><a class="menu-text" href="/">Vmango</a></li>
-            {{ end }}
-            {{ if IsAuthenticated .Request }}
-            <li {{if and (HasPrefix .Request.URL.Path $machinesUrl) (not (eq .Request.URL.Path $machineAddUrl)) }}class="active"{{end}}>
-              <a href="{{ $machinesUrl }}">Machines</a>
-            </li>
-            <li {{if HasPrefix .Request.URL.Path $imagesUrl }}class="active"{{end}}>
-              <a href="{{ $imagesUrl }}">Images</a>
-            </li>
-            {{ end }}
-          </ul>
-        </div>
-        <div class="top-bar-right">
-          <ul class="menu">
-            {{ if IsAuthenticated .Request }}
-            <li {{if HasPrefix .Request.URL.Path $machineAddUrl }}class="active"{{end}}><a href="{{ $machineAddUrl }}">Add machine</a></li>
-            <li><a href="{{ $logoutUrl }}">Logout</a></li>
-            {{ else }}
-            <li {{if HasPrefix .Request.URL.Path $loginUrl }}class="active"{{end}}><a href="{{ $loginUrl }}">Login</a></li>
-            {{ end }}
-          </ul>
-        </div>
-      </div>
+<body class="app sidebar-hidden">
+  <header class="app-header navbar">
+    <button class="navbar-toggler mobile-sidebar-toggler hidden-lg-up" type="button">☰</button>
+    <a class="navbar-brand" href="/"></a>
+    <ul class="nav navbar-nav hidden-md-down">
+      <li class="nav-item px-1">
+        <a class="nav-link" href="{{ Url "index" }}">Hypervisors</a>
+      </li>
+      <li class="nav-item px-1">
+        <a class="nav-link" href="{{ Url "machine-list" }}">Machines</a>
+      </li>
+      <li class="nav-item px-1">
+        <a class="nav-link" href="{{ Url "image-list" }}">Images</a>
+      </li>
+      <li class="nav-item px-1">
+        <a class="nav-link" href="{{ Url "machine-add" }}">Create machine</a>
+      </li>
+    </ul>
+    <ul class="nav navbar-nav ml-auto pr-3">
+      <li class="nav-item hidden-md-down">
+          <a class="nav-link" href="{{ Url "logout" }}">Logout</a>
+      </li>
+    </ul>
+  </header>
+
+  <div class="app-body">
+    <div class="sidebar">
+      <nav class="sidebar-nav">
+        <ul class="nav">
+          <li class="nav-title">
+            Menu
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ Url "index" }}"><i class="icon-arrow-right"></i> Hypervisors</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ Url "machine-list" }}"><i class="icon-arrow-right"></i> Machines</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ Url "image-list" }}"><i class="icon-arrow-right"></i> Images</a>
+          </li>
+          <li class="divider"></li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ Url "machine-add" }}"><i class="icon-arrow-right"></i> Create machine</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ Url "logout" }}"><i class="icon-arrow-right"></i> Logout</a>
+          </li>
+        </ul>
+      </nav>
     </div>
-    <br>
-    <section id="content">
+
+    <!-- Main content -->
+    <main class="main">

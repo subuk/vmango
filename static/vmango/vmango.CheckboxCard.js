@@ -15,7 +15,7 @@
                 $icon = $el.find('.icon');
 
             if ($el.find('input[type=checkbox]').prop('checked')){
-                $el.css({'border-color': 'green'})
+                $el.addClass('card-inverse card-primary');
                 $icon.show();
             }
         });
@@ -26,10 +26,10 @@
                 $icon = $cardEl.find('.icon');
 
             if ($el.prop('checked')){
-                $cardEl.css({'border-color': 'green'});
+                $cardEl.addClass('card-inverse card-primary');
                 $icon.show();
             } else {
-                $cardEl.css({'border-color': defaultColor});
+                $cardEl.removeClass('card-inverse card-primary');
                 $icon.hide();
             }
         });

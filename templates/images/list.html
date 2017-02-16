@@ -1,33 +1,49 @@
-{{template "header" .}}
-<div class="row">
-  <h1>Disk images</h1>
-</div>
+{{ template "header" . }}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item">Images</li>
+</ol>
 
-<div class="row">
-  <table class="table">
-    <thead>
-      <tr>
-        <th>OS</th>
-        <th>Arch</th>
-        <th>Size</th>
-        <th>Type</th>
-        <th>Last updated</th>
-        <th>Hypervisor</th>
-      </tr>
-    </thead>
-    <tbody>
+<div class="container">
 
-    {{ range .Images }}
-      <tr>
-        <td>{{ .OS }}</td>
-        <td>{{ .ArchString }}</td>
-        <td>{{ .SizeMegabytes }}Mb</td>
-        <td>{{ .TypeString }}</td>
-        <td>{{ HumanizeDate .Date }}</td>
-        <td>{{ .Hypervisor }}</td>
-      </tr>
-    {{ end }}
-    </tbody>
-  </table>
+  <div class="card border-0">
+    <div class="card-block">
+      <div class="row">
+        <div class="col-md-12">
+          <h4 class="card-title">Disk Images</h4>
+          <div class="small text-muted" style="margin-top:-10px;">Over all hypervisors</div>
+        </div>
+
+        <div style="margin-top:40px;" class="col-md-12">
+          <table class="table table-hover table-outline m-b-0">
+            <thead class="thead-default">
+              <tr>
+                <th>OS</th>
+                <th>Arch</th>
+                <th>Size</th>
+                <th>Type</th>
+                <th>Last updated</th>
+                <th>Hypervisor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{ range .Images }}
+                <tr>
+                  <td>{{ .OS }}</td>
+                  <td>{{ .ArchString }}</td>
+                  <td>{{ .SizeMegabytes }}Mb</td>
+                  <td>{{ .TypeString }}</td>
+                  <td>{{ HumanizeDate .Date }}</td>
+                  <td>{{ .Hypervisor }}</td>
+                </tr>
+              {{ end }}
+            </tbody>
+          </table>
+        </div>
+        <!--/.col-->
+      </div>
+      <!--/.row-->
+    </div>
+  </div>
 </div>
-{{template "footer" .}}
+{{ template "footer" . }}

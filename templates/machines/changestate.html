@@ -1,20 +1,43 @@
-{{template "header" .}}
-<div class="row">
-  <p>
-    Are you sure you want to {{ .Action }} machine <b>{{ .Machine.Name }}</b>?<br>
-    {{ if eq .Action "stop" }}
-    It feels like a power loss inside a machine!
-    {{ end }}
-  </p>
+{{ template "header" . }}
+
+<!-- Breadcrumb -->
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "machine-list" }}">Machines</a></li>
+  <li class="breadcrumb-item">{{ .Machine.Hypervisor }}</li>
+  <li class="breadcrumb-item active"><a href="{{ Url "machine-detail" "hypervisor" .Machine.Hypervisor "name" .Machine.Name }}">{{ .Machine.Name }}</a></li>
+  <li class="breadcrumb-item">{{ .Action | Capitalize }}</li>
+</ol>
+
+<div class="container">
+  <div class="card border-0">
+    <div class="card-block">
+
+      <div class="row">
+        <div class="col-md-12">
+          <p>
+            Are you sure you want to {{ .Action }} machine <b>{{ .Machine.Name }}</b>?<br>
+            {{ if eq .Action "stop" }}
+            It feels like a power loss inside a machine!
+            {{ end }}
+          </p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-12">
+          <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
+
+
+            <button
+              class="btn {{ if eq .Action "stop" }}btn-danger{{ else }}btn-primary{{ end }}"
+              data-loading="<i class='icon-refresh icons'></i> Applying..."
+              type="submit">{{ .Action | Capitalize }}</button>
+            <a class="btn btn-secondary" href="{{ Url "machine-detail" "name" .Machine.Name "hypervisor" .Machine.Hypervisor }}">Cancel</a>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
-<div class="row">
-  <form method="post" action="">{{ CSRFField .Request }}
-    {{ if eq .Action "stop" }}
-    <button class="button alert" type="submit">{{ .Action | Capitalize }}</button>
-    {{ else }}
-    <button class="button" type="submit">{{ .Action | Capitalize }}</button>
-    {{ end }}
-    <a class="button secondary" href="{{ Url "machine-detail" "name" .Machine.Name "hypervisor" .Machine.Hypervisor }}">Cancel</a>
-  </form>
-</div>
-{{template "footer" .}}
+{{ template "footer" . }}
