@@ -53,6 +53,7 @@ func (suite *MachineDetailHandlerTestSuite) TestHTMLOk() {
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
 		Name:       "test-detail-html",
 		Hypervisor: "testhv",
+		Ip:         &models.IP{Address: "1.1.1.1"},
 		RootDisk: &models.VirtualMachineDisk{
 			Size:   123,
 			Driver: "hello",
