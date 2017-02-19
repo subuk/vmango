@@ -1,100 +1,100 @@
 {{template "header" .}}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "machine-list" }}">Machines</a></li>
+  <li class="breadcrumb-item">{{ .Machine.Hypervisor }}</li>
+  <li class="breadcrumb-item active">{{ .Machine.Name }}</li>
+</ol>
 
-<div class="row">
-  <div class="medium-8 columns">
+<div class="container">
+
+<div class="card border-0">
+  <div class="card-block">
+
     <div class="row">
-      <h1>{{ .Machine.Name }}</h1>
-      <div class="medium-10 column">
-        <div class="media-object">
-          <div class="media-object-section">
-            <div>
-              <img height="60" width="60" src="{{ Static "vmango/server-icon.png" }}">
-            </div>
-          </div>
-          <div class="media-object-section">
-            <h5>{{ .Machine.OS }} {{ .Machine.Arch }}</h5>
-            <p class="subheader">{{ .Machine.MemoryMegabytes }}M Memory / {{ .Machine.RootDisk.SizeGigabytes }}G Disk / {{ .Machine.Cpus }} CPU / {{ .Machine.Hypervisor }}</p>
+      <div class="col-md-7">
+        <h1>{{ .Machine.Name }}</h1>
+        <div class="media">
+          <img src="{{ Static "vmango/img/linux-logo.png" }}" width="100" alt="Generic placeholder image">
+          <div class="media-body">
+            <p class="text-muted">
+              {{ .Machine.MemoryMegabytes }}MB RAM, {{ .Machine.RootDisk.SizeGigabytes }}G Disk, {{ .Machine.Cpus }} CPU<br>
+              {{ .Machine.OS }} {{ .Machine.Arch }} <br>
+              {{ .Machine.Hypervisor }}
+            </p>
           </div>
         </div>
       </div>
-      <div class="medium-2 column">
-        <span class="label {{ if .Machine.IsRunning }}success{{ else }}alert{{ end }}">
-          {{ .Machine.StateName | Capitalize }}
-        </span>
-      </div>
-    </div>
 
-    <div class="row">
-      <h4 class="subheader">Network</h4>
-      <table class="unstriped">
-        <tbody>
-          <tr>
-            <td>IP Address</td>
-            <td>{{ if .Machine.Ip }}{{ .Machine.Ip.Address }}{{ else }}Unkown{{ end }}</td>
-          </tr>
-          {{ if .Machine.VNCAddr }}
-          <tr>
-            <td>VNC address</td>
-            <td>{{ .Machine.VNCAddr }}</td>
-          </tr>
+      <div class="col-md-5 text-right">
+        <p>
+
+          {{ if .Machine.IsRunning }}
+            <a class="btn btn-primary" href="{{ Url "machine-changestate" "name" .Machine.Name "hypervisor" .Machine.Hypervisor "action" "stop" }}">Power Off</a>
+            <a class="btn btn-primary" href="{{ Url "machine-changestate" "name" .Machine.Name "hypervisor" .Machine.Hypervisor "action" "reboot" }}">Reboot</a>
+          {{ else }}
+            <a class="btn btn-primary" href="{{ Url "machine-changestate" "name" .Machine.Name "hypervisor" .Machine.Hypervisor "action" "start" }}">Power On</a>
           {{ end }}
-        </tbody>
-      </table>
+            <a class="btn btn-danger" href="{{ Url "machine-delete" "name" .Machine.Name "hypervisor" .Machine.Hypervisor }}">Remove</a>
+        </p>
+        <p>
+          Status: <b>{{ .Machine.StateName | Capitalize }}</b>
+        </p>
+        <p>
+          IP Address: <b> {{ .Machine.Ip.Address }}</b>
+        </p>
+      </div>
     </div>
+    <hr>
+    <div class="row">
+      <div class="col-md-6">
+        <div class="card card-inverse card-info">
+          <div class="card-block text-xs-center">
+            <div class="text-muted small text-uppercase font-weight-bold">IP Address</div>
+            <div class="h2 p-1">{{ .Machine.Ip.Address }}</div>
+          </div>
+        </div>
+      </div>
 
-    <div class="row small-up-2 medium-up-3">
-      <h4 class="subheader">SSH Keys</h4>
-      {{ range .Machine.SSHKeys }}
-        <div class="column">
-          <div class="card">
-            <div class="card-section">
-              <span>{{ .Name }}</span>
+      <div class="col-md-6">
+        <div class="card card-inverse card-warning">
+          <div class="card-block text-xs-center">
+            <div class="text-muted small text-uppercase font-weight-bold">VNC Address</div>
+            <div class="h2 p-1">{{ .Machine.VNCAddr }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-12">
+        <div class="card card-inverse card-success">
+          <div class="card-block text-xs-center">
+            <div class="text-muted small text-uppercase font-weight-bold">SSH Keys</div>
+            <div class="h2 p-1">
+              {{ range .Machine.SSHKeys }} {{ .Name }} {{ end }}
             </div>
           </div>
         </div>
-      {{ end }}
+      </div>
     </div>
 
     {{ if .Machine.HasUserdata }}
-    <div class="row small-up-2 medium-up-3">
-      <h4 class="subheader">Userdata</h4>
-      <textarea rows="20" disabled="disabled">{{ .Machine.Userdata }}</textarea>
+    <div class="row">
+      <div class="col-md-12">
+        <div class="card">
+          <div class="card-block text-xs-center">
+            <div class="text-muted small text-uppercase font-weight-bold">Userdata</div>
+            <pre>
+              <code>
+{{ .Machine.Userdata }}
+              </code>
+            </pre>
+          </div>
+        </div>
+      </div>
     </div>
     {{ end }}
-
-  </div>
-  <div class="medium-4 columns end">
-    <ul class="menu vertical">
-      {{ if .Machine.IsRunning }}
-      <li>
-        <a href="{{ Url "machine-changestate" "name" .Machine.Name "hypervisor" .Machine.Hypervisor "action" "stop" }}">
-          <i class="fi-power"></i>
-          <span>Force Stop</span>
-        </a>
-      </li>
-      <li>
-        <a href="{{ Url "machine-changestate" "name" .Machine.Name "hypervisor" .Machine.Hypervisor "action" "reboot" }}">
-          <i class="fi-loop"></i>
-          <span>Reboot</span>
-        </a>
-      </li>
-      {{ else }}
-      <li>
-        <a href="{{ Url "machine-changestate" "name" .Machine.Name "hypervisor" .Machine.Hypervisor "action" "start" }}">
-          <i class="fi-power"></i>
-          <span>Start</span>
-        </a>
-      </li>
-      {{ end }}
-
-      <li>
-        <a href="{{ Url "machine-delete" "name" .Machine.Name "hypervisor" .Machine.Hypervisor }}">
-          <i class="fi-trash"></i>
-          <span>Remove</span>
-        </a>
-      </li>
-
-    </ul>
   </div>
 </div>
+
 {{template "footer" .}}

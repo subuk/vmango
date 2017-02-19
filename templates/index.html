@@ -1,60 +1,60 @@
 {{template "header" .}}
-  <div class="row">
-    <div class="large-12 columns">
-      <div class="callout large">
-        <h1>Vmango</h1>
-        <p class="lead">virtual machine management interface</p>
-        <br/>
-        <p><span class="stat">{{ .Machines.Active.Count }}</span> machines running now</p>
+
+<!-- Breadcrumb -->
+<ol class="breadcrumb">
+  <li class="breadcrumb-item">Home</li>
+</ol>
+
+<div class="container">
+  {{ range .Servers }}
+  <div class="card border-0">
+    <div class="card-block">
+      <div class="row">
+        <div class="col-md-12">
+          <h2>{{ .Data.Hostname }}</h2>
+          <table>
+            <tr>
+              <td>Processor</td>
+              <td>{{ .Data.Processor }} ({{ .Data.Cpus }} cores)</td>
+            </tr>
+            <tr>
+              <td>Connection URI</td>
+              <td>{{ .Data.LibvirtURI }}</td>
+            </tr>
+            <tr>
+              <td>Memory</td>
+              <td>{{ .Data.Memory | HumanizeBytes 2 }}</td>
+            </tr>
+            <tr>
+              <td>Machines</td>
+              <td>{{ .Data.MachineCount }}</td>
+            </tr>
+            <tr>
+              <td>Storage space usage ({{ .Data.StorageCapacity | HumanizeBytes 4 }} total)</td>
+              <td>
+                <div class="progress">
+                  <div class="progress-bar bg-{{if lt .Data.StorageUsagePercent 80}}success{{ else }}danger{{ end }}" role="progressbar" style="width: {{ .Data.StorageUsagePercent }}%" aria-valuenow="{{ .Data.StorageUsagePercent }}" aria-valuemin="0" aria-valuemax="100">
+                    {{ .Data.StorageUsagePercent }}%
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>Memory usage ({{ .Data.MemoryTotal | HumanizeBytes 2 }} total)</td>
+              <td>
+                <div class="progress">
+                  <div class="progress-bar bg-{{if lt .Data.MemoryUsedPersent 80}}success{{ else }}danger{{ end }}" role="progressbar" style="width: {{ .Data.MemoryUsedPersent }}%" aria-valuenow="{{ .Data.MemoryUsedPersent }}" aria-valuemin="0" aria-valuemax="100">
+                    {{ .Data.MemoryUsedPersent }}%
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </div>
       </div>
     </div>
   </div>
-
-
-<div class="row">
-  {{ range .Servers }}
-  <div class="medium-12 column end">
-    <h2>{{ .Data.Hostname }}</h2>
-    <table>
-      <tr>
-        <td>Processor</td>
-        <td>{{ .Data.Processor }} ({{ .Data.Cpus }} cores)</td>
-      </tr>
-      <tr>
-        <td>Connection URI</td>
-        <td>{{ .Data.LibvirtURI }}</td>
-      </tr>
-      <tr>
-        <td>Memory</td>
-        <td>{{ .Data.Memory | HumanizeBytes 2 }}</td>
-      </tr>
-      <tr>
-        <td>Machines</td>
-        <td>{{ .Data.MachineCount }}</td>
-      </tr>
-      <tr>
-        <td>Storage space usage ({{ .Data.StorageCapacity | HumanizeBytes 4 }} total)</td>
-        <td>
-          <div class="progress {{if lt .Data.StorageUsagePercent 80}}success{{ else }}alert{{ end }}">
-            <div class="progress-meter" style="width: {{ .Data.StorageUsagePercent }}%">
-              <p class="progress-meter-text">{{ .Data.StorageUsagePercent }}%</p>
-            </div>
-          </div>
-        </td>
-      </tr>
-      <tr>
-        <td>Memory usage ({{ .Data.MemoryTotal | HumanizeBytes 2 }} total)</td>
-        <td>
-          <div class="progress {{if lt .Data.MemoryUsedPersent 80}}success{{ else }}alert{{ end }}">
-            <div class="progress-meter" style="width: {{ .Data.MemoryUsedPersent }}%">
-              <p class="progress-meter-text">{{ .Data.MemoryUsedPersent }}%</p>
-            </div>
-          </div>
-        </td>
-      </tr>
-
-    </table>
-  </div>
   {{ end }}
 </div>
+
 {{template "footer" .}}
