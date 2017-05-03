@@ -77,4 +77,5 @@ package-rpm-%:
 package-all: package-deb-ubuntu\:14.04 package-deb-ubuntu\:16.04 package-deb-debian\:8 package-rpm-centos\:7
 
 clean:
-	rm -rf bin/ vendor/pkg/ vendor/bin pkg/ src/vmango/web/assets.go dockerfile.build.*
+	rm -rf bin/ pkg/ vendor/pkg/ vendor/bin pkg/ src/vmango/web/assets.go dockerfile.build.*
+	make -C docs clean
