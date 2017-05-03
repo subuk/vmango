@@ -48,7 +48,7 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 			{
 				FullName:   "test_image.img",
 				OS:         "TestOS",
-				Arch:       models.IMAGE_ARCH_X86,
+				Arch:       models.ARCH_X86,
 				Type:       models.IMAGE_FMT_RAW,
 				Date:       time.Unix(1484891107, 0),
 				Hypervisor: "test1",
@@ -56,7 +56,7 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 			{
 				FullName:   "test_image2.img",
 				OS:         "OsTest-4.0",
-				Arch:       models.IMAGE_ARCH_X86_64,
+				Arch:       models.ARCH_X86_64,
 				Type:       models.IMAGE_FMT_QCOW2,
 				Date:       time.Unix(1484831107, 0),
 				Hypervisor: "test1",
@@ -69,7 +69,7 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 			{
 				FullName:   "test_image.img",
 				OS:         "TestOS",
-				Arch:       models.IMAGE_ARCH_X86,
+				Arch:       models.ARCH_X86,
 				Type:       models.IMAGE_FMT_RAW,
 				Date:       time.Unix(1484891107, 0),
 				Hypervisor: "test2",
@@ -77,7 +77,7 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 			{
 				FullName:   "test_image2.img",
 				OS:         "OsTest-4.0",
-				Arch:       models.IMAGE_ARCH_X86_64,
+				Arch:       models.ARCH_X86_64,
 				Type:       models.IMAGE_FMT_QCOW2,
 				Date:       time.Unix(1484831107, 0),
 				Hypervisor: "test2",
@@ -97,18 +97,18 @@ func (suite *ImageHandlersTestSuite) TestAPIOk() {
 			{
 				FullName:   "test_image.img",
 				OS:         "TestOS",
-				Arch:       models.IMAGE_ARCH_X86,
+				Arch:       models.ARCH_X86,
 				Type:       models.IMAGE_FMT_RAW,
-				Date:       time.Unix(1484891107, 0),
+				Date:       time.Unix(1484891107, 0).UTC(),
 				PoolName:   "hello",
 				Hypervisor: "test2",
 			},
 			{
 				FullName:   "test_image2.img",
 				OS:         "OsTest-4.0",
-				Arch:       models.IMAGE_ARCH_X86_64,
+				Arch:       models.ARCH_X86_64,
 				Type:       models.IMAGE_FMT_QCOW2,
-				Date:       time.Unix(1484831107, 0),
+				Date:       time.Unix(1484831107, 0).UTC(),
 				PoolName:   "hello2",
 				Hypervisor: "test2",
 			},
@@ -122,7 +122,7 @@ func (suite *ImageHandlersTestSuite) TestAPIOk() {
 		"Title": "Images",
 		"Images": [{
 		  "OS": "TestOS",
-		  "Arch": 1,
+		  "Arch": "x86",
 		  "Size": 0,
 		  "Type": 0,
 		  "Date": "2017-01-20T05:45:07Z",
@@ -132,7 +132,7 @@ func (suite *ImageHandlersTestSuite) TestAPIOk() {
 		  "Hypervisor": "test2"
 		},{
 		  "OS": "OsTest-4.0",
-		  "Arch": 0,
+		  "Arch": "x86_64",
 		  "Size": 0,
 		  "Type": 1,
 		  "Date": "2017-01-19T13:05:07Z",

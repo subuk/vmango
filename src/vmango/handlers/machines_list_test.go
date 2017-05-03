@@ -67,7 +67,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 		Hypervisor: "stub",
 		VNCAddr:    "vnc",
 		OS:         "WoW",
-		Arch:       "x86",
+		Arch:       models.ARCH_UNKNOWN,
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},
@@ -116,7 +116,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
           "Hypervisor": "stub",
           "VNCAddr": "vnc",
           "OS": "WoW",
-          "Arch": "x86",
+          "Arch": "unknown",
           "RootDisk": {
             "Size": 123,
             "Driver": "hello",
@@ -131,7 +131,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
           "Memory": 67897,
           "Cpus": 4,
           "OS": "",
-          "Arch": "",
+          "Arch": "unknown",
           "HWAddr": "xx:xx:xx",
           "Hypervisor": "stub",
           "VNCAddr": "VVV",

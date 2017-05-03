@@ -17,7 +17,7 @@
   </metadata>
   <memory unit="b">{{ .Plan.Memory }}</memory>
   <os>
-    <type arch='{{ .Image.ArchString2 }}'>hvm</type>
+    <type arch='{{ .Image.Arch }}'>hvm</type>
     <boot dev='hd'/>
   </os>
   <features>

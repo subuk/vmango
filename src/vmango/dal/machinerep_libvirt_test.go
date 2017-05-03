@@ -76,7 +76,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal(expectedKey, oneVm.SSHKeys[0].Public)
 	suite.Equal("192.168.128.130", oneVm.Ip.Address)
 	suite.Equal("", oneVm.OS)
-	suite.Equal("x86_64", oneVm.Arch)
+	suite.Equal("x86_64", oneVm.Arch.String())
 	suite.Equal("main", oneVm.Hypervisor)
 
 	twoVm := machines.Find("two")
@@ -98,7 +98,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal(expectedKey, twoVm.SSHKeys[0].Public)
 	suite.Nil(twoVm.Ip)
 	suite.Equal("TestOS-12", twoVm.OS)
-	suite.Equal("x86_64", twoVm.Arch)
+	suite.Equal("x86_64", twoVm.Arch.String())
 	suite.Equal("main", oneVm.Hypervisor)
 }
 
@@ -139,7 +139,7 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	suite.Equal(expectedKey, machine.SSHKeys[0].Public)
 	suite.Nil(machine.Ip)
 	suite.Equal("TestOS-12", machine.OS)
-	suite.Equal("x86_64", machine.Arch)
+	suite.Equal("x86_64", machine.Arch.String())
 	suite.Equal("main", machine.Hypervisor)
 }
 
@@ -230,7 +230,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	repo := suite.CreateRep()
 	image := &models.Image{
 		OS:       "Ubuntu-12.04",
-		Arch:     models.IMAGE_ARCH_X86_64,
+		Arch:     models.ARCH_X86_64,
 		Type:     models.IMAGE_FMT_QCOW2,
 		PoolName: suite.Fixtures.Pools[1].Name,
 		FullName: "test-image",

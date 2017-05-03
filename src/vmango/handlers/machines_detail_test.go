@@ -78,7 +78,7 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
 		HWAddr:     "hw:hw:hw",
 		VNCAddr:    "vnc",
 		OS:         "HelloOS",
-		Arch:       "xxx",
+		Arch:       models.ARCH_X86_64,
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},
@@ -106,7 +106,7 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
           "Hypervisor": "stub",
           "VNCAddr": "vnc",
           "OS": "HelloOS",
-          "Arch": "xxx",
+          "Arch": "x86_64",
           "RootDisk": {
             "Size": 123,
             "Driver": "hello",
@@ -132,7 +132,7 @@ func (suite *MachineDetailHandlerTestSuite) TestPostNotAllowed() {
 		HWAddr:     "hw:hw:hw",
 		VNCAddr:    "vnc",
 		OS:         "HelloOS",
-		Arch:       "xxx",
+		Arch:       models.ARCH_X86,
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},
@@ -161,7 +161,7 @@ func (suite *MachineDetailHandlerTestSuite) TestPostAPINotAllowed() {
 		HWAddr:     "hw:hw:hw",
 		VNCAddr:    "vnc",
 		OS:         "HelloOS",
-		Arch:       "xxx",
+		Arch:       models.ARCH_X86,
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},

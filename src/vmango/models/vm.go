@@ -60,7 +60,7 @@ type VirtualMachine struct {
 	Hypervisor string
 	Userdata   string `json:"-"`
 	OS         string
-	Arch       string
+	Arch       HWArch
 	State      int `json:"-"`
 	Memory     int
 	Cpus       int

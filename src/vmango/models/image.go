@@ -1,7 +1,6 @@
 package models
 
 import (
-	"encoding/json"
 	"os"
 	"strings"
 	"time"
@@ -11,16 +10,12 @@ const (
 	IMAGE_FMT_RAW   = iota
 	IMAGE_FMT_QCOW2 = iota
 )
-const (
-	IMAGE_ARCH_X86_64 = iota
-	IMAGE_ARCH_X86    = iota
-)
 
 type ImageList []*Image
 
 type Image struct {
 	OS         string
-	Arch       int
+	Arch       HWArch
 	Size       uint64
 	Type       int
 	Date       time.Time
@@ -28,30 +23,6 @@ type Image struct {
 	FullPath   string
 	PoolName   string
 	Hypervisor string
-}
-
-func (image *Image) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		OS         string
-		Arch       int
-		Size       uint64
-		Type       int
-		Date       time.Time
-		FullName   string
-		FullPath   string
-		PoolName   string
-		Hypervisor string
-	}{
-		OS:         image.OS,
-		Arch:       image.Arch,
-		Size:       image.Size,
-		Type:       image.Type,
-		Date:       image.Date.In(time.UTC),
-		FullName:   image.FullName,
-		FullPath:   image.FullPath,
-		PoolName:   image.PoolName,
-		Hypervisor: image.Hypervisor,
-	})
 }
 
 func (image *Image) String() string {
@@ -71,28 +42,6 @@ func (image *Image) Stream() (*os.File, error) {
 
 func (image *Image) SizeMegabytes() int {
 	return int(image.Size / 1024 / 1024)
-}
-
-func (image *Image) ArchString() string {
-	switch image.Arch {
-	default:
-		return "unknown"
-	case IMAGE_ARCH_X86_64:
-		return "amd64"
-	case IMAGE_ARCH_X86:
-		return "i386"
-	}
-}
-
-func (image *Image) ArchString2() string {
-	switch image.Arch {
-	default:
-		return "unknown"
-	case IMAGE_ARCH_X86_64:
-		return "x86_64"
-	case IMAGE_ARCH_X86:
-		return "x86"
-	}
 }
 
 func (image *Image) TypeString() string {

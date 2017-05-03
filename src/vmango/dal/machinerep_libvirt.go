@@ -272,7 +272,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.Cpus = int(info.NrVirtCpu)
 	vm.HWAddr = domainConfig.Interfaces[0].Mac.Address
 	vm.VNCAddr = domainConfig.VNCAddr()
-	vm.Arch = domainConfig.Os.Type.Arch
+	vm.Arch = models.ParseHWArch(domainConfig.Os.Type.Arch)
 	vm.OS = domainConfig.OSName
 	vm.Hypervisor = store.hypervisor
 	vm.Userdata = strings.TrimSpace(domainConfig.Userdata) + "\n"

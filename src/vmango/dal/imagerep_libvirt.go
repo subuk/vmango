@@ -72,15 +72,8 @@ func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.Stor
 	if len(imginfo) < 2 {
 		return fmt.Errorf("invalid name")
 	}
+	image.Arch = models.ParseHWArch(imginfo[1])
 
-	switch imginfo[1] {
-	default:
-		return fmt.Errorf("unknown arch")
-	case "amd64":
-		image.Arch = models.IMAGE_ARCH_X86_64
-	case "i386":
-		image.Arch = models.IMAGE_ARCH_X86
-	}
 	switch volumeConfig.Target.Format.Type {
 	default:
 		return fmt.Errorf("unknown type")
