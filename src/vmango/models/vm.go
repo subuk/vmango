@@ -64,7 +64,7 @@ type VirtualMachine struct {
 	State      int `json:"-"`
 	Memory     int
 	Cpus       int
-	ImageName  string `json:"-"`
+	ImageId    string `json:"-"`
 	Ip         *IP
 	HWAddr     string
 	VNCAddr    string

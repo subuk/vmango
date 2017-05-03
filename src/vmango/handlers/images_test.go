@@ -46,7 +46,7 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 		Name: "test1",
 		Images: &dal.StubImagerep{Data: []*models.Image{
 			{
-				FullName:   "test_image.img",
+				Id:         "test_image.img",
 				OS:         "TestOS",
 				Arch:       models.ARCH_X86,
 				Type:       models.IMAGE_FMT_RAW,
@@ -54,7 +54,7 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 				Hypervisor: "test1",
 			},
 			{
-				FullName:   "test_image2.img",
+				Id:         "test_image2.img",
 				OS:         "OsTest-4.0",
 				Arch:       models.ARCH_X86_64,
 				Type:       models.IMAGE_FMT_QCOW2,
@@ -67,7 +67,7 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 		Name: "test2",
 		Images: &dal.StubImagerep{Data: []*models.Image{
 			{
-				FullName:   "test_image.img",
+				Id:         "test_image.img",
 				OS:         "TestOS",
 				Arch:       models.ARCH_X86,
 				Type:       models.IMAGE_FMT_RAW,
@@ -75,7 +75,7 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 				Hypervisor: "test2",
 			},
 			{
-				FullName:   "test_image2.img",
+				Id:         "test_image2.img",
 				OS:         "OsTest-4.0",
 				Arch:       models.ARCH_X86_64,
 				Type:       models.IMAGE_FMT_QCOW2,
@@ -95,7 +95,7 @@ func (suite *ImageHandlersTestSuite) TestAPIOk() {
 		Name: "test2",
 		Images: &dal.StubImagerep{Data: []*models.Image{
 			{
-				FullName:   "test_image.img",
+				Id:         "test_image.img",
 				OS:         "TestOS",
 				Arch:       models.ARCH_X86,
 				Type:       models.IMAGE_FMT_RAW,
@@ -104,7 +104,7 @@ func (suite *ImageHandlersTestSuite) TestAPIOk() {
 				Hypervisor: "test2",
 			},
 			{
-				FullName:   "test_image2.img",
+				Id:         "test_image2.img",
 				OS:         "OsTest-4.0",
 				Arch:       models.ARCH_X86_64,
 				Type:       models.IMAGE_FMT_QCOW2,
@@ -121,21 +121,21 @@ func (suite *ImageHandlersTestSuite) TestAPIOk() {
 	suite.JSONEq(`{
 		"Title": "Images",
 		"Images": [{
+		  "Id": "test_image.img",
 		  "OS": "TestOS",
 		  "Arch": "x86",
 		  "Size": 0,
 		  "Type": 0,
 		  "Date": "2017-01-20T05:45:07Z",
-		  "FullName": "test_image.img",
 		  "PoolName": "hello",
 		  "Hypervisor": "test2"
 		},{
+		  "Id": "test_image2.img",
 		  "OS": "OsTest-4.0",
 		  "Arch": "x86_64",
 		  "Size": 0,
 		  "Type": 1,
 		  "Date": "2017-01-19T13:05:07Z",
-		  "FullName": "test_image2.img",
 		  "PoolName": "hello2",
 		  "Hypervisor": "test2"
 		}]

@@ -82,9 +82,9 @@ func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.Stor
 		image.Type = models.IMAGE_FMT_QCOW2
 	}
 
+	image.Id = volumeConfig.Name
 	image.OS = imginfo[0]
 	image.Size = volumeConfig.Allocation
-	image.FullName = volumeConfig.Name
 	image.PoolName = repo.pool
 	image.Date = volumeConfig.LastModified()
 	image.Hypervisor = repo.hypervisor
@@ -112,14 +112,14 @@ func (repo *LibvirtImagerep) List(images *models.ImageList) error {
 }
 
 func (repo *LibvirtImagerep) Get(image *models.Image) (bool, error) {
-	if image.FullName == "" {
+	if image.Id == "" {
 		return false, fmt.Errorf("no filename provided")
 	}
 	pool, err := repo.conn.LookupStoragePoolByName(repo.pool)
 	if err != nil {
 		return false, err
 	}
-	volume, err := pool.LookupStorageVolByName(image.FullName)
+	volume, err := pool.LookupStorageVolByName(image.Id)
 	if err != nil {
 		if (err.(libvirt.Error)).Code == libvirt.ERR_NO_STORAGE_VOL {
 			return false, nil

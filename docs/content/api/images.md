@@ -22,22 +22,22 @@ Response
       "Title": "Images",
       "Images": [
         {
+          "Id": "Centos-7_amd64_qcow2.img",
           "OS": "Centos-7",
           "Arch": 0,
           "Size": 1317994496,
           "Type": 1,
           "Date": "2017-01-17T23:34:43+01:00",
-          "FullName": "Centos-7_amd64_qcow2.img",
           "PoolName": "vm-images",
           "Hypervisor": "HV1"
         },
         {
+          "Id": "Ubuntu-16.04_amd64_qcow2.img",
           "OS": "Ubuntu-16.04",
           "Arch": 0,
           "Size": 322502656,
           "Type": 1,
           "Date": "2017-01-25T21:05:17.384080365+01:00",
-          "FullName": "Ubuntu-16.04_amd64_qcow2.img",
           "PoolName": "vm-images",
           "Hypervisor": "HV1"
         }

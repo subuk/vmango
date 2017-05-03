@@ -182,11 +182,11 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 			return web.BadRequest(fmt.Sprintf(`plan "%s" not found`, form.Plan))
 		}
 
-		image := &models.Image{FullName: form.Image}
+		image := &models.Image{Id: form.Image}
 		if exists, err := hypervisor.Images.Get(image); err != nil {
 			return err
 		} else if !exists {
-			return web.BadRequest(fmt.Sprintf(`image "%s" not found on hypervisor "%s"`, image.FullName, image.Hypervisor))
+			return web.BadRequest(fmt.Sprintf(`image "%s" not found on hypervisor "%s"`, image.Id, image.Hypervisor))
 		}
 		sshkeys := []*models.SSHKey{}
 		for _, keyName := range form.SSHKey {
@@ -200,12 +200,12 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 		}
 
 		vm := &models.VirtualMachine{
-			Name:      form.Name,
-			Memory:    plan.Memory,
-			Cpus:      plan.Cpus,
-			ImageName: image.FullName,
-			SSHKeys:   sshkeys,
-			Userdata:  form.Userdata,
+			Name:     form.Name,
+			Memory:   plan.Memory,
+			Cpus:     plan.Cpus,
+			ImageId:  image.Id,
+			SSHKeys:  sshkeys,
+			Userdata: form.Userdata,
 		}
 
 		if err := hypervisor.Machines.Create(vm, image, plan); err != nil {

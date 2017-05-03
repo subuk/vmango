@@ -37,7 +37,7 @@
               {{ range $hypervisor, $images := .Images }}
               {{ range $images }}
               <div data-Hypervisor="{{ $hypervisor }}" style="min-width: 180px;" class="text-center mr-2 card JS-CheckboxCard">
-                <input type="checkbox" name="Image" value="{{ .FullName }}">
+                <input type="checkbox" name="Image" value="{{ .Id }}">
                 <div class="card-block">
                   <img src="{{ Static "vmango/img/linux-logo.png" }}" width="70" height="70"> <br>
                   {{ .OSName }} {{ .OSVersion }}<br>

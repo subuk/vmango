@@ -26,7 +26,7 @@ func (repo *StubImagerep) Get(needle *models.Image) (bool, error) {
 	}
 
 	for _, image := range repo.Data {
-		if image.FullName == needle.FullName {
+		if image.Id == needle.Id {
 			*needle = *image
 			return true, nil
 		}

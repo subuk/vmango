@@ -13,12 +13,12 @@ const (
 type ImageList []*Image
 
 type Image struct {
+	Id         string
 	OS         string
 	Arch       HWArch
 	Size       uint64
 	Type       int
 	Date       time.Time
-	FullName   string
 	PoolName   string
 	Hypervisor string
 }

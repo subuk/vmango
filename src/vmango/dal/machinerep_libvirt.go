@@ -497,7 +497,7 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	if err := store.voltpl.Execute(&volumeXML, voltplContext); err != nil {
 		return fmt.Errorf("failed to create volume xml from template: %s", err)
 	}
-	imageVolume, err := imagePool.LookupStorageVolByName(image.FullName)
+	imageVolume, err := imagePool.LookupStorageVolByName(image.Id)
 	if err != nil {
 		return fmt.Errorf("failed to lookup image volume: %s", err)
 	}

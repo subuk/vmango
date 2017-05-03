@@ -64,7 +64,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("fb6c4f622cf346239aee23f0005eb5fb", oneVm.Id)
 	suite.Equal(536870912, oneVm.Memory)
 	suite.Equal(1, oneVm.Cpus)
-	suite.Equal("", oneVm.ImageName)
+	suite.Equal("", oneVm.ImageId)
 	suite.Equal("52:54:00:2e:54:28", oneVm.HWAddr)
 	suite.Equal("127.0.0.1:5900", oneVm.VNCAddr)
 	suite.Equal(oneVm.RootDisk.Type, "raw")
@@ -86,7 +86,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("c72cb377301a4f2aa34c547f70872b55", twoVm.Id)
 	suite.Equal(536870912, twoVm.Memory)
 	suite.Equal(1, twoVm.Cpus)
-	suite.Equal("", twoVm.ImageName)
+	suite.Equal("", twoVm.ImageId)
 	suite.Equal("52:54:00:2e:54:29", twoVm.HWAddr)
 	suite.Equal("127.0.0.1:5901", twoVm.VNCAddr)
 	suite.Equal("raw", twoVm.RootDisk.Type)
@@ -127,7 +127,7 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	suite.Equal("c72cb377301a4f2aa34c547f70872b55", machine.Id)
 	suite.Equal(536870912, machine.Memory)
 	suite.Equal(1, machine.Cpus)
-	suite.Equal("", machine.ImageName)
+	suite.Equal("", machine.ImageId)
 	suite.Equal("52:54:00:2e:54:29", machine.HWAddr)
 	suite.Equal("127.0.0.1:5901", machine.VNCAddr)
 	suite.Equal("raw", machine.RootDisk.Type)
@@ -233,9 +233,9 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 		Arch:     models.ARCH_X86_64,
 		Type:     models.IMAGE_FMT_QCOW2,
 		PoolName: suite.Fixtures.Pools[1].Name,
-		FullName: "test-image",
+		Id:       "test-image",
 	}
-	if err := testool.CreateVolume(suite.VirConnect, suite.Fixtures.Pools[1].Name, image.FullName); err != nil {
+	if err := testool.CreateVolume(suite.VirConnect, suite.Fixtures.Pools[1].Name, image.Id); err != nil {
 		suite.FailNow("failed to create image volume", err.Error())
 	}
 

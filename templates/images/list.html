@@ -18,6 +18,7 @@
           <table class="table table-hover table-outline m-b-0">
             <thead class="thead-default">
               <tr>
+                <th>Id</th>
                 <th>OS</th>
                 <th>Arch</th>
                 <th>Size</th>
@@ -29,6 +30,7 @@
             <tbody>
               {{ range .Images }}
                 <tr>
+                  <td>{{ .Id }}</td>
                   <td>{{ .OS }}</td>
                   <td>{{ .Arch }}</td>
                   <td>{{ .SizeMegabytes }}Mb</td>
