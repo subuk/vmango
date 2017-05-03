@@ -350,7 +350,9 @@ func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error
 		}
 		return false, virErr
 	}
-	store.fillVm(machine, domain, network)
+	if err := store.fillVm(machine, domain, network); err != nil {
+		return true, fmt.Errorf("failed to fetch machine info: %s", err)
+	}
 	return true, nil
 }
 
