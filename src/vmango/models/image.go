@@ -1,7 +1,6 @@
 package models
 
 import (
-	"os"
 	"strings"
 	"time"
 )
@@ -20,7 +19,6 @@ type Image struct {
 	Type       int
 	Date       time.Time
 	FullName   string
-	FullPath   string
 	PoolName   string
 	Hypervisor string
 }
@@ -34,10 +32,6 @@ func (image *Image) OSName() string {
 }
 func (image *Image) OSVersion() string {
 	return strings.Split(image.OS, "-")[1]
-}
-
-func (image *Image) Stream() (*os.File, error) {
-	return os.Open(image.FullPath)
 }
 
 func (image *Image) SizeMegabytes() int {

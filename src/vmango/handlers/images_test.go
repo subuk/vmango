@@ -127,7 +127,6 @@ func (suite *ImageHandlersTestSuite) TestAPIOk() {
 		  "Type": 0,
 		  "Date": "2017-01-20T05:45:07Z",
 		  "FullName": "test_image.img",
-		  "FullPath": "",
 		  "PoolName": "hello",
 		  "Hypervisor": "test2"
 		},{
@@ -137,7 +136,6 @@ func (suite *ImageHandlersTestSuite) TestAPIOk() {
 		  "Type": 1,
 		  "Date": "2017-01-19T13:05:07Z",
 		  "FullName": "test_image2.img",
-		  "FullPath": "",
 		  "PoolName": "hello2",
 		  "Hypervisor": "test2"
 		}]

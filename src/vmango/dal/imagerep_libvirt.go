@@ -15,7 +15,6 @@ type volumeXMLConfig struct {
 	Name       string `xml:"name"`
 	Allocation uint64 `xml:"allocation"`
 	Target     struct {
-		Path       string `xml:"path"`
 		Timestamps struct {
 			MTimeRaw string `xml:"mtime"`
 		} `xml:"timestamps"`
@@ -85,7 +84,6 @@ func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.Stor
 
 	image.OS = imginfo[0]
 	image.Size = volumeConfig.Allocation
-	image.FullPath = volumeConfig.Target.Path
 	image.FullName = volumeConfig.Name
 	image.PoolName = repo.pool
 	image.Date = volumeConfig.LastModified()
