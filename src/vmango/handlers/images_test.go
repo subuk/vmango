@@ -92,27 +92,6 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 func (suite *ImageHandlersTestSuite) TestAPIOk() {
 	suite.APIAuthenticate("admin", "secret")
 	suite.Context.Hypervisors.Add(&dal.Hypervisor{
-		Name: "test1",
-		Images: &dal.StubImagerep{Data: []*models.Image{
-			{
-				FullName:   "test_image.img",
-				OS:         "TestOS",
-				Arch:       models.IMAGE_ARCH_X86,
-				Type:       models.IMAGE_FMT_RAW,
-				Date:       time.Unix(1484891107, 0),
-				Hypervisor: "test1",
-			},
-			{
-				FullName:   "test_image2.img",
-				OS:         "OsTest-4.0",
-				Arch:       models.IMAGE_ARCH_X86_64,
-				Type:       models.IMAGE_FMT_QCOW2,
-				Date:       time.Unix(1484831107, 0),
-				Hypervisor: "test1",
-			},
-		}},
-	})
-	suite.Context.Hypervisors.Add(&dal.Hypervisor{
 		Name: "test2",
 		Images: &dal.StubImagerep{Data: []*models.Image{
 			{

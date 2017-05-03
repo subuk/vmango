@@ -14,9 +14,9 @@ func (repo *StubImagerep) List(images *models.ImageList) error {
 	if repo.ListErr != nil {
 		return repo.ListErr
 	}
-	dataCopy := make([]*models.Image, len(repo.Data))
-	copy(dataCopy, repo.Data)
-	*images = *(&dataCopy)
+	for _, image := range repo.Data {
+		*images = append(*images, image)
+	}
 	return nil
 }
 
