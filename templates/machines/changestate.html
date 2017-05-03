@@ -5,7 +5,7 @@
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{{ Url "machine-list" }}">Machines</a></li>
   <li class="breadcrumb-item">{{ .Machine.Hypervisor }}</li>
-  <li class="breadcrumb-item active"><a href="{{ Url "machine-detail" "hypervisor" .Machine.Hypervisor "name" .Machine.Name }}">{{ .Machine.Name }}</a></li>
+  <li class="breadcrumb-item active"><a href="{{ Url "machine-detail" "hypervisor" .Machine.Hypervisor "id" .Machine.Id }}">{{ .Machine.Name }}</a></li>
   <li class="breadcrumb-item">{{ .Action | Capitalize }}</li>
 </ol>
 
@@ -33,7 +33,7 @@
               class="btn {{ if eq .Action "stop" }}btn-danger{{ else }}btn-primary{{ end }}"
               data-loading="<i class='icon-refresh icons'></i> Applying..."
               type="submit">{{ .Action | Capitalize }}</button>
-            <a class="btn btn-secondary" href="{{ Url "machine-detail" "name" .Machine.Name "hypervisor" .Machine.Hypervisor }}">Cancel</a>
+            <a class="btn btn-secondary" href="{{ Url "machine-detail" "id" .Machine.Id "hypervisor" .Machine.Hypervisor }}">Cancel</a>
           </form>
         </div>
       </div>

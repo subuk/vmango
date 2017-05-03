@@ -73,11 +73,12 @@ func (suite *MachineDeleteHandlerTestSuite) TestConfirmationOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
+		Id:         "deadbeefdeadbeefdeadbeefdeadbeef",
 		Name:       "test-remove",
 		RootDisk:   &models.VirtualMachineDisk{},
 		Hypervisor: "testhv",
 	}
-	rr := suite.DoGet(DELETE_URL("testhv", "test-remove"))
+	rr := suite.DoGet(DELETE_URL("testhv", "deadbeefdeadbeefdeadbeefdeadbeef"))
 	suite.Equal(200, rr.Code, rr.Body.String())
 }
 
@@ -86,7 +87,7 @@ func (suite *MachineDeleteHandlerTestSuite) TestConfirmationNoMachineFail() {
 	suite.Repo.GetResponse.Exist = false
 	rr := suite.DoGet(DELETE_URL("testhv", "test-remove"))
 	suite.Equal(404, rr.Code, rr.Body.String())
-	suite.Contains(rr.Body.String(), "Machine with name test-remove not found")
+	suite.Contains(rr.Body.String(), "Machine with id test-remove not found")
 }
 
 func (suite *MachineDeleteHandlerTestSuite) TestConfirmationRepFail() {
@@ -101,11 +102,12 @@ func (suite *MachineDeleteHandlerTestSuite) TestActionOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
+		Id:         "deadbeefdeadbeefdeadbeefdeadbeef",
 		Name:       "test-remove",
 		RootDisk:   &models.VirtualMachineDisk{},
 		Hypervisor: "testhv",
 	}
-	rr := suite.DoPost(DELETE_URL("testhv", "test-remove"), bytes.NewBuffer([]byte(``)))
+	rr := suite.DoPost(DELETE_URL("testhv", "deadbeefdeadbeefdeadbeefdeadbeef"), bytes.NewBuffer([]byte(``)))
 	suite.Equal(302, rr.Code, rr.Body.String())
 }
 
@@ -113,11 +115,12 @@ func (suite *MachineDeleteHandlerTestSuite) TestAPIActionOk() {
 	suite.APIAuthenticate("admin", "secret")
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
+		Id:         "deadbeefdeadbeefdeadbeefdeadbeef",
 		Name:       "test-remove",
 		RootDisk:   &models.VirtualMachineDisk{},
 		Hypervisor: "testhv",
 	}
-	rr := suite.DoDelete(DELETE_API_URL("testhv", "test-remove"))
+	rr := suite.DoDelete(DELETE_API_URL("testhv", "deadbeefdeadbeefdeadbeefdeadbeef"))
 	suite.Equal(204, rr.Code, rr.Body.String())
 	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
 	suite.JSONEq(`{"Message": "Machine test-remove deleted"}`, rr.Body.String())
@@ -132,7 +135,7 @@ func (suite *MachineDeleteHandlerTestSuite) TestActionNoMachineFail() {
 func (suite *MachineDeleteHandlerTestSuite) TestActionRepFail() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Error = fmt.Errorf("test error")
-	rr := suite.DoPost(DELETE_URL("testhv", "test-remove"), bytes.NewBuffer([]byte(``)))
+	rr := suite.DoPost(DELETE_URL("testhv", "deadbeefdeadbeefdeadbeefdeadbeef"), bytes.NewBuffer([]byte(``)))
 	suite.Contains(rr.Body.String(), "failed to fetch machine info: test error")
 	suite.Equal(500, rr.Code, rr.Body.String())
 }

@@ -91,7 +91,7 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateOk() {
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
 	suite.Equal(302, rr.Code, rr.Body.String())
-	suite.Equal(DETAIL_URL("test1", "testvm"), rr.Header().Get("Location"))
+	suite.Equal(DETAIL_URL("test1", "stub-machine-id"), rr.Header().Get("Location"))
 }
 
 func (suite *MachineCreateHandlerTestSuite) TestCreateAPIOk() {
@@ -107,26 +107,9 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateAPIOk() {
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_API_URL, data)
 	suite.Equal(201, rr.Code, rr.Body.String())
-	suite.Equal(DETAIL_API_URL("test1", "testvm"), rr.Header().Get("Location"))
+	suite.Equal(DETAIL_API_URL("test1", "stub-machine-id"), rr.Header().Get("Location"))
 	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
-	suite.JSONEq(`{"Message": "Machine testvm created"}`, rr.Body.String())
-}
-
-func (suite *MachineCreateHandlerTestSuite) TestCreateSameNameAlreadyExistFail() {
-	suite.Authenticate()
-	data := bytes.NewBufferString((url.Values{
-		"Name":       []string{"exist"},
-		"Plan":       []string{"test-1"},
-		"Image":      []string{"TestOS-1.0_amd64.img"},
-		"SSHKey":     []string{"first"},
-		"Hypervisor": []string{"test1"},
-	}).Encode())
-	suite.Machines.GetResponse.Exist = true
-	suite.T().Log(data)
-	rr := suite.DoPost(CREATE_URL, data)
-	suite.Equal(400, rr.Code, rr.Body.String())
-	suite.Contains(rr.Body.String(), "machine with name &#39;exist&#39; already exists")
-	suite.Equal(rr.Header().Get("Location"), "")
+	suite.JSONEq(`{"Message": "Machine testvm (stub-machine-id) created"}`, rr.Body.String())
 }
 
 func (suite *MachineCreateHandlerTestSuite) TestCreateNoPlanFail() {

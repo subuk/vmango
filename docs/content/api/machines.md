@@ -19,6 +19,7 @@ Response
 
     {
         "Machines": [{
+            "Id": "some-machine-id",
             "Name": "test",
             "Memory": 456,
             "Cpus": 1,
@@ -37,6 +38,7 @@ Response
                 {"Name": "test", "Public": "keykeykey"}
             ]
         }, {
+            "Id": "deadbeefdeadbeefdeadbeefdeadbeef",
             "Name": "hello",
             "Memory": 67897,
             "Cpus": 4,
@@ -84,18 +86,19 @@ Response example
 
 ## Details
 
-*GET /api/machines/{hypervisor}/{name}/*
+*GET /api/machines/{hypervisor}/{id}/*
 
 Success http code: 200
 
 Curl example:
 
-    curl "http://vmango.example.org/api/machines/LCL1/testapi/"
+    curl "http://vmango.example.org/api/machines/LCL1/i-deadbeef/"
 
 Response example
 
     {
         "Machine": {
+            "Id": "i-deadbeef",
             "Name": "test-detail-json",
             "Memory": 456,
             "Cpus": 1,
@@ -118,7 +121,7 @@ Response example
 
 ## Delete
 
-*DELETE /api/machines/{hypervisor}/{name}/*
+*DELETE /api/machines/{hypervisor}/{id}/*
 
 Success http code: 204
 
@@ -126,11 +129,11 @@ No parameters.
 
 Curl example:
 
-    curl -X DELETE "http://vmango.example.org/api/machines/LCL1/testvm/"
+    curl -X DELETE "http://vmango.example.org/api/machines/LCL1/deadbeef/"
 
 ## Start
 
-*POST /api/machines/{hypervisor}/{name}/start/*
+*POST /api/machines/{hypervisor}/{id}/start/*
 
 Success http code: 200
 
@@ -142,7 +145,7 @@ Curl example:
 
 ## Stop
 
-*POST /api/machines/{hypervisor}/{name}/stop/*
+*POST /api/machines/{hypervisor}/{id}/stop/*
 
 Success http code: 200
 
@@ -154,7 +157,7 @@ Curl example:
 
 ## Reboot
 
-*POST /api/machines/{hypervisor}/{name}/reboot/*
+*POST /api/machines/{hypervisor}/{id}/reboot/*
 
 Success http code: 200
 

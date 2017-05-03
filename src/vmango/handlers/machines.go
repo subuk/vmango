@@ -17,12 +17,12 @@ func MachineDelete(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 		return web.NotFound(fmt.Sprintf("hypervisor '%s' not found", urlvars["hypervisor"]))
 	}
 	machine := &models.VirtualMachine{
-		Name: urlvars["name"],
+		Id: urlvars["id"],
 	}
 	if exists, err := hypervisor.Machines.Get(machine); err != nil {
 		return fmt.Errorf("failed to fetch machine info: %s", err)
 	} else if !exists {
-		return web.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
+		return web.NotFound(fmt.Sprintf("Machine with id %s not found", machine.Id))
 	}
 
 	if req.Method == "POST" || req.Method == "DELETE" {
@@ -50,13 +50,13 @@ func MachineStateChange(ctx *web.Context, w http.ResponseWriter, req *http.Reque
 		return web.NotFound(fmt.Sprintf("hypervisor '%s' not found", urlvars["hypervisor"]))
 	}
 	machine := &models.VirtualMachine{
-		Name: urlvars["name"],
+		Id: urlvars["id"],
 	}
 
 	if exists, err := hypervisor.Machines.Get(machine); err != nil {
 		return fmt.Errorf("failed to fetch machine info: %s", err)
 	} else if !exists {
-		return web.NotFound(fmt.Sprintf("Machine with name %s not found", machine.Name))
+		return web.NotFound(fmt.Sprintf("Machine with id %s not found", machine.Id))
 	}
 
 	action := urlvars["action"]
@@ -79,7 +79,7 @@ func MachineStateChange(ctx *web.Context, w http.ResponseWriter, req *http.Reque
 		}
 		ctx.RenderRedirect(w, req, map[string]interface{}{
 			"Message": fmt.Sprintf("Action %s done for machine %s", action, machine.Name),
-		}, "machine-detail", "name", machine.Name, "hypervisor", machine.Hypervisor)
+		}, "machine-detail", "id", machine.Id, "hypervisor", machine.Hypervisor)
 		return nil
 	} else {
 		ctx.Render.HTML(w, http.StatusOK, "machines/changestate", map[string]interface{}{
@@ -113,12 +113,12 @@ func MachineDetail(ctx *web.Context, w http.ResponseWriter, req *http.Request) e
 		return web.NotFound(fmt.Sprintf("hypervisor '%s' not found", urlvars["hypervisor"]))
 	}
 	machine := &models.VirtualMachine{
-		Name: urlvars["name"],
+		Id: urlvars["id"],
 	}
 	if exists, err := hypervisor.Machines.Get(machine); err != nil {
 		return err
 	} else if !exists {
-		return web.NotFound(fmt.Sprintf("Machine with name %s not found on hypervisor %s", machine.Name, hypervisor.Name))
+		return web.NotFound(fmt.Sprintf("Machine with id %s not found on hypervisor %s", machine.Id, hypervisor.Name))
 	}
 	ctx.RenderResponse(w, req, http.StatusOK, "machines/detail", map[string]interface{}{
 		"Machine": machine,
@@ -208,11 +208,6 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 			Userdata:  form.Userdata,
 		}
 
-		if exists, err := hypervisor.Machines.Get(vm); err != nil {
-			return err
-		} else if exists {
-			return web.BadRequest(fmt.Sprintf("machine with name '%s' already exists on hypervisor '%s'", vm.Name, hypervisor.Name))
-		}
 		if err := hypervisor.Machines.Create(vm, image, plan); err != nil {
 			return fmt.Errorf("failed to create machine: %s", err)
 		}
@@ -220,8 +215,8 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 			return fmt.Errorf("failed to start machine: %s", err)
 		}
 		ctx.RenderCreated(w, req, map[string]interface{}{
-			"Message": fmt.Sprintf("Machine %s created", vm.Name),
-		}, "machine-detail", "name", vm.Name, "hypervisor", vm.Hypervisor)
+			"Message": fmt.Sprintf("Machine %s (%s) created", vm.Name, vm.Id),
+		}, "machine-detail", "id", vm.Id, "hypervisor", vm.Hypervisor)
 	} else {
 		plans := []*models.Plan{}
 		if err := ctx.Plans.List(&plans); err != nil {

@@ -11,12 +11,12 @@ import (
 	"vmango/testool"
 )
 
-func DETAIL_URL(hypervisor, name string) string {
-	return fmt.Sprintf("/machines/%s/%s/", hypervisor, name)
+func DETAIL_URL(hypervisor, id string) string {
+	return fmt.Sprintf("/machines/%s/%s/", hypervisor, id)
 }
 
-func DETAIL_API_URL(hypervisor, name string) string {
-	return fmt.Sprintf("/api/machines/%s/%s/", hypervisor, name)
+func DETAIL_API_URL(hypervisor, id string) string {
+	return fmt.Sprintf("/api/machines/%s/%s/", hypervisor, id)
 }
 
 type MachineDetailHandlerTestSuite struct {
@@ -51,6 +51,7 @@ func (suite *MachineDetailHandlerTestSuite) TestHTMLOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
+		Id:         "deadbeefdeadbeefdeadbeefdeadbeef",
 		Name:       "test-detail-html",
 		Hypervisor: "testhv",
 		Ip:         &models.IP{Address: "1.1.1.1"},
@@ -60,7 +61,7 @@ func (suite *MachineDetailHandlerTestSuite) TestHTMLOk() {
 			Type:   "wow",
 		},
 	}
-	rr := suite.DoGet(DETAIL_URL("testhv", "test-detail-html"))
+	rr := suite.DoGet(DETAIL_URL("testhv", "deadbeefdeadbeefdeadbeefdeadbeef"))
 	suite.Equal("text/html; charset=UTF-8", rr.Header().Get("Content-Type"))
 	suite.Equal(200, rr.Code, rr.Body.String())
 }
@@ -70,7 +71,7 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
 		Name:       "test-detail-json",
-		Uuid:       "123uuid",
+		Id:         "123uuid",
 		Hypervisor: "stub",
 		Memory:     456,
 		Cpus:       1,
@@ -96,6 +97,7 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
 	expected := `{
       "Title": "Machine test-detail-json",
       "Machine": {
+      	  "Id": "123uuid",
           "Name": "test-detail-json",
           "Memory": 456,
           "Cpus": 1,
@@ -123,7 +125,7 @@ func (suite *MachineDetailHandlerTestSuite) TestPostNotAllowed() {
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
 		Name:       "hello",
-		Uuid:       "123uuid",
+		Id:         "123uuid",
 		Hypervisor: "stub",
 		Memory:     456,
 		Cpus:       1,
@@ -152,7 +154,7 @@ func (suite *MachineDetailHandlerTestSuite) TestPostAPINotAllowed() {
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
 		Name:       "hello",
-		Uuid:       "123uuid",
+		Id:         "123uuid",
 		Hypervisor: "stub",
 		Memory:     456,
 		Cpus:       1,

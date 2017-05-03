@@ -267,7 +267,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	}
 
 	vm.Name = name
-	vm.Uuid = fmt.Sprintf("%x", uuid)
+	vm.Id = fmt.Sprintf("%x", uuid)
 	vm.Memory = int(info.Memory * 1024)
 	vm.Cpus = int(info.NrVirtCpu)
 	vm.HWAddr = domainConfig.Interfaces[0].Mac.Address
@@ -335,14 +335,14 @@ func (store *LibvirtMachinerep) List(machines *models.VirtualMachineList) error 
 }
 
 func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error) {
-	if machine.Name == "" {
-		panic("no name specified for LibvirtMachinerep.Get()")
+	if machine.Id == "" {
+		panic("no id specified for LibvirtMachinerep.Get()")
 	}
 	network, err := store.conn.LookupNetworkByName(store.network)
 	if err != nil {
 		return false, fmt.Errorf("failed to find network '%s'", err)
 	}
-	domain, err := store.conn.LookupDomainByName(machine.Name)
+	domain, err := store.conn.LookupDomainByUUIDString(machine.Id)
 	if err != nil {
 		virErr := err.(libvirt.Error)
 		if virErr.Code == libvirt.ERR_NO_DOMAIN {
@@ -400,7 +400,7 @@ func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine
 		Name:        machine.Name,
 		Meta:        map[string]string{},
 		PublicKeys:  metadataPubkeys,
-		UUID:        machine.Uuid,
+		UUID:        machine.Id,
 	}
 	mdContent, err := json.Marshal(metadata)
 	if err != nil {
@@ -484,6 +484,10 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		return err
 	}
 
+	if _, err := store.conn.LookupDomainByName(machine.Name); err == nil {
+		return fmt.Errorf("domain with name '%s' already exists", machine.Name)
+	}
+
 	var volumeXML bytes.Buffer
 	voltplContext := struct {
 		Machine *models.VirtualMachine
@@ -561,8 +565,8 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 }
 
 func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
-	if machine.Name == "" {
-		panic("no name specified for machine remove")
+	if machine.Id == "" {
+		panic("no id specified for machine remove")
 	}
 	storagePool, err := store.conn.LookupStoragePoolByName(store.storagePool)
 	if err != nil {
@@ -571,7 +575,7 @@ func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
 	if err := storagePool.Refresh(0); err != nil {
 		return err
 	}
-	domain, err := store.conn.LookupDomainByName(machine.Name)
+	domain, err := store.conn.LookupDomainByUUIDString(machine.Id)
 	if err != nil {
 		return fmt.Errorf("failed to lookup domain: %s", err.(libvirt.Error).Message)
 	}

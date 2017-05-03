@@ -61,7 +61,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Require().NotNil(oneVm)
 	suite.Equal("one", oneVm.Name)
 	suite.Equal(models.STATE_RUNNING, oneVm.State)
-	suite.Equal("fb6c4f622cf346239aee23f0005eb5fb", oneVm.Uuid)
+	suite.Equal("fb6c4f622cf346239aee23f0005eb5fb", oneVm.Id)
 	suite.Equal(536870912, oneVm.Memory)
 	suite.Equal(1, oneVm.Cpus)
 	suite.Equal("", oneVm.ImageName)
@@ -83,7 +83,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Require().NotNil(twoVm)
 	suite.Equal("two", twoVm.Name)
 	suite.Equal(models.STATE_RUNNING, twoVm.State)
-	suite.Equal("c72cb377301a4f2aa34c547f70872b55", twoVm.Uuid)
+	suite.Equal("c72cb377301a4f2aa34c547f70872b55", twoVm.Id)
 	suite.Equal(536870912, twoVm.Memory)
 	suite.Equal(1, twoVm.Cpus)
 	suite.Equal("", twoVm.ImageName)
@@ -117,14 +117,14 @@ func (suite *MachinerepLibvirtSuite) TestIgnoredOk() {
 
 func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{Name: "two"}
+	machine := &models.VirtualMachine{Id: "c72cb377301a4f2aa34c547f70872b55"}
 	exists, err := repo.Get(machine)
 	suite.Require().True(exists)
 	suite.Require().Nil(err)
 
 	suite.Equal("two", machine.Name)
 	suite.Equal(models.STATE_RUNNING, machine.State)
-	suite.Equal("c72cb377301a4f2aa34c547f70872b55", machine.Uuid)
+	suite.Equal("c72cb377301a4f2aa34c547f70872b55", machine.Id)
 	suite.Equal(536870912, machine.Memory)
 	suite.Equal(1, machine.Cpus)
 	suite.Equal("", machine.ImageName)
@@ -145,7 +145,7 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 
 func (suite *MachinerepLibvirtSuite) TestGetNotFoundFail() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{Name: "doesntexist"}
+	machine := &models.VirtualMachine{Id: "deadbeefdeadbeefdeadbeefdeadbeef"}
 	exists, err := repo.Get(machine)
 	suite.Require().False(exists)
 	suite.Require().Nil(err)
@@ -161,12 +161,12 @@ func (suite *MachinerepLibvirtSuite) TestGetNoNameFail() {
 
 func (suite *MachinerepLibvirtSuite) TestRemoveWithIPOk() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{Name: "one"}
+	machine := &models.VirtualMachine{Id: "fb6c4f622cf346239aee23f0005eb5fb"}
 	suite.T().Log("Waiting for domain")
 	err := repo.Remove(machine)
 	suite.Require().NoError(err)
 
-	domain, err := suite.VirConnect.LookupDomainByName("one")
+	domain, err := suite.VirConnect.LookupDomainByUUIDString("fb6c4f622cf346239aee23f0005eb5fb")
 	suite.Require().NotNil(err)
 	suite.Require().Nil(domain)
 	suite.Require().Contains(err.(libvirt.Error).Message, "Domain not found")
@@ -180,14 +180,14 @@ func (suite *MachinerepLibvirtSuite) TestRemoveWithIPOk() {
 
 func (suite *MachinerepLibvirtSuite) TestRemoveNotFoundFail() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{Name: "doesntexist"}
+	machine := &models.VirtualMachine{Id: "deadbeefdeadbeefdeadbeefdeadbeef"}
 	err := repo.Remove(machine)
 	suite.Require().NotNil(err)
 	suite.T().Log(err.Error())
 	suite.Require().Contains(err.Error(), "Domain not found")
 }
 
-func (suite *MachinerepLibvirtSuite) TestRemoveNoNameFail() {
+func (suite *MachinerepLibvirtSuite) TestRemoveNoIdFail() {
 	repo := suite.CreateRep()
 	machine := &models.VirtualMachine{}
 	suite.Require().Panics(func() {
@@ -215,6 +215,15 @@ func (suite *MachinerepLibvirtSuite) TestCreateNoVMPoolFail() {
 	plan := &models.Plan{}
 	err := repo.Create(machine, image, plan)
 	suite.Contains(err.Error(), "failed to lookup vm storage pool: Storage pool not found: ")
+}
+
+func (suite *MachinerepLibvirtSuite) TestCreateSameNameFail() {
+	repo := suite.CreateRep()
+	machine := &models.VirtualMachine{Name: "two"}
+	image := &models.Image{PoolName: suite.Fixtures.Pools[1].Name}
+	plan := &models.Plan{}
+	err := repo.Create(machine, image, plan)
+	suite.EqualError(err, "domain with name 'two' already exists")
 }
 
 func (suite *MachinerepLibvirtSuite) TestCreateOk() {
@@ -254,6 +263,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	domainConfig := struct {
 		Memory   string `xml:"memory"`
 		Cpus     string `xml:"vcpu"`
+		Id       string `xml:"uuid"`
 		Name     string `xml:"name"`
 		Userdata string `xml:"metadata>md>userdata"`
 		SSHKeys  []struct {
@@ -275,6 +285,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	suite.Equal("524288", domainConfig.Memory)
 	suite.Equal("2", domainConfig.Cpus)
 	suite.Equal("test-create", domainConfig.Name)
+	suite.NotEmpty(domainConfig.Id)
 	suite.Equal("#!/bin/sh", strings.TrimSpace(domainConfig.Userdata))
 	suite.Len(domainConfig.SSHKeys, 2)
 	suite.Equal(domainConfig.SSHKeys[0].Name, "home")

@@ -45,7 +45,11 @@ func (suite *MachineListHandlerTestSuite) TestAPIAuthRequired() {
 func (suite *MachineListHandlerTestSuite) TestHTMLOk() {
 	suite.Authenticate()
 	suite.Repo.ListResponse.Machines = &models.VirtualMachineList{}
-	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{Name: "test", Hypervisor: "testhv"})
+	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{
+		Id:         "deadbeefdeadbeefdeadbeefdeadbeef",
+		Name:       "test",
+		Hypervisor: "testhv",
+	})
 	rr := suite.DoGet(LIST_URL)
 	suite.Equal(200, rr.Code, rr.Body.String())
 	suite.Equal("text/html; charset=UTF-8", rr.Header().Get("Content-Type"))
@@ -56,7 +60,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 	suite.Repo.ListResponse.Machines = &models.VirtualMachineList{}
 	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{
 		Name:       "test",
-		Uuid:       "123uuid",
+		Id:         "123uuid",
 		Memory:     456,
 		Cpus:       1,
 		HWAddr:     "hw:hw:hw",
@@ -78,7 +82,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 	})
 	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{
 		Name:       "hello",
-		Uuid:       "321uuid",
+		Id:         "321uuid",
 		Memory:     67897,
 		Cpus:       4,
 		HWAddr:     "xx:xx:xx",
@@ -103,6 +107,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 	expected := `{
       "Title": "Machines",
       "Machines": [{
+          "Id": "123uuid",
           "Name": "test",
           "Memory": 456,
           "Cpus": 1,
@@ -121,6 +126,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
             {"Name": "test", "Public": "keykeykey"}
           ]
         }, {
+          "Id": "321uuid",
           "Name": "hello",
           "Memory": 67897,
           "Cpus": 4,

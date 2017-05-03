@@ -36,6 +36,9 @@ func (repo *StubMachinerep) List(vms *models.VirtualMachineList) error {
 	return repo.ListResponse.Error
 }
 func (repo *StubMachinerep) Get(vm *models.VirtualMachine) (bool, error) {
+	if vm.Id == "" {
+		panic("no id specified")
+	}
 	if repo.GetResponse.Machine != nil {
 		*vm = *repo.GetResponse.Machine
 	}
@@ -46,6 +49,7 @@ func (repo *StubMachinerep) Create(vm *models.VirtualMachine, image *models.Imag
 		*vm = *repo.CreateResponse.Machine
 	}
 	vm.Hypervisor = repo.Hypervisor
+	vm.Id = "stub-machine-id"
 	return repo.CreateResponse.Error
 }
 func (repo *StubMachinerep) Start(vm *models.VirtualMachine) error {
