@@ -2,7 +2,7 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{{ Url "machine-list" }}">Machines</a></li>
-  <li class="breadcrumb-item">{{ .Machine.Hypervisor }}</li>
+  <li class="breadcrumb-item">{{ .Provider }}</li>
   <li class="breadcrumb-item active">{{ .Machine.Name }}</li>
 </ol>
 
@@ -20,7 +20,7 @@
             <p class="text-muted">
               {{ .Machine.MemoryMegabytes }}MB RAM, {{ .Machine.RootDisk.SizeGigabytes }}G Disk, {{ .Machine.Cpus }} CPU<br>
               {{ .Machine.OS }} {{ .Machine.Arch }} <br>
-              {{ .Machine.Hypervisor }}
+              {{ .Provider }}
             </p>
           </div>
         </div>
@@ -30,12 +30,12 @@
         <p>
 
           {{ if .Machine.IsRunning }}
-            <a class="btn btn-primary" href="{{ Url "machine-changestate" "id" .Machine.Id "hypervisor" .Machine.Hypervisor "action" "stop" }}">Power Off</a>
-            <a class="btn btn-primary" href="{{ Url "machine-changestate" "id" .Machine.Id "hypervisor" .Machine.Hypervisor "action" "reboot" }}">Reboot</a>
+            <a class="btn btn-primary" href="{{ Url "machine-changestate" "id" .Machine.Id "provider" .Provider "action" "stop" }}">Power Off</a>
+            <a class="btn btn-primary" href="{{ Url "machine-changestate" "id" .Machine.Id "provider" .Provider "action" "reboot" }}">Reboot</a>
           {{ else }}
-            <a class="btn btn-primary" href="{{ Url "machine-changestate" "id" .Machine.Id "hypervisor" .Machine.Hypervisor "action" "start" }}">Power On</a>
+            <a class="btn btn-primary" href="{{ Url "machine-changestate" "id" .Machine.Id "provider" .Provider "action" "start" }}">Power On</a>
           {{ end }}
-            <a class="btn btn-danger" href="{{ Url "machine-delete" "id" .Machine.Id "hypervisor" .Machine.Hypervisor }}">Remove</a>
+            <a class="btn btn-danger" href="{{ Url "machine-delete" "id" .Machine.Id "provider" .Provider }}">Remove</a>
         </p>
         <p>
           Status: <b>{{ .Machine.StateName | Capitalize }}</b>

@@ -22,18 +22,20 @@
                 <th>State</th>
                 <th>CPU</th>
                 <th>Memory</th>
-                <th>Hypervisor</th>
+                <th>Provider</th>
               </tr>
             </thead>
             <tbody>
-              {{ range .Machines.All }}
-                <tr>
-                  <td><a href="{{ Url "machine-detail" "id" .Id "hypervisor" .Hypervisor }}">{{ .Name }}</a></td>
-                  <td>{{ .StateName }}</td>
-                  <td>{{ .Cpus }}</td>
-                  <td>{{ .MemoryMegabytes }}Mb</td>
-                  <td>{{ .Hypervisor }}</td>
-                </tr>
+              {{ range $provider, $machines := .Machines }}
+                {{ range $machines }}
+                  <tr>
+                    <td><a href="{{ Url "machine-detail" "id" .Id "provider" $provider }}">{{ .Name }}</a></td>
+                    <td>{{ .StateName }}</td>
+                    <td>{{ .Cpus }}</td>
+                    <td>{{ .MemoryMegabytes }}Mb</td>
+                    <td>{{ $provider }}</td>
+                  </tr>
+                {{ end }}
               {{ end }}
             </tbody>
 

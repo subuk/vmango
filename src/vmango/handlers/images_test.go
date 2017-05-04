@@ -42,9 +42,9 @@ func (suite *ImageHandlersTestSuite) TestAPIPostNotAllowed() {
 
 func (suite *ImageHandlersTestSuite) TestOk() {
 	suite.Authenticate()
-	suite.Context.Hypervisors.Add(&dal.Hypervisor{
-		Name: "test1",
-		Images: &dal.StubImagerep{Data: []*models.Image{
+	suite.Context.Providers.Add(&dal.StubProvider{
+		TName: "test1",
+		TImages: &dal.StubImagerep{Data: []*models.Image{
 			{
 				Id:         "test_image.img",
 				OS:         "TestOS",
@@ -63,9 +63,9 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 			},
 		}},
 	})
-	suite.Context.Hypervisors.Add(&dal.Hypervisor{
-		Name: "test2",
-		Images: &dal.StubImagerep{Data: []*models.Image{
+	suite.Context.Providers.Add(&dal.StubProvider{
+		TName: "test2",
+		TImages: &dal.StubImagerep{Data: []*models.Image{
 			{
 				Id:         "test_image.img",
 				OS:         "TestOS",
@@ -91,9 +91,9 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 
 func (suite *ImageHandlersTestSuite) TestAPIOk() {
 	suite.APIAuthenticate("admin", "secret")
-	suite.Context.Hypervisors.Add(&dal.Hypervisor{
-		Name: "test2",
-		Images: &dal.StubImagerep{Data: []*models.Image{
+	suite.Context.Providers.Add(&dal.StubProvider{
+		TName: "test2",
+		TImages: &dal.StubImagerep{Data: []*models.Image{
 			{
 				Id:         "test_image.img",
 				OS:         "TestOS",
@@ -120,33 +120,35 @@ func (suite *ImageHandlersTestSuite) TestAPIOk() {
 	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
 	suite.JSONEq(`{
 		"Title": "Images",
-		"Images": [{
-		  "Id": "test_image.img",
-		  "OS": "TestOS",
-		  "Arch": "x86",
-		  "Size": 0,
-		  "Type": 0,
-		  "Date": "2017-01-20T05:45:07Z",
-		  "PoolName": "hello",
-		  "Hypervisor": "test2"
-		},{
-		  "Id": "test_image2.img",
-		  "OS": "OsTest-4.0",
-		  "Arch": "x86_64",
-		  "Size": 0,
-		  "Type": 1,
-		  "Date": "2017-01-19T13:05:07Z",
-		  "PoolName": "hello2",
-		  "Hypervisor": "test2"
-		}]
+		"Images": {
+			"test2": [{
+				"Id": "test_image.img",
+				"OS": "TestOS",
+				"Arch": "x86",
+				"Size": 0,
+				"Type": 0,
+				"Date": "2017-01-20T05:45:07Z",
+				"PoolName": "hello",
+				"Hypervisor": "test2"
+			},{
+				"Id": "test_image2.img",
+				"OS": "OsTest-4.0",
+				"Arch": "x86_64",
+				"Size": 0,
+				"Type": 1,
+				"Date": "2017-01-19T13:05:07Z",
+				"PoolName": "hello2",
+				"Hypervisor": "test2"
+			}]
+		}
 	}`, rr.Body.String())
 }
 
 func (suite *ImageHandlersTestSuite) TestRepFail() {
 	suite.Authenticate()
-	suite.Context.Hypervisors.Add(&dal.Hypervisor{
-		Name: "test1",
-		Images: &dal.StubImagerep{
+	suite.Context.Providers.Add(&dal.StubProvider{
+		TName: "test1",
+		TImages: &dal.StubImagerep{
 			ListErr: fmt.Errorf("test repo error"),
 		},
 	})

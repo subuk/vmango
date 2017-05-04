@@ -14,13 +14,13 @@
 
         <div class="form-group row JS-CheckboxCards" data-CheckboxCards-AutoSelect="true">
           <div class="col-lg-9 col-md-12">
-            <h4>Choose a hypervisor</h4>
+            <h4>Choose a provider</h4>
 
             <div class="form-group d-flex flex-wrap">
-              {{ range .Hypervisors }}
-              <div style="min-width: 200px;" class="mr-2 card JS-CheckboxCard" data-CheckboxCards-Depends="#ImageSelect" data-CheckboxCards-Depends-ShowOnly="[data-Hypervisor='{{ .Name }}']">
+              {{ range .Providers }}
+              <div style="min-width: 200px;" class="mr-2 card JS-CheckboxCard" data-CheckboxCards-Depends="#ImageSelect" data-CheckboxCards-Depends-ShowOnly="[data-Provider='{{ .Name }}']">
                 <div class="card-block p-1 text-center">
-                  <input type="checkbox" name="Hypervisor" value="{{ .Name }}"> {{ .Name }}
+                  <input type="checkbox" name="Provider" value="{{ .Name }}"> {{ .Name }}
                 </div>
               </div>
               {{ end }}
@@ -34,9 +34,9 @@
             <h4>Choose an image</h4>
 
             <div class="form-group d-flex flex-wrap">
-              {{ range $hypervisor, $images := .Images }}
+              {{ range $provider, $images := .Images }}
               {{ range $images }}
-              <div data-Hypervisor="{{ $hypervisor }}" style="min-width: 180px;" class="text-center mr-2 card JS-CheckboxCard">
+              <div data-Provider="{{ $provider }}" style="min-width: 180px;" class="text-center mr-2 card JS-CheckboxCard">
                 <input type="checkbox" name="Image" value="{{ .Id }}">
                 <div class="card-block">
                   <img src="{{ Static "vmango/img/linux-logo.png" }}" width="70" height="70"> <br>

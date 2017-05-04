@@ -18,46 +18,40 @@ Curl example:
 Response
 
     {
-        "Machines": [{
-            "Id": "some-machine-id",
-            "Name": "test",
-            "Memory": 456,
+      "Title": "Machines",
+      "Machines": {
+        "LOCAL1": [
+          {
+            "Id": "4fe884940a384a15b039f94a9bea4934",
+            "Name": "asdf",
+            "OS": "Ubuntu-16.04",
+            "Arch": "x86_64",
+            "Memory": 536870912,
             "Cpus": 1,
-            "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
-            "HWAddr": "hw:hw:hw",
-            "Hypervisor": "LCL1",
-            "VNCAddr": "vnc",
-            "OS": "Ubuntu-14.04",
-            "Arch": "x86_64",
+            "Ip": {
+              "Address": "192.168.124.128",
+              "Gateway": "",
+              "Netmask": 0,
+              "UsedBy": ""
+            },
+            "HWAddr": "52:54:00:bd:1c:8e",
+            "VNCAddr": "127.0.0.1:5900",
             "RootDisk": {
-                "Size": 123,
-                "Driver": "hello",
-                "Type": "wow"
+              "Size": 10737418240,
+              "Driver": "qemu",
+              "Type": "qcow2"
             },
             "SSHKeys": [
-                {"Name": "test", "Public": "keykeykey"}
+              {
+                "Name": "test",
+                "Public": "ssh-rsa AAAAB3NzaC1yc2EAA..."
+              }
             ]
-        }, {
-            "Id": "deadbeefdeadbeefdeadbeefdeadbeef",
-            "Name": "hello",
-            "Memory": 67897,
-            "Cpus": 4,
-            "HWAddr": "xx:xx:xx",
-            "Hypervisor": "LCL1",
-            "VNCAddr": "VVV",
-            "OS": "Centos-7",
-            "Arch": "x86_64",
-            "Ip": {"Address": "2.2.2.2", "Gateway": "", "Netmask": 0, "UsedBy": ""},
-            "RootDisk": {
-                "Size": 321,
-                "Driver": "ehlo",
-                "Type": "www"
-            },
-            "SSHKeys": [
-                {"Name": "test2", "Public": "kekkekkek"}
-            ]
-        }]
+          }
+        ]
+      }
     }
+
 
 ## Create
 
@@ -71,13 +65,13 @@ Parameters:
 * Plan (string): Plan name
 * Image (string): Image full name (see [Images]({{< ref "api/images.md#List" >}}))
 * SSHKey ([]string): List of key ssh names
-* Hypervisor (string): Create machine on this hypervisor
+* Provider (string): Create machine on this provider
 * Userdata (string): Userdata for cloud-init (more about formats in [cloud-init documentation](http://cloudinit.readthedocs.io/en/latest/topics/format.html))
 
 Curl example:
 
     curl -X POST \
-    -d 'Name=testapi&Plan=medium&Image=Centos-7_amd64_qcow2.img&SSHKey=test&SSHKey=home&Hypervisor=LCL1&Userdata=hello' \
+    -d 'Name=testapi&Plan=medium&Image=Centos-7_amd64_qcow2.img&SSHKey=test&SSHKey=home&Provider=LCL1&Userdata=hello' \
     "http://vmango.example.org/api/machines/"
 
 Response example
@@ -86,42 +80,51 @@ Response example
 
 ## Details
 
-*GET /api/machines/{hypervisor}/{id}/*
+*GET /api/machines/{provider}/{id}/*
 
 Success http code: 200
 
 Curl example:
 
-    curl "http://vmango.example.org/api/machines/LCL1/i-deadbeef/"
+    curl "http://vmango.example.org/api/machines/LCL1/4fe884940a384a15b039f94a9bea4934/"
 
 Response example
 
     {
-        "Machine": {
-            "Id": "i-deadbeef",
-            "Name": "test-detail-json",
-            "Memory": 456,
-            "Cpus": 1,
-            "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
-            "HWAddr": "hw:hw:hw",
-            "Hypervisor": "LCL1",
-            "VNCAddr": "vnc",
-            "OS": "Ubuntu-12.04",
-            "Arch": "x86_64",
-            "RootDisk": {
-                "Size": 123,
-                "Driver": "hello",
-                "Type": "wow"
-            },
-            "SSHKeys": [
-                {"Name": "test", "Public": "keykeykey"}
-            ]
-        }
+      "Provider": "LCL1",
+      "Title": "Machine asdf",
+      "Machine": {
+        "Id": "4fe884940a384a15b039f94a9bea4934",
+        "Name": "asdf",
+        "OS": "Ubuntu-16.04",
+        "Arch": "x86_64",
+        "Memory": 536870912,
+        "Cpus": 1,
+        "Ip": {
+          "Address": "192.168.124.128",
+          "Gateway": "",
+          "Netmask": 0,
+          "UsedBy": ""
+        },
+        "HWAddr": "52:54:00:bd:1c:8e",
+        "VNCAddr": "127.0.0.1:5900",
+        "RootDisk": {
+          "Size": 10737418240,
+          "Driver": "qemu",
+          "Type": "qcow2"
+        },
+        "SSHKeys": [
+          {
+            "Name": "test",
+            "Public": "ssh-rsa AAAAB3NzaC1yc2E..."
+          }
+        ]
+      }
     }
 
 ## Delete
 
-*DELETE /api/machines/{hypervisor}/{id}/*
+*DELETE /api/machines/{provider}/{id}/*
 
 Success http code: 204
 
@@ -133,7 +136,7 @@ Curl example:
 
 ## Start
 
-*POST /api/machines/{hypervisor}/{id}/start/*
+*POST /api/machines/{provider}/{id}/start/*
 
 Success http code: 200
 
@@ -145,7 +148,7 @@ Curl example:
 
 ## Stop
 
-*POST /api/machines/{hypervisor}/{id}/stop/*
+*POST /api/machines/{provider}/{id}/stop/*
 
 Success http code: 200
 
@@ -157,7 +160,7 @@ Curl example:
 
 ## Reboot
 
-*POST /api/machines/{hypervisor}/{id}/reboot/*
+*POST /api/machines/{provider}/{id}/reboot/*
 
 Success http code: 200
 

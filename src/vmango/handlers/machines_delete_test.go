@@ -29,9 +29,9 @@ type MachineDeleteHandlerTestSuite struct {
 func (suite *MachineDeleteHandlerTestSuite) SetupTest() {
 	suite.WebTest.SetupTest()
 	suite.Repo = &dal.StubMachinerep{}
-	suite.Context.Hypervisors.Add(&dal.Hypervisor{
-		Name:     "testhv",
-		Machines: suite.Repo,
+	suite.Context.Providers.Add(&dal.StubProvider{
+		TName:     "testhv",
+		TMachines: suite.Repo,
 	})
 }
 
@@ -73,10 +73,9 @@ func (suite *MachineDeleteHandlerTestSuite) TestConfirmationOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
-		Id:         "deadbeefdeadbeefdeadbeefdeadbeef",
-		Name:       "test-remove",
-		RootDisk:   &models.VirtualMachineDisk{},
-		Hypervisor: "testhv",
+		Id:       "deadbeefdeadbeefdeadbeefdeadbeef",
+		Name:     "test-remove",
+		RootDisk: &models.VirtualMachineDisk{},
 	}
 	rr := suite.DoGet(DELETE_URL("testhv", "deadbeefdeadbeefdeadbeefdeadbeef"))
 	suite.Equal(200, rr.Code, rr.Body.String())
@@ -102,10 +101,9 @@ func (suite *MachineDeleteHandlerTestSuite) TestActionOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
-		Id:         "deadbeefdeadbeefdeadbeefdeadbeef",
-		Name:       "test-remove",
-		RootDisk:   &models.VirtualMachineDisk{},
-		Hypervisor: "testhv",
+		Id:       "deadbeefdeadbeefdeadbeefdeadbeef",
+		Name:     "test-remove",
+		RootDisk: &models.VirtualMachineDisk{},
 	}
 	rr := suite.DoPost(DELETE_URL("testhv", "deadbeefdeadbeefdeadbeefdeadbeef"), bytes.NewBuffer([]byte(``)))
 	suite.Equal(302, rr.Code, rr.Body.String())
@@ -115,10 +113,9 @@ func (suite *MachineDeleteHandlerTestSuite) TestAPIActionOk() {
 	suite.APIAuthenticate("admin", "secret")
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
-		Id:         "deadbeefdeadbeefdeadbeefdeadbeef",
-		Name:       "test-remove",
-		RootDisk:   &models.VirtualMachineDisk{},
-		Hypervisor: "testhv",
+		Id:       "deadbeefdeadbeefdeadbeefdeadbeef",
+		Name:     "test-remove",
+		RootDisk: &models.VirtualMachineDisk{},
 	}
 	rr := suite.DoDelete(DELETE_API_URL("testhv", "deadbeefdeadbeefdeadbeefdeadbeef"))
 	suite.Equal(204, rr.Code, rr.Body.String())

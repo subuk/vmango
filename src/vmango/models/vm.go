@@ -55,21 +55,20 @@ func (disk *VirtualMachineDisk) SizeGigabytes() int {
 }
 
 type VirtualMachine struct {
-	Id         string
-	Name       string
-	Hypervisor string
-	Userdata   string `json:"-"`
-	OS         string
-	Arch       HWArch
-	State      int `json:"-"`
-	Memory     int
-	Cpus       int
-	ImageId    string `json:"-"`
-	Ip         *IP
-	HWAddr     string
-	VNCAddr    string
-	RootDisk   *VirtualMachineDisk
-	SSHKeys    []*SSHKey
+	Id       string
+	Name     string
+	Userdata string `json:"-"`
+	OS       string
+	Arch     HWArch
+	State    int `json:"-"`
+	Memory   int
+	Cpus     int
+	ImageId  string `json:"-"`
+	Ip       *IP
+	HWAddr   string
+	VNCAddr  string
+	RootDisk *VirtualMachineDisk
+	SSHKeys  []*SSHKey
 }
 
 func (v *VirtualMachine) StateName() string {

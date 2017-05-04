@@ -39,10 +39,10 @@ type Context struct {
 	SessionStore sessions.Store
 	StaticCache  time.Duration
 
-	Plans       dal.Planrep
-	Hypervisors dal.HypervisorList
-	SSHKeys     dal.SSHKeyrep
-	AuthDB      dal.Authrep
+	Plans     dal.Planrep
+	Providers dal.Providers
+	SSHKeys   dal.SSHKeyrep
+	AuthDB    dal.Authrep
 }
 
 func (ctx *Context) RenderRedirect(w http.ResponseWriter, req *http.Request, bindings map[string]interface{}, routeName string, params ...string) {

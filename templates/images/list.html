@@ -24,11 +24,12 @@
                 <th>Size</th>
                 <th>Type</th>
                 <th>Last updated</th>
-                <th>Hypervisor</th>
+                <th>Provider</th>
               </tr>
             </thead>
             <tbody>
-              {{ range .Images }}
+              {{ range $provider, $images := .Images }}
+                {{ range $images }}
                 <tr>
                   <td>{{ .Id }}</td>
                   <td>{{ .OS }}</td>
@@ -36,8 +37,9 @@
                   <td>{{ .SizeMegabytes }}Mb</td>
                   <td>{{ .TypeString }}</td>
                   <td>{{ HumanizeDate .Date }}</td>
-                  <td>{{ .Hypervisor }}</td>
+                  <td>{{ $provider }}</td>
                 </tr>
+                {{ end }}
               {{ end }}
             </tbody>
           </table>

@@ -274,7 +274,6 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.VNCAddr = domainConfig.VNCAddr()
 	vm.Arch = models.ParseHWArch(domainConfig.Os.Type.Arch)
 	vm.OS = domainConfig.OSName
-	vm.Hypervisor = store.hypervisor
 	vm.Userdata = strings.TrimSpace(domainConfig.Userdata) + "\n"
 
 	for _, key := range domainConfig.SSHKeys {

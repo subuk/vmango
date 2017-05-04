@@ -33,19 +33,3 @@ type SSHKeyrep interface {
 type Authrep interface {
 	Get(*models.User) (bool, error)
 }
-
-type Hypervisor struct {
-	Name     string
-	Machines Machinerep
-	Images   Imagerep
-}
-
-type HypervisorList map[string]*Hypervisor
-
-func (hvl HypervisorList) Add(hv *Hypervisor) {
-	hvl[hv.Name] = hv
-}
-
-func (hvl HypervisorList) Get(name string) *Hypervisor {
-	return hvl[name]
-}

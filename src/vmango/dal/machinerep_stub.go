@@ -5,7 +5,6 @@ import (
 )
 
 type StubMachinerep struct {
-	Hypervisor   string
 	ListResponse struct {
 		Machines *models.VirtualMachineList
 		Error    error
@@ -48,7 +47,6 @@ func (repo *StubMachinerep) Create(vm *models.VirtualMachine, image *models.Imag
 	if repo.CreateResponse.Machine != nil {
 		*vm = *repo.CreateResponse.Machine
 	}
-	vm.Hypervisor = repo.Hypervisor
 	vm.Id = "stub-machine-id"
 	return repo.CreateResponse.Error
 }

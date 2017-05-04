@@ -39,19 +39,19 @@ func addWebRoutes(router *mux.Router, ctx *web.Context, csrfProtect CSRFProtecto
 		handlers.MachineDetail, web.LimitMethods("GET", "HEAD"),
 		web.SessionAuthenticationRequired,
 	)))
-	router.Handle("/machines/{hypervisor:[^/]+}/{id:[^/]+}/", machineDetail).Name("machine-detail")
+	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/", machineDetail).Name("machine-detail")
 
 	machineStateChange := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
 		handlers.MachineStateChange, web.LimitMethods("GET", "HEAD", "POST"),
 		web.SessionAuthenticationRequired,
 	)))
-	router.Handle("/machines/{hypervisor:[^/]+}/{id:[^/]+}/{action:(?:start|stop|reboot)}/", machineStateChange).Name("machine-changestate")
+	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/{action:(?:start|stop|reboot)}/", machineStateChange).Name("machine-changestate")
 
 	machineDelete := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
 		handlers.MachineDelete, web.LimitMethods("GET", "HEAD", "POST"),
 		web.SessionAuthenticationRequired,
 	)))
-	router.Handle("/machines/{hypervisor:[^/]+}/{id:[^/]+}/delete/", machineDelete).Name("machine-delete")
+	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/delete/", machineDelete).Name("machine-delete")
 
 	imageList := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
 		handlers.ImageList, web.LimitMethods("GET", "HEAD"),
@@ -99,18 +99,18 @@ func addApiRoutes(router *mux.Router, ctx *web.Context) *mux.Router {
 		handlers.MachineDetail, web.LimitMethods("GET", "HEAD"),
 		web.APIAuthenticationRequired, web.ForceJsonResponse,
 	))
-	router.Handle("/machines/{hypervisor:[^/]+}/{id:[^/]+}/", machineDetail).
+	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/", machineDetail).
 		Methods("GET", "HEAD", "PUT", "POST").
 		Name("api-machine-detail")
 
-	machineStateChangeUrl := "/machines/{hypervisor:[^/]+}/{id:[^/]+}/{action:(?:start|stop|reboot)}/"
+	machineStateChangeUrl := "/machines/{provider:[^/]+}/{id:[^/]+}/{action:(?:start|stop|reboot)}/"
 	machineStateChange := web.NewHandler(ctx, web.ApplyDecorators(
 		handlers.MachineStateChange, web.LimitMethods("POST"),
 		web.APIAuthenticationRequired, web.ForceJsonResponse,
 	))
 	router.Handle(machineStateChangeUrl, machineStateChange).Name("api-machine-changestate")
 
-	machineDeleteUrl := "/machines/{hypervisor:[^/]+}/{id:[^/]+}/"
+	machineDeleteUrl := "/machines/{provider:[^/]+}/{id:[^/]+}/"
 	machineDelete := web.NewHandler(ctx, web.ApplyDecorators(
 		handlers.MachineDelete, web.LimitMethods("DELETE"),
 		web.APIAuthenticationRequired, web.ForceJsonResponse,

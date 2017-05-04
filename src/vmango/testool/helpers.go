@@ -45,7 +45,7 @@ func NewTestContext() *web.Context {
 		{Username: "admin", PasswordHash: "$2a$10$K6XfNbM2e5Tn/etSW7HpvuCAsWT62Y1Zrcituk9U1ktAHHVYh5kBS"},
 	})
 	ctx.Logger = logrus.New()
-	ctx.Hypervisors = dal.HypervisorList{}
+	ctx.Providers = dal.Providers{}
 	store := &StubSessionStore{}
 	session := sessions.NewSession(store, "vmango")
 	session.Values = map[interface{}]interface{}{}

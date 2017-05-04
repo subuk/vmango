@@ -25,19 +25,19 @@ type MachineCreateHandlerTestSuite struct {
 func (suite *MachineCreateHandlerTestSuite) SetupTest() {
 	suite.WebTest.SetupTest()
 	suite.Machines = &dal.StubMachinerep{}
-	suite.Context.Hypervisors.Add(&dal.Hypervisor{
-		Name:     "test1",
-		Machines: suite.Machines,
-		Images: &dal.StubImagerep{
+	suite.Context.Providers.Add(&dal.StubProvider{
+		TName:     "test1",
+		TMachines: suite.Machines,
+		TImages: &dal.StubImagerep{
 			Data: []*models.Image{
 				{OS: "TestOS-1.0", Arch: models.ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, Id: "TestOS-1.0_amd64.img", PoolName: "test", Hypervisor: "test1"},
 			},
 		},
 	})
-	suite.Context.Hypervisors.Add(&dal.Hypervisor{
-		Name:     "test2",
-		Machines: suite.Machines,
-		Images: &dal.StubImagerep{
+	suite.Context.Providers.Add(&dal.StubProvider{
+		TName:     "test2",
+		TMachines: suite.Machines,
+		TImages: &dal.StubImagerep{
 			Data: []*models.Image{
 				{OS: "TestOS-1.0", Arch: models.ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, Id: "TestOS-1.0_amd64.img", PoolName: "test", Hypervisor: "test2"},
 			},
@@ -80,13 +80,12 @@ func (suite *MachineCreateHandlerTestSuite) TestGetOk() {
 
 func (suite *MachineCreateHandlerTestSuite) TestCreateOk() {
 	suite.Authenticate()
-	suite.Machines.Hypervisor = "test1"
 	data := bytes.NewBufferString((url.Values{
-		"Name":       []string{"testvm"},
-		"Plan":       []string{"test-1"},
-		"Image":      []string{"TestOS-1.0_amd64.img"},
-		"SSHKey":     []string{"first"},
-		"Hypervisor": []string{"test1"},
+		"Name":     []string{"testvm"},
+		"Plan":     []string{"test-1"},
+		"Image":    []string{"TestOS-1.0_amd64.img"},
+		"SSHKey":   []string{"first"},
+		"Provider": []string{"test1"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
@@ -96,13 +95,12 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateOk() {
 
 func (suite *MachineCreateHandlerTestSuite) TestCreateAPIOk() {
 	suite.APIAuthenticate("admin", "secret")
-	suite.Machines.Hypervisor = "test1"
 	data := bytes.NewBufferString((url.Values{
-		"Name":       []string{"testvm"},
-		"Plan":       []string{"test-1"},
-		"Image":      []string{"TestOS-1.0_amd64.img"},
-		"SSHKey":     []string{"first"},
-		"Hypervisor": []string{"test1"},
+		"Name":     []string{"testvm"},
+		"Plan":     []string{"test-1"},
+		"Image":    []string{"TestOS-1.0_amd64.img"},
+		"SSHKey":   []string{"first"},
+		"Provider": []string{"test1"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_API_URL, data)
@@ -115,11 +113,11 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateAPIOk() {
 func (suite *MachineCreateHandlerTestSuite) TestCreateNoPlanFail() {
 	suite.Authenticate()
 	data := bytes.NewBufferString((url.Values{
-		"Name":       []string{"testvm"},
-		"Plan":       []string{"doesntexist"},
-		"Image":      []string{"TestOS-1.0_amd64.img"},
-		"SSHKey":     []string{"first"},
-		"Hypervisor": []string{"test2"},
+		"Name":     []string{"testvm"},
+		"Plan":     []string{"doesntexist"},
+		"Image":    []string{"TestOS-1.0_amd64.img"},
+		"SSHKey":   []string{"first"},
+		"Provider": []string{"test2"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
@@ -131,11 +129,11 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateNoPlanFail() {
 func (suite *MachineCreateHandlerTestSuite) TestCreateNoImageFail() {
 	suite.Authenticate()
 	data := bytes.NewBufferString((url.Values{
-		"Name":       []string{"testvm"},
-		"Plan":       []string{"test-1"},
-		"Image":      []string{"doesntexist"},
-		"SSHKey":     []string{"first"},
-		"Hypervisor": []string{"test1"},
+		"Name":     []string{"testvm"},
+		"Plan":     []string{"test-1"},
+		"Image":    []string{"doesntexist"},
+		"SSHKey":   []string{"first"},
+		"Provider": []string{"test1"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
@@ -147,27 +145,27 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateNoImageFail() {
 func (suite *MachineCreateHandlerTestSuite) TestCreateNoHypervisorFail() {
 	suite.Authenticate()
 	data := bytes.NewBufferString((url.Values{
-		"Name":       []string{"testvm"},
-		"Plan":       []string{"test-1"},
-		"Image":      []string{"TestOS-1.0_amd64.img"},
-		"SSHKey":     []string{"first"},
-		"Hypervisor": []string{"doesntexist"},
+		"Name":     []string{"testvm"},
+		"Plan":     []string{"test-1"},
+		"Image":    []string{"TestOS-1.0_amd64.img"},
+		"SSHKey":   []string{"first"},
+		"Provider": []string{"doesntexist"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
 	suite.Equal(400, rr.Code, rr.Body.String())
-	suite.Contains(rr.Body.String(), "hypervisor &#34;doesntexist&#34; not found")
+	suite.Contains(rr.Body.String(), "provider &#34;doesntexist&#34; not found")
 	suite.Equal(rr.Header().Get("Location"), "")
 }
 
 func (suite *MachineCreateHandlerTestSuite) TestCreateNoSSHKeyFail() {
 	suite.Authenticate()
 	data := bytes.NewBufferString((url.Values{
-		"Name":       []string{"testvm"},
-		"Plan":       []string{"test-1"},
-		"Image":      []string{"TestOS-1.0_amd64.img"},
-		"SSHKey":     []string{"doesntexist"},
-		"Hypervisor": []string{"test1"},
+		"Name":     []string{"testvm"},
+		"Plan":     []string{"test-1"},
+		"Image":    []string{"TestOS-1.0_amd64.img"},
+		"SSHKey":   []string{"doesntexist"},
+		"Provider": []string{"test1"},
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)

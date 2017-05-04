@@ -77,7 +77,6 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("192.168.128.130", oneVm.Ip.Address)
 	suite.Equal("", oneVm.OS)
 	suite.Equal("x86_64", oneVm.Arch.String())
-	suite.Equal("main", oneVm.Hypervisor)
 
 	twoVm := machines.Find("two")
 	suite.Require().NotNil(twoVm)
@@ -99,7 +98,6 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Nil(twoVm.Ip)
 	suite.Equal("TestOS-12", twoVm.OS)
 	suite.Equal("x86_64", twoVm.Arch.String())
-	suite.Equal("main", oneVm.Hypervisor)
 }
 
 func (suite *MachinerepLibvirtSuite) TestIgnoredOk() {
@@ -140,7 +138,6 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	suite.Nil(machine.Ip)
 	suite.Equal("TestOS-12", machine.OS)
 	suite.Equal("x86_64", machine.Arch.String())
-	suite.Equal("main", machine.Hypervisor)
 }
 
 func (suite *MachinerepLibvirtSuite) TestGetNotFoundFail() {

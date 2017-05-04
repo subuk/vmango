@@ -28,9 +28,9 @@ type MachineDetailHandlerTestSuite struct {
 func (suite *MachineDetailHandlerTestSuite) SetupTest() {
 	suite.WebTest.SetupTest()
 	suite.Repo = &dal.StubMachinerep{}
-	suite.Context.Hypervisors.Add(&dal.Hypervisor{
-		Name:     "testhv",
-		Machines: suite.Repo,
+	suite.Context.Providers.Add(&dal.StubProvider{
+		TName:     "testhv",
+		TMachines: suite.Repo,
 	})
 }
 
@@ -51,10 +51,9 @@ func (suite *MachineDetailHandlerTestSuite) TestHTMLOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
-		Id:         "deadbeefdeadbeefdeadbeefdeadbeef",
-		Name:       "test-detail-html",
-		Hypervisor: "testhv",
-		Ip:         &models.IP{Address: "1.1.1.1"},
+		Id:   "deadbeefdeadbeefdeadbeefdeadbeef",
+		Name: "test-detail-html",
+		Ip:   &models.IP{Address: "1.1.1.1"},
 		RootDisk: &models.VirtualMachineDisk{
 			Size:   123,
 			Driver: "hello",
@@ -70,15 +69,14 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
 	suite.APIAuthenticate("admin", "secret")
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
-		Name:       "test-detail-json",
-		Id:         "123uuid",
-		Hypervisor: "stub",
-		Memory:     456,
-		Cpus:       1,
-		HWAddr:     "hw:hw:hw",
-		VNCAddr:    "vnc",
-		OS:         "HelloOS",
-		Arch:       models.ARCH_X86_64,
+		Name:    "test-detail-json",
+		Id:      "123uuid",
+		Memory:  456,
+		Cpus:    1,
+		HWAddr:  "hw:hw:hw",
+		VNCAddr: "vnc",
+		OS:      "HelloOS",
+		Arch:    models.ARCH_X86_64,
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},
@@ -96,6 +94,7 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
 	suite.Require().Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
 	expected := `{
       "Title": "Machine test-detail-json",
+      "Provider": "testhv",
       "Machine": {
       	  "Id": "123uuid",
           "Name": "test-detail-json",
@@ -103,7 +102,6 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
           "Cpus": 1,
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "HWAddr": "hw:hw:hw",
-          "Hypervisor": "stub",
           "VNCAddr": "vnc",
           "OS": "HelloOS",
           "Arch": "x86_64",
@@ -124,15 +122,14 @@ func (suite *MachineDetailHandlerTestSuite) TestPostNotAllowed() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
-		Name:       "hello",
-		Id:         "123uuid",
-		Hypervisor: "stub",
-		Memory:     456,
-		Cpus:       1,
-		HWAddr:     "hw:hw:hw",
-		VNCAddr:    "vnc",
-		OS:         "HelloOS",
-		Arch:       models.ARCH_X86,
+		Name:    "hello",
+		Id:      "123uuid",
+		Memory:  456,
+		Cpus:    1,
+		HWAddr:  "hw:hw:hw",
+		VNCAddr: "vnc",
+		OS:      "HelloOS",
+		Arch:    models.ARCH_X86,
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},
@@ -153,15 +150,14 @@ func (suite *MachineDetailHandlerTestSuite) TestPostAPINotAllowed() {
 	suite.APIAuthenticate("admin", "secret")
 	suite.Repo.GetResponse.Exist = true
 	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
-		Name:       "hello",
-		Id:         "123uuid",
-		Hypervisor: "stub",
-		Memory:     456,
-		Cpus:       1,
-		HWAddr:     "hw:hw:hw",
-		VNCAddr:    "vnc",
-		OS:         "HelloOS",
-		Arch:       models.ARCH_X86,
+		Name:    "hello",
+		Id:      "123uuid",
+		Memory:  456,
+		Cpus:    1,
+		HWAddr:  "hw:hw:hw",
+		VNCAddr: "vnc",
+		OS:      "HelloOS",
+		Arch:    models.ARCH_X86,
 		Ip: &models.IP{
 			Address: "1.1.1.1",
 		},

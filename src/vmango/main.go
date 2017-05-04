@@ -7,13 +7,11 @@ import (
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/sessions"
-	"github.com/libvirt/libvirt-go"
 	"github.com/meatballhat/negroni-logrus"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"os"
 	"path/filepath"
-	text_template "text/template"
 	"time"
 	"vmango/cfg"
 	"vmango/dal"
@@ -90,42 +88,22 @@ func main() {
 	}
 	ctx.Render = web.NewRenderer(staticVersion, config.Debug, ctx)
 
-	hypervisors := dal.HypervisorList{}
+	providers := dal.Providers{}
 
 	for _, hConfig := range config.Hypervisors {
-		vmtpl, err := text_template.ParseFiles(hConfig.VmTemplate)
+		provider, err := dal.NewLibvirtProvider(hConfig)
 		if err != nil {
-			log.WithError(err).WithField("hypervisor", hConfig.Name).WithField("filename", hConfig.VmTemplate).Fatal("failed to parse machine template")
+			log.WithError(err).WithField("provider", hConfig.Name).Warning("failed to initialize libvirt hypervisor")
+			continue
 		}
-		voltpl, err := text_template.ParseFiles(hConfig.VolTemplate)
-		if err != nil {
-			log.WithError(err).WithField("hypervisor", hConfig.Name).WithField("filename", hConfig.VmTemplate).Fatal("failed to parse volume template")
-		}
-		virtConn, err := libvirt.NewConnect(hConfig.Url)
-		if err != nil {
-			log.WithError(err).WithField("hypervisor", hConfig.Name).Fatal("failed to connect to libvirt")
-		}
-		machinerep, err := dal.NewLibvirtMachinerep(
-			virtConn, vmtpl, voltpl, hConfig.Network,
-			hConfig.RootStoragePool, hConfig.Name,
-			hConfig.IgnoreVms,
-		)
-		if err != nil {
-			log.WithError(err).WithField("hypervisor", hConfig.Name).Fatal("failed to initialize hypervisor")
-		}
-		imagerep := dal.NewLibvirtImagerep(virtConn, hConfig.ImageStoragePool, hConfig.Name)
-		hypervisors.Add(&dal.Hypervisor{
-			Name:     hConfig.Name,
-			Machines: machinerep,
-			Images:   imagerep,
-		})
+		providers.Add(provider)
 	}
 
 	planrep := dal.NewConfigPlanrep(config.Plans)
 	sshkeyrep := dal.NewConfigSSHKeyrep(config.SSHKeys)
 	authrep := dal.NewConfigAuthrep(config.Users)
 
-	ctx.Hypervisors = hypervisors
+	ctx.Providers = providers
 	ctx.Plans = planrep
 	ctx.SSHKeys = sshkeyrep
 	ctx.AuthDB = authrep

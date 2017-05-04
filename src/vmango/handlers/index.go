@@ -10,12 +10,12 @@ import (
 func Index(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	machines := &models.VirtualMachineList{}
 	servers := &models.ServerList{}
-	for _, hypervisor := range ctx.Hypervisors {
-		if err := hypervisor.Machines.List(machines); err != nil {
-			return fmt.Errorf("failed to query hypervisor %s: %s", hypervisor.Name, err)
+	for _, provider := range ctx.Providers {
+		if err := provider.Machines().List(machines); err != nil {
+			return fmt.Errorf("failed to query provider %s: %s", provider, err)
 		}
-		if err := hypervisor.Machines.ServerInfo(servers); err != nil {
-			return fmt.Errorf("failed to query hypervisor %s: %s", hypervisor.Name, err)
+		if err := provider.Machines().ServerInfo(servers); err != nil {
+			return fmt.Errorf("failed to query provider %s: %s", provider, err)
 		}
 	}
 
