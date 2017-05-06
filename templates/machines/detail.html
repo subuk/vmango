@@ -69,7 +69,7 @@
         <div class="card card-inverse card-warning">
           <div class="card-block text-xs-center">
             <div class="text-muted small text-uppercase font-weight-bold">Created by</div>
-            <div class="h2 p-1">{{ if not (eq .Machine.Creator "")  }}.Machine.Creator{{ else }}???{{ end }}</div>
+            <div class="h2 p-1">{{ if not (eq .Machine.Creator "")  }}{{ .Machine.Creator }}{{ else }}???{{ end }}</div>
           </div>
         </div>
       </div>

@@ -51,6 +51,7 @@ type domainXMLConfig struct {
 		} `xml:"mac"`
 	} `xml:"devices>interface"`
 	OSName   string `xml:"metadata>md>os"`
+	Creator  string `xml:"metadata>md>creator"`
 	ImageId  string `xml:"metadata>md>imageId"`
 	Userdata string `xml:"metadata>md>userdata"`
 	SSHKeys  []struct {

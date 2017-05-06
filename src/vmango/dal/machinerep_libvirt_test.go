@@ -64,7 +64,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("fb6c4f622cf346239aee23f0005eb5fb", oneVm.Id)
 	suite.Equal(536870912, oneVm.Memory)
 	suite.Equal(1, oneVm.Cpus)
-	suite.Equal("", oneVm.ImageId)
+	suite.Equal("image-stub-000", oneVm.ImageId)
 	suite.Equal("52:54:00:2e:54:28", oneVm.HWAddr)
 	suite.Equal("127.0.0.1:5900", oneVm.VNCAddr)
 	suite.Equal(oneVm.RootDisk.Type, "raw")
@@ -75,8 +75,10 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	expectedKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDXJjuFhloSumFjJRrrZfSinBE0q4e/o0nKzt4QfkD3VR56rrrrCtjHh+/wcZcIdm9I9QODxoFoSSvrPNOzLj0lfF0f64Ic7fUnC4hhRBEeyo/03KVpUQcHWHjeex+5OHQXa8s5Xy/dytZkhdvDYOCgEpMgC2tU6tk/mVuk84Q03QEnSYJQuIgj8VwvxC+22aGSpLzXtenpdXr+O8s7dkuhHQjl1w6WbiLADv0I06bFwW8iB6p7aHZCqJUYAUYa4XaCjXdVwoKAE/J23s17XCZzY10YmBIikRQQIjpvRIbHArzO0om4++2KMnY8m6xoMp2imyceD/0fIVlAqhLTEaBP test@vmango"
 	suite.Equal(expectedKey, oneVm.SSHKeys[0].Public)
 	suite.Equal("192.168.128.130", oneVm.Ip.Address)
-	suite.Equal("", oneVm.OS)
 	suite.Equal("x86_64", oneVm.Arch.String())
+	suite.Equal("#!/bin/sh\n", oneVm.Userdata)
+	suite.Equal("StubOs-1.0", oneVm.OS)
+	suite.Equal("stubuser", oneVm.Creator)
 
 	twoVm := machines.Find("two")
 	suite.Require().NotNil(twoVm)
@@ -85,7 +87,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("c72cb377301a4f2aa34c547f70872b55", twoVm.Id)
 	suite.Equal(536870912, twoVm.Memory)
 	suite.Equal(1, twoVm.Cpus)
-	suite.Equal("", twoVm.ImageId)
+	suite.Equal("image-stub-000", twoVm.ImageId)
 	suite.Equal("52:54:00:2e:54:29", twoVm.HWAddr)
 	suite.Equal("127.0.0.1:5901", twoVm.VNCAddr)
 	suite.Equal("raw", twoVm.RootDisk.Type)
@@ -96,8 +98,9 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	expectedKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDXJjuFhloSumFjJRrrZfSinBE0q4e/o0nKzt4QfkD3VR56rrrrCtjHh+/wcZcIdm9I9QODxoFoSSvrPNOzLj0lfF0f64Ic7fUnC4hhRBEeyo/03KVpUQcHWHjeex+5OHQXa8s5Xy/dytZkhdvDYOCgEpMgC2tU6tk/mVuk84Q03QEnSYJQuIgj8VwvxC+22aGSpLzXtenpdXr+O8s7dkuhHQjl1w6WbiLADv0I06bFwW8iB6p7aHZCqJUYAUYa4XaCjXdVwoKAE/J23s17XCZzY10YmBIikRQQIjpvRIbHArzO0om4++2KMnY8m6xoMp2imyceD/0fIVlAqhLTEaBP test@vmango"
 	suite.Equal(expectedKey, twoVm.SSHKeys[0].Public)
 	suite.Nil(twoVm.Ip)
-	suite.Equal("TestOS-12", twoVm.OS)
+	suite.Equal("StubOs-1.0", twoVm.OS)
 	suite.Equal("x86_64", twoVm.Arch.String())
+	suite.Equal("stubuser", twoVm.Creator)
 }
 
 func (suite *MachinerepLibvirtSuite) TestIgnoredOk() {
@@ -125,7 +128,9 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	suite.Equal("c72cb377301a4f2aa34c547f70872b55", machine.Id)
 	suite.Equal(536870912, machine.Memory)
 	suite.Equal(1, machine.Cpus)
-	suite.Equal("", machine.ImageId)
+	suite.Equal("image-stub-000", machine.ImageId)
+	suite.Equal("#!/bin/sh\n", machine.Userdata)
+	suite.Equal("stubuser", machine.Creator)
 	suite.Equal("52:54:00:2e:54:29", machine.HWAddr)
 	suite.Equal("127.0.0.1:5901", machine.VNCAddr)
 	suite.Equal("raw", machine.RootDisk.Type)
@@ -136,7 +141,7 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	expectedKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDXJjuFhloSumFjJRrrZfSinBE0q4e/o0nKzt4QfkD3VR56rrrrCtjHh+/wcZcIdm9I9QODxoFoSSvrPNOzLj0lfF0f64Ic7fUnC4hhRBEeyo/03KVpUQcHWHjeex+5OHQXa8s5Xy/dytZkhdvDYOCgEpMgC2tU6tk/mVuk84Q03QEnSYJQuIgj8VwvxC+22aGSpLzXtenpdXr+O8s7dkuhHQjl1w6WbiLADv0I06bFwW8iB6p7aHZCqJUYAUYa4XaCjXdVwoKAE/J23s17XCZzY10YmBIikRQQIjpvRIbHArzO0om4++2KMnY8m6xoMp2imyceD/0fIVlAqhLTEaBP test@vmango"
 	suite.Equal(expectedKey, machine.SSHKeys[0].Public)
 	suite.Nil(machine.Ip)
-	suite.Equal("TestOS-12", machine.OS)
+	suite.Equal("StubOs-1.0", machine.OS)
 	suite.Equal("x86_64", machine.Arch.String())
 }
 
@@ -311,6 +316,28 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	suite.Equal(domainConfig.Disks[1].Device, "cdrom")
 	suite.Equal(domainConfig.Disks[1].Type, "file")
 	suite.True(strings.HasSuffix(domainConfig.Disks[1].Source.File, "_config.iso"))
+
+	suite.NotEmpty(machine.Id)
+	suite.Equal("test-create", machine.Name)
+	suite.Equal("someuser", machine.Creator)
+	suite.Equal("#!/bin/sh\n", machine.Userdata)
+	suite.Equal("Ubuntu-12.04", machine.OS)
+	suite.Equal(models.HWArch(models.ARCH_X86_64), machine.Arch)
+	suite.Equal(models.STATE_STOPPED, machine.State)
+	suite.Equal(536870912, machine.Memory)
+	suite.Equal(2, machine.Cpus)
+	suite.Equal("test-image", machine.ImageId)
+	suite.NotEmpty(machine.Ip)
+	suite.NotEmpty(machine.HWAddr)
+	suite.NotEmpty(machine.VNCAddr)
+	suite.NotEmpty(machine.RootDisk.Driver)
+	suite.Equal(uint64(0x140000000), machine.RootDisk.Size)
+	suite.NotEmpty(machine.RootDisk.Type)
+	suite.Equal(2, len(machine.SSHKeys))
+	suite.Equal(machine.SSHKeys[0].Name, "home")
+	suite.Equal(machine.SSHKeys[0].Public, "asdf")
+	suite.Equal(machine.SSHKeys[1].Name, "work")
+	suite.Equal(machine.SSHKeys[1].Public, "hello")
 }
 
 func TestMachinerepLibvirtSuite(t *testing.T) {

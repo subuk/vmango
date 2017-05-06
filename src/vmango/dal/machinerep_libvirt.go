@@ -189,7 +189,8 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.OS = domainConfig.OSName
 	vm.Userdata = strings.TrimSpace(domainConfig.Userdata) + "\n"
 	vm.ImageId = domainConfig.ImageId
-
+	vm.Creator = domainConfig.Creator
+	vm.SSHKeys = []*models.SSHKey{}
 	for _, key := range domainConfig.SSHKeys {
 		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{Name: key.Name, Public: key.Public})
 	}
