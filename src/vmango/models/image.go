@@ -13,14 +13,13 @@ const (
 type ImageList []*Image
 
 type Image struct {
-	Id         string
-	OS         string
-	Arch       HWArch
-	Size       uint64
-	Type       int
-	Date       time.Time
-	PoolName   string
-	Hypervisor string
+	Id       string
+	OS       string
+	Arch     HWArch
+	Size     uint64
+	Type     int
+	Date     time.Time
+	PoolName string
 }
 
 func (image *Image) String() string {

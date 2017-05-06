@@ -30,7 +30,7 @@ func (suite *MachineCreateHandlerTestSuite) SetupTest() {
 		TMachines: suite.Machines,
 		TImages: &dal.StubImagerep{
 			Data: []*models.Image{
-				{OS: "TestOS-1.0", Arch: models.ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, Id: "TestOS-1.0_amd64.img", PoolName: "test", Hypervisor: "test1"},
+				{OS: "TestOS-1.0", Arch: models.ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, Id: "TestOS-1.0_amd64.img", PoolName: "test"},
 			},
 		},
 	})
@@ -39,7 +39,7 @@ func (suite *MachineCreateHandlerTestSuite) SetupTest() {
 		TMachines: suite.Machines,
 		TImages: &dal.StubImagerep{
 			Data: []*models.Image{
-				{OS: "TestOS-1.0", Arch: models.ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, Id: "TestOS-1.0_amd64.img", PoolName: "test", Hypervisor: "test2"},
+				{OS: "TestOS-1.0", Arch: models.ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, Id: "TestOS-1.0_amd64.img", PoolName: "test"},
 			},
 		},
 	})

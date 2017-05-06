@@ -48,13 +48,12 @@ func (v volumeXMLConfig) LastModified() time.Time {
 }
 
 type LibvirtImagerep struct {
-	pool       string
-	hypervisor string
-	conn       *libvirt.Connect
+	pool string
+	conn *libvirt.Connect
 }
 
-func NewLibvirtImagerep(conn *libvirt.Connect, name, hypervisor string) *LibvirtImagerep {
-	return &LibvirtImagerep{pool: name, conn: conn, hypervisor: hypervisor}
+func NewLibvirtImagerep(conn *libvirt.Connect, name string) *LibvirtImagerep {
+	return &LibvirtImagerep{pool: name, conn: conn}
 }
 
 func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.StorageVol) error {
@@ -87,7 +86,6 @@ func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.Stor
 	image.Size = volumeConfig.Allocation
 	image.PoolName = repo.pool
 	image.Date = volumeConfig.LastModified()
-	image.Hypervisor = repo.hypervisor
 	return nil
 }
 

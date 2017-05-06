@@ -40,7 +40,7 @@ func NewLibvirtProvider(conf cfg.HypervisorConfig) (*LibvirtProvider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize machinerep: %s", err)
 	}
-	imagerep := NewLibvirtImagerep(virtConn, conf.ImageStoragePool, conf.Name)
+	imagerep := NewLibvirtImagerep(virtConn, conf.ImageStoragePool)
 	provider := &LibvirtProvider{
 		name:        conf.Name,
 		conn:        virtConn,
