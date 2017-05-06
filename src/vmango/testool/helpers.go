@@ -43,6 +43,7 @@ func NewTestContext() *web.Context {
 	ctx.Render = web.NewRenderer("", true, ctx)
 	ctx.AuthDB = dal.NewConfigAuthrep([]cfg.AuthUserConfig{
 		{Username: "admin", PasswordHash: "$2a$10$K6XfNbM2e5Tn/etSW7HpvuCAsWT62Y1Zrcituk9U1ktAHHVYh5kBS"},
+		{Username: "testuser", PasswordHash: "$2a$10$K6XfNbM2e5Tn/etSW7HpvuCAsWT62Y1Zrcituk9U1ktAHHVYh5kBS"},
 	})
 	ctx.Logger = logrus.New()
 	ctx.Providers = dal.Providers{}

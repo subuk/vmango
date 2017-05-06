@@ -245,6 +245,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	machine := &models.VirtualMachine{
 		Name:     "test-create",
 		Userdata: "#!/bin/sh",
+		Creator:  "someuser",
 		SSHKeys: []*models.SSHKey{
 			{Name: "home", Public: "asdf"},
 			{Name: "work", Public: "hello"},
@@ -263,6 +264,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 		Id       string `xml:"uuid"`
 		Name     string `xml:"name"`
 		OS       string `xml:"metadata>md>os"`
+		Creator  string `xml:"metadata>md>creator"`
 		ImageId  string `xml:"metadata>md>imageId"`
 		Userdata string `xml:"metadata>md>userdata"`
 		SSHKeys  []struct {
@@ -284,6 +286,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	suite.Equal("524288", domainConfig.Memory)
 	suite.Equal("2", domainConfig.Cpus)
 	suite.Equal("test-create", domainConfig.Name)
+	suite.Equal("someuser", domainConfig.Creator)
 	suite.NotEmpty(domainConfig.Id)
 	suite.Equal("#!/bin/sh", strings.TrimSpace(domainConfig.Userdata))
 	suite.Equal("Ubuntu-12.04", domainConfig.OS)

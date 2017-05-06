@@ -76,6 +76,7 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
 		HWAddr:  "hw:hw:hw",
 		VNCAddr: "vnc",
 		OS:      "HelloOS",
+		Creator: "testuser",
 		Arch:    models.ARCH_X86_64,
 		Ip: &models.IP{
 			Address: "1.1.1.1",
@@ -100,6 +101,7 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
           "Name": "test-detail-json",
           "Memory": 456,
           "Cpus": 1,
+          "Creator": "testuser",
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "HWAddr": "hw:hw:hw",
           "VNCAddr": "vnc",

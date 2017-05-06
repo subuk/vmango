@@ -203,11 +203,11 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 			}
 			sshkeys = append(sshkeys, &key)
 		}
-
 		vm := &models.VirtualMachine{
 			Name:     form.Name,
 			SSHKeys:  sshkeys,
 			Userdata: form.Userdata,
+			Creator:  ctx.AuthUser.Name,
 		}
 
 		if err := provider.Machines().Create(vm, image, plan); err != nil {

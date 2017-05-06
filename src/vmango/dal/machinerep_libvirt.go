@@ -20,6 +20,7 @@ var METADATA_TEMPLATE = template.Must(template.New("metadata").Parse(strings.Tri
 <vmango:md xmlns:vmango="http://vmango.org/schema/md">
   <vmango:imageId>{{ .Machine.ImageId }}</vmango:imageId>
   <vmango:os>{{ .Machine.OS }}</vmango:os>
+  <vmango:creator>{{ .Machine.Creator }}</vmango:creator>
   <vmango:sshkeys>
     {{ range .Machine.SSHKeys }}
     <vmango:key name="{{ .Name }}">{{ .Public }}</vmango:key>
