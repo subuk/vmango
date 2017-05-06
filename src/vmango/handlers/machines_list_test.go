@@ -65,6 +65,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 		HWAddr:  "hw:hw:hw",
 		VNCAddr: "vnc",
 		Creator: "hello",
+		ImageId: "stub-image",
 		OS:      "WoW",
 		Arch:    models.ARCH_UNKNOWN,
 		Ip: &models.IP{
@@ -87,6 +88,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 		HWAddr:  "xx:xx:xx",
 		VNCAddr: "VVV",
 		Creator: "wow",
+		ImageId: "stub-image",
 		Ip: &models.IP{
 			Address: "2.2.2.2",
 		},
@@ -115,6 +117,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "HWAddr": "hw:hw:hw",
           "VNCAddr": "vnc",
+          "ImageId": "stub-image",
           "OS": "WoW",
           "Arch": "unknown",
           "RootDisk": {
@@ -135,6 +138,7 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
           "Arch": "unknown",
           "HWAddr": "xx:xx:xx",
           "VNCAddr": "VVV",
+          "ImageId": "stub-image",
           "Ip": {"Address": "2.2.2.2", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "RootDisk": {
             "Size": 321,
