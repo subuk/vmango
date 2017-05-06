@@ -87,7 +87,7 @@ func storagePoolEventGenericCallback(c C.virConnectPtr, s C.virStoragePoolPtr,
 
 func (c *Connect) StoragePoolEventLifecycleRegister(pool *StoragePool, callback StoragePoolEventLifecycleCallback) (int, error) {
 	if C.LIBVIR_VERSION_NUMBER < 2000000 {
-		return 0, GetNotImplementedError()
+		return 0, GetNotImplementedError("virConnectStoragePoolEventRegisterAny")
 	}
 
 	goCallBackId := registerCallbackId(callback)
@@ -110,7 +110,7 @@ func (c *Connect) StoragePoolEventLifecycleRegister(pool *StoragePool, callback 
 
 func (c *Connect) StoragePoolEventRefreshRegister(pool *StoragePool, callback StoragePoolEventGenericCallback) (int, error) {
 	if C.LIBVIR_VERSION_NUMBER < 2000000 {
-		return 0, GetNotImplementedError()
+		return 0, GetNotImplementedError("virConnectStoragePoolEventRegisterAny")
 	}
 
 	goCallBackId := registerCallbackId(callback)
@@ -133,7 +133,7 @@ func (c *Connect) StoragePoolEventRefreshRegister(pool *StoragePool, callback St
 
 func (c *Connect) StoragePoolEventDeregister(callbackId int) error {
 	if C.LIBVIR_VERSION_NUMBER < 2000000 {
-		return GetNotImplementedError()
+		return GetNotImplementedError("virConnectStoragePoolEventDeregisterAny")
 	}
 
 	// Deregister the callback

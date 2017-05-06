@@ -77,11 +77,18 @@ func (v *Stream) Finish() error {
 }
 
 func (v *Stream) Free() error {
-	result := C.virStreamFree(v.ptr)
-	if result == -1 {
+	ret := C.virStreamFree(v.ptr)
+	if ret == -1 {
 		return GetLastError()
 	}
-	v.ptr = nil
+	return nil
+}
+
+func (c *Stream) Ref() error {
+	ret := C.virStreamRef(c.ptr)
+	if ret == -1 {
+		return GetLastError()
+	}
 	return nil
 }
 

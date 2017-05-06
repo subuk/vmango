@@ -136,10 +136,18 @@ func (p *StoragePool) Destroy() error {
 }
 
 func (p *StoragePool) Free() error {
-	if result := C.virStoragePoolFree(p.ptr); result != 0 {
+	ret := C.virStoragePoolFree(p.ptr)
+	if ret == -1 {
 		return GetLastError()
 	}
-	p.ptr = nil
+	return nil
+}
+
+func (c *StoragePool) Ref() error {
+	ret := C.virStoragePoolRef(c.ptr)
+	if ret == -1 {
+		return GetLastError()
+	}
 	return nil
 }
 

@@ -27,28 +27,6 @@
 #ifndef LIBVIRT_GO_DOMAIN_COMPAT_H__
 #define LIBVIRT_GO_DOMAIN_COMPAT_H__
 
-/* 3.0.0 */
-
-#ifndef VIR_PERF_PARAM_BUS_CYCLES
-#define VIR_PERF_PARAM_BUS_CYCLES "bus_cycles"
-#endif
-
-#ifndef VIR_PERF_PARAM_STALLED_CYCLES_FRONTEND
-#define VIR_PERF_PARAM_STALLED_CYCLES_FRONTEND "stalled_cycles_frontend"
-#endif
-
-#ifndef VIR_PERF_PARAM_STALLED_CYCLES_BACKEND
-#define VIR_PERF_PARAM_STALLED_CYCLES_BACKEND "stalled_cycles_backend"
-#endif
-
-#ifndef VIR_PERF_PARAM_REF_CPU_CYCLES
-#define VIR_PERF_PARAM_REF_CPU_CYCLES "ref_cpu_cycles"
-#endif
-
-#ifndef VIR_DOMAIN_EVENT_ID_METADATA_CHANGE
-#define VIR_DOMAIN_EVENT_ID_METADATA_CHANGE 23
-#endif
-
 /* 1.2.2 */
 
 #ifndef VIR_DOMAIN_BLKIO_DEVICE_READ_IOPS
@@ -505,7 +483,6 @@ int virDomainPinIOThreadCompat(virDomainPtr domain,
 #define VIR_DOMAIN_EVENT_ID_DEVICE_ADDED 19
 #endif
 
-
 int virDomainAddIOThreadCompat(virDomainPtr domain,
 			       unsigned int iothread_id,
 			       unsigned int flags);
@@ -835,6 +812,62 @@ int virDomainSetGuestVcpusCompat(virDomainPtr domain,
 #define VIR_PERF_PARAM_BRANCH_MISSES "branch_misses"
 #endif
 
+#ifndef VIR_PERF_PARAM_BUS_CYCLES
+#define VIR_PERF_PARAM_BUS_CYCLES "bus_cycles"
+#endif
+
+#ifndef VIR_PERF_PARAM_STALLED_CYCLES_FRONTEND
+#define VIR_PERF_PARAM_STALLED_CYCLES_FRONTEND "stalled_cycles_frontend"
+#endif
+
+#ifndef VIR_PERF_PARAM_STALLED_CYCLES_BACKEND
+#define VIR_PERF_PARAM_STALLED_CYCLES_BACKEND "stalled_cycles_backend"
+#endif
+
+#ifndef VIR_PERF_PARAM_REF_CPU_CYCLES
+#define VIR_PERF_PARAM_REF_CPU_CYCLES "ref_cpu_cycles"
+#endif
+
+#ifndef VIR_PERF_PARAM_CPU_CLOCK
+#define VIR_PERF_PARAM_CPU_CLOCK "cpu_clock"
+#endif
+
+#ifndef VIR_PERF_PARAM_TASK_CLOCK
+#define VIR_PERF_PARAM_TASK_CLOCK "task_clock"
+#endif
+
+#ifndef VIR_PERF_PARAM_PAGE_FAULTS
+#define VIR_PERF_PARAM_PAGE_FAULTS "page_faults"
+#endif
+
+#ifndef VIR_PERF_PARAM_CONTEXT_SWITCHES
+#define VIR_PERF_PARAM_CONTEXT_SWITCHES "context_switches"
+#endif
+
+#ifndef VIR_PERF_PARAM_CPU_MIGRATIONS
+#define VIR_PERF_PARAM_CPU_MIGRATIONS "cpu_migrations"
+#endif
+
+#ifndef VIR_PERF_PARAM_PAGE_FAULTS_MIN
+#define VIR_PERF_PARAM_PAGE_FAULTS_MIN "page_faults_min"
+#endif
+
+#ifndef VIR_PERF_PARAM_PAGE_FAULTS_MAJ
+#define VIR_PERF_PARAM_PAGE_FAULTS_MAJ "page_faults_maj"
+#endif
+
+#ifndef VIR_PERF_PARAM_ALIGNMENT_FAULTS
+#define VIR_PERF_PARAM_ALIGNMENT_FAULTS "alignment_faults"
+#endif
+
+#ifndef VIR_PERF_PARAM_EMULATION_FAULTS
+#define VIR_PERF_PARAM_EMULATION_FAULTS "emulation_faults"
+#endif
+
+#ifndef VIR_DOMAIN_EVENT_ID_METADATA_CHANGE
+#define VIR_DOMAIN_EVENT_ID_METADATA_CHANGE 23
+#endif
+
 #ifndef VIR_DOMAIN_BLOCK_IOTUNE_GROUP_NAME
 #define VIR_DOMAIN_BLOCK_IOTUNE_GROUP_NAME "group_name"
 #endif
@@ -843,5 +876,68 @@ int virDomainSetGuestVcpusCompat(virDomainPtr domain,
 #define VIR_DOMAIN_TUNABLE_BLKDEV_GROUP_NAME "blkdeviotune.group_name"
 #endif
 
+/* 3.1.0 */
+
+int virDomainSetVcpuCompat(virDomainPtr domain,
+			   const char *cpumap,
+			   int state,
+			   unsigned int flags);
+
+/* 3.2.0 */
+
+#ifndef VIR_MIGRATE_TLS
+#define VIR_MIGRATE_TLS 1 << 16
+#endif
+
+#ifndef VIR_DOMAIN_EVENT_ID_BLOCK_THRESHOLD
+#define VIR_DOMAIN_EVENT_ID_BLOCK_THRESHOLD 24
+#endif
+
+int virDomainSetBlockThresholdCompat(virDomainPtr domain,
+                                     const char *dev,
+                                     unsigned long long threshold,
+                                     unsigned int flags);
+
+/* 3.3.0 */
+
+#ifndef VIR_DOMAIN_JOB_OPERATION
+#define VIR_DOMAIN_JOB_OPERATION "operation"
+#endif
+
+#ifndef VIR_DOMAIN_JOB_OPERATION_UNKNOWN
+#define VIR_DOMAIN_JOB_OPERATION_UNKNOWN 0
+#endif
+
+#ifndef VIR_DOMAIN_JOB_OPERATION_START
+#define VIR_DOMAIN_JOB_OPERATION_START 1
+#endif
+
+#ifndef VIR_DOMAIN_JOB_OPERATION_SAVE
+#define VIR_DOMAIN_JOB_OPERATION_SAVE 2
+#endif
+
+#ifndef VIR_DOMAIN_JOB_OPERATION_RESTORE
+#define VIR_DOMAIN_JOB_OPERATION_RESTORE 3
+#endif
+
+#ifndef VIR_DOMAIN_JOB_OPERATION_MIGRATION_IN
+#define VIR_DOMAIN_JOB_OPERATION_MIGRATION_IN 4
+#endif
+
+#ifndef VIR_DOMAIN_JOB_OPERATION_MIGRATION_OUT
+#define VIR_DOMAIN_JOB_OPERATION_MIGRATION_OUT 5
+#endif
+
+#ifndef VIR_DOMAIN_JOB_OPERATION_SNAPSHOT
+#define VIR_DOMAIN_JOB_OPERATION_SNAPSHOT 6
+#endif
+
+#ifndef VIR_DOMAIN_JOB_OPERATION_SNAPSHOT_REVERT
+#define VIR_DOMAIN_JOB_OPERATION_SNAPSHOT_REVERT 7
+#endif
+
+#ifndef VIR_DOMAIN_JOB_OPERATION_DUMP
+#define VIR_DOMAIN_JOB_OPERATION_DUMP 8
+#endif
 
 #endif /* LIBVIRT_GO_DOMAIN_COMPAT_H__ */

@@ -43,10 +43,18 @@ type NWFilter struct {
 }
 
 func (f *NWFilter) Free() error {
-	if result := C.virNWFilterFree(f.ptr); result != 0 {
+	ret := C.virNWFilterFree(f.ptr)
+	if ret == -1 {
 		return GetLastError()
 	}
-	f.ptr = nil
+	return nil
+}
+
+func (c *NWFilter) Ref() error {
+	ret := C.virNWFilterRef(c.ptr)
+	if ret == -1 {
+		return GetLastError()
+	}
 	return nil
 }
 

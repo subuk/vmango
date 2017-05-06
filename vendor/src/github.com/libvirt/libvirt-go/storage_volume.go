@@ -120,10 +120,18 @@ func (v *StorageVol) Delete(flags StorageVolDeleteFlags) error {
 }
 
 func (v *StorageVol) Free() error {
-	if result := C.virStorageVolFree(v.ptr); result != 0 {
+	ret := C.virStorageVolFree(v.ptr)
+	if ret == -1 {
 		return GetLastError()
 	}
-	v.ptr = nil
+	return nil
+}
+
+func (c *StorageVol) Ref() error {
+	ret := C.virStorageVolRef(c.ptr)
+	if ret == -1 {
+		return GetLastError()
+	}
 	return nil
 }
 
@@ -142,7 +150,7 @@ func (v *StorageVol) GetInfo() (*StorageVolInfo, error) {
 
 func (v *StorageVol) GetInfoFlags(flags StorageVolInfoFlags) (*StorageVolInfo, error) {
 	if C.LIBVIR_VERSION_NUMBER < 3000000 {
-		return nil, GetNotImplementedError()
+		return nil, GetNotImplementedError("virStorageVolGetInfoFlags")
 	}
 
 	var cinfo C.virStorageVolInfo

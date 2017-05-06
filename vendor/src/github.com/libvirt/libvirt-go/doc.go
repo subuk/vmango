@@ -52,6 +52,12 @@
 //  }
 //  defer dom.Free()
 //
+// If multiple goroutines are using the same libvirt object struct, it may
+// not be possible to determine which goroutine should call 'Free'. In such
+// scenarios each new goroutine should call 'Ref' to obtain a private reference
+// on the underlying C struct. All goroutines can call 'Free' unconditionally
+// with the final one causing the release of the C object.
+//
 // For methods, the 'vir' prefix and object name prefix are remove from the name.
 // The C functions become methods with an object receiver. e.g.
 // 'virDomainScreenshot' in C becomes 'Screenshot' with a 'Domain *' receiver.
