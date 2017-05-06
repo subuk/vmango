@@ -7,7 +7,6 @@ import (
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/sessions"
-	"github.com/meatballhat/negroni-logrus"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"os"
@@ -110,7 +109,10 @@ func main() {
 	ctx.SessionStore = sessions.NewCookieStore([]byte(config.SessionSecret))
 
 	n := negroni.New()
-	n.Use(negronilogrus.NewCustomMiddleware(logLevel, &log.TextFormatter{}, "web"))
+	n.Use(web.NewLogRequestMiddleware(
+		config.TrustedProxies,
+		[]string{"/static/"},
+	))
 	n.Use(negroni.NewRecovery())
 	n.UseHandler(ctx.Router)
 

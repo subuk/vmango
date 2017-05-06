@@ -17,6 +17,8 @@ All vm configuration templates are golang text templates: https://golang.org/pkg
 
 **static_cache** - Static files cache duration, e.g: "1d", "10m", "60s". Used mainly for development.
 
+**trusted_proxies** - List of trusted ip addresses for X-Forwarded-For or X-Real-IP headers processing.
+
 **ssl_key** - Path to private key file
 
 **ssl_cert** - Path to SSL certificate

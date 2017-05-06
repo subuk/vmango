@@ -38,12 +38,13 @@ type AuthUserConfig struct {
 }
 
 type Config struct {
-	Listen        string `hcl:"listen"`
-	SessionSecret string `hcl:"session_secret"`
-	StaticCache   string `hcl:"static_cache"`
-	Debug         bool   `hcl:"debug"`
-	SSLKey        string `hcl:"ssl_key"`
-	SSLCert       string `hcl:"ssl_cert"`
+	Listen         string   `hcl:"listen"`
+	SessionSecret  string   `hcl:"session_secret"`
+	StaticCache    string   `hcl:"static_cache"`
+	Debug          bool     `hcl:"debug"`
+	SSLKey         string   `hcl:"ssl_key"`
+	SSLCert        string   `hcl:"ssl_cert"`
+	TrustedProxies []string `hcl:"trusted_proxies"`
 
 	Hypervisors []HypervisorConfig `hcl:"hypervisor"`
 	SSHKeys     []SSHKeyConfig     `hcl:"ssh_key"`
