@@ -206,7 +206,6 @@ func MachineAddForm(ctx *web.Context, w http.ResponseWriter, req *http.Request) 
 
 		vm := &models.VirtualMachine{
 			Name:     form.Name,
-			ImageId:  image.Id,
 			SSHKeys:  sshkeys,
 			Userdata: form.Userdata,
 		}

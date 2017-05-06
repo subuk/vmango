@@ -18,6 +18,7 @@ import (
 
 var METADATA_TEMPLATE = template.Must(template.New("metadata").Parse(strings.TrimSpace(`
 <vmango:md xmlns:vmango="http://vmango.org/schema/md">
+  <vmango:imageId>{{ .Machine.ImageId }}</vmango:imageId>
   <vmango:os>{{ .Machine.OS }}</vmango:os>
   <vmango:sshkeys>
     {{ range .Machine.SSHKeys }}
@@ -186,6 +187,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.Arch = models.ParseHWArch(domainConfig.Os.Type.Arch)
 	vm.OS = domainConfig.OSName
 	vm.Userdata = strings.TrimSpace(domainConfig.Userdata) + "\n"
+	vm.ImageId = domainConfig.ImageId
 
 	for _, key := range domainConfig.SSHKeys {
 		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{Name: key.Name, Public: key.Public})
@@ -437,6 +439,7 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	machine.Arch = image.Arch
 	machine.Memory = plan.Memory
 	machine.Cpus = plan.Cpus
+	machine.ImageId = image.Id
 
 	var domainCreationXml bytes.Buffer
 	vmtplContext := struct {
