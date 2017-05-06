@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	IMAGE_FMT_RAW   = iota
-	IMAGE_FMT_QCOW2 = iota
+	IMAGE_FMT_UNKNOWN = iota
+	IMAGE_FMT_RAW     = iota
+	IMAGE_FMT_QCOW2   = iota
 )
 
 type ImageList []*Image
@@ -45,5 +46,16 @@ func (image *Image) TypeString() string {
 		return "raw"
 	case IMAGE_FMT_QCOW2:
 		return "qcow2"
+	}
+}
+
+func ParseImageFormat(in string) int {
+	switch strings.TrimSuffix(in, ".img") {
+	default:
+		return IMAGE_FMT_UNKNOWN
+	case "raw":
+		return IMAGE_FMT_RAW
+	case "qcow2":
+		return IMAGE_FMT_QCOW2
 	}
 }

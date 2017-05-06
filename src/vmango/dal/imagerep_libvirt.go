@@ -68,17 +68,16 @@ func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.Stor
 
 	imginfo := strings.SplitN(volumeConfig.Name, "_", 3)
 	if len(imginfo) < 2 {
-		return fmt.Errorf("invalid name")
+		return fmt.Errorf("invalid name: %s", volumeConfig.Name)
 	}
-	image.Arch = models.ParseHWArch(imginfo[1])
 
-	switch volumeConfig.Target.Format.Type {
-	default:
-		return fmt.Errorf("unknown type")
-	case "raw":
-		image.Type = models.IMAGE_FMT_RAW
-	case "qcow2":
-		image.Type = models.IMAGE_FMT_QCOW2
+	image.Arch = models.ParseHWArch(imginfo[1])
+	if image.Arch == models.ARCH_UNKNOWN {
+		return fmt.Errorf("unknown image arch: %s", volumeConfig.Name)
+	}
+	image.Type = models.ParseImageFormat(imginfo[2])
+	if image.Type == models.IMAGE_FMT_UNKNOWN {
+		return fmt.Errorf("unknown image format: %s", volumeConfig.Name)
 	}
 
 	image.Id = volumeConfig.Name
@@ -111,7 +110,7 @@ func (repo *LibvirtImagerep) List(images *models.ImageList) error {
 
 func (repo *LibvirtImagerep) Get(image *models.Image) (bool, error) {
 	if image.Id == "" {
-		return false, fmt.Errorf("no filename provided")
+		return false, fmt.Errorf("no image id provided")
 	}
 	pool, err := repo.conn.LookupStoragePoolByName(repo.pool)
 	if err != nil {

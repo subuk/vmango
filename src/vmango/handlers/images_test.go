@@ -120,17 +120,17 @@ func (suite *ImageHandlersTestSuite) TestAPIOk() {
 				"OS": "TestOS",
 				"Arch": "x86",
 				"Size": 0,
-				"Type": 0,
+				"Type": 1,
 				"Date": "2017-01-20T05:45:07Z",
-				"PoolName": "hello",
+				"PoolName": "hello"
 			},{
 				"Id": "test_image2.img",
 				"OS": "OsTest-4.0",
 				"Arch": "x86_64",
 				"Size": 0,
-				"Type": 1,
+				"Type": 2,
 				"Date": "2017-01-19T13:05:07Z",
-				"PoolName": "hello2",
+				"PoolName": "hello2"
 			}]
 		}
 	}`, rr.Body.String())
