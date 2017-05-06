@@ -13,32 +13,32 @@ INSTALL = install
 
 default: bin/vmango
 
-debug:
-	@echo $(test_coverage_targets)
+.PHONY: dependencies
+vendorize-dependencies:
+	$(GO) get -d -t vmango/...
+	$(GO) get -d github.com/jteeuwen/go-bindata/...
+	$(GO) get -d github.com/stretchr/testify
+	python make-vendor-json.py
+	find vendor/ -name .git -type d |xargs rm -rf
 
 vendor/bin/go-bindata:
-	$(GO) get github.com/jteeuwen/go-bindata/...
+	$(GO) build -o vendor/bin/go-bindata github.com/jteeuwen/go-bindata/go-bindata
 
 src/vmango/web/assets.go: vendor/bin/go-bindata $(ASSETS)
 	vendor/bin/go-bindata $(EXTRA_ASSETS_FLAGS) -o src/vmango/web/assets.go -pkg web static/... templates/...
 
 bin/vmango: $(SOURCES)
-	$(GO) get -d vmango/...
 	$(GO) build -ldflags "-w -s -X main.STATIC_VERSION=${VERSION}" -o bin/vmango vmango
 
 bin/vmango-debug: $(SOURCES)
-	$(GO) get -d vmango/...
 	$(GO) build -ldflags "-X main.STATIC_VERSION=${VERSION}" -o bin/vmango-debug vmango
 
-test-deps:
-	$(GO) get -t vmango/...
-
-test-coverage-%: test-deps
+test-coverage-%:
 	$(GO) test $(TEST_ARGS) -coverprofile=coverage.$*.out --run=. vmango/$(shell echo $* | sed 's,@,/,g')
 
 test-coverage: $(test_coverage_targets)
 
-test: lint src/vmango/web/assets.go test-deps
+test: lint src/vmango/web/assets.go
 	$(GO) test $(TEST_ARGS)  vmango/...
 
 show-coverage-html:
