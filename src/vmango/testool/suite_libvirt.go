@@ -18,8 +18,11 @@ type LibvirtTestPoolFixture struct {
 
 type LibvirtTest struct {
 	VMTpl      *template.Template
+	VMTplPath  string
 	VolTpl     *template.Template
+	VolTplPath string
 	VirConnect *libvirt.Connect
+	VirURI     string
 
 	Fixtures struct {
 		Domains  []string
@@ -41,7 +44,8 @@ func (suite *LibvirtTest) SetupSuite() {
 	if os.Getenv(TEST_TYPE_ENV_KEY) == "" {
 		log.Panicf("%s must be set", TEST_TYPE_ENV_KEY)
 	}
-	virConn, err := libvirt.NewConnect(os.Getenv(TEST_URI_ENV_KEY))
+	suite.VirURI = os.Getenv(TEST_URI_ENV_KEY)
+	virConn, err := libvirt.NewConnect(suite.VirURI)
 	if err != nil {
 		panic(err)
 	}
@@ -49,10 +53,10 @@ func (suite *LibvirtTest) SetupSuite() {
 }
 
 func (suite *LibvirtTest) SetupTest() {
-	vmTplPath := filepath.Join(SourceDir(), "fixtures/libvirt", os.Getenv(TEST_TYPE_ENV_KEY), "vm.xml.in")
-	volTplPath := filepath.Join(SourceDir(), "fixtures/libvirt", os.Getenv(TEST_TYPE_ENV_KEY), "volume.xml.in")
-	suite.VMTpl = template.Must(template.New("vm.xml.in").ParseFiles(vmTplPath))
-	suite.VolTpl = template.Must(template.New("volume.xml.in").ParseFiles(volTplPath))
+	suite.VMTplPath = filepath.Join(SourceDir(), "fixtures/libvirt", os.Getenv(TEST_TYPE_ENV_KEY), "vm.xml.in")
+	suite.VolTplPath = filepath.Join(SourceDir(), "fixtures/libvirt", os.Getenv(TEST_TYPE_ENV_KEY), "volume.xml.in")
+	suite.VMTpl = template.Must(template.New("vm.xml.in").ParseFiles(suite.VMTplPath))
+	suite.VolTpl = template.Must(template.New("volume.xml.in").ParseFiles(suite.VolTplPath))
 
 	for _, poolFixture := range suite.Fixtures.Pools {
 		pool, err := CreatePool(suite.VirConnect, poolFixture.Name)
