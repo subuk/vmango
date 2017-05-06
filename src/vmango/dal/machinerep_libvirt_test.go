@@ -262,6 +262,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 		Cpus     string `xml:"vcpu"`
 		Id       string `xml:"uuid"`
 		Name     string `xml:"name"`
+		OS       string `xml:"metadata>md>os"`
 		Userdata string `xml:"metadata>md>userdata"`
 		SSHKeys  []struct {
 			Name   string `xml:"name,attr"`
@@ -284,6 +285,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	suite.Equal("test-create", domainConfig.Name)
 	suite.NotEmpty(domainConfig.Id)
 	suite.Equal("#!/bin/sh", strings.TrimSpace(domainConfig.Userdata))
+	suite.Equal("Ubuntu-12.04", domainConfig.OS)
 	suite.Len(domainConfig.SSHKeys, 2)
 	suite.Equal(domainConfig.SSHKeys[0].Name, "home")
 	suite.Equal(domainConfig.SSHKeys[0].Public, "asdf")
