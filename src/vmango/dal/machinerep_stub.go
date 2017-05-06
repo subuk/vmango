@@ -18,10 +18,6 @@ type StubMachinerep struct {
 		Machine *models.VirtualMachine
 		Error   error
 	}
-	ServerInfoResponse struct {
-		Servers *models.ServerList
-		Error   error
-	}
 	StartResponse  error
 	StopResponse   error
 	RemoveResponse error
@@ -61,8 +57,4 @@ func (repo *StubMachinerep) Remove(vm *models.VirtualMachine) error {
 }
 func (repo *StubMachinerep) Reboot(vm *models.VirtualMachine) error {
 	return repo.RebootResponse
-}
-func (repo *StubMachinerep) ServerInfo(servers *models.ServerList) error {
-	*servers = *repo.ServerInfoResponse.Servers
-	return repo.ServerInfoResponse.Error
 }

@@ -8,21 +8,16 @@ import (
 )
 
 func Index(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
-	machines := &models.VirtualMachineList{}
-	servers := &models.ServerList{}
+	statuses := models.StatusInfoList{}
 	for _, provider := range ctx.Providers {
-		if err := provider.Machines().List(machines); err != nil {
-			return fmt.Errorf("failed to query provider %s: %s", provider, err)
+		status := &models.StatusInfo{}
+		if err := provider.Status(status); err != nil {
+			return fmt.Errorf("failed to query provider %s for status: %s", provider.Name(), err)
 		}
-		if err := provider.Machines().ServerInfo(servers); err != nil {
-			return fmt.Errorf("failed to query provider %s: %s", provider, err)
-		}
+		statuses = append(statuses, status)
 	}
-
-	ctx.Render.HTML(w, http.StatusOK, "index", map[string]interface{}{
-		"Request":  req,
-		"Machines": machines,
-		"Servers":  servers,
+	ctx.RenderResponse(w, req, http.StatusOK, "index", map[string]interface{}{
+		"Statuses": statuses,
 		"Title":    "Server info",
 	})
 	return nil

@@ -1,9 +1,14 @@
 package dal
 
+import (
+	"vmango/models"
+)
+
 type Provider interface {
 	Name() string
 	Machines() Machinerep
 	Images() Imagerep
+	Status(*models.StatusInfo) error
 }
 
 type Providers map[string]Provider

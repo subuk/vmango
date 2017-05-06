@@ -6,45 +6,41 @@
 </ol>
 
 <div class="container">
-  {{ range .Servers }}
+  {{ range .Statuses }}
   <div class="card border-0">
     <div class="card-block">
       <div class="row">
         <div class="col-md-12">
-          <h2>{{ .Data.Hostname }}</h2>
+          <h2>{{ .Name }} <small class="text-muted">{{ .Type }}</small></h2>
           <table>
             <tr>
-              <td>Processor</td>
-              <td>{{ .Data.Processor }} ({{ .Data.Cpus }} cores)</td>
+              <td>Description</td>
+              <td>{{ .Description }}</td>
             </tr>
             <tr>
-              <td>Connection URI</td>
-              <td>{{ .Data.LibvirtURI }}</td>
-            </tr>
-            <tr>
-              <td>Memory</td>
-              <td>{{ .Data.Memory | HumanizeBytes 2 }}</td>
+              <td>Connection</td>
+              <td>{{ .Connection }}</td>
             </tr>
             <tr>
               <td>Machines</td>
-              <td>{{ .Data.MachineCount }}</td>
+              <td>{{ .MachineCount }}</td>
             </tr>
             <tr>
-              <td>Storage space usage ({{ .Data.StorageCapacity | HumanizeBytes 4 }} total)</td>
+              <td>Storage space usage ({{ .Storage.Total | HumanizeBytes 3 }} total)</td>
               <td>
                 <div class="progress">
-                  <div class="progress-bar bg-{{if lt .Data.StorageUsagePercent 80}}success{{ else }}danger{{ end }}" role="progressbar" style="width: {{ .Data.StorageUsagePercent }}%" aria-valuenow="{{ .Data.StorageUsagePercent }}" aria-valuemin="0" aria-valuemax="100">
-                    {{ .Data.StorageUsagePercent }}%
+                  <div class="progress-bar bg-{{if lt .Storage.Usage 80}}success{{ else }}danger{{ end }}" role="progressbar" style="width: {{ .Storage.Usage }}%" aria-valuenow="{{ .Storage.Usage }}" aria-valuemin="0" aria-valuemax="100">
+                    {{ .Storage.Usage }}%
                   </div>
                 </div>
               </td>
             </tr>
             <tr>
-              <td>Memory usage ({{ .Data.MemoryTotal | HumanizeBytes 2 }} total)</td>
+              <td>Memory usage ({{ .Memory.Total | HumanizeBytes 2 }} total)</td>
               <td>
                 <div class="progress">
-                  <div class="progress-bar bg-{{if lt .Data.MemoryUsedPersent 80}}success{{ else }}danger{{ end }}" role="progressbar" style="width: {{ .Data.MemoryUsedPersent }}%" aria-valuenow="{{ .Data.MemoryUsedPersent }}" aria-valuemin="0" aria-valuemax="100">
-                    {{ .Data.MemoryUsedPersent }}%
+                  <div class="progress-bar bg-{{if lt .Memory.Usage 80}}success{{ else }}danger{{ end }}" role="progressbar" style="width: {{ .Memory.Usage }}%" aria-valuenow="{{ .Memory.Usage }}" aria-valuemin="0" aria-valuemax="100">
+                    {{ .Memory.Usage }}%
                   </div>
                 </div>
               </td>
