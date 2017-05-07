@@ -38,7 +38,7 @@ test-coverage-%:
 
 test-coverage: $(test_coverage_targets)
 
-test: lint src/vmango/web/assets.go
+test: lint bin/vmango
 	$(GO) test $(TEST_ARGS)  vmango/...
 
 show-coverage-html:
