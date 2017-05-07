@@ -74,6 +74,63 @@ Example:
         volume_template = "volume.xml.in"
     }
 
+## AWS Connection
+
+For authentication you can use any supported shared credentials configuration like awscli does or specify access and secret keys directly in the config file:
+
+http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html#config-settings-and-precedence
+
+**aws_connection** - AWS connection definition
+
+**aws_connection.profile** - AWS profile name 
+
+**aws_connection.access_key** - AWS access key 
+
+**aws_connection.secret_key** - AWS secret key 
+
+
+**aws_connection.region** - AWS region to use
+
+**aws_connection.subnet_id** - AWS VPC subnet id
+
+**aws_connection.security_groups** - AWS VPC security group ids
+
+**aws_connection.planmap** - Mapping from vmango plan to AWS instance type. All defined vmango plans should be mapped to aws instance types.
+
+**aws_connection.image** - AWS AMI definition
+
+**aws_connection.image.os** - OS name for defined aws AMI
+
+**aws_connection.assign_tags** - Add this extra tags for each machine
+
+Example:
+
+    aws_connection "AWS-IRELAND" {
+        region = "eu-west-1"
+        profile = "somename"
+        # access_key = ""
+        # secret_key = ""
+        planmap {
+            "small" = "t2.small"
+            "medium" = "t2.medium"
+            "large" = "t2.large"
+        }
+        image "ami-0d063c6b" {
+            os = "Centos-7"
+        }
+        image "ami-a8d2d7ce" {
+            os = "Ubuntu-16.04"
+        }
+        image "ami-3291be54" {
+            os = "Debian-8"
+        }
+        subnet_id = "subnet-4e2fdf16"
+        security_groups = ["sg-d30f9eb4"]
+        assign_tags = {
+            "Env" = "testing"
+            "Creator" = "vmango"
+        }
+    }
 
 ## Authentication users
 
