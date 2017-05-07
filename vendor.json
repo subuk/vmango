@@ -25,6 +25,10 @@
             "revision": "1d8981a52d6bda4467a9faacf3fdddd38222dfc4"
         }, 
         {
+            "path": "github.com/aws/aws-sdk-go", 
+            "revision": "a5b389b7b05c59adf7ac44f50d0d8be6e0c85710"
+        }, 
+        {
             "path": "github.com/gorilla/securecookie", 
             "revision": "e59506cc896acb7f7bf732d4fdf5e25f7ccd8983"
         }, 
