@@ -6,6 +6,7 @@ import (
 	"vmango/models"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	aws_session "github.com/aws/aws-sdk-go/aws/session"
 	aws_ec2 "github.com/aws/aws-sdk-go/service/ec2"
 )
@@ -26,6 +27,13 @@ func NewAWSProvider(conf cfg.AWSConnectionConfig) *AWSProvider {
 		Profile: conf.Profile,
 		Config:  aws.Config{Region: aws.String(conf.Region)},
 	}))
+
+	if conf.AccessKey != "" && conf.SecretKey != "" {
+		awsSession.Config = awsSession.Config.WithCredentials(
+			credentials.NewStaticCredentials(conf.AccessKey, conf.SecretKey, ""),
+		)
+	}
+
 	ec2 := aws_ec2.New(awsSession)
 	imagerep := NewAWSImagerep(ec2, conf.Images)
 	machinerep := NewAWSMachinerep(
