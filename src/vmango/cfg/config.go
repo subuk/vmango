@@ -10,6 +10,27 @@ import (
 	"github.com/hashicorp/hcl"
 )
 
+type AWSImageConfig struct {
+	Id string `hcl:",key"`
+	OS string `hcl:"os"`
+}
+
+type AWSConnectionConfig struct {
+	Name   string `hcl:",key"`
+	Region string `hcl:"region"`
+
+	Profile   string `hcl:"profile"`
+	AccessKey string `hcl:"access_key"`
+	SecretKey string `hcl:"secret_key"`
+
+	SubnetId       string   `hcl:"subnet_id"`
+	SecurityGroups []string `hcl:"security_groups"`
+
+	Images     []AWSImageConfig  `hcl:"image"`
+	AssignTags map[string]string `hcl:"assign_tags"`
+	PlanMap    map[string]string `hcl:"planmap"`
+}
+
 type HypervisorConfig struct {
 	Name             string   `hcl:",key"`
 	Url              string   `hcl:"url"`
@@ -47,10 +68,11 @@ type Config struct {
 	SSLCert        string   `hcl:"ssl_cert"`
 	TrustedProxies []string `hcl:"trusted_proxies"`
 
-	Hypervisors []HypervisorConfig `hcl:"hypervisor"`
-	SSHKeys     []SSHKeyConfig     `hcl:"ssh_key"`
-	Plans       []PlanConfig       `hcl:"plan"`
-	Users       []AuthUserConfig   `hcl:"user"`
+	AWSConnections []AWSConnectionConfig `hcl:"aws_connection"`
+	Hypervisors    []HypervisorConfig    `hcl:"hypervisor"`
+	SSHKeys        []SSHKeyConfig        `hcl:"ssh_key"`
+	Plans          []PlanConfig          `hcl:"plan"`
+	Users          []AuthUserConfig      `hcl:"user"`
 }
 
 func ResolveFilename(root string, filename string) string {

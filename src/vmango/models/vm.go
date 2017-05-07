@@ -6,9 +6,11 @@ import (
 )
 
 const (
-	STATE_RUNNING = iota
-	STATE_STOPPED = iota
-	STATE_UNKNOWN = iota
+	STATE_UNKNOWN  = iota
+	STATE_RUNNING  = iota
+	STATE_STOPPED  = iota
+	STATE_STOPPING = iota
+	STATE_STARTING = iota
 )
 
 type VirtualMachineList []*VirtualMachine
@@ -70,13 +72,17 @@ type VirtualMachine struct {
 	HWAddr   string
 	VNCAddr  string
 	RootDisk *VirtualMachineDisk
-	SSHKeys  []*SSHKey
+	SSHKeys  SSHKeyList
 }
 
 func (v *VirtualMachine) StateName() string {
 	switch v.State {
 	case STATE_RUNNING:
 		return "running"
+	case STATE_STOPPING:
+		return "stopping"
+	case STATE_STARTING:
+		return "starting"
 	case STATE_STOPPED:
 		return "stopped"
 	}
@@ -85,6 +91,14 @@ func (v *VirtualMachine) StateName() string {
 
 func (v *VirtualMachine) IsRunning() bool {
 	return v.State == STATE_RUNNING
+}
+
+func (v *VirtualMachine) IsStopping() bool {
+	return v.State == STATE_STOPPING
+}
+
+func (v *VirtualMachine) IsStarting() bool {
+	return v.State == STATE_STARTING
 }
 
 func (v *VirtualMachine) MemoryMegabytes() int {

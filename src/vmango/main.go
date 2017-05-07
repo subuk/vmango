@@ -95,6 +95,11 @@ func main() {
 		providers.Add(provider)
 	}
 
+	for _, aConfig := range config.AWSConnections {
+		provider := dal.NewAWSProvider(aConfig)
+		providers.Add(provider)
+	}
+
 	planrep := dal.NewConfigPlanrep(config.Plans)
 	sshkeyrep := dal.NewConfigSSHKeyrep(config.SSHKeys)
 	authrep := dal.NewConfigAuthrep(config.Users)

@@ -2,9 +2,9 @@ GOPATH = $(CURDIR)/vendor:$(CURDIR)
 GO = GOPATH=$(GOPATH) go
 TAR = tar
 NAME = vmango
-SOURCES = $(shell find src/ -name *.go) src/vmango/web/assets.go
+SOURCES = $(shell find src/ -name *.go) src/vmango/web/assets.go src/vmango/dal/aws_instance_types.go
 ASSETS = $(shell find templates/ static/)
-TARBALL_SOURCES = $(SOURCES) $(ASSETS) vendor/src/ docs/ debian/ *.dist.* Makefile
+TARBALL_SOURCES = $(SOURCES) $(ASSETS) vendor/src/ docs/ debian/ *.dist.* Makefile aws_instances.json.gz
 .PHONY = clean test show-coverage-html show-coverage-text
 PACKAGES = $(shell cd src/vmango; find . -type d|sed 's,^./,,' | sed 's,/,@,g' |sed '/^\.$$/d')
 TEST_ARGS = -race -tags "unit"
@@ -32,6 +32,12 @@ src/vmango/web/assets.go: vendor/bin/go-bindata $(ASSETS)
 
 bin/vmango: $(SOURCES)
 	$(GO) build -ldflags "-X main.VERSION=${VERSION}" -o bin/vmango vmango
+
+aws_instances.json.gz:
+	curl http://www.ec2instances.info/instances.json |gzip > aws_instances.json.gz
+
+src/vmango/dal/aws_instance_types.go: aws_instances.json.gz src/vmango/dal/aws_instance_types.go.in
+	$(GO) run generate-aws-instance-types.go > src/vmango/dal/aws_instance_types.go
 
 test-coverage-%:
 	$(GO) test $(TEST_ARGS) -coverprofile=coverage.$*.out --run=. vmango/$(shell echo $* | sed 's,@,/,g')
@@ -81,5 +87,6 @@ package-all: package-debian-9-x64 package-debian-8-x64 package-ubuntu-trusty-x64
 
 clean:
 	rm -rf bin/ pkg/ vendor/pkg/ vendor/bin pkg/ src/vmango/web/assets.go dockerfile.build.* vmango-*.tar.gz
+	rm -f src/vmango/dal/aws_instance_types.go
 	rm -f $(NAME)-$(VERSION).tar.gz
 	make -C docs clean

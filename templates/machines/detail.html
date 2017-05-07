@@ -32,6 +32,8 @@
           {{ if .Machine.IsRunning }}
             <a class="btn btn-primary" href="{{ Url "machine-changestate" "id" .Machine.Id "provider" .Provider "action" "stop" }}">Power Off</a>
             <a class="btn btn-primary" href="{{ Url "machine-changestate" "id" .Machine.Id "provider" .Provider "action" "reboot" }}">Reboot</a>
+          {{ else if .Machine.IsStopping }}
+          {{ else if .Machine.IsStarting }}
           {{ else }}
             <a class="btn btn-primary" href="{{ Url "machine-changestate" "id" .Machine.Id "provider" .Provider "action" "start" }}">Power On</a>
           {{ end }}
@@ -69,7 +71,7 @@
         <div class="card card-inverse card-warning">
           <div class="card-block text-xs-center">
             <div class="text-muted small text-uppercase font-weight-bold">Created by</div>
-            <div class="h2 p-1">{{ if not (eq .Machine.Creator "")  }}{{ .Machine.Creator }}{{ else }}???{{ end }}</div>
+            <div class="h2 p-1">{{ if not (eq .Machine.Creator "")  }}{{ .Machine.Creator }}{{ else }}? ? ?{{ end }}</div>
           </div>
         </div>
       </div>

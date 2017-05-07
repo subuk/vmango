@@ -1,0 +1,15 @@
+package dal
+
+type _awsInstanceType struct {
+    Name   string
+    Cpus   int
+    Memory int
+}
+
+type _awsInstanceTypesMap map[string]*_awsInstanceType
+
+var AWS_INSTANCE_TYPES = _awsInstanceTypesMap{
+    {{ range .InstanceTypes -}}
+    "{{ .Name }}": &_awsInstanceType{Name: "{{ .Name }}", Cpus: {{.Cpus }}, Memory: {{ .MemoryBytes }}},
+    {{ end }}
+}
