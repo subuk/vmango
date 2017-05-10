@@ -20,10 +20,10 @@ import (
 )
 
 var (
-	CONFIG_PATH    = flag.String("config", "vmango.conf", "Path to configuration file")
-	CHECK_CONFIG   = flag.Bool("check", false, "Validate configuration file and exit")
-	LOG_LEVEL      = flag.String("loglevel", "info", "Log level. One of panic,fatal,error,warn,info,debug")
-	STATIC_VERSION string
+	CONFIG_PATH  = flag.String("config", "vmango.conf", "Path to configuration file")
+	CHECK_CONFIG = flag.Bool("check", false, "Validate configuration file and exit")
+	LOG_LEVEL    = flag.String("loglevel", "info", "Log level. One of panic,fatal,error,warn,info,debug")
+	VERSION      string
 )
 
 func main() {
@@ -81,11 +81,7 @@ func main() {
 	csrfProtect := csrf.Protect([]byte(config.SessionSecret), csrfOptions...)
 
 	ctx.Router = vmango_router.New(ctx, csrfProtect)
-	staticVersion := STATIC_VERSION
-	if config.Debug {
-		staticVersion = ""
-	}
-	ctx.Render = web.NewRenderer(staticVersion, config.Debug, ctx)
+	ctx.Render = web.NewRenderer(VERSION, config.Debug, ctx)
 
 	providers := dal.Providers{}
 
@@ -116,12 +112,16 @@ func main() {
 	n.Use(negroni.NewRecovery())
 	n.UseHandler(ctx.Router)
 
+	log.WithFields(log.Fields{
+		"version": VERSION,
+		"address": config.Listen,
+		"tls":     config.IsTLS(),
+		"debug":   config.Debug,
+	}).Info("starting server")
+
 	if config.IsTLS() {
-		log.WithField("address", config.Listen).Info("starting SSL server")
 		log.Fatal(http.ListenAndServeTLS(config.Listen, config.SSLCert, config.SSLKey, n))
 	} else {
-		log.WithField("address", config.Listen).Info("starting server")
 		log.Fatal(http.ListenAndServe(config.Listen, n))
 	}
-
 }

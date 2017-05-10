@@ -28,10 +28,7 @@ src/vmango/web/assets.go: vendor/bin/go-bindata $(ASSETS)
 	vendor/bin/go-bindata $(EXTRA_ASSETS_FLAGS) -o src/vmango/web/assets.go -pkg web static/... templates/...
 
 bin/vmango: $(SOURCES)
-	$(GO) build -ldflags "-w -s -X main.STATIC_VERSION=${VERSION}" -o bin/vmango vmango
-
-bin/vmango-debug: $(SOURCES)
-	$(GO) build -ldflags "-X main.STATIC_VERSION=${VERSION}" -o bin/vmango-debug vmango
+	$(GO) build -ldflags "-X main.VERSION=${VERSION}" -o bin/vmango vmango
 
 test-coverage-%:
 	$(GO) test $(TEST_ARGS) -coverprofile=coverage.$*.out --run=. vmango/$(shell echo $* | sed 's,@,/,g')

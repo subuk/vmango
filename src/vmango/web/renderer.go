@@ -29,6 +29,9 @@ func NewRenderer(version string, debug bool, ctx *Context) *render.Render {
 				"CSRFField": func(req *http.Request) template.HTML {
 					return csrf.TemplateField(req)
 				},
+				"Version": func() string {
+					return strings.TrimPrefix(version, "v")
+				},
 				"HumanizeBytes": func(max int, number uint64) string {
 					i := 0
 					for {
