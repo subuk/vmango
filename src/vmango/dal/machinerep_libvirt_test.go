@@ -79,6 +79,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("#!/bin/sh\n", oneVm.Userdata)
 	suite.Equal("StubOs-1.0", oneVm.OS)
 	suite.Equal("stubuser", oneVm.Creator)
+	suite.Equal("medium", oneVm.Plan)
 
 	twoVm := machines.Find("two")
 	suite.Require().NotNil(twoVm)
@@ -101,6 +102,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("StubOs-1.0", twoVm.OS)
 	suite.Equal("x86_64", twoVm.Arch.String())
 	suite.Equal("stubuser", twoVm.Creator)
+	suite.Equal("large", twoVm.Plan)
 }
 
 func (suite *MachinerepLibvirtSuite) TestIgnoredOk() {
@@ -143,6 +145,7 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	suite.Nil(machine.Ip)
 	suite.Equal("StubOs-1.0", machine.OS)
 	suite.Equal("x86_64", machine.Arch.String())
+	suite.Equal("large", machine.Plan)
 }
 
 func (suite *MachinerepLibvirtSuite) TestGetNotFoundFail() {
@@ -272,6 +275,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 		Creator  string `xml:"metadata>md>creator"`
 		ImageId  string `xml:"metadata>md>imageId"`
 		Userdata string `xml:"metadata>md>userdata"`
+		Plan     string `xml:"metadata>md>plan"`
 		SSHKeys  []struct {
 			Name   string `xml:"name,attr"`
 			Public string `xml:",chardata"`
@@ -322,6 +326,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	suite.Equal("someuser", machine.Creator)
 	suite.Equal("#!/bin/sh\n", machine.Userdata)
 	suite.Equal("Ubuntu-12.04", machine.OS)
+	suite.Equal("small", machine.Plan)
 	suite.Equal(models.HWArch(models.ARCH_X86_64), machine.Arch)
 	suite.Equal(models.STATE_STOPPED, machine.State)
 	suite.Equal(536870912, machine.Memory)

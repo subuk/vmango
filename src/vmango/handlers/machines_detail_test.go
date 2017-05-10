@@ -78,6 +78,7 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
 		OS:      "HelloOS",
 		ImageId: "test-image",
 		Creator: "testuser",
+		Plan:    "test-plan",
 		Arch:    models.ARCH_X86_64,
 		Ip: &models.IP{
 			Address: "1.1.1.1",
@@ -104,6 +105,7 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
           "Cpus": 1,
           "ImageId": "test-image",
           "Creator": "testuser",
+          "Plan": "test-plan",
           "Ip": {"Address": "1.1.1.1", "Gateway": "", "Netmask": 0, "UsedBy": ""},
           "HWAddr": "hw:hw:hw",
           "VNCAddr": "vnc",

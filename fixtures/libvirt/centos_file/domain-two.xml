@@ -10,6 +10,7 @@
       <vmango:os>StubOs-1.0</vmango:os>
       <vmango:imageId>image-stub-000</vmango:imageId>
       <vmango:userdata>#!/bin/sh</vmango:userdata>
+      <vmango:plan>large</vmango:plan>
     </vmango:md>
   </metadata>
   <memory unit='KiB'>524288</memory>

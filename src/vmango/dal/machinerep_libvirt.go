@@ -21,6 +21,7 @@ var METADATA_TEMPLATE = template.Must(template.New("metadata").Parse(strings.Tri
   <vmango:imageId>{{ .Machine.ImageId }}</vmango:imageId>
   <vmango:os>{{ .Machine.OS }}</vmango:os>
   <vmango:creator>{{ .Machine.Creator }}</vmango:creator>
+  <vmango:plan>{{ .Machine.Plan }}</vmango:plan>
   <vmango:sshkeys>
     {{ range .Machine.SSHKeys }}
     <vmango:key name="{{ .Name }}">{{ .Public }}</vmango:key>
@@ -189,6 +190,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.OS = domainConfig.OSName
 	vm.Userdata = strings.TrimSpace(domainConfig.Userdata) + "\n"
 	vm.ImageId = domainConfig.ImageId
+	vm.Plan = domainConfig.Plan
 	vm.Creator = domainConfig.Creator
 	vm.SSHKeys = []*models.SSHKey{}
 	for _, key := range domainConfig.SSHKeys {
@@ -442,6 +444,7 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	machine.Memory = plan.Memory
 	machine.Cpus = plan.Cpus
 	machine.ImageId = image.Id
+	machine.Plan = plan.Name
 
 	var domainCreationXml bytes.Buffer
 	vmtplContext := struct {
