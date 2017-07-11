@@ -48,6 +48,16 @@ rm -rf $RPM_BUILD_ROOT
 %attr(644,root,root) %{_unitdir}/vmango.service
 
 %changelog
+* Wed Jul 12 2017 00:14:50 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.6.0-1
+- Preserve machine plan, creator and source image for virtual machines
+- Improve web access logging
+- Build with go1.8.1
+- Expose machine source image id
+- Simplify metadata rendering for vm templates
+- Rename Hypervisor to Provider
+- Rename Image.FullName to Image.Id
+- Use machine.id as main identify of machine instead of name
+
 * Sun Feb 19 2017 23:20:33 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.5.0-1
 - Use CSRF tokens for forms
 - New UI
