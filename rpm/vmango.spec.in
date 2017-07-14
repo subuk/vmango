@@ -48,7 +48,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(644,root,root) %{_unitdir}/vmango.service
 
 %changelog
-* Wed Feb 19 2017 23:20:33 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.5.0-1
+* Sun Feb 19 2017 23:20:33 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.5.0-1
 - Use CSRF tokens for forms
 - New UI
 
