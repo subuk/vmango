@@ -1,5 +1,7 @@
 GOPATH = $(CURDIR)/vendor:$(CURDIR)
 GO = GOPATH=$(GOPATH) go
+TAR = tar
+NAME = vmango
 SOURCES = $(shell find src/ -name *.go) src/vmango/web/assets.go
 ASSETS = $(shell find templates/ static/)
 .PHONY = clean test show-coverage-html show-coverage-text
@@ -55,24 +57,35 @@ install: bin/vmango
 	$(INSTALL) -m 0644 -o root vm.dist.xml.in $(DESTDIR)/etc/vmango/vm.xml.in
 	$(INSTALL) -m 0644 -o root volume.dist.xml.in $(DESTDIR)/etc/vmango/volume.xml.in
 
-package-deb-%:
-	echo "FROM $*" > "dockerfile.build.$*"
-	cat dockerfile.deb.in >> "dockerfile.build.$*"
-	docker build -f "dockerfile.build.$*" -t "vmango-build-$*" .
-	rm -rf "native-packages/$*"
-	mkdir -p "native-packages/$*"
-	docker run --rm "vmango-build-$*" /bin/bash -c 'tar -C /packages -cf - .' | tar -C "./native-packages/$*" -xf -
+.PHONY: tarball
+tarball:
+	$(TAR) --anchored \
+	--exclude=\*.tar.gz \
+	--exclude=.git \
+	--exclude=native-packages \
+	--exclude=rpm \
+	--exclude=pkg \
+	--exclude=bin \
+	--exclude=deb \
+	--transform "s,^,$(NAME)-$(VERSION)/," -czf $(NAME)-$(VERSION).tar.gz * .??*
 
-package-rpm-%:
-	echo "FROM $*" > "dockerfile.build.$*"
-	cat dockerfile.rpm.in >> "dockerfile.build.$*"
-	docker build -f "dockerfile.build.$*" -t "vmango-build-$*" .
-	rm -rf "native-packages/$*"
-	mkdir -p "native-packages/$*"
-	docker run --rm "vmango-build-$*" /bin/bash -c 'tar -C /packages -cf - .' | tar -C "./native-packages/$*" -xf -
+package-debian-8-x64:
+	$(MAKE) -C deb TARGET_DISTRO=debian-8-x64
 
-package-all: package-deb-ubuntu\:14.04 package-deb-ubuntu\:16.04 package-deb-debian\:8 package-rpm-centos\:7
+package-ubuntu-trusty-x64:
+	$(MAKE) -C deb TARGET_DISTRO=ubuntu-trusty-x64
+
+package-ubuntu-xenial-x64:
+	$(MAKE) -C deb TARGET_DISTRO=ubuntu-xenial-x64
+
+package-centos-7-x64:
+	$(MAKE) -C rpm TARGET_DISTRO=centos-7-x64-epel
+
+package-centos-6-x64:
+	$(MAKE) -C rpm TARGET_DISTRO=centos-6-x64-epel
+
+package-all: package-debian-8-x64 package-ubuntu-trusty-x64 package-ubuntu-xenial-x64 package-centos-7-x64
 
 clean:
-	rm -rf bin/ pkg/ vendor/pkg/ vendor/bin pkg/ src/vmango/web/assets.go dockerfile.build.*
+	rm -rf bin/ pkg/ vendor/pkg/ vendor/bin pkg/ src/vmango/web/assets.go dockerfile.build.* vmango-*.tar.gz
 	make -C docs clean
