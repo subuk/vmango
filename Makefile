@@ -4,6 +4,7 @@ TAR = tar
 NAME = vmango
 SOURCES = $(shell find src/ -name *.go) src/vmango/web/assets.go
 ASSETS = $(shell find templates/ static/)
+TARBALL_SOURCES = $(SOURCES) $(ASSETS) vendor/src/ docs/ debian/ *.dist.* Makefile
 .PHONY = clean test show-coverage-html show-coverage-text
 PACKAGES = $(shell cd src/vmango; find . -type d|sed 's,^./,,' | sed 's,/,@,g' |sed '/^\.$$/d')
 TEST_ARGS = -race -tags "unit"
@@ -57,17 +58,9 @@ install: bin/vmango
 	$(INSTALL) -m 0644 -o root vm.dist.xml.in $(DESTDIR)/etc/vmango/vm.xml.in
 	$(INSTALL) -m 0644 -o root volume.dist.xml.in $(DESTDIR)/etc/vmango/volume.xml.in
 
-.PHONY: tarball
-tarball:
-	$(TAR) --anchored \
-	--exclude=\*.tar.gz \
-	--exclude=.git \
-	--exclude=native-packages \
-	--exclude=rpm \
-	--exclude=pkg \
-	--exclude=bin \
-	--exclude=deb \
-	--transform "s,^,$(NAME)-$(VERSION)/," -czf $(NAME)-$(VERSION).tar.gz * .??*
+tarball: $(NAME)-$(VERSION).tar.gz
+$(NAME)-$(VERSION).tar.gz: $(TARBALL_SOURCES)
+	$(TAR) --transform "s,^,$(NAME)-$(VERSION)/," -czf $(NAME)-$(VERSION).tar.gz $(TARBALL_SOURCES)
 
 package-debian-8-x64:
 	$(MAKE) -C deb TARGET_DISTRO=debian-8-x64
@@ -88,4 +81,5 @@ package-all: package-debian-9-x64 package-debian-8-x64 package-ubuntu-trusty-x64
 
 clean:
 	rm -rf bin/ pkg/ vendor/pkg/ vendor/bin pkg/ src/vmango/web/assets.go dockerfile.build.* vmango-*.tar.gz
+	rm -f $(NAME)-$(VERSION).tar.gz
 	make -C docs clean
