@@ -7,9 +7,10 @@ TARGET_DISTRO =
 default: package
 
 $(NAME)_$(VERSION).orig-go.tar.gz:
-	wget -O $(NAME)_$(VERSION).orig-go.tar.gz https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz
+	wget -O $(NAME)_$(VERSION).orig-go.tar.gz https://storage.googleapis.com/golang/go1.8.3.linux-amd64.tar.gz
 
 sources: $(NAME)_$(VERSION).orig-go.tar.gz
+	rm -rf $(NAME)-$(VERSION)/
 	$(MAKE) -C ../ tarball VERSION=$(VERSION)
 	mv ../$(NAME)-$(VERSION).tar.gz ./$(NAME)_$(VERSION).orig.tar.gz
 	$(TAR) -xf $(NAME)_$(VERSION).orig.tar.gz

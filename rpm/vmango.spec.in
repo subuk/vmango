@@ -7,7 +7,7 @@ Version: @@_VERSION_@@
 Release: @@_RELEASE_@@%{dist}
 Source0: http://vmango.org/download/vmango-%{version}.tar.gz
 Source1: vmango.service
-Source2: https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz
+Source2: https://storage.googleapis.com/golang/go1.8.3.linux-amd64.tar.gz
 License: GPLv3
 Group: Applications/System
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
