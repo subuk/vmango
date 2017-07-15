@@ -3,8 +3,8 @@ ENV DEBIAN_PRIORITY critical
 ENV DEBCONF_NOWARNINGS yes
 
 RUN apt-get update && apt-get install -y wget dpkg-dev cdbs devscripts equivs
-RUN wget https://storage.googleapis.com/golang/go1.7.4.linux-amd64.tar.gz
-RUN tar -xf go1.7.4.linux-amd64.tar.gz
+RUN wget https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz
+RUN tar -xf go1.8.1.linux-amd64.tar.gz
 
 ADD debian/ /tmp/buildd/vmango/debian/
 RUN mk-build-deps -t 'apt-get -y' --remove --install /tmp/buildd/vmango/debian/control

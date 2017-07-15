@@ -210,6 +210,15 @@ type DomainEventMetadataChange struct {
 
 type DomainEventMetadataChangeCallback func(c *Connect, d *Domain, event *DomainEventMetadataChange)
 
+type DomainEventBlockThreshold struct {
+	Dev       string
+	Path      string
+	Threshold uint64
+	Excess    uint64
+}
+
+type DomainEventBlockThresholdCallback func(c *Connect, d *Domain, event *DomainEventBlockThreshold)
+
 //export domainEventLifecycleCallback
 func domainEventLifecycleCallback(c C.virConnectPtr, d C.virDomainPtr,
 	event int, detail int,
@@ -931,6 +940,26 @@ func domainEventDeviceRemovalFailedCallback(c C.virConnectPtr, d C.virDomainPtr,
 
 }
 
+//export domainEventBlockThresholdCallback
+func domainEventBlockThresholdCallback(c C.virConnectPtr, d C.virDomainPtr, dev *C.char, path *C.char, threshold C.ulonglong, excess C.ulonglong, goCallbackId int) {
+	domain := &Domain{ptr: d}
+	connection := &Connect{ptr: c}
+
+	eventDetails := &DomainEventBlockThreshold{
+		Dev:       C.GoString(dev),
+		Path:      C.GoString(path),
+		Threshold: uint64(threshold),
+		Excess:    uint64(excess),
+	}
+	callbackFunc := getCallbackId(goCallbackId)
+	callback, ok := callbackFunc.(DomainEventBlockThresholdCallback)
+	if !ok {
+		panic("Inappropriate callback type called")
+	}
+	callback(connection, domain, eventDetails)
+
+}
+
 func (c *Connect) DomainEventLifecycleRegister(dom *Domain, callback DomainEventLifecycleCallback) (int, error) {
 	goCallBackId := registerCallbackId(callback)
 
@@ -1378,6 +1407,25 @@ func (c *Connect) DomainEventMetadataChangeRegister(dom *Domain, callback Domain
 	}
 	ret := C.virConnectDomainEventRegisterAny_cgo(c.ptr, cdom,
 		C.VIR_DOMAIN_EVENT_ID_METADATA_CHANGE,
+		C.virConnectDomainEventGenericCallback(callbackPtr),
+		C.long(goCallBackId))
+	if ret == -1 {
+		freeCallbackId(goCallBackId)
+		return 0, GetLastError()
+	}
+	return int(ret), nil
+}
+
+func (c *Connect) DomainEventBlockThresholdRegister(dom *Domain, callback DomainEventBlockThresholdCallback) (int, error) {
+	goCallBackId := registerCallbackId(callback)
+
+	callbackPtr := unsafe.Pointer(C.domainEventBlockThresholdCallback_cgo)
+	var cdom C.virDomainPtr
+	if dom != nil {
+		cdom = dom.ptr
+	}
+	ret := C.virConnectDomainEventRegisterAny_cgo(c.ptr, cdom,
+		C.VIR_DOMAIN_EVENT_ID_BLOCK_THRESHOLD,
 		C.virConnectDomainEventGenericCallback(callbackPtr),
 		C.long(goCallBackId))
 	if ret == -1 {

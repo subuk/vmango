@@ -90,10 +90,18 @@ type DomainSnapshot struct {
 }
 
 func (s *DomainSnapshot) Free() error {
-	if result := C.virDomainSnapshotFree(s.ptr); result != 0 {
+	ret := C.virDomainSnapshotFree(s.ptr)
+	if ret == -1 {
 		return GetLastError()
 	}
-	s.ptr = nil
+	return nil
+}
+
+func (c *DomainSnapshot) Ref() error {
+	ret := C.virDomainSnapshotRef(c.ptr)
+	if ret == -1 {
+		return GetLastError()
+	}
 	return nil
 }
 

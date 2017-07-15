@@ -215,6 +215,18 @@ void domainEventMetadataChangeCallback_cgo(virConnectPtr conn,
     domainEventMetadataChangeCallback(conn, dom, type, nsuri, (int)(intptr_t)opaque);
 }
 
+extern void domainEventBlockThresholdCallback(virConnectPtr, virDomainPtr, const char *, const char *, unsigned long long, unsigned long long, int);
+void domainEventBlockThresholdCallback_cgo(virConnectPtr conn,
+					   virDomainPtr dom,
+					   const char *dev,
+					   const char *path,
+					   unsigned long long threshold,
+					   unsigned long long excess,
+					   void *opaque)
+{
+    domainEventBlockThresholdCallback(conn, dom, dev, path, threshold, excess, (int)(intptr_t)opaque);
+}
+
 int virConnectDomainEventRegisterAny_cgo(virConnectPtr c,  virDomainPtr d,
                                          int eventID, virConnectDomainEventGenericCallback cb,
                                          long goCallbackId) {

@@ -28,6 +28,8 @@ Response
             "Arch": "x86_64",
             "Memory": 536870912,
             "Cpus": 1,
+            "Creator": "admin",
+            "ImageId": "Centos-7_amd64_qcow2.img",
             "Ip": {
               "Address": "192.168.124.128",
               "Gateway": "",
@@ -100,6 +102,8 @@ Response example
         "Arch": "x86_64",
         "Memory": 536870912,
         "Cpus": 1,
+        "Creator": "admin",
+        "ImageId": "Centos-7_amd64_qcow2.img",        
         "Ip": {
           "Address": "192.168.124.128",
           "Gateway": "",

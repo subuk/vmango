@@ -2,8 +2,8 @@ RUN yum install -y epel-release rpmdevtools tar gzip
 RUN yum install -y make fakeroot
 RUN yum install -y wget
 
-RUN wget https://storage.googleapis.com/golang/go1.7.4.linux-amd64.tar.gz
-RUN tar -xf go1.7.4.linux-amd64.tar.gz
+RUN wget https://storage.googleapis.com/golang/go1.8.1.linux-amd64.tar.gz
+RUN tar -xf go1.8.1.linux-amd64.tar.gz
 
 ADD . /tmp/buildd/vmango/
 RUN cd /tmp/buildd/vmango/rpm/ && make sources

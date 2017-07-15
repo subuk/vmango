@@ -1,3 +1,16 @@
+vmango (0.6.0) vmango; urgency=medium
+
+  * Preserve machine plan, creator and source image for virtual machines
+  * Improve web access logging
+  * Build with go1.8.1
+  * Expose machine source image id
+  * Simplify metadata rendering for vm templates
+  * Rename Hypervisor to Provider
+  * Rename Image.FullName to Image.Id
+  * Use machine.id as main identify of machine instead of name
+
+ -- Matvey Kruglov <kubuzzzz@gmail.com>  Wed, 12 Jul 2017 00:14:50 +0300
+
 vmango (0.5.0) vmango; urgency=medium
 
   * Use CSRF tokens for forms

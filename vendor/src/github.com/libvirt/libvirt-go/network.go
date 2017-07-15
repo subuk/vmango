@@ -122,10 +122,18 @@ type NetworkDHCPLease struct {
 }
 
 func (n *Network) Free() error {
-	if result := C.virNetworkFree(n.ptr); result != 0 {
+	ret := C.virNetworkFree(n.ptr)
+	if ret == -1 {
 		return GetLastError()
 	}
-	n.ptr = nil
+	return nil
+}
+
+func (c *Network) Ref() error {
+	ret := C.virNetworkRef(c.ptr)
+	if ret == -1 {
+		return GetLastError()
+	}
 	return nil
 }
 
@@ -264,7 +272,7 @@ func (n *Network) Update(cmd NetworkUpdateCommand, section NetworkUpdateSection,
 
 func (n *Network) GetDHCPLeases() ([]NetworkDHCPLease, error) {
 	if C.LIBVIR_VERSION_NUMBER < 1002006 {
-		return []NetworkDHCPLease{}, GetNotImplementedError()
+		return []NetworkDHCPLease{}, GetNotImplementedError("virNetworkGetDHCPLeases")
 	}
 	var cLeases *C.virNetworkDHCPLeasePtr
 	numLeases := C.virNetworkGetDHCPLeasesCompat(n.ptr, nil, (**C.virNetworkDHCPLeasePtr)(&cLeases), C.uint(0))

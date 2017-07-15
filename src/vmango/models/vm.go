@@ -57,13 +57,15 @@ func (disk *VirtualMachineDisk) SizeGigabytes() int {
 type VirtualMachine struct {
 	Id       string
 	Name     string
+	Plan     string
+	Creator  string
 	Userdata string `json:"-"`
 	OS       string
 	Arch     HWArch
 	State    int `json:"-"`
 	Memory   int
 	Cpus     int
-	ImageId  string `json:"-"`
+	ImageId  string
 	Ip       *IP
 	HWAddr   string
 	VNCAddr  string

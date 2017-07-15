@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 const (
@@ -34,18 +37,7 @@ const (
 	defaultCharset = "UTF-8"
 )
 
-// Included helper functions for use when rendering HTML.
-var helperFuncs = template.FuncMap{
-	"yield": func() (string, error) {
-		return "", fmt.Errorf("yield called with no layout defined")
-	},
-	"block": func() (string, error) {
-		return "", fmt.Errorf("block called with no layout defined")
-	},
-	"current": func() (string, error) {
-		return "", nil
-	},
-}
+// helperFuncs had to be moved out. See helpers.go|helpers_pre16.go files.
 
 // Delims represents a set of Left and Right delimiters for HTML template rendering.
 type Delims struct {
@@ -81,7 +73,7 @@ type Options struct {
 	PrefixJSON []byte
 	// Prefixes the XML output with the given bytes.
 	PrefixXML []byte
-	// Allows changing of output to XHTML instead of HTML. Default is "text/html"
+	// Allows changing of output to XHTML instead of HTML. Default is "text/html".
 	HTMLContentType string
 	// If IsDevelopment is set to true, this will recompile the templates on every request. Default is false.
 	IsDevelopment bool
@@ -89,6 +81,14 @@ type Options struct {
 	UnEscapeHTML bool
 	// Streams JSON responses instead of marshalling prior to sending. Default is false.
 	StreamingJSON bool
+	// Require that all partials executed in the layout are implemented in all templates using the layout. Default is false.
+	RequirePartials bool
+	// Deprecated: Use the above `RequirePartials` instead of this. As of Go 1.6, blocks are built in. Default is false.
+	RequireBlocks bool
+	// Disables automatic rendering of http.StatusInternalServerError when an error occurs. Default is false.
+	DisableHTTPErrorRendering bool
+	// Enables using partials without the current filename suffix which allows use of the same template in multiple files. e.g {{ partial "carosuel" }} inside the home template will match carosel-home or carosel.
+	RenderPartialsWithoutPrefix bool
 }
 
 // HTMLOptions is a struct for overriding some rendering Options for specific HTML call.
@@ -103,6 +103,7 @@ type Render struct {
 	// Customize Secure with an Options struct.
 	opt             Options
 	templates       *template.Template
+	templatesLk     sync.Mutex
 	compiledCharset string
 }
 
@@ -121,11 +122,6 @@ func New(options ...Options) *Render {
 
 	r.prepareOptions()
 	r.compileTemplates()
-
-	// Create a new buffer pool for writing templates into.
-	if bufPool == nil {
-		bufPool = NewBufferPool(64)
-	}
 
 	return &r
 }
@@ -163,11 +159,10 @@ func (r *Render) compileTemplatesFromDir() {
 
 	// Walk the supplied directory and compile any files that match our extension list.
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		// fmt.Println("path: ", path)
-		// Fix same-extension-dirs bug: some dir might be named to: "users.tmpl", "local.html"
+		// Fix same-extension-dirs bug: some dir might be named to: "users.tmpl", "local.html".
 		// These dirs should be excluded as they are not valid golang templates, but files under
 		// them should be treat as normal.
-		// if is a dir, return immediately.(dir is not a valid golang template)
+		// If is a dir, return immediately (dir is not a valid golang template).
 		if info == nil || info.IsDir() {
 			return nil
 		}
@@ -252,7 +247,7 @@ func (r *Render) compileTemplatesFromAsset() {
 
 // TemplateLookup is a wrapper around template.Lookup and returns
 // the template with the given name that is associated with t, or nil
-// if there is no such template
+// if there is no such template.
 func (r *Render) TemplateLookup(t string) *template.Template {
 	return r.templates.Lookup(t)
 }
@@ -272,10 +267,30 @@ func (r *Render) addLayoutFuncs(name string, binding interface{}) {
 		"current": func() (string, error) {
 			return name, nil
 		},
-		"block": func(blockName string) (template.HTML, error) {
-			buf, err := r.execute(fmt.Sprintf("%s-%s", blockName, name), binding)
-			// Return safe HTML here since we are rendering our own template.
-			return template.HTML(buf.String()), err
+		"block": func(partialName string) (template.HTML, error) {
+			log.Print("Render's `block` implementation is now depericated. Use `partial` as a drop in replacement.")
+			fullPartialName := fmt.Sprintf("%s-%s", partialName, name)
+			if r.TemplateLookup(fullPartialName) == nil && r.opt.RenderPartialsWithoutPrefix {
+				fullPartialName = partialName
+			}
+			if r.opt.RequireBlocks || r.TemplateLookup(fullPartialName) != nil {
+				buf, err := r.execute(fullPartialName, binding)
+				// Return safe HTML here since we are rendering our own template.
+				return template.HTML(buf.String()), err
+			}
+			return "", nil
+		},
+		"partial": func(partialName string) (template.HTML, error) {
+			fullPartialName := fmt.Sprintf("%s-%s", partialName, name)
+			if r.TemplateLookup(fullPartialName) == nil && r.opt.RenderPartialsWithoutPrefix {
+				fullPartialName = partialName
+			}
+			if r.opt.RequirePartials || r.TemplateLookup(fullPartialName) != nil {
+				buf, err := r.execute(fullPartialName, binding)
+				// Return safe HTML here since we are rendering our own template.
+				return template.HTML(buf.String()), err
+			}
+			return "", nil
 		},
 	}
 	if tpl := r.templates.Lookup(name); tpl != nil {
@@ -294,15 +309,16 @@ func (r *Render) prepareHTMLOptions(htmlOpt []HTMLOptions) HTMLOptions {
 }
 
 // Render is the generic function called by XML, JSON, Data, HTML, and can be called by custom implementations.
-func (r *Render) Render(w http.ResponseWriter, e Engine, data interface{}) {
+func (r *Render) Render(w io.Writer, e Engine, data interface{}) error {
 	err := e.Render(w, data)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if hw, ok := w.(http.ResponseWriter); err != nil && !r.opt.DisableHTTPErrorRendering && ok {
+		http.Error(hw, err.Error(), http.StatusInternalServerError)
 	}
+	return err
 }
 
 // Data writes out the raw bytes as binary data.
-func (r *Render) Data(w http.ResponseWriter, status int, v []byte) {
+func (r *Render) Data(w io.Writer, status int, v []byte) error {
 	head := Head{
 		ContentType: ContentBinary,
 		Status:      status,
@@ -312,11 +328,14 @@ func (r *Render) Data(w http.ResponseWriter, status int, v []byte) {
 		Head: head,
 	}
 
-	r.Render(w, d, v)
+	return r.Render(w, d, v)
 }
 
 // HTML builds up the response from the specified template and bindings.
-func (r *Render) HTML(w http.ResponseWriter, status int, name string, binding interface{}, htmlOpt ...HTMLOptions) {
+func (r *Render) HTML(w io.Writer, status int, name string, binding interface{}, htmlOpt ...HTMLOptions) error {
+	r.templatesLk.Lock()
+	defer r.templatesLk.Unlock()
+
 	// If we are in development mode, recompile the templates on every HTML request.
 	if r.opt.IsDevelopment {
 		r.compileTemplates()
@@ -340,11 +359,11 @@ func (r *Render) HTML(w http.ResponseWriter, status int, name string, binding in
 		Templates: r.templates,
 	}
 
-	r.Render(w, h, binding)
+	return r.Render(w, h, binding)
 }
 
 // JSON marshals the given interface object and writes the JSON response.
-func (r *Render) JSON(w http.ResponseWriter, status int, v interface{}) {
+func (r *Render) JSON(w io.Writer, status int, v interface{}) error {
 	head := Head{
 		ContentType: ContentJSON + r.compiledCharset,
 		Status:      status,
@@ -358,11 +377,11 @@ func (r *Render) JSON(w http.ResponseWriter, status int, v interface{}) {
 		StreamingJSON: r.opt.StreamingJSON,
 	}
 
-	r.Render(w, j, v)
+	return r.Render(w, j, v)
 }
 
 // JSONP marshals the given interface object and writes the JSON response.
-func (r *Render) JSONP(w http.ResponseWriter, status int, callback string, v interface{}) {
+func (r *Render) JSONP(w io.Writer, status int, callback string, v interface{}) error {
 	head := Head{
 		ContentType: ContentJSONP + r.compiledCharset,
 		Status:      status,
@@ -374,11 +393,11 @@ func (r *Render) JSONP(w http.ResponseWriter, status int, callback string, v int
 		Callback: callback,
 	}
 
-	r.Render(w, j, v)
+	return r.Render(w, j, v)
 }
 
 // Text writes out a string as plain text.
-func (r *Render) Text(w http.ResponseWriter, status int, v string) {
+func (r *Render) Text(w io.Writer, status int, v string) error {
 	head := Head{
 		ContentType: ContentText + r.compiledCharset,
 		Status:      status,
@@ -388,11 +407,11 @@ func (r *Render) Text(w http.ResponseWriter, status int, v string) {
 		Head: head,
 	}
 
-	r.Render(w, t, v)
+	return r.Render(w, t, v)
 }
 
 // XML marshals the given interface object and writes the XML response.
-func (r *Render) XML(w http.ResponseWriter, status int, v interface{}) {
+func (r *Render) XML(w io.Writer, status int, v interface{}) error {
 	head := Head{
 		ContentType: ContentXML + r.compiledCharset,
 		Status:      status,
@@ -404,5 +423,5 @@ func (r *Render) XML(w http.ResponseWriter, status int, v interface{}) {
 		Prefix: r.opt.PrefixXML,
 	}
 
-	r.Render(w, x, v)
+	return r.Render(w, x, v)
 }

@@ -4,13 +4,13 @@ prevention middleware for Go web applications & services.
 
 It includes:
 
-    * The `csrf.Protect` middleware/handler provides CSRF protection on routes
-      attached to a router or a sub-router.
-    * A `csrf.Token` function that provides the token to pass into your response,
-      whether that be a HTML form or a JSON response body.
-    * ... and a `csrf.TemplateField` helper that you can pass into your `html/template`
-      templates to replace a `{{ .csrfField }}` template tag with a hidden input
-      field.
+* The `csrf.Protect` middleware/handler provides CSRF protection on routes
+  attached to a router or a sub-router.
+* A `csrf.Token` function that provides the token to pass into your response,
+  whether that be a HTML form or a JSON response body.
+* ... and a `csrf.TemplateField` helper that you can pass into your `html/template`
+  templates to replace a `{{ .csrfField }}` template tag with a hidden input
+  field.
 
 gorilla/csrf is easy to use: add the middleware to individual handlers with
 the below:
@@ -135,25 +135,29 @@ providing a JSON API:
         w.Write(b)
     }
 
+If you're writing a client that's supposed to mimic browser behavior, make sure to
+send back the CSRF cookie (the default name is _gorilla_csrf, but this can be changed
+with the CookieName Option) along with either the X-CSRF-Token header or the gorilla.csrf.Token form field.
+
 In addition: getting CSRF protection right is important, so here's some background:
 
-    * This library generates unique-per-request (masked) tokens as a mitigation
-      against the [BREACH attack](http://breachattack.com/).
-    * The 'base' (unmasked) token is stored in the session, which means that
-      multiple browser tabs won't cause a user problems as their per-request token
-      is compared with the base token.
-    * Operates on a "whitelist only" approach where safe (non-mutating) HTTP methods
-      (GET, HEAD, OPTIONS, TRACE) are the *only* methods where token validation is not
-      enforced.
-    * The design is based on the battle-tested
-      [Django](https://docs.djangoproject.com/en/1.8/ref/csrf/) and [Ruby on
-      Rails](http://api.rubyonrails.org/classes/ActionController/RequestForgeryProtection.html)
-      approaches.
-    * Cookies are authenticated and based on the [securecookie](https://github.com/gorilla/securecookie)
-      library. They're also Secure (issued over HTTPS only) and are HttpOnly
-      by default, because sane defaults are important.
-    * Go's `crypto/rand` library is used to generate the 32 byte (256 bit) tokens
-      and the one-time-pad used for masking them.
+* This library generates unique-per-request (masked) tokens as a mitigation
+  against the [BREACH attack](http://breachattack.com/).
+* The 'base' (unmasked) token is stored in the session, which means that
+  multiple browser tabs won't cause a user problems as their per-request token
+  is compared with the base token.
+* Operates on a "whitelist only" approach where safe (non-mutating) HTTP methods
+  (GET, HEAD, OPTIONS, TRACE) are the *only* methods where token validation is not
+  enforced.
+* The design is based on the battle-tested
+  [Django](https://docs.djangoproject.com/en/1.8/ref/csrf/) and [Ruby on
+  Rails](http://api.rubyonrails.org/classes/ActionController/RequestForgeryProtection.html)
+  approaches.
+* Cookies are authenticated and based on the [securecookie](https://github.com/gorilla/securecookie)
+  library. They're also Secure (issued over HTTPS only) and are HttpOnly
+  by default, because sane defaults are important.
+* Go's `crypto/rand` library is used to generate the 32 byte (256 bit) tokens
+  and the one-time-pad used for masking them.
 
 This library does not seek to be adventurous.
 

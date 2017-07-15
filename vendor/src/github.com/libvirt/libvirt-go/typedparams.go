@@ -200,6 +200,10 @@ func typedParamsPack(cparams []C.virTypedParameter, infomap map[string]typedPara
 func typedParamsPackNew(infomap map[string]typedParamsFieldInfo) (*[]C.virTypedParameter, error) {
 	nparams := 0
 	for _, value := range infomap {
+		if !*value.set {
+			continue
+		}
+
 		if value.sl != nil {
 			nparams += len(*value.sl)
 		} else {
@@ -210,6 +214,10 @@ func typedParamsPackNew(infomap map[string]typedParamsFieldInfo) (*[]C.virTypedP
 	cparams := make([]C.virTypedParameter, nparams)
 	nparams = 0
 	for key, value := range infomap {
+		if !*value.set {
+			continue
+		}
+
 		cfield := C.CString(key)
 		defer C.free(unsafe.Pointer(cfield))
 		clen := len(key) + 1

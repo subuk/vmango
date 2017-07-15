@@ -2,18 +2,7 @@
   <name>{{ .Machine.Name }}</name>
   <currentMemory unit="b">{{ .Plan.Memory }}</currentMemory>
   <metadata>
-    <vmango:md xmlns:vmango="http://vmango.org/schema/md">
-      <vmango:sshkeys>
-        {{ range .Machine.SSHKeys }}
-        <vmango:key name="{{ .Name }}">{{ .Public }}</vmango:key>
-        {{ end }}
-      </vmango:sshkeys>
-      <vmango:userdata>
-        <![CDATA[
-          {{ .Machine.Userdata }}
-        ]]>
-      </vmango:userdata>
-    </vmango:md>
+    {{ .Metadata }}
   </metadata>
   <memory unit="b">{{ .Plan.Memory }}</memory>
   <os>

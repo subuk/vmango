@@ -16,6 +16,25 @@ import (
 	"vmango/models"
 )
 
+var METADATA_TEMPLATE = template.Must(template.New("metadata").Parse(strings.TrimSpace(`
+<vmango:md xmlns:vmango="http://vmango.org/schema/md">
+  <vmango:imageId>{{ .Machine.ImageId }}</vmango:imageId>
+  <vmango:os>{{ .Machine.OS }}</vmango:os>
+  <vmango:creator>{{ .Machine.Creator }}</vmango:creator>
+  <vmango:plan>{{ .Machine.Plan }}</vmango:plan>
+  <vmango:sshkeys>
+    {{ range .Machine.SSHKeys }}
+    <vmango:key name="{{ .Name }}">{{ .Public }}</vmango:key>
+    {{ end }}
+  </vmango:sshkeys>
+  <vmango:userdata>
+    <![CDATA[
+      {{ .Machine.Userdata }}
+    ]]>
+  </vmango:userdata>
+</vmango:md>
+`)))
+
 type LibvirtMachinerep struct {
 	conn        *libvirt.Connect
 	vmtpl       *template.Template
@@ -170,7 +189,10 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.Arch = models.ParseHWArch(domainConfig.Os.Type.Arch)
 	vm.OS = domainConfig.OSName
 	vm.Userdata = strings.TrimSpace(domainConfig.Userdata) + "\n"
-
+	vm.ImageId = domainConfig.ImageId
+	vm.Plan = domainConfig.Plan
+	vm.Creator = domainConfig.Creator
+	vm.SSHKeys = []*models.SSHKey{}
 	for _, key := range domainConfig.SSHKeys {
 		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{Name: key.Name, Public: key.Public})
 	}
@@ -362,6 +384,17 @@ func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine
 	return volume, nil
 }
 
+func (store *LibvirtMachinerep) renderMetadata(machine *models.VirtualMachine) string {
+	var buf bytes.Buffer
+	context := struct {
+		Machine *models.VirtualMachine
+	}{machine}
+	if err := METADATA_TEMPLATE.Execute(&buf, context); err != nil {
+		panic(fmt.Errorf("failed to render metadata xml: %s", err))
+	}
+	return buf.String()
+}
+
 func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *models.Image, plan *models.Plan) error {
 	storagePool, err := store.conn.LookupStoragePoolByName(store.storagePool)
 	if err != nil {
@@ -405,6 +438,14 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	if err != nil {
 		return fmt.Errorf("failed to get machine volume path: %s", err)
 	}
+
+	machine.OS = image.OS
+	machine.Arch = image.Arch
+	machine.Memory = plan.Memory
+	machine.Cpus = plan.Cpus
+	machine.ImageId = image.Id
+	machine.Plan = plan.Name
+
 	var domainCreationXml bytes.Buffer
 	vmtplContext := struct {
 		Machine    *models.VirtualMachine
@@ -412,7 +453,8 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		Plan       *models.Plan
 		VolumePath string
 		Network    string
-	}{machine, image, plan, rootVolumePath, store.network}
+		Metadata   string
+	}{machine, image, plan, rootVolumePath, store.network, store.renderMetadata(machine)}
 	if err := store.vmtpl.Execute(&domainCreationXml, vmtplContext); err != nil {
 		return err
 	}

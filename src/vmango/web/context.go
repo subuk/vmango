@@ -38,6 +38,7 @@ type Context struct {
 	Logger       *logrus.Logger
 	SessionStore sessions.Store
 	StaticCache  time.Duration
+	AuthUser     *models.User
 
 	Plans     dal.Planrep
 	Providers dal.Providers
@@ -121,26 +122,6 @@ func (ctx *Context) Session(r *http.Request) *SessionData {
 		panic(err)
 	}
 	return &SessionData{Session: session}
-}
-
-func (ctx *Context) CheckAPIAuth(req *http.Request) bool {
-	username := req.Header.Get("X-Vmango-User")
-	if username == "" {
-		return false
-	}
-	password := req.Header.Get("X-Vmango-Pass")
-	if password == "" {
-		return false
-	}
-	user := &models.User{Name: username}
-	if exist, err := ctx.AuthDB.Get(user); err != nil {
-		logrus.WithError(err).Warning("failed to fetch user")
-		return false
-	} else if !exist {
-		logrus.WithField("username", username).Warning("Basic auth failed: no user found")
-		return false
-	}
-	return user.CheckPassword(password)
 }
 
 type HandlerFunc func(*Context, http.ResponseWriter, *http.Request) error

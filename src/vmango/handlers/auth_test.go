@@ -25,6 +25,7 @@ func (suite *LoginHandlerTestSuite) SetupTest() {
 	suite.Context.AuthDB = dal.NewConfigAuthrep([]cfg.AuthUserConfig{
 		// Password: secret
 		{Username: "testadmin", PasswordHash: "$2a$10$wrob4Gq/7x.zcaZu6wwkYueSCp3KMYC8Z.X.TR.04mMMHt5dM6rCe"},
+		{Username: "testuser", PasswordHash: "$2a$10$wrob4Gq/7x.zcaZu6wwkYueSCp3KMYC8Z.X.TR.04mMMHt5dM6rCe"},
 	})
 }
 

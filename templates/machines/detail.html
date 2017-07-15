@@ -47,7 +47,7 @@
     </div>
     <hr>
     <div class="row">
-      <div class="col-md-6">
+      <div class="col-md-4">
         <div class="card card-inverse card-info">
           <div class="card-block text-xs-center">
             <div class="text-muted small text-uppercase font-weight-bold">IP Address</div>
@@ -56,14 +56,24 @@
         </div>
       </div>
 
-      <div class="col-md-6">
+      <div class="col-md-4">
         <div class="card card-inverse card-warning">
           <div class="card-block text-xs-center">
-            <div class="text-muted small text-uppercase font-weight-bold">VNC Address</div>
-            <div class="h2 p-1">{{ .Machine.VNCAddr }}</div>
+            <div class="text-muted small text-uppercase font-weight-bold">Plan</div>
+            <div class="h2 p-1">{{ if not (eq .Machine.Plan "")  }}{{ .Machine.Plan }}{{ else }}???{{ end }}</div>
           </div>
         </div>
       </div>
+
+      <div class="col-md-4">
+        <div class="card card-inverse card-warning">
+          <div class="card-block text-xs-center">
+            <div class="text-muted small text-uppercase font-weight-bold">Created by</div>
+            <div class="h2 p-1">{{ if not (eq .Machine.Creator "")  }}{{ .Machine.Creator }}{{ else }}???{{ end }}</div>
+          </div>
+        </div>
+      </div>
+
     </div>
     <div class="row">
       <div class="col-md-12">

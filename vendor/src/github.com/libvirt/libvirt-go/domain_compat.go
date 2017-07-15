@@ -286,5 +286,30 @@ int virDomainSetGuestVcpusCompat(virDomainPtr domain,
 #endif
 }
 
+int virDomainSetVcpuCompat(virDomainPtr domain,
+			   const char *cpumap,
+			   int state,
+			   unsigned int flags)
+{
+#if LIBVIR_VERSION_NUMBER < 3001000
+    assert(0); // Caller should have checked version
+#else
+    return virDomainSetVcpu(domain, cpumap, state, flags);
+#endif
+}
+
+
+int virDomainSetBlockThresholdCompat(virDomainPtr domain,
+                                     const char *dev,
+                                     unsigned long long threshold,
+                                     unsigned int flags)
+{
+#if LIBVIR_VERSION_NUMBER < 3002000
+    assert(0); // Caller should have checked version
+#else
+    return virDomainSetBlockThreshold(domain, dev, threshold, flags);
+#endif
+}
+
 */
 import "C"

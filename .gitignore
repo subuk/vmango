@@ -8,3 +8,6 @@
 /coverage*.out
 /src/vmango/web/assets.go
 /dockerfile.build.*
+/rpm/vmango.spec
+/rpm/*.tar.gz
+/deb/*.tar.gz

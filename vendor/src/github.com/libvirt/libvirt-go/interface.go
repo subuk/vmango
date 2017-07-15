@@ -112,9 +112,17 @@ func (n *Interface) Undefine() error {
 }
 
 func (n *Interface) Free() error {
-	if result := C.virInterfaceFree(n.ptr); result != 0 {
+	ret := C.virInterfaceFree(n.ptr)
+	if ret == -1 {
 		return GetLastError()
 	}
-	n.ptr = nil
+	return nil
+}
+
+func (c *Interface) Ref() error {
+	ret := C.virInterfaceRef(c.ptr)
+	if ret == -1 {
+		return GetLastError()
+	}
 	return nil
 }

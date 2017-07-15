@@ -591,11 +591,11 @@ func GetLastError() Error {
 	return virErr
 }
 
-func GetNotImplementedError() Error {
+func GetNotImplementedError(apiname string) Error {
 	return Error{
 		Code:    ERR_NO_SUPPORT,
 		Domain:  FROM_NONE,
-		Message: "Function not implemented in this libvirt build",
+		Message: fmt.Sprintf("Function '%s' not available in the libvirt library used during Go build", apiname),
 		Level:   ERR_ERROR,
 	}
 }
