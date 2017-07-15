@@ -1,6 +1,6 @@
 # vmango
 
-[![Build Status](https://jenkins.vmango.org/job/subuk/job/vmango/job/feature%252Fjenkins/badge/icon)](https://jenkins.vmango.org/job/subuk/job/vmango/job/feature%252Fjenkins/)
+[![Build Status](https://jenkins.vmango.org/job/subuk/job/vmango/job/develop/badge/icon)](https://jenkins.vmango.org/job/subuk/job/vmango/job/develop/)
 
 Vmango is a virtual machines management web interface written using [Go](http://golang.org/).
 
