@@ -72,6 +72,9 @@ tarball:
 package-debian-8-x64:
 	$(MAKE) -C deb TARGET_DISTRO=debian-8-x64
 
+package-debian-9-x64:
+	$(MAKE) -C deb TARGET_DISTRO=debian-9-x64
+
 package-ubuntu-trusty-x64:
 	$(MAKE) -C deb TARGET_DISTRO=ubuntu-trusty-x64
 
@@ -81,10 +84,7 @@ package-ubuntu-xenial-x64:
 package-centos-7-x64:
 	$(MAKE) -C rpm TARGET_DISTRO=centos-7-x64-epel
 
-package-centos-6-x64:
-	$(MAKE) -C rpm TARGET_DISTRO=centos-6-x64-epel
-
-package-all: package-debian-8-x64 package-ubuntu-trusty-x64 package-ubuntu-xenial-x64 package-centos-7-x64
+package-all: package-debian-9-x64 package-debian-8-x64 package-ubuntu-trusty-x64 package-ubuntu-xenial-x64 package-centos-7-x64
 
 clean:
 	rm -rf bin/ pkg/ vendor/pkg/ vendor/bin pkg/ src/vmango/web/assets.go dockerfile.build.* vmango-*.tar.gz
