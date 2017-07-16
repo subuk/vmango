@@ -15,20 +15,20 @@ The simplest way to install.
 For all distributions, configuration files located in /etc/vmango, logs managed by init system (systemd or upstart).
 
 
-#### Ubuntu 14.04/16.04
+#### Ubuntu 14.04 / 16.04
 
+    sudo apt-get install apt-transport-https gnupg lsb-release
     echo deb https://dl.vmango.org/ubuntu $(lsb_release -c -s) main |sudo tee /etc/apt/sources.list.d/vmango.list
     wget -O- https://dl.vmango.org/repo.key | sudo apt-key add -
-    sudo apt-get install apt-transport-https
     sudo apt-get update
     sudo apt-get install vmango
 
 
-#### Debian 8
+#### Debian 8 / 9
 
-    echo deb https://dl.vmango.org/debian jessie main |sudo tee /etc/apt/sources.list.d/vmango.list
+    sudo apt-get install apt-transport-https gnupg lsb-release
+    echo deb https://dl.vmango.org/debian $(lsb_release -c -s) main |sudo tee /etc/apt/sources.list.d/vmango.list
     wget -O- https://dl.vmango.org/repo.key | sudo apt-key add -
-    sudo apt-get install apt-transport-https
     sudo apt-get update
     sudo apt-get install vmango
 

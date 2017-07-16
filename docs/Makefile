@@ -1,11 +1,12 @@
 DEPLOY_HOST=no_host_set
 DEPLOY_PATH=/srv/www/vmango.org/docs/
+HUGO = hugo-0.21
 
 dev:
-	hugo server -D -E
+	$(HUGO) server -D -E
 
 deploy: clean
-	hugo
+	$(HUGO)
 	rsync -v --delete-after -a public/ $(DEPLOY_HOST):$(DEPLOY_PATH)
 
 clean:
