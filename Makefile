@@ -2,9 +2,9 @@ GOPATH = $(CURDIR)/vendor:$(CURDIR)
 GO = GOPATH=$(GOPATH) go
 TAR = tar
 NAME = vmango
-SOURCES = $(shell find src/ -name *.go) src/vmango/web/assets.go src/vmango/dal/aws_instance_types.go
-ASSETS = $(shell find templates/ static/)
-TARBALL_SOURCES = $(SOURCES) $(ASSETS) vendor/src/ docs/ debian/ *.dist.* Makefile aws_instances.json.gz
+SOURCES = $(shell find src -name '*.go' -o -name '*.go.in') src/vmango/web/assets.go src/vmango/dal/aws_instance_types.go
+ASSETS = $(shell find templates static)
+TARBALL_SOURCES = $(SOURCES) $(ASSETS) vendor/src docs debian *.dist.* Makefile aws_instances.json.gz generate-aws-instance-types.go
 .PHONY = clean test show-coverage-html show-coverage-text
 PACKAGES = $(shell cd src/vmango; find . -type d|sed 's,^./,,' | sed 's,/,@,g' |sed '/^\.$$/d')
 TEST_ARGS = -race -tags "unit"
