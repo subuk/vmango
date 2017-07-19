@@ -1,0 +1,176 @@
+package main
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"syscall"
+
+	"github.com/lxc/lxd/shared"
+)
+
+var storagePoolConfigKeys = map[string]func(value string) error{
+	// valid drivers: btrfs
+	// (Note, that we can't be smart in detecting mount options since a lot
+	// of filesystems come with their own additional ones (e.g.
+	// "user_subvol_rm_allowed" for btrfs or "zfsutils" for zfs). So
+	// shared.IsAny() must do.)
+	"btrfs.mount_options": shared.IsAny,
+
+	// valid drivers: lvm
+	"lvm.thinpool_name": shared.IsAny,
+	"lvm.use_thinpool":  shared.IsBool,
+	"lvm.vg_name":       shared.IsAny,
+
+	// valid drivers: btrfs, lvm, zfs
+	"size": func(value string) error {
+		if value == "" {
+			return nil
+		}
+
+		_, err := shared.ParseByteSizeString(value)
+		return err
+	},
+
+	// valid drivers: btrfs, dir, lvm, zfs
+	"source": shared.IsAny,
+
+	// valid drivers: lvm
+	"volume.block.filesystem": func(value string) error {
+		return shared.IsOneOf(value, []string{"ext4", "xfs"})
+	},
+	"volume.block.mount_options": shared.IsAny,
+
+	// valid drivers: lvm
+	"volume.size": func(value string) error {
+		if value == "" {
+			return nil
+		}
+
+		_, err := shared.ParseByteSizeString(value)
+		return err
+	},
+
+	// valid drivers: zfs
+	"volume.zfs.remove_snapshots": shared.IsBool,
+	"volume.zfs.use_refquota":     shared.IsBool,
+
+	// valid drivers: zfs
+	"zfs.clone_copy": shared.IsBool,
+	"zfs.pool_name":  shared.IsAny,
+	"rsync.bwlimit":  shared.IsAny,
+}
+
+func storagePoolValidateConfig(name string, driver string, config map[string]string) error {
+	err := func(value string) error {
+		return shared.IsOneOf(value, supportedStoragePoolDrivers)
+	}(driver)
+	if err != nil {
+		return err
+	}
+
+	if driver == "lvm" {
+		v, ok := config["lvm.use_thinpool"]
+		if ok && !shared.IsTrue(v) && config["lvm.thinpool_name"] != "" {
+			return fmt.Errorf("the key \"lvm.use_thinpool\" cannot be set to a false value when \"lvm.thinpool_name\" is set for LVM storage pools")
+		}
+	}
+
+	v, ok := config["rsync.bwlimit"]
+	if ok && v != "" {
+		_, err := shared.ParseByteSizeString(v)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Check whether the config properties for the driver container sane
+	// values.
+	for key, val := range config {
+		// User keys are not validated.
+		if strings.HasPrefix(key, "user.") {
+			continue
+		}
+
+		prfx := strings.HasPrefix
+		if driver == "dir" {
+			if key == "size" {
+				return fmt.Errorf("the key %s cannot be used with %s storage pools", key, strings.ToUpper(driver))
+			}
+		}
+
+		if driver != "lvm" {
+			if prfx(key, "lvm.") || prfx(key, "volume.block.") || key == "volume.size" {
+				return fmt.Errorf("the key %s cannot be used with %s storage pools", key, strings.ToUpper(driver))
+			}
+		}
+
+		if driver != "zfs" {
+			if prfx(key, "volume.zfs.") || prfx(key, "zfs.") {
+				return fmt.Errorf("the key %s cannot be used with %s storage pools", key, strings.ToUpper(driver))
+			}
+		}
+
+		// Validate storage pool config keys.
+		validator, ok := storagePoolConfigKeys[key]
+		if !ok {
+			return fmt.Errorf("Invalid storage pool configuration key: %s", key)
+		}
+
+		err := validator(val)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func storagePoolFillDefault(name string, driver string, config map[string]string) error {
+	if driver != "dir" {
+		if config["size"] == "" {
+			st := syscall.Statfs_t{}
+			err := syscall.Statfs(shared.VarPath(), &st)
+			if err != nil {
+				return fmt.Errorf("couldn't statfs %s: %s", shared.VarPath(), err)
+			}
+
+			/* choose 15 GB < x < 100GB, where x is 20% of the disk size */
+			size := uint64(st.Frsize) * st.Blocks / (1024 * 1024 * 1024) / 5
+			if size > 100 {
+				size = 100
+			}
+			if size < 15 {
+				size = 15
+			}
+			config["size"] = strconv.FormatUint(uint64(size), 10) + "GB"
+		} else {
+			_, err := shared.ParseByteSizeString(config["size"])
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if driver == "lvm" {
+		// We use thin pools per default.
+		useThinpool := true
+		if config["lvm.use_thinpool"] != "" {
+			useThinpool = shared.IsTrue(config["lvm.use_thinpool"])
+		}
+
+		if useThinpool && config["lvm.thinpool_name"] == "" {
+			// Unchangeable pool property: Set unconditionally.
+			config["lvm.thinpool_name"] = "LXDThinpool"
+		}
+
+		if config["volume.size"] != "" {
+			_, err := shared.ParseByteSizeString(config["volume.size"])
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}

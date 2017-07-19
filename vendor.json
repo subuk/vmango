@@ -45,6 +45,10 @@
             "revision": "1c72d033473165ade8a126ba64180d76a9212dcd"
         }, 
         {
+            "path": "github.com/lxc/lxd", 
+            "revision": "79a36e6edfdf6d3235b4524c024225a0d62425e2"
+        }, 
+        {
             "path": "github.com/pkg/errors", 
             "revision": "c605e284fe17294bda444b34710735b29d1a9d90"
         }, 
@@ -55,6 +59,10 @@
         {
             "path": "github.com/libvirt/libvirt-go", 
             "revision": "d1dd72b576736b3726d7f754bedcdd287c377e15"
+        }, 
+        {
+            "path": "github.com/gorilla/websocket", 
+            "revision": "a69d9f6de432e2c6b296a947d8a5ee88f68522cf"
         }, 
         {
             "path": "github.com/gorilla/mux", 
