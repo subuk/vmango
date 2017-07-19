@@ -1,14 +1,15 @@
 package web
 
 import (
-	"github.com/Sirupsen/logrus"
-	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
-	"github.com/unrolled/render"
 	"net/http"
 	"time"
 	"vmango/dal"
 	"vmango/models"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
+	"github.com/unrolled/render"
 )
 
 const SESSION_NAME = "vmango"

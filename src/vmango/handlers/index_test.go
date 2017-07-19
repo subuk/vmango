@@ -4,11 +4,12 @@ package handlers_test
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/suite"
 	"testing"
 	"vmango/dal"
 	"vmango/models"
 	"vmango/testool"
+
+	"github.com/stretchr/testify/suite"
 )
 
 const INDEX_URL = "/"

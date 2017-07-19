@@ -1,11 +1,12 @@
 package testool
 
 import (
-	"github.com/gorilla/sessions"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"vmango/web"
+
+	"github.com/gorilla/sessions"
 )
 
 type WebTest struct {

@@ -3,12 +3,13 @@ package dal
 import (
 	"encoding/xml"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/libvirt/libvirt-go"
 	"strconv"
 	"strings"
 	"time"
 	"vmango/models"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/libvirt/libvirt-go"
 )
 
 type volumeXMLConfig struct {

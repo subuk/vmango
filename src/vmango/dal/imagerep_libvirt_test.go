@@ -3,12 +3,13 @@
 package dal_test
 
 import (
-	"github.com/stretchr/testify/suite"
 	"testing"
 	"time"
 	"vmango/dal"
 	"vmango/models"
 	"vmango/testool"
+
+	"github.com/stretchr/testify/suite"
 )
 
 type ImagerepLibvirtTestSuite struct {

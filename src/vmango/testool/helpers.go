@@ -3,9 +3,6 @@ package testool
 import (
 	"encoding/xml"
 	"fmt"
-	"github.com/Sirupsen/logrus"
-	"github.com/gorilla/sessions"
-	"github.com/libvirt/libvirt-go"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -15,6 +12,10 @@ import (
 	"vmango/dal"
 	"vmango/web"
 	web_router "vmango/web/router"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/gorilla/sessions"
+	"github.com/libvirt/libvirt-go"
 )
 
 type StubSessionStore struct {

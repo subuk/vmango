@@ -2,11 +2,12 @@ package cfg
 
 import (
 	"fmt"
-	"github.com/hashicorp/go-multierror"
-	"github.com/hashicorp/hcl"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/hcl"
 )
 
 type HypervisorConfig struct {

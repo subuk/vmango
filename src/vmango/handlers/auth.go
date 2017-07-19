@@ -2,11 +2,12 @@ package handlers
 
 import (
 	"fmt"
-	"github.com/gorilla/csrf"
-	"github.com/gorilla/schema"
 	"net/http"
 	"vmango/models"
 	"vmango/web"
+
+	"github.com/gorilla/csrf"
+	"github.com/gorilla/schema"
 )
 
 type loginFormData struct {

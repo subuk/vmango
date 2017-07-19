@@ -2,12 +2,13 @@ package handlers
 
 import (
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/gorilla/schema"
 	"net/http"
 	"strings"
 	"vmango/models"
 	"vmango/web"
+
+	"github.com/gorilla/mux"
+	"github.com/gorilla/schema"
 )
 
 func MachineDelete(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {

@@ -1,10 +1,11 @@
 package router
 
 import (
-	"github.com/gorilla/mux"
 	"net/http"
 	"vmango/handlers"
 	"vmango/web"
+
+	"github.com/gorilla/mux"
 )
 
 type CSRFProtector func(http.Handler) http.Handler

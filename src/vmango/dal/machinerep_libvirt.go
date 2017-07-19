@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/libvirt/libvirt-go"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -14,6 +12,9 @@ import (
 	"strings"
 	"text/template"
 	"vmango/models"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/libvirt/libvirt-go"
 )
 
 var METADATA_TEMPLATE = template.Must(template.New("metadata").Parse(strings.TrimSpace(`

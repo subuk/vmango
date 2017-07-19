@@ -3,10 +3,11 @@ package dal
 import (
 	"encoding/xml"
 	"fmt"
-	"github.com/libvirt/libvirt-go"
 	text_template "text/template"
 	"vmango/cfg"
 	"vmango/models"
+
+	"github.com/libvirt/libvirt-go"
 )
 
 const LIBVIRT_PROVIDER_TYPE = "libvirt"

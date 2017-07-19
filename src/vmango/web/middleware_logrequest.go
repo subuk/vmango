@@ -1,11 +1,12 @@
 package web
 
 import (
-	"github.com/Sirupsen/logrus"
 	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Sirupsen/logrus"
 )
 
 type LogRequestMiddleware struct {

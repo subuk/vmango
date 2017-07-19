@@ -2,12 +2,13 @@ package web
 
 import (
 	"fmt"
-	"github.com/gorilla/csrf"
-	"github.com/unrolled/render"
 	"html/template"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/gorilla/csrf"
+	"github.com/unrolled/render"
 )
 
 var SUFFIXES = []string{"b", "K", "M", "G", "T"}

@@ -5,11 +5,12 @@ package handlers_test
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/suite"
 	"testing"
 	"vmango/dal"
 	"vmango/models"
 	"vmango/testool"
+
+	"github.com/stretchr/testify/suite"
 )
 
 func DELETE_URL(hypervisor, name string) string {

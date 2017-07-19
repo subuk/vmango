@@ -3,12 +3,13 @@
 package web
 
 import (
-	"github.com/Sirupsen/logrus"
-	logrus_test "github.com/Sirupsen/logrus/hooks/test"
-	"github.com/stretchr/testify/suite"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/Sirupsen/logrus"
+	logrus_test "github.com/Sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/suite"
 )
 
 type LogRequestMiddlewareTestSuite struct {

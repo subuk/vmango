@@ -3,13 +3,14 @@
 package dal_test
 
 import (
-	"github.com/stretchr/testify/suite"
 	"strings"
 	"testing"
 	"vmango/cfg"
 	"vmango/dal"
 	"vmango/models"
 	"vmango/testool"
+
+	"github.com/stretchr/testify/suite"
 )
 
 type ProviderLibvirtSuite struct {

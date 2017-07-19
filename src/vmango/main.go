@@ -3,11 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/codegangsta/negroni"
-	"github.com/gorilla/csrf"
-	"github.com/gorilla/sessions"
-	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,6 +12,12 @@ import (
 	"vmango/handlers"
 	"vmango/web"
 	vmango_router "vmango/web/router"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/codegangsta/negroni"
+	"github.com/gorilla/csrf"
+	"github.com/gorilla/sessions"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (

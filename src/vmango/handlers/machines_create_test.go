@@ -4,13 +4,14 @@ package handlers_test
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/suite"
 	"net/url"
 	"testing"
 	"vmango/cfg"
 	"vmango/dal"
 	"vmango/models"
 	"vmango/testool"
+
+	"github.com/stretchr/testify/suite"
 )
 
 const CREATE_URL = "/machines/add/"

@@ -1,11 +1,12 @@
 package testool
 
 import (
-	"github.com/libvirt/libvirt-go"
 	"log"
 	"os"
 	"path/filepath"
 	"text/template"
+
+	"github.com/libvirt/libvirt-go"
 )
 
 const TEST_URI_ENV_KEY = "VMANGO_TEST_LIBVIRT_URI"

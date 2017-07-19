@@ -4,13 +4,14 @@ package dal_test
 
 import (
 	"encoding/xml"
-	"github.com/libvirt/libvirt-go"
-	"github.com/stretchr/testify/suite"
 	"strings"
 	"testing"
 	"vmango/dal"
 	"vmango/models"
 	"vmango/testool"
+
+	"github.com/libvirt/libvirt-go"
+	"github.com/stretchr/testify/suite"
 )
 
 const HYPERVISOR_NAME = "main"
