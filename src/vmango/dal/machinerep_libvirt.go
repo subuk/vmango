@@ -13,7 +13,7 @@ import (
 	"text/template"
 	"vmango/models"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/libvirt/libvirt-go"
 )
 
@@ -109,7 +109,7 @@ func (store *LibvirtMachinerep) releaseIP(vm *models.VirtualMachine) error {
 		return err
 	}
 	if vm.Ip == nil {
-		log.WithField("machine", vm.Name).Warn("no ip to release")
+		logrus.WithField("machine", vm.Name).Warn("no ip to release")
 		return nil
 	}
 	return network.Update(
@@ -148,7 +148,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 		return fmt.Errorf("failed to parse domain xml: %s", err)
 	}
 
-	log.WithField("name", name).WithField("domain", domainConfig).Debug("domain xml fetched")
+	logrus.WithField("name", name).WithField("domain", domainConfig).Debug("domain xml fetched")
 
 	switch info.State {
 	default:
@@ -430,7 +430,7 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		return fmt.Errorf("failed to lookup image volume: %s", err)
 	}
 
-	log.WithField("xml", volumeXML.String()).Debug("defining volume from xml")
+	logrus.WithField("xml", volumeXML.String()).Debug("defining volume from xml")
 	rootVolume, err := storagePool.StorageVolCreateXMLFrom(volumeXML.String(), imageVolume, 0)
 	if err != nil {
 		return fmt.Errorf("failed to clone image: %s", err)
@@ -459,7 +459,7 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	if err := store.vmtpl.Execute(&domainCreationXml, vmtplContext); err != nil {
 		return err
 	}
-	log.WithField("xml", domainCreationXml.String()).Debug("defining domain from xml")
+	logrus.WithField("xml", domainCreationXml.String()).Debug("defining domain from xml")
 	domain, err := store.conn.DomainDefineXML(domainCreationXml.String())
 	if err != nil {
 		return err
@@ -471,7 +471,7 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 		return err
 	}
 
-	log.Debug("creating config drive")
+	logrus.Debug("creating config drive")
 	configDriveVolume, err := store.createConfigDrive(machine, storagePool)
 	if err != nil {
 		return fmt.Errorf("failed to create config drive: %s", err)

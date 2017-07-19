@@ -8,7 +8,7 @@ import (
 	"time"
 	"vmango/models"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/libvirt/libvirt-go"
 )
 
@@ -101,7 +101,7 @@ func (repo *LibvirtImagerep) List(images *models.ImageList) error {
 	for _, volume := range volumes {
 		image := &models.Image{}
 		if err := repo.fillImage(image, &volume); err != nil {
-			log.WithError(err).Warn("skipping volume")
+			logrus.WithError(err).Warn("skipping volume")
 			continue
 		}
 		*images = append(*images, image)

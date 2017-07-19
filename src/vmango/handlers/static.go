@@ -8,7 +8,7 @@ import (
 	"time"
 	"vmango/web"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 )
 
@@ -38,7 +38,7 @@ func ServeAsset(ctx *web.Context, w http.ResponseWriter, req *http.Request) erro
 func MakeStaticHandler(root string) http.HandlerFunc {
 	return func(w http.ResponseWriter, request *http.Request) {
 		name := mux.Vars(request)["name"]
-		log.WithField("name", name).Debug("serving static file")
+		logrus.WithField("name", name).Debug("serving static file")
 		http.ServeFile(w, request, filepath.Join(root, name))
 	}
 }
