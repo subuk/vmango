@@ -31,7 +31,7 @@
               {{ range $provider, $images := .Images }}
                 {{ range $images }}
                 <tr>
-                  <td>{{ .Id }}</td>
+                  <td>{{ .Id | LimitString 20 }}</td>
                   <td>{{ .OS }}</td>
                   <td>{{ .Arch }}</td>
                   <td>{{ .SizeMegabytes }}Mb</td>

@@ -25,6 +25,7 @@
               <td>Machines</td>
               <td>{{ .MachineCount }}</td>
             </tr>
+            {{ if not (eq .Storage.Total 0) }}
             <tr>
               <td>Storage space usage ({{ .Storage.Total | HumanizeBytes 3 }} total)</td>
               <td>
@@ -35,6 +36,8 @@
                 </div>
               </td>
             </tr>
+            {{ end }}
+            {{ if not (eq .Memory.Total 0) }}
             <tr>
               <td>Memory usage ({{ .Memory.Total | HumanizeBytes 2 }} total)</td>
               <td>
@@ -45,6 +48,7 @@
                 </div>
               </td>
             </tr>
+            {{ end }}
           </table>
         </div>
       </div>

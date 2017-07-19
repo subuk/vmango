@@ -9,6 +9,7 @@ const (
 	IMAGE_FMT_UNKNOWN = iota
 	IMAGE_FMT_RAW     = iota
 	IMAGE_FMT_QCOW2   = iota
+	IMAGE_FMT_LXD     = iota
 )
 
 type ImageList []*Image
@@ -46,6 +47,8 @@ func (image *Image) TypeString() string {
 		return "raw"
 	case IMAGE_FMT_QCOW2:
 		return "qcow2"
+	case IMAGE_FMT_LXD:
+		return "lxd"
 	}
 }
 

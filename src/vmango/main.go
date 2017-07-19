@@ -95,6 +95,15 @@ func main() {
 		providers.Add(provider)
 	}
 
+	for _, lConfig := range config.LXDServers {
+		provider, err := dal.NewLXDProvider(lConfig)
+		if err != nil {
+			logrus.WithError(err).WithField("provider", lConfig.Name).Warning("failed to initialize lxd provider")
+			continue
+		}
+		providers.Add(provider)
+	}
+
 	planrep := dal.NewConfigPlanrep(config.Plans)
 	sshkeyrep := dal.NewConfigSSHKeyrep(config.SSHKeys)
 	authrep := dal.NewConfigAuthrep(config.Users)

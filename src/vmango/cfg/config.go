@@ -10,6 +10,22 @@ import (
 	"github.com/hashicorp/hcl"
 )
 
+type LXDImageServerConfig struct {
+	Name   string   `hcl:"name"`
+	Filter []string `hcl:"filter"`
+}
+
+type LXDConfig struct {
+	Name       string `hcl:",key"`
+	Url        string `hcl:"url"`
+	ServerCert string `hcl:"server_cert"`
+	Cert       string `hcl:"cert"`
+	Key        string `hcl:"key"`
+	Password   string `hcl:"password"`
+
+	ImageServer LXDImageServerConfig `hcl:"image_server"`
+}
+
 type HypervisorConfig struct {
 	Name             string   `hcl:",key"`
 	Url              string   `hcl:"url"`
@@ -48,6 +64,7 @@ type Config struct {
 	TrustedProxies []string `hcl:"trusted_proxies"`
 
 	Hypervisors []HypervisorConfig `hcl:"hypervisor"`
+	LXDServers  []LXDConfig        `hcl:"lxd"`
 	SSHKeys     []SSHKeyConfig     `hcl:"ssh_key"`
 	Plans       []PlanConfig       `hcl:"plan"`
 	Users       []AuthUserConfig   `hcl:"user"`
@@ -104,6 +121,13 @@ func (config *Config) Sanitize(root string) error {
 		if err := FileAvailaible(hypervisor.VolTemplate); err != nil {
 			errors = multierror.Append(errors, fmt.Errorf("failed to stat hypervisor.%s.volume_template: %s", hypervisor.Name, err))
 		}
+	}
+	for index := range config.LXDServers {
+		lxdServer := &config.LXDServers[index]
+		if _, exists := names[lxdServer.Name]; exists {
+			errors = multierror.Append(errors, fmt.Errorf("duplicated lxd server name '%s'", lxdServer.Name))
+		}
+		names[lxdServer.Name] = struct{}{}
 	}
 	if config.SessionSecret == "" {
 		errors = multierror.Append(errors, fmt.Errorf("session_secret required"))
