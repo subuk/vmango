@@ -1,6 +1,6 @@
 +++
 weight = 10
-title = "Livirt Hypervisor"
+title = "Libvirt Hypervisor"
 date = "2017-02-09T23:36:17+03:00"
 toc = true
 +++
