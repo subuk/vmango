@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
-	"vmango/models"
+	"vmango/domain"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/libvirt/libvirt-go"
@@ -42,23 +42,21 @@ type LibvirtMachinerep struct {
 	voltpl      *template.Template
 	network     string
 	storagePool string
-	hypervisor  string
 	ignoreVms   []string
 }
 
-func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Template, network, pool, hypervisor string, ignoreVms []string) (*LibvirtMachinerep, error) {
+func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Template, network, pool string, ignoreVms []string) *LibvirtMachinerep {
 	return &LibvirtMachinerep{
 		conn:        conn,
 		vmtpl:       vmtpl,
 		voltpl:      voltpl,
 		network:     network,
-		hypervisor:  hypervisor,
 		storagePool: pool,
 		ignoreVms:   ignoreVms,
-	}, nil
+	}
 }
 
-func (store *LibvirtMachinerep) assignIP(vm *models.VirtualMachine) error {
+func (store *LibvirtMachinerep) assignIP(vm *domain.VirtualMachine) error {
 	network, err := store.conn.LookupNetworkByName(store.network)
 	if err != nil {
 		return err
@@ -80,10 +78,10 @@ func (store *LibvirtMachinerep) assignIP(vm *models.VirtualMachine) error {
 	if err != nil {
 		return err
 	}
-	var ip *models.IP
+	var ip *domain.IP
 	for _, addr := range addrs {
 		if has := networkConfig.HasHost(addr); !has {
-			ip = &models.IP{Address: addr}
+			ip = &domain.IP{Address: addr}
 			break
 		}
 	}
@@ -103,7 +101,7 @@ func (store *LibvirtMachinerep) assignIP(vm *models.VirtualMachine) error {
 	)
 }
 
-func (store *LibvirtMachinerep) releaseIP(vm *models.VirtualMachine) error {
+func (store *LibvirtMachinerep) releaseIP(vm *domain.VirtualMachine) error {
 	network, err := store.conn.LookupNetworkByName(store.network)
 	if err != nil {
 		return err
@@ -124,21 +122,21 @@ func (store *LibvirtMachinerep) releaseIP(vm *models.VirtualMachine) error {
 	)
 }
 
-func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvirt.Domain, network *libvirt.Network) error {
-	name, err := domain.GetName()
+func (store *LibvirtMachinerep) fillVm(vm *domain.VirtualMachine, virDomain *libvirt.Domain, network *libvirt.Network) error {
+	name, err := virDomain.GetName()
 	if err != nil {
 		return err
 	}
-	uuid, err := domain.GetUUID()
+	uuid, err := virDomain.GetUUID()
 	if err != nil {
 		return err
 	}
-	info, err := domain.GetInfo()
+	info, err := virDomain.GetInfo()
 	if err != nil {
 		return err
 	}
 
-	domainXMLString, err := domain.GetXMLDesc(0)
+	domainXMLString, err := virDomain.GetXMLDesc(0)
 	if err != nil {
 		return err
 	}
@@ -152,13 +150,13 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 
 	switch info.State {
 	default:
-		vm.State = models.STATE_UNKNOWN
+		vm.State = domain.STATE_UNKNOWN
 	case libvirt.DOMAIN_RUNNING:
-		vm.State = models.STATE_RUNNING
+		vm.State = domain.STATE_RUNNING
 	case libvirt.DOMAIN_SHUTDOWN:
-		vm.State = models.STATE_STOPPED
+		vm.State = domain.STATE_STOPPED
 	case libvirt.DOMAIN_SHUTOFF:
-		vm.State = models.STATE_STOPPED
+		vm.State = domain.STATE_STOPPED
 
 	}
 
@@ -175,7 +173,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 		if err != nil {
 			return err
 		}
-		vm.RootDisk = &models.VirtualMachineDisk{}
+		vm.RootDisk = &domain.VirtualMachineDisk{}
 		vm.RootDisk.Driver = rootVolumeConfig.Driver.Name
 		vm.RootDisk.Type = rootVolumeConfig.Driver.Type
 		vm.RootDisk.Size = rootVolumeInfo.Capacity
@@ -187,15 +185,15 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	vm.Cpus = int(info.NrVirtCpu)
 	vm.HWAddr = domainConfig.Interfaces[0].Mac.Address
 	vm.VNCAddr = domainConfig.VNCAddr()
-	vm.Arch = models.ParseHWArch(domainConfig.Os.Type.Arch)
+	vm.Arch = domain.ParseHWArch(domainConfig.Os.Type.Arch)
 	vm.OS = domainConfig.OSName
 	vm.Userdata = strings.TrimSpace(domainConfig.Userdata) + "\n"
 	vm.ImageId = domainConfig.ImageId
 	vm.Plan = domainConfig.Plan
 	vm.Creator = domainConfig.Creator
-	vm.SSHKeys = []*models.SSHKey{}
+	vm.SSHKeys = []*domain.SSHKey{}
 	for _, key := range domainConfig.SSHKeys {
-		vm.SSHKeys = append(vm.SSHKeys, &models.SSHKey{Name: key.Name, Public: key.Public})
+		vm.SSHKeys = append(vm.SSHKeys, &domain.SSHKey{Name: key.Name, Public: key.Public})
 	}
 
 	networkXMLString, err := network.GetXMLDesc(0)
@@ -208,7 +206,7 @@ func (store *LibvirtMachinerep) fillVm(vm *models.VirtualMachine, domain *libvir
 	}
 	for _, host := range networkConfig.IP.Hosts {
 		if host.HWAddr == vm.HWAddr {
-			vm.Ip = &models.IP{Address: host.IPAddr}
+			vm.Ip = &domain.IP{Address: host.IPAddr}
 		}
 	}
 
@@ -224,7 +222,7 @@ func (store *LibvirtMachinerep) isIgnored(name string) bool {
 	return false
 }
 
-func (store *LibvirtMachinerep) List(machines *models.VirtualMachineList) error {
+func (store *LibvirtMachinerep) List(machines *domain.VirtualMachineList) error {
 	domains, err := store.conn.ListAllDomains(0)
 	if err != nil {
 		return err
@@ -234,16 +232,16 @@ func (store *LibvirtMachinerep) List(machines *models.VirtualMachineList) error 
 		return err
 	}
 
-	for _, domain := range domains {
-		domainName, err := domain.GetName()
+	for _, virDomain := range domains {
+		domainName, err := virDomain.GetName()
 		if err != nil {
 			panic(err)
 		}
 		if store.isIgnored(domainName) {
 			continue
 		}
-		vm := &models.VirtualMachine{}
-		if err := store.fillVm(vm, &domain, network); err != nil {
+		vm := &domain.VirtualMachine{}
+		if err := store.fillVm(vm, &virDomain, network); err != nil {
 			return err
 		}
 		machines.Add(vm)
@@ -251,7 +249,7 @@ func (store *LibvirtMachinerep) List(machines *models.VirtualMachineList) error 
 	return nil
 }
 
-func (store *LibvirtMachinerep) Get(machine *models.VirtualMachine) (bool, error) {
+func (store *LibvirtMachinerep) Get(machine *domain.VirtualMachine) (bool, error) {
 	if machine.Id == "" {
 		panic("no id specified for LibvirtMachinerep.Get()")
 	}
@@ -287,7 +285,7 @@ type openstackMetadata struct {
 	UUID        string                  `json:"uuid"`
 }
 
-func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine, pool *libvirt.StoragePool) (*libvirt.StorageVol, error) {
+func (store *LibvirtMachinerep) createConfigDrive(machine *domain.VirtualMachine, pool *libvirt.StoragePool) (*libvirt.StorageVol, error) {
 	tmpdir, err := ioutil.TempDir("", "")
 	if err != nil {
 		return nil, err
@@ -385,10 +383,10 @@ func (store *LibvirtMachinerep) createConfigDrive(machine *models.VirtualMachine
 	return volume, nil
 }
 
-func (store *LibvirtMachinerep) renderMetadata(machine *models.VirtualMachine) string {
+func (store *LibvirtMachinerep) renderMetadata(machine *domain.VirtualMachine) string {
 	var buf bytes.Buffer
 	context := struct {
-		Machine *models.VirtualMachine
+		Machine *domain.VirtualMachine
 	}{machine}
 	if err := METADATA_TEMPLATE.Execute(&buf, context); err != nil {
 		panic(fmt.Errorf("failed to render metadata xml: %s", err))
@@ -396,7 +394,7 @@ func (store *LibvirtMachinerep) renderMetadata(machine *models.VirtualMachine) s
 	return buf.String()
 }
 
-func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *models.Image, plan *models.Plan) error {
+func (store *LibvirtMachinerep) Create(machine *domain.VirtualMachine, image *domain.Image, plan *domain.Plan) error {
 	storagePool, err := store.conn.LookupStoragePoolByName(store.storagePool)
 	if err != nil {
 		return fmt.Errorf("failed to lookup vm storage pool: %s", err.(libvirt.Error).Message)
@@ -418,9 +416,9 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 
 	var volumeXML bytes.Buffer
 	voltplContext := struct {
-		Machine *models.VirtualMachine
-		Image   *models.Image
-		Plan    *models.Plan
+		Machine *domain.VirtualMachine
+		Image   *domain.Image
+		Plan    *domain.Plan
 	}{machine, image, plan}
 	if err := store.voltpl.Execute(&volumeXML, voltplContext); err != nil {
 		return fmt.Errorf("failed to create volume xml from template: %s", err)
@@ -449,9 +447,9 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 
 	var domainCreationXml bytes.Buffer
 	vmtplContext := struct {
-		Machine    *models.VirtualMachine
-		Image      *models.Image
-		Plan       *models.Plan
+		Machine    *domain.VirtualMachine
+		Image      *domain.Image
+		Plan       *domain.Plan
 		VolumePath string
 		Network    string
 		Metadata   string
@@ -501,7 +499,7 @@ func (store *LibvirtMachinerep) Create(machine *models.VirtualMachine, image *mo
 	return store.fillVm(machine, domain, network)
 }
 
-func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
+func (store *LibvirtMachinerep) Remove(machine *domain.VirtualMachine) error {
 	if machine.Id == "" {
 		panic("no id specified for machine remove")
 	}
@@ -556,7 +554,7 @@ func (store *LibvirtMachinerep) Remove(machine *models.VirtualMachine) error {
 	return nil
 }
 
-func (store *LibvirtMachinerep) Start(machine *models.VirtualMachine) error {
+func (store *LibvirtMachinerep) Start(machine *domain.VirtualMachine) error {
 	domain, err := store.conn.LookupDomainByName(machine.Name)
 	if err != nil {
 		return err
@@ -564,7 +562,7 @@ func (store *LibvirtMachinerep) Start(machine *models.VirtualMachine) error {
 	return domain.Create()
 }
 
-func (store *LibvirtMachinerep) Stop(machine *models.VirtualMachine) error {
+func (store *LibvirtMachinerep) Stop(machine *domain.VirtualMachine) error {
 	domain, err := store.conn.LookupDomainByName(machine.Name)
 	if err != nil {
 		return err
@@ -572,7 +570,7 @@ func (store *LibvirtMachinerep) Stop(machine *models.VirtualMachine) error {
 	return domain.Destroy()
 }
 
-func (store *LibvirtMachinerep) Reboot(machine *models.VirtualMachine) error {
+func (store *LibvirtMachinerep) Reboot(machine *domain.VirtualMachine) error {
 	domain, err := store.conn.LookupDomainByName(machine.Name)
 	if err != nil {
 		return err

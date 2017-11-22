@@ -1,16 +1,16 @@
 package dal
 
 import (
-	"vmango/models"
+	"vmango/domain"
 )
 
 type StubImagerep struct {
-	Data    []*models.Image
+	Data    []*domain.Image
 	ListErr error
 	GetErr  error
 }
 
-func (repo *StubImagerep) List(images *models.ImageList) error {
+func (repo *StubImagerep) List(images *domain.ImageList) error {
 	if repo.ListErr != nil {
 		return repo.ListErr
 	}
@@ -20,7 +20,7 @@ func (repo *StubImagerep) List(images *models.ImageList) error {
 	return nil
 }
 
-func (repo *StubImagerep) Get(needle *models.Image) (bool, error) {
+func (repo *StubImagerep) Get(needle *domain.Image) (bool, error) {
 	if repo.GetErr != nil {
 		return false, repo.GetErr
 	}

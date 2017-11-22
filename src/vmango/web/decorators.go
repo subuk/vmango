@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"vmango/models"
+	"vmango/domain"
 
 	"github.com/Sirupsen/logrus"
 )
@@ -25,7 +25,7 @@ func SessionAuthenticationRequired(next HandlerFunc) HandlerFunc {
 			return nil
 		}
 		username := session.AuthUser()
-		user := &models.User{Name: username}
+		user := &domain.User{Name: username}
 		if exists, err := ctx.AuthDB.Get(user); err != nil {
 			return err
 		} else if !exists {
@@ -52,7 +52,7 @@ func APIAuthenticationRequired(next HandlerFunc) HandlerFunc {
 			})
 			return nil
 		}
-		user := &models.User{Name: username}
+		user := &domain.User{Name: username}
 		if exist, err := ctx.AuthDB.Get(user); err != nil {
 			logrus.WithError(err).Warning("failed to fetch user")
 			ctx.Render.JSON(w, http.StatusUnauthorized, map[string]string{

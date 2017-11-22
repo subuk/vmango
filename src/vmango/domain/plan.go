@@ -1,4 +1,4 @@
-package models
+package domain
 
 type Plan struct {
 	Name     string

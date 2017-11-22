@@ -1,4 +1,4 @@
-package models
+package domain
 
 type Server struct {
 	Data map[string]interface{}

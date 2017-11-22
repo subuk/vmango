@@ -18,9 +18,9 @@
 
             <div class="form-group d-flex flex-wrap">
               {{ range .Providers }}
-              <div style="min-width: 200px;" class="mr-2 card JS-CheckboxCard" data-CheckboxCards-Depends="#ImageSelect" data-CheckboxCards-Depends-ShowOnly="[data-Provider='{{ .Name }}']">
+              <div style="min-width: 200px;" class="mr-2 card JS-CheckboxCard" data-CheckboxCards-Depends="#ImageSelect" data-CheckboxCards-Depends-ShowOnly="[data-Provider='{{ . }}']">
                 <div class="card-block p-1 text-center">
-                  <input type="checkbox" name="Provider" value="{{ .Name }}"> {{ .Name }}
+                  <input type="checkbox" name="Provider" value="{{ . }}"> {{ . }}
                 </div>
               </div>
               {{ end }}

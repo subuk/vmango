@@ -9,6 +9,7 @@ import (
 	"time"
 	"vmango/cfg"
 	"vmango/dal"
+	"vmango/domain"
 	"vmango/handlers"
 	"vmango/web"
 	vmango_router "vmango/web/router"
@@ -84,24 +85,15 @@ func main() {
 	ctx.Router = vmango_router.New(ctx, csrfProtect)
 	ctx.Render = web.NewRenderer(VERSION, config.Debug, ctx)
 
-	providers := dal.Providers{}
-
-	for _, hConfig := range config.Hypervisors {
-		provider, err := dal.NewLibvirtProvider(hConfig)
-		if err != nil {
-			logrus.WithError(err).WithField("provider", hConfig.Name).Warning("failed to initialize libvirt hypervisor")
-			continue
-		}
-		providers.Add(provider)
-	}
-
 	planrep := dal.NewConfigPlanrep(config.Plans)
 	sshkeyrep := dal.NewConfigSSHKeyrep(config.SSHKeys)
 	authrep := dal.NewConfigAuthrep(config.Users)
+	providerconfigrep, err := dal.NewConfigProviderConfigrep(config.Hypervisors)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to initialize provider configuration repository")
+	}
 
-	ctx.Providers = providers
-	ctx.Plans = planrep
-	ctx.SSHKeys = sshkeyrep
+	ctx.Machines = domain.NewMachineService(providerconfigrep, dal.ProviderFactory, sshkeyrep, planrep)
 	ctx.AuthDB = authrep
 	ctx.SessionStore = sessions.NewCookieStore([]byte(config.SessionSecret))
 

@@ -2,19 +2,19 @@ package dal
 
 import (
 	"vmango/cfg"
-	"vmango/models"
+	"vmango/domain"
 )
 
 type ConfigPlanrep struct {
-	plans []*models.Plan
+	plans []*domain.Plan
 }
 
 func NewConfigPlanrep(planConfigs []cfg.PlanConfig) *ConfigPlanrep {
 	repo := &ConfigPlanrep{
-		plans: []*models.Plan{},
+		plans: []*domain.Plan{},
 	}
 	for _, planConfig := range planConfigs {
-		plan := &models.Plan{
+		plan := &domain.Plan{
 			Name:     planConfig.Name,
 			Memory:   planConfig.Memory * 1024 * 1024,
 			Cpus:     planConfig.Cpus,
@@ -25,12 +25,12 @@ func NewConfigPlanrep(planConfigs []cfg.PlanConfig) *ConfigPlanrep {
 	return repo
 }
 
-func (repo *ConfigPlanrep) List(plans *[]*models.Plan) error {
+func (repo *ConfigPlanrep) List(plans *[]*domain.Plan) error {
 	*plans = *(&repo.plans)
 	return nil
 
 }
-func (repo *ConfigPlanrep) Get(needle *models.Plan) (bool, error) {
+func (repo *ConfigPlanrep) Get(needle *domain.Plan) (bool, error) {
 	for _, plan := range repo.plans {
 		if plan.Name == needle.Name {
 			*needle = *plan

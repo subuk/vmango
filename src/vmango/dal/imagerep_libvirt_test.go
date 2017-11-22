@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 	"vmango/dal"
-	"vmango/models"
+	"vmango/domain"
 	"vmango/testool"
 
 	"github.com/stretchr/testify/suite"
@@ -44,7 +44,7 @@ func (suite *ImagerepLibvirtTestSuite) SetupTest() {
 }
 
 func (suite *ImagerepLibvirtTestSuite) TestListOk() {
-	images := models.ImageList{}
+	images := domain.ImageList{}
 	err := suite.Imagerep.List(&images)
 	suite.Require().NoError(err)
 
@@ -54,7 +54,7 @@ func (suite *ImagerepLibvirtTestSuite) TestListOk() {
 	suite.Equal("Centos-7", images[0].OS)
 	suite.Equal("x86_64", images[0].Arch.String())
 	suite.Equal(uint64(0x100000), images[0].Size)
-	suite.Equal(models.IMAGE_FMT_QCOW2, images[0].Type)
+	suite.Equal(domain.IMAGE_FMT_QCOW2, images[0].Type)
 	suite.True(images[0].Date.After(time.Time{}), images[0].Date.String())
 	suite.Equal("vmango-images-test", images[0].PoolName)
 
@@ -62,7 +62,7 @@ func (suite *ImagerepLibvirtTestSuite) TestListOk() {
 	suite.Equal("Ubuntu-14.04", images[1].OS)
 	suite.Equal("x86", images[1].Arch.String())
 	suite.Equal(uint64(0x100000), images[1].Size)
-	suite.Equal(models.IMAGE_FMT_QCOW2, images[1].Type)
+	suite.Equal(domain.IMAGE_FMT_QCOW2, images[1].Type)
 	suite.True(images[1].Date.After(time.Time{}), images[1].Date.String())
 	suite.Equal("vmango-images-test", images[1].PoolName)
 
@@ -70,13 +70,13 @@ func (suite *ImagerepLibvirtTestSuite) TestListOk() {
 	suite.Equal("Ubuntu-16.04", images[2].OS)
 	suite.Equal("x86_64", images[2].Arch.String())
 	suite.Equal(uint64(0x100000), images[2].Size)
-	suite.Equal(models.IMAGE_FMT_RAW, images[2].Type)
+	suite.Equal(domain.IMAGE_FMT_RAW, images[2].Type)
 	suite.True(images[2].Date.After(time.Time{}), images[2].Date.String())
 	suite.Equal("vmango-images-test", images[2].PoolName)
 }
 
 func (suite *ImagerepLibvirtTestSuite) TestGetOk() {
-	image := &models.Image{Id: "Centos-7_amd64_qcow2.img"}
+	image := &domain.Image{Id: "Centos-7_amd64_qcow2.img"}
 	exist, err := suite.Imagerep.Get(image)
 	suite.Require().True(exist)
 	suite.Require().NoError(err)
@@ -85,27 +85,27 @@ func (suite *ImagerepLibvirtTestSuite) TestGetOk() {
 	suite.Equal("Centos-7", image.OS)
 	suite.Equal("x86_64", image.Arch.String())
 	suite.Equal(uint64(0x100000), image.Size)
-	suite.Equal(models.IMAGE_FMT_QCOW2, image.Type)
+	suite.Equal(domain.IMAGE_FMT_QCOW2, image.Type)
 	suite.True(image.Date.After(time.Time{}), image.Date.String())
 	suite.Equal("vmango-images-test", image.PoolName)
 }
 
 func (suite *ImagerepLibvirtTestSuite) TestGetNoIdFail() {
-	image := &models.Image{}
+	image := &domain.Image{}
 	exist, err := suite.Imagerep.Get(image)
 	suite.False(exist)
 	suite.EqualError(err, "no image id provided")
 }
 
 func (suite *ImagerepLibvirtTestSuite) TestGetNoSuchImageFail() {
-	image := &models.Image{Id: "doesntexist"}
+	image := &domain.Image{Id: "doesntexist"}
 	exist, err := suite.Imagerep.Get(image)
 	suite.False(exist)
 	suite.NoError(err)
 }
 
 func (suite *ImagerepLibvirtTestSuite) TestGetBadFilenameFail() {
-	image := &models.Image{Id: "asdasdf"}
+	image := &domain.Image{Id: "asdasdf"}
 	exist, err := suite.Imagerep.Get(image)
 	suite.True(exist)
 	suite.EqualError(err, "invalid image: invalid name: asdasdf")

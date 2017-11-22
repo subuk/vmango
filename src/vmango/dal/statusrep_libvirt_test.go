@@ -5,21 +5,20 @@ package dal_test
 import (
 	"strings"
 	"testing"
-	"vmango/cfg"
 	"vmango/dal"
-	"vmango/models"
+	"vmango/domain"
 	"vmango/testool"
 
 	"github.com/stretchr/testify/suite"
 )
 
-type ProviderLibvirtSuite struct {
+type StatusrepLibvirtTestSuite struct {
 	suite.Suite
 	testool.LibvirtTest
-	Provider *dal.LibvirtProvider
+	Repo *dal.LibvirtStatusrep
 }
 
-func (suite *ProviderLibvirtSuite) SetupSuite() {
+func (suite *StatusrepLibvirtTestSuite) SetupSuite() {
 	suite.LibvirtTest.SetupSuite()
 	suite.LibvirtTest.Fixtures.Domains = []string{"one", "two"}
 	suite.LibvirtTest.Fixtures.Networks = []string{"vmango-test"}
@@ -35,30 +34,20 @@ func (suite *ProviderLibvirtSuite) SetupSuite() {
 	}
 }
 
-func (suite *ProviderLibvirtSuite) SetupTest() {
+func (suite *StatusrepLibvirtTestSuite) SetupTest() {
 	suite.LibvirtTest.SetupTest()
-	provider, err := dal.NewLibvirtProvider(cfg.HypervisorConfig{
-		Name:             "testhv",
-		Url:              suite.LibvirtTest.VirURI,
-		RootStoragePool:  suite.Fixtures.Pools[0].Name,
-		ImageStoragePool: suite.Fixtures.Pools[1].Name,
-		Network:          suite.Fixtures.Networks[0],
-		VmTemplate:       suite.VMTplPath,
-		VolTemplate:      suite.VolTplPath,
-		IgnoreVms:        []string{},
-	})
-	if err != nil {
-		panic(err)
-	}
-	suite.Provider = provider
+	suite.Repo = dal.NewLibvirtStatusrep(
+		suite.LibvirtTest.VirConnect,
+		suite.Fixtures.Pools[0].Name,
+	)
 }
 
-func (suite *ProviderLibvirtSuite) TestStatusOk() {
-	status := &models.StatusInfo{}
-	err := suite.Provider.Status(status)
+func (suite *StatusrepLibvirtTestSuite) TestStatusOk() {
+	status := &domain.StatusInfo{}
+	err := suite.Repo.Fetch(status)
 	suite.Require().NoError(err)
 
-	suite.Equal("testhv", status.Name)
+	suite.Equal("", status.Name)
 	suite.Equal("libvirt", status.Type)
 	suite.True(strings.HasPrefix(status.Description, "KVM hypervisor"), status.Description)
 	suite.Equal(suite.LibvirtTest.VirURI, status.Connection)
@@ -71,6 +60,6 @@ func (suite *ProviderLibvirtSuite) TestStatusOk() {
 
 }
 
-func TestProviderLibvirtSuite(t *testing.T) {
-	suite.Run(t, new(ProviderLibvirtSuite))
+func TestStatusrepLibvirtTestSuite(t *testing.T) {
+	suite.Run(t, new(StatusrepLibvirtTestSuite))
 }
