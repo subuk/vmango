@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 	"vmango/dal"
-	"vmango/models"
+	"vmango/domain"
 	"vmango/testool"
 
 	"github.com/stretchr/testify/suite"
@@ -24,9 +24,9 @@ type MachineListHandlerTestSuite struct {
 func (suite *MachineListHandlerTestSuite) SetupTest() {
 	suite.WebTest.SetupTest()
 	suite.Repo = &dal.StubMachinerep{}
-	suite.Context.Providers.Add(&dal.StubProvider{
-		TName:     "test1",
-		TMachines: suite.Repo,
+	suite.ProviderFactory.Add(&domain.Provider{
+		Name:     "test1",
+		Machines: suite.Repo,
 	})
 }
 
@@ -45,8 +45,8 @@ func (suite *MachineListHandlerTestSuite) TestAPIAuthRequired() {
 
 func (suite *MachineListHandlerTestSuite) TestHTMLOk() {
 	suite.Authenticate()
-	suite.Repo.ListResponse.Machines = &models.VirtualMachineList{}
-	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{
+	suite.Repo.ListResponse.Machines = &domain.VirtualMachineList{}
+	suite.Repo.ListResponse.Machines.Add(&domain.VirtualMachine{
 		Id:   "deadbeefdeadbeefdeadbeefdeadbeef",
 		Name: "test",
 	})
@@ -57,8 +57,8 @@ func (suite *MachineListHandlerTestSuite) TestHTMLOk() {
 
 func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 	suite.APIAuthenticate("admin", "secret")
-	suite.Repo.ListResponse.Machines = &models.VirtualMachineList{}
-	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{
+	suite.Repo.ListResponse.Machines = &domain.VirtualMachineList{}
+	suite.Repo.ListResponse.Machines.Add(&domain.VirtualMachine{
 		Name:    "test",
 		Id:      "123uuid",
 		Memory:  456,
@@ -69,20 +69,20 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 		ImageId: "stub-image",
 		Plan:    "xxxzzz",
 		OS:      "WoW",
-		Arch:    models.ARCH_UNKNOWN,
-		Ip: &models.IP{
+		Arch:    domain.ARCH_UNKNOWN,
+		Ip: &domain.IP{
 			Address: "1.1.1.1",
 		},
-		RootDisk: &models.VirtualMachineDisk{
+		RootDisk: &domain.VirtualMachineDisk{
 			Size:   123,
 			Driver: "hello",
 			Type:   "wow",
 		},
-		SSHKeys: []*models.SSHKey{
+		SSHKeys: []*domain.SSHKey{
 			{Name: "test", Public: "keykeykey"},
 		},
 	})
-	suite.Repo.ListResponse.Machines.Add(&models.VirtualMachine{
+	suite.Repo.ListResponse.Machines.Add(&domain.VirtualMachine{
 		Name:    "hello",
 		Id:      "321uuid",
 		Memory:  67897,
@@ -92,15 +92,15 @@ func (suite *MachineListHandlerTestSuite) TestJSONOk() {
 		Creator: "wow",
 		Plan:    "testx",
 		ImageId: "stub-image",
-		Ip: &models.IP{
+		Ip: &domain.IP{
 			Address: "2.2.2.2",
 		},
-		RootDisk: &models.VirtualMachineDisk{
+		RootDisk: &domain.VirtualMachineDisk{
 			Size:   321,
 			Driver: "ehlo",
 			Type:   "www",
 		},
-		SSHKeys: []*models.SSHKey{
+		SSHKeys: []*domain.SSHKey{
 			{Name: "test2", Public: "kekkekkek"},
 		},
 	})

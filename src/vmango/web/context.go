@@ -3,8 +3,7 @@ package web
 import (
 	"net/http"
 	"time"
-	"vmango/dal"
-	"vmango/models"
+	"vmango/domain"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
@@ -39,12 +38,10 @@ type Context struct {
 	Logger       *logrus.Logger
 	SessionStore sessions.Store
 	StaticCache  time.Duration
-	AuthUser     *models.User
+	AuthUser     *domain.User
 
-	Plans     dal.Planrep
-	Providers dal.Providers
-	SSHKeys   dal.SSHKeyrep
-	AuthDB    dal.Authrep
+	Machines *domain.MachineService
+	AuthDB   domain.Authrep
 }
 
 func (ctx *Context) RenderRedirect(w http.ResponseWriter, req *http.Request, bindings map[string]interface{}, routeName string, params ...string) {

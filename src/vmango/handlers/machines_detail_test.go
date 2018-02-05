@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 	"vmango/dal"
-	"vmango/models"
+	"vmango/domain"
 	"vmango/testool"
 
 	"github.com/stretchr/testify/suite"
@@ -29,9 +29,9 @@ type MachineDetailHandlerTestSuite struct {
 func (suite *MachineDetailHandlerTestSuite) SetupTest() {
 	suite.WebTest.SetupTest()
 	suite.Repo = &dal.StubMachinerep{}
-	suite.Context.Providers.Add(&dal.StubProvider{
-		TName:     "testhv",
-		TMachines: suite.Repo,
+	suite.ProviderFactory.Add(&domain.Provider{
+		Name:     "testhv",
+		Machines: suite.Repo,
 	})
 }
 
@@ -51,11 +51,11 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIAuthRequired() {
 func (suite *MachineDetailHandlerTestSuite) TestHTMLOk() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
-	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
+	suite.Repo.GetResponse.Machine = &domain.VirtualMachine{
 		Id:   "deadbeefdeadbeefdeadbeefdeadbeef",
 		Name: "test-detail-html",
-		Ip:   &models.IP{Address: "1.1.1.1"},
-		RootDisk: &models.VirtualMachineDisk{
+		Ip:   &domain.IP{Address: "1.1.1.1"},
+		RootDisk: &domain.VirtualMachineDisk{
 			Size:   123,
 			Driver: "hello",
 			Type:   "wow",
@@ -69,7 +69,7 @@ func (suite *MachineDetailHandlerTestSuite) TestHTMLOk() {
 func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
 	suite.APIAuthenticate("admin", "secret")
 	suite.Repo.GetResponse.Exist = true
-	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
+	suite.Repo.GetResponse.Machine = &domain.VirtualMachine{
 		Name:    "test-detail-json",
 		Id:      "123uuid",
 		Memory:  456,
@@ -80,16 +80,16 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
 		ImageId: "test-image",
 		Creator: "testuser",
 		Plan:    "test-plan",
-		Arch:    models.ARCH_X86_64,
-		Ip: &models.IP{
+		Arch:    domain.ARCH_X86_64,
+		Ip: &domain.IP{
 			Address: "1.1.1.1",
 		},
-		RootDisk: &models.VirtualMachineDisk{
+		RootDisk: &domain.VirtualMachineDisk{
 			Size:   123,
 			Driver: "hello",
 			Type:   "wow",
 		},
-		SSHKeys: []*models.SSHKey{
+		SSHKeys: []*domain.SSHKey{
 			{Name: "test", Public: "keykeykey"},
 		},
 	}
@@ -128,7 +128,7 @@ func (suite *MachineDetailHandlerTestSuite) TestAPIOk() {
 func (suite *MachineDetailHandlerTestSuite) TestPostNotAllowed() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = true
-	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
+	suite.Repo.GetResponse.Machine = &domain.VirtualMachine{
 		Name:    "hello",
 		Id:      "123uuid",
 		Memory:  456,
@@ -136,16 +136,16 @@ func (suite *MachineDetailHandlerTestSuite) TestPostNotAllowed() {
 		HWAddr:  "hw:hw:hw",
 		VNCAddr: "vnc",
 		OS:      "HelloOS",
-		Arch:    models.ARCH_X86,
-		Ip: &models.IP{
+		Arch:    domain.ARCH_X86,
+		Ip: &domain.IP{
 			Address: "1.1.1.1",
 		},
-		RootDisk: &models.VirtualMachineDisk{
+		RootDisk: &domain.VirtualMachineDisk{
 			Size:   123,
 			Driver: "hello",
 			Type:   "wow",
 		},
-		SSHKeys: []*models.SSHKey{
+		SSHKeys: []*domain.SSHKey{
 			{Name: "test", Public: "keykeykey"},
 		},
 	}
@@ -156,7 +156,7 @@ func (suite *MachineDetailHandlerTestSuite) TestPostNotAllowed() {
 func (suite *MachineDetailHandlerTestSuite) TestPostAPINotAllowed() {
 	suite.APIAuthenticate("admin", "secret")
 	suite.Repo.GetResponse.Exist = true
-	suite.Repo.GetResponse.Machine = &models.VirtualMachine{
+	suite.Repo.GetResponse.Machine = &domain.VirtualMachine{
 		Name:    "hello",
 		Id:      "123uuid",
 		Memory:  456,
@@ -164,16 +164,16 @@ func (suite *MachineDetailHandlerTestSuite) TestPostAPINotAllowed() {
 		HWAddr:  "hw:hw:hw",
 		VNCAddr: "vnc",
 		OS:      "HelloOS",
-		Arch:    models.ARCH_X86,
-		Ip: &models.IP{
+		Arch:    domain.ARCH_X86,
+		Ip: &domain.IP{
 			Address: "1.1.1.1",
 		},
-		RootDisk: &models.VirtualMachineDisk{
+		RootDisk: &domain.VirtualMachineDisk{
 			Size:   123,
 			Driver: "hello",
 			Type:   "wow",
 		},
-		SSHKeys: []*models.SSHKey{
+		SSHKeys: []*domain.SSHKey{
 			{Name: "test", Public: "keykeykey"},
 		},
 	}
@@ -192,7 +192,7 @@ func (suite *MachineDetailHandlerTestSuite) TestMachineNotFoundFail() {
 	suite.Authenticate()
 	suite.Repo.GetResponse.Exist = false
 	rr := suite.DoGet(DETAIL_URL("testhv", "doesntexist"))
-	suite.Equal(404, rr.Code, rr.Body.String())
+	suite.Equal(500, rr.Code, rr.Body.String())
 }
 
 func TestMachineDetailHandlerTestSuite(t *testing.T) {

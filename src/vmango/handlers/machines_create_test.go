@@ -8,7 +8,7 @@ import (
 	"testing"
 	"vmango/cfg"
 	"vmango/dal"
-	"vmango/models"
+	"vmango/domain"
 	"vmango/testool"
 
 	"github.com/stretchr/testify/suite"
@@ -25,31 +25,33 @@ type MachineCreateHandlerTestSuite struct {
 
 func (suite *MachineCreateHandlerTestSuite) SetupTest() {
 	suite.WebTest.SetupTest()
-	suite.Machines = &dal.StubMachinerep{}
-	suite.Context.Providers.Add(&dal.StubProvider{
-		TName:     "test1",
-		TMachines: suite.Machines,
-		TImages: &dal.StubImagerep{
-			Data: []*models.Image{
-				{OS: "TestOS-1.0", Arch: models.ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, Id: "TestOS-1.0_amd64.img", PoolName: "test"},
-			},
-		},
-	})
-	suite.Context.Providers.Add(&dal.StubProvider{
-		TName:     "test2",
-		TMachines: suite.Machines,
-		TImages: &dal.StubImagerep{
-			Data: []*models.Image{
-				{OS: "TestOS-1.0", Arch: models.ARCH_X86_64, Size: 10 * 1024 * 1024, Type: models.IMAGE_FMT_QCOW2, Id: "TestOS-1.0_amd64.img", PoolName: "test"},
-			},
-		},
-	})
-	suite.Context.SSHKeys = dal.NewConfigSSHKeyrep([]cfg.SSHKeyConfig{
+	sshkeys := dal.NewConfigSSHKeyrep([]cfg.SSHKeyConfig{
 		{Name: "first", Public: "hello"},
 	})
-	suite.Context.Plans = dal.NewConfigPlanrep([]cfg.PlanConfig{
+	*suite.SSHKeys = *sshkeys
+	plans := dal.NewConfigPlanrep([]cfg.PlanConfig{
 		{Name: "test-1", Memory: 512 * 1024 * 1024, Cpus: 1, DiskSize: 5},
 		{Name: "test-2", Memory: 1024 * 1024 * 1024, Cpus: 2, DiskSize: 10},
+	})
+	*suite.Plans = *plans
+	suite.Machines = &dal.StubMachinerep{}
+	suite.ProviderFactory.Add(&domain.Provider{
+		Name:     "test1",
+		Machines: suite.Machines,
+		Images: &dal.StubImagerep{
+			Data: []*domain.Image{
+				{OS: "TestOS-1.0", Arch: domain.ARCH_X86_64, Size: 10 * 1024 * 1024, Type: domain.IMAGE_FMT_QCOW2, Id: "TestOS-1.0_amd64.img", PoolName: "test"},
+			},
+		},
+	})
+	suite.ProviderFactory.Add(&domain.Provider{
+		Name:     "test2",
+		Machines: suite.Machines,
+		Images: &dal.StubImagerep{
+			Data: []*domain.Image{
+				{OS: "TestOS-1.0", Arch: domain.ARCH_X86_64, Size: 10 * 1024 * 1024, Type: domain.IMAGE_FMT_QCOW2, Id: "TestOS-1.0_amd64.img", PoolName: "test"},
+			},
+		},
 	})
 }
 
@@ -122,7 +124,7 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateNoPlanFail() {
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
-	suite.Equal(400, rr.Code, rr.Body.String())
+	suite.Equal(500, rr.Code)
 	suite.Contains(rr.Body.String(), "plan &#34;doesntexist&#34; not found")
 	suite.Equal(rr.Header().Get("Location"), "")
 }
@@ -138,7 +140,7 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateNoImageFail() {
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
-	suite.Equal(400, rr.Code, rr.Body.String())
+	suite.Equal(500, rr.Code)
 	suite.Contains(rr.Body.String(), "image &#34;doesntexist&#34; not found")
 	suite.Equal(rr.Header().Get("Location"), "")
 }
@@ -154,8 +156,8 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateNoHypervisorFail() {
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
-	suite.Equal(400, rr.Code, rr.Body.String())
-	suite.Contains(rr.Body.String(), "provider &#34;doesntexist&#34; not found")
+	suite.Equal(500, rr.Code)
+	suite.Contains(rr.Body.String(), "provider &#34;doesntexist&#34;: not found")
 	suite.Equal(rr.Header().Get("Location"), "")
 }
 
@@ -170,7 +172,7 @@ func (suite *MachineCreateHandlerTestSuite) TestCreateNoSSHKeyFail() {
 	}).Encode())
 	suite.T().Log(data)
 	rr := suite.DoPost(CREATE_URL, data)
-	suite.Equal(400, rr.Code, rr.Body.String())
+	suite.Equal(500, rr.Code)
 	suite.Contains(rr.Body.String(), "ssh key &#39;doesntexist&#39; doesn&#39;t exist")
 	suite.Equal(rr.Header().Get("Location"), "")
 }

@@ -3,7 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"vmango/models"
+	"vmango/domain"
 	"vmango/web"
 
 	"github.com/gorilla/csrf"
@@ -31,7 +31,7 @@ func Login(ctx *web.Context, w http.ResponseWriter, req *http.Request) error {
 	if err := schema.NewDecoder().Decode(form, req.PostForm); err != nil {
 		return web.BadRequest(err.Error())
 	}
-	user := &models.User{Name: form.Username}
+	user := &domain.User{Name: form.Username}
 	if exists, err := ctx.AuthDB.Get(user); err != nil {
 		return fmt.Errorf("failed to fetch user from auth database: %s", err)
 	} else if !exists {

@@ -1,4 +1,4 @@
-package models
+package domain
 
 const (
 	ARCH_UNKNOWN = 0
