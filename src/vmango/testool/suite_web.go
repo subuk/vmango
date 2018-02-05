@@ -71,3 +71,7 @@ func (suite *WebTest) DoPost(url string, body io.Reader) *httptest.ResponseRecor
 func (suite *WebTest) DoDelete(url string) *httptest.ResponseRecorder {
 	return suite.DoRequest("DELETE", url, nil)
 }
+
+func (suite *WebTest) DoBad(url string) *httptest.ResponseRecorder {
+	return suite.DoRequest("BAD", url, nil)
+}

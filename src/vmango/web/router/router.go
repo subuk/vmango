@@ -30,11 +30,17 @@ func addWebRoutes(router *mux.Router, ctx *web.Context, csrfProtect CSRFProtecto
 	)))
 	router.Handle("/machines/", machineList).Name("machine-list")
 
-	machineAdd := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
-		handlers.MachineAddForm, web.LimitMethods("GET", "HEAD", "POST"),
+	machineAddProcess := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
+		handlers.MachineAddFormProcess, web.LimitMethods("POST"),
 		web.SessionAuthenticationRequired,
 	)))
-	router.Handle("/machines/add/", machineAdd).Name("machine-add")
+	router.Handle("/machines/add/", machineAddProcess).Methods("POST")
+
+	machineAddShow := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
+		handlers.MachineAddFormShow, web.LimitMethods("GET", "HEAD"),
+		web.SessionAuthenticationRequired,
+	)))
+	router.Handle("/machines/add/", machineAddShow).Name("machine-add")
 
 	machineDetail := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
 		handlers.MachineDetail, web.LimitMethods("GET", "HEAD"),
@@ -42,17 +48,29 @@ func addWebRoutes(router *mux.Router, ctx *web.Context, csrfProtect CSRFProtecto
 	)))
 	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/", machineDetail).Name("machine-detail")
 
-	machineStateChange := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
-		handlers.MachineStateChange, web.LimitMethods("GET", "HEAD", "POST"),
+	machineStateChangeProcess := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
+		handlers.MachineStateChangeFormProcess, web.LimitMethods("POST"),
 		web.SessionAuthenticationRequired,
 	)))
-	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/{action:(?:start|stop|reboot)}/", machineStateChange).Name("machine-changestate")
+	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/{action:(?:start|stop|reboot)}/", machineStateChangeProcess).Methods("POST")
 
-	machineDelete := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
-		handlers.MachineDelete, web.LimitMethods("GET", "HEAD", "POST"),
+	machineStateChangeShow := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
+		handlers.MachineStateChangeFormShow, web.LimitMethods("GET", "HEAD"),
 		web.SessionAuthenticationRequired,
 	)))
-	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/delete/", machineDelete).Name("machine-delete")
+	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/{action:(?:start|stop|reboot)}/", machineStateChangeShow).Name("machine-changestate")
+
+	machineDeleteProcess := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
+		handlers.MachineDeleteFormProcess, web.LimitMethods("POST"),
+		web.SessionAuthenticationRequired,
+	)))
+	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/delete/", machineDeleteProcess).Methods("POST")
+
+	machineDeleteShow := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
+		handlers.MachineDeleteFormShow, web.LimitMethods("GET", "HEAD"),
+		web.SessionAuthenticationRequired,
+	)))
+	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/delete/", machineDeleteShow).Name("machine-delete")
 
 	imageList := csrfProtect(web.NewHandler(ctx, web.ApplyDecorators(
 		handlers.ImageList, web.LimitMethods("GET", "HEAD"),
@@ -80,43 +98,41 @@ func addWebRoutes(router *mux.Router, ctx *web.Context, csrfProtect CSRFProtecto
 }
 
 func addApiRoutes(router *mux.Router, ctx *web.Context) *mux.Router {
-	machineList := web.NewHandler(ctx, web.ApplyDecorators(
-		handlers.MachineList, web.LimitMethods("GET", "HEAD"),
-		web.APIAuthenticationRequired, web.ForceJsonResponse,
-	))
-	router.Handle("/machines/", machineList).
-		Methods("GET", "HEAD", "DELETE", "PUT").
-		Name("api-machine-list")
-
 	machineAdd := web.NewHandler(ctx, web.ApplyDecorators(
-		handlers.MachineAddForm, web.LimitMethods("POST"),
+		handlers.MachineAddFormProcess, web.LimitMethods("POST"),
 		web.APIAuthenticationRequired, web.ForceJsonResponse,
 	))
 	router.Handle("/machines/", machineAdd).
 		Methods("POST").
 		Name("api-machine-add")
 
+	machineList := web.NewHandler(ctx, web.ApplyDecorators(
+		handlers.MachineList, web.LimitMethods("GET", "HEAD"),
+		web.APIAuthenticationRequired, web.ForceJsonResponse,
+	))
+	router.Handle("/machines/", machineList).
+		Name("api-machine-list")
+
+	machineDeleteUrl := "/machines/{provider:[^/]+}/{id:[^/]+}/"
+	machineDelete := web.NewHandler(ctx, web.ApplyDecorators(
+		handlers.MachineDeleteFormProcess, web.LimitMethods("DELETE"),
+		web.APIAuthenticationRequired, web.ForceJsonResponse,
+	))
+	router.Handle(machineDeleteUrl, machineDelete).Methods("DELETE").Name("api-machine-delete")
+
 	machineDetail := web.NewHandler(ctx, web.ApplyDecorators(
 		handlers.MachineDetail, web.LimitMethods("GET", "HEAD"),
 		web.APIAuthenticationRequired, web.ForceJsonResponse,
 	))
 	router.Handle("/machines/{provider:[^/]+}/{id:[^/]+}/", machineDetail).
-		Methods("GET", "HEAD", "PUT", "POST").
 		Name("api-machine-detail")
 
 	machineStateChangeUrl := "/machines/{provider:[^/]+}/{id:[^/]+}/{action:(?:start|stop|reboot)}/"
 	machineStateChange := web.NewHandler(ctx, web.ApplyDecorators(
-		handlers.MachineStateChange, web.LimitMethods("POST"),
+		handlers.MachineStateChangeFormProcess, web.LimitMethods("POST"),
 		web.APIAuthenticationRequired, web.ForceJsonResponse,
 	))
 	router.Handle(machineStateChangeUrl, machineStateChange).Name("api-machine-changestate")
-
-	machineDeleteUrl := "/machines/{provider:[^/]+}/{id:[^/]+}/"
-	machineDelete := web.NewHandler(ctx, web.ApplyDecorators(
-		handlers.MachineDelete, web.LimitMethods("DELETE"),
-		web.APIAuthenticationRequired, web.ForceJsonResponse,
-	))
-	router.Handle(machineDeleteUrl, machineDelete).Methods("DELETE").Name("api-machine-delete")
 
 	imageList := web.NewHandler(ctx, web.ApplyDecorators(
 		handlers.ImageList, web.LimitMethods("GET", "HEAD"),

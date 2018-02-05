@@ -74,6 +74,18 @@ func (suite *MachineCreateHandlerTestSuite) TestPostAPIAuthRequired() {
 	suite.JSONEq(`{"Error": "Authentication failed"}`, rr.Body.String())
 }
 
+func (suite *MachineCreateHandlerTestSuite) TestBadHTTPMethodNotAllowed() {
+	suite.Authenticate()
+	rr := suite.DoBad(CREATE_URL)
+	suite.Equal(501, rr.Code)
+}
+
+func (suite *MachineCreateHandlerTestSuite) TestBadHTTPMethodAPINotAllowed() {
+	suite.APIAuthenticate("admin", "secret")
+	rr := suite.DoBad(CREATE_API_URL)
+	suite.Equal(501, rr.Code, rr.Body.String())
+}
+
 func (suite *MachineCreateHandlerTestSuite) TestGetOk() {
 	suite.Authenticate()
 	rr := suite.DoGet(CREATE_URL)

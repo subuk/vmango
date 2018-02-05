@@ -48,6 +48,12 @@ func (suite *MachineDeleteHandlerTestSuite) TestPostAuthRequired() {
 	suite.Equal(rr.Header().Get("Location"), "/login/?next="+DELETE_URL("testhv", "hello"))
 }
 
+func (suite *MachineDeleteHandlerTestSuite) TestBadHTTPMethodNotAllowed() {
+	suite.Authenticate()
+	rr := suite.DoBad(DELETE_URL("testhv", "hello"))
+	suite.Equal(501, rr.Code)
+}
+
 func (suite *MachineDeleteHandlerTestSuite) TestGetAPIAuthRequired() {
 	rr := suite.DoGet(DELETE_API_URL("testhv", "hello"))
 	suite.Equal(401, rr.Code, rr.Body.String())
@@ -68,6 +74,12 @@ func (suite *MachineDeleteHandlerTestSuite) TestDeleteAPIAuthRequired() {
 	suite.Equal(401, rr.Code, rr.Body.String())
 	suite.Equal("application/json; charset=UTF-8", rr.Header().Get("Content-Type"))
 	suite.JSONEq(`{"Error": "Authentication failed"}`, rr.Body.String())
+}
+
+func (suite *MachineDeleteHandlerTestSuite) TestBadHTTPMethodAPINotAllowed() {
+	suite.APIAuthenticate("admin", "secret")
+	rr := suite.DoBad(DELETE_API_URL("testhv", "hello"))
+	suite.Equal(501, rr.Code, rr.Body.String())
 }
 
 func (suite *MachineDeleteHandlerTestSuite) TestConfirmationOk() {
