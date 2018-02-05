@@ -48,6 +48,7 @@ func (suite *LogRequestMiddlewareTestSuite) TestOk() {
 	suite.Equal("/test", entry.Data["path"])
 	suite.NotEqual(0, entry.Data["latency"])
 	suite.Equal("1.1.1.1", entry.Data["remote"])
+	suite.Equal("GET", entry.Data["method"])
 	suite.True(suite.NextCalled)
 }
 

@@ -63,6 +63,7 @@ func (mw *LogRequestMiddleware) ServeHTTP(rw http.ResponseWriter, req *http.Requ
 	entry := logrus.NewEntry(mw.logger)
 	entry = entry.WithField("path", req.URL.Path)
 	entry = entry.WithField("remote", mw.getRemoteAddr(req))
+	entry = entry.WithField("method", req.Method)
 	next(rw, req)
 	entry = entry.WithField("latency", time.Since(start))
 	entry.Info("completed handling request")
