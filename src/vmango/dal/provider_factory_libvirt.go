@@ -28,7 +28,15 @@ func LibvirtProviderFactory(pc *domain.ProviderConfig) (*domain.Provider, error)
 		ignoreVms = append(ignoreVms, strings.TrimSpace(ignoreVm))
 	}
 
-	network := NewLibvirtManagedNetwork(virtConn, pc.Params["network"])
+	var network LibvirtNetwork
+	if pc.Params["network_script"] != "" {
+		network = NewLibvirtScriptedNetwork(pc.Params["network"], pc.Params["network_script"])
+	} else if pc.Params["network_script"] == "" && pc.Params["network"] != "" {
+		network = NewLibvirtManagedNetwork(virtConn, pc.Params["network"])
+	} else {
+		return nil, fmt.Errorf("no network or network_script specified")
+	}
+
 	machinerep := NewLibvirtMachinerep(virtConn, vmtpl, voltpl, network, pc.Params["root_storage_pool"], ignoreVms)
 	imagerep := NewLibvirtImagerep(virtConn, pc.Params["image_storage_pool"])
 	statusrep := NewLibvirtStatusrep(virtConn, pc.Params["root_storage_pool"])

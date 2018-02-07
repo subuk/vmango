@@ -16,6 +16,7 @@ type HypervisorConfig struct {
 	ImageStoragePool string   `hcl:"image_storage_pool"`
 	RootStoragePool  string   `hcl:"root_storage_pool"`
 	Network          string   `hcl:"network"`
+	NetworkScript    string   `hcl:"network_script"`
 	VmTemplate       string   `hcl:"vm_template"`
 	VolTemplate      string   `hcl:"volume_template"`
 	IgnoreVms        []string `hcl:"ignore_vms"`

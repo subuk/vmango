@@ -41,6 +41,7 @@ func NewConfigProviderConfigrep(hypervisors []cfg.HypervisorConfig) (*ConfigProv
 				"machine_template":   vmTemplateContent,
 				"volume_template":    volTemplateContent,
 				"network":            hv.Network,
+				"network_script":     hv.NetworkScript,
 				"root_storage_pool":  hv.RootStoragePool,
 				"image_storage_pool": hv.ImageStoragePool,
 				"ignore_vms":         strings.Join(hv.IgnoreVms, ","),

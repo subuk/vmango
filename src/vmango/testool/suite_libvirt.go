@@ -24,6 +24,7 @@ type LibvirtTest struct {
 	VolTplPath    string
 	VirConnect    *libvirt.Connect
 	VirURI        string
+	NetworkScript string
 
 	Fixtures struct {
 		Domains  []string
@@ -54,6 +55,7 @@ func (suite *LibvirtTest) SetupSuite() {
 }
 
 func (suite *LibvirtTest) SetupTest() {
+	suite.NetworkScript = filepath.Join(SourceDir(), "fixtures/stub_network_script.py")
 	suite.VMTplPath = filepath.Join(SourceDir(), "fixtures/libvirt", os.Getenv(TEST_TYPE_ENV_KEY), "vm.xml.in")
 	suite.VolTplPath = filepath.Join(SourceDir(), "fixtures/libvirt", os.Getenv(TEST_TYPE_ENV_KEY), "volume.xml.in")
 	vmTplContent, err := ioutil.ReadFile(suite.VMTplPath)

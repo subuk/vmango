@@ -37,6 +37,7 @@ func (suite *MachinerepLibvirtSuite) SetupSuite() {
 
 func (suite *MachinerepLibvirtSuite) CreateRep(params ...map[string]interface{}) *dal.LibvirtMachinerep {
 	ignoreVms := ""
+	networkScript := ""
 	vmPool := suite.Fixtures.Pools[0].Name
 
 	if len(params) > 0 {
@@ -45,6 +46,9 @@ func (suite *MachinerepLibvirtSuite) CreateRep(params ...map[string]interface{})
 		}
 		if v, ok := params[0]["vm_pool"].(string); ok {
 			vmPool = v
+		}
+		if v, ok := params[0]["network_script"].(string); ok {
+			networkScript = v
 		}
 	}
 	provider, err := dal.ProviderFactory(&domain.ProviderConfig{
@@ -55,6 +59,7 @@ func (suite *MachinerepLibvirtSuite) CreateRep(params ...map[string]interface{})
 			"machine_template":   suite.LibvirtTest.VMTplContent,
 			"volume_template":    suite.LibvirtTest.VolTplContent,
 			"network":            suite.Fixtures.Networks[0],
+			"network_script":     networkScript,
 			"root_storage_pool":  vmPool,
 			"image_storage_pool": suite.Fixtures.Pools[1].Name,
 			"ignore_vms":         ignoreVms,
@@ -349,6 +354,42 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	suite.Equal(machine.SSHKeys[0].Public, "asdf")
 	suite.Equal(machine.SSHKeys[1].Name, "work")
 	suite.Equal(machine.SSHKeys[1].Public, "hello")
+}
+
+func (suite *MachinerepLibvirtSuite) TestCreateScriptedNetworkOk() {
+	repo := suite.CreateRep(map[string]interface{}{"network_script": suite.LibvirtTest.NetworkScript})
+	image := &domain.Image{
+		OS:       "Ubuntu-12.04",
+		Arch:     domain.ARCH_X86_64,
+		Type:     domain.IMAGE_FMT_QCOW2,
+		PoolName: suite.Fixtures.Pools[1].Name,
+		Id:       "test-image",
+	}
+	if err := testool.CreateVolume(suite.VirConnect, suite.Fixtures.Pools[1].Name, image.Id); err != nil {
+		suite.FailNow("failed to create image volume", err.Error())
+	}
+	plan := &domain.Plan{
+		Name:     "small",
+		Memory:   512 * 1024 * 1024,
+		Cpus:     2,
+		DiskSize: 5 * 1024 * 1024 * 1024,
+	}
+	machine := &domain.VirtualMachine{
+		Name:     "test-create-scripted-network",
+		Userdata: "#!/bin/sh",
+		Creator:  "someuser",
+		SSHKeys: []*domain.SSHKey{
+			{Name: "home", Public: "asdf"},
+			{Name: "work", Public: "hello"},
+		},
+	}
+	err := repo.Create(machine, image, plan)
+	suite.Require().NoError(err)
+	virDomain, err := suite.VirConnect.LookupDomainByName("test-create-scripted-network")
+	suite.Require().NoError(err)
+	suite.AddCleanup(virDomain)
+
+	suite.Require().Equal("44.43.42.41", machine.Ip.Address)
 }
 
 func TestMachinerepLibvirtSuite(t *testing.T) {
