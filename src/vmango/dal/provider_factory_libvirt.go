@@ -28,7 +28,8 @@ func LibvirtProviderFactory(pc *domain.ProviderConfig) (*domain.Provider, error)
 		ignoreVms = append(ignoreVms, strings.TrimSpace(ignoreVm))
 	}
 
-	machinerep := NewLibvirtMachinerep(virtConn, vmtpl, voltpl, pc.Params["network"], pc.Params["root_storage_pool"], ignoreVms)
+	network := NewLibvirtManagedNetwork(virtConn, pc.Params["network"])
+	machinerep := NewLibvirtMachinerep(virtConn, vmtpl, voltpl, network, pc.Params["root_storage_pool"], ignoreVms)
 	imagerep := NewLibvirtImagerep(virtConn, pc.Params["image_storage_pool"])
 	statusrep := NewLibvirtStatusrep(virtConn, pc.Params["root_storage_pool"])
 	provider := &domain.Provider{

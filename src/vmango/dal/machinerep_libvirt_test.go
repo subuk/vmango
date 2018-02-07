@@ -35,12 +35,35 @@ func (suite *MachinerepLibvirtSuite) SetupSuite() {
 	}
 }
 
-func (suite *MachinerepLibvirtSuite) CreateRep() *dal.LibvirtMachinerep {
-	return dal.NewLibvirtMachinerep(
-		suite.VirConnect, suite.VMTpl, suite.VolTpl,
-		suite.Fixtures.Networks[0], suite.Fixtures.Pools[0].Name,
-		[]string{},
-	)
+func (suite *MachinerepLibvirtSuite) CreateRep(params ...map[string]interface{}) *dal.LibvirtMachinerep {
+	ignoreVms := ""
+	vmPool := suite.Fixtures.Pools[0].Name
+
+	if len(params) > 0 {
+		if v, ok := params[0]["ignore_vms"].(string); ok {
+			ignoreVms = v
+		}
+		if v, ok := params[0]["vm_pool"].(string); ok {
+			vmPool = v
+		}
+	}
+	provider, err := dal.ProviderFactory(&domain.ProviderConfig{
+		Name: "test-libvirt",
+		Type: dal.LibvirtProvider,
+		Params: map[string]string{
+			"url":                suite.LibvirtTest.VirURI,
+			"machine_template":   suite.LibvirtTest.VMTplContent,
+			"volume_template":    suite.LibvirtTest.VolTplContent,
+			"network":            suite.Fixtures.Networks[0],
+			"root_storage_pool":  vmPool,
+			"image_storage_pool": suite.Fixtures.Pools[1].Name,
+			"ignore_vms":         ignoreVms,
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	return provider.Machines.(*dal.LibvirtMachinerep)
 }
 
 func (suite *MachinerepLibvirtSuite) TestListOk() {
@@ -97,11 +120,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 }
 
 func (suite *MachinerepLibvirtSuite) TestIgnoredOk() {
-	repo := dal.NewLibvirtMachinerep(
-		suite.VirConnect, suite.VMTpl, suite.VolTpl,
-		suite.Fixtures.Networks[0], suite.Fixtures.Pools[0].Name,
-		[]string{"one"},
-	)
+	repo := suite.CreateRep(map[string]interface{}{"ignore_vms": "one"})
 	machines := &domain.VirtualMachineList{}
 	err := repo.List(machines)
 	suite.Require().NoError(err)
@@ -201,11 +220,7 @@ func (suite *MachinerepLibvirtSuite) TestCreateNoImagePoolFail() {
 }
 
 func (suite *MachinerepLibvirtSuite) TestCreateNoVMPoolFail() {
-	repo := dal.NewLibvirtMachinerep(
-		suite.VirConnect, suite.VMTpl, suite.VolTpl,
-		suite.Fixtures.Networks[0], "doesntexist",
-		[]string{"one"},
-	)
+	repo := suite.CreateRep(map[string]interface{}{"vm_pool": "doesntexist"})
 	machine := &domain.VirtualMachine{}
 	image := &domain.Image{PoolName: suite.Fixtures.Pools[1].Name}
 	plan := &domain.Plan{}
