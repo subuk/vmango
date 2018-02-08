@@ -50,7 +50,7 @@ func (backend *LibvirtScriptedNetwork) getOutput(vm *domain.VirtualMachine, args
 	}
 	output := strings.TrimSpace(string(rawOutput))
 	if output == "" {
-		return "", fmt.Errorf("script did not return anything")
+		return "", fmt.Errorf("script '%s' did not return anything", cmd.Args)
 	}
 	return output, nil
 }
