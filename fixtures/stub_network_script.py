@@ -4,25 +4,33 @@ import os
 import sys
 
 
-def print_context():
-    print("===",sys.argv[1:])
-    for name, value in os.environ.items():
-        if not name.startswith("VMANGO_"):
-            continue
-        print("%s: %s" % (name, value))
-
-
 def lookup():
+    assert "VMANGO_MACHINE_HWADDR" in os.environ
+    assert "VMANGO_MACHINE_NAME" in os.environ
+    assert "VMANGO_MACHINE_PLAN" in os.environ
+    assert "VMANGO_MACHINE_ID" in os.environ
     print("44.43.42.41")
 
 
 def assign():
+    assert "VMANGO_MACHINE_HWADDR" in os.environ
+    assert "VMANGO_MACHINE_NAME" in os.environ
+    assert "VMANGO_MACHINE_PLAN" in os.environ
+    assert "VMANGO_MACHINE_ID" in os.environ
     print("44.43.42.41")
 
 
 def release():
-    pass
+    assert "VMANGO_MACHINE_HWADDR" in os.environ
+    assert "VMANGO_MACHINE_IP" in os.environ
+    assert "VMANGO_MACHINE_NAME" in os.environ
+    assert "VMANGO_MACHINE_PLAN" in os.environ
+    assert "VMANGO_MACHINE_ID" in os.environ
 
+
+def error():
+    sys.stderr.write("Unknown action requested\n")
+    return 1
 
 def main():
     handlers = {
@@ -30,12 +38,7 @@ def main():
         "assign-ip": assign,
         "release-ip": release,
     }
-    action = sys.argv[1]
-    handler = handlers.get(action)
-    if handler is None:
-        print("Unknown action requested: %s" % action)
-        return 1
-    return handler()
+    return handlers.get(sys.argv[1], error)()
 
 
 if __name__ == '__main__':

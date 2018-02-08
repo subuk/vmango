@@ -163,6 +163,16 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	suite.Equal("large", machine.Plan)
 }
 
+func (suite *MachinerepLibvirtSuite) TestGetScriptedNetworkIPOk() {
+	repo := suite.CreateRep(map[string]interface{}{"network_script": suite.LibvirtTest.NetworkScript})
+	machine := &domain.VirtualMachine{Id: "c72cb377301a4f2aa34c547f70872b55"}
+	exists, err := repo.Get(machine)
+	suite.Require().True(exists)
+	suite.Require().Nil(err)
+
+	suite.Equal("44.43.42.41", machine.Ip.Address)
+}
+
 func (suite *MachinerepLibvirtSuite) TestGetNotFoundFail() {
 	repo := suite.CreateRep()
 	machine := &domain.VirtualMachine{Id: "deadbeefdeadbeefdeadbeefdeadbeef"}

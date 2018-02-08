@@ -56,7 +56,16 @@ func (backend *LibvirtScriptedNetwork) getOutput(vm *domain.VirtualMachine, args
 }
 
 func (backend *LibvirtScriptedNetwork) ReleaseIP(vm *domain.VirtualMachine) error {
-	return backend.getCommand(vm, "release-ip").Run()
+	cmd := backend.getCommand(vm, "release-ip")
+	_, err := cmd.Output()
+	if err != nil {
+		errput := ""
+		if ee, ok := err.(*exec.ExitError); ok {
+			errput = string(ee.Stderr)
+		}
+		return fmt.Errorf("command '%s' failed: %s. %s", cmd.Args, err, errput)
+	}
+	return nil
 }
 
 func (backend *LibvirtScriptedNetwork) LookupIP(vm *domain.VirtualMachine) error {
