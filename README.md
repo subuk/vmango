@@ -20,11 +20,11 @@ Current features:
 * IP address management
 * Simple API
 * Custom userdata for cloud-init
+* Bridged network
 
 Hypervisor server requirements:
 
 * Libvirt 0.10+ (centos6+, ubuntu14.04+, debian8+)
-* Routed network with libvirt managed dhcp server. Bridged networks not supported due to impossibility to determine machine ip address.
 
 Web interface server requirements:
 * Libvirt 1.2.0+ (Ubuntu 14.04+, debian8+, centos7+)
@@ -45,14 +45,14 @@ Define libvirt network
     virsh net-autostart vmango
 
 Define libvirt images storage:
-    
+
     sudo mkdir -p /var/lib/libvirt/images/vmango-images
     virsh pool-define storage-pool-images.xml
     virsh pool-start vmango-images
     virsh pool-autostart vmango-images
 
 Install dhcp lease monitor hook (symlink doesn't work due to Apparmor restrictions):
-    
+
     sudo cp qemu-hook-lease-monitor.py /etc/libvirt/hooks/qemu
 
 Download vm images (file names matter!)
@@ -66,7 +66,7 @@ Download vm images (file names matter!)
 
 If your processor doesn't support hardware acceleration, change type from "kvm" to "qemu" in the first line of vm.xml.in (or you will get an error during first machine creation):
 
-    <domain type='qemu'> 
+    <domain type='qemu'>
 
 ### Dependencies for Ubuntu 14.04+
 
