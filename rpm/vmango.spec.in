@@ -48,6 +48,10 @@ rm -rf $RPM_BUILD_ROOT
 %attr(644,root,root) %{_unitdir}/vmango.service
 
 %changelog
+* Mon Feb 12 2018 23:07:14 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.7.0-1
+- Add support for scripted network configuration
+- Add request method to access log
+
 * Wed Jul 12 2017 00:14:50 +0300 Matvey Kruglov <kubuzzzz@gmail.com> 0.6.0-1
 - Preserve machine plan, creator and source image for virtual machines
 - Improve web access logging
