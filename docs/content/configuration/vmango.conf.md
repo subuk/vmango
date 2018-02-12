@@ -43,15 +43,17 @@ Libvirt socket path can be changed via ?socket=/path/to/libvirt-sock url option.
 
 **hypervisor.ignored_vms** - List of ignored virtual machines names.
 
-**hypervisor.network** - Libvirt network name.
+**hypervisor.network** - Libvirt network name or bridge name if network_script specified.
+
+**hypervisor.network_script** - Path to executable file to integrate vmango with network not managed by libvirt (see [network]({{% ref "hypervisor.md#scripted-network" %}}) chapter).
 
 **hypervisor.vm_template** - Path to go template file (relative to vmango.conf) with libvirt domain XML. Used to create a new machine.
 
 Execution context:
 
-* Machine    [VirtualMachine](https://github.com/subuk/vmango/blob/master/src/vmango/models/vm.go#L56) 
-* Image  - [Image](https://github.com/subuk/vmango/blob/master/src/vmango/models/image.go#L18)
-* Plan       [Plan](https://github.com/subuk/vmango/blob/master/src/vmango/models/plan.go#L3)
+* Machine    [VirtualMachine](https://github.com/subuk/vmango/blob/master/src/vmango/domain/vm.go#L57)
+* Image  - [Image](https://github.com/subuk/vmango/blob/master/src/vmango/domain/image.go#L16)
+* Plan       [Plan](https://github.com/subuk/vmango/blob/master/src/vmango/domain/plan.go#L3)
 * VolumePath string
 * Network    string
 
@@ -59,9 +61,9 @@ Execution context:
 
 Execution context:
 
-* Machine    [VirtualMachine](https://github.com/subuk/vmango/blob/master/src/vmango/models/vm.go#L56) 
-* Image  - [Image](https://github.com/subuk/vmango/blob/master/src/vmango/models/image.go#L18)
-* Plan       [Plan](https://github.com/subuk/vmango/blob/master/src/vmango/models/plan.go#L3)
+* Machine    [VirtualMachine](https://github.com/subuk/vmango/blob/master/src/vmango/domain/vm.go#L57)
+* Image  - [Image](https://github.com/subuk/vmango/blob/master/src/vmango/domain/image.go#L16)
+* Plan       [Plan](https://github.com/subuk/vmango/blob/master/src/vmango/domain/plan.go#L3)
 
 Example:
 
