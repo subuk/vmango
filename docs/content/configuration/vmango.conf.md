@@ -13,7 +13,7 @@ All vm configuration templates are golang text templates: https://golang.org/pkg
 
 **listen** - Web server listen address
 
-**session_secret** - Secret key for session cookie encryption. 
+**session_secret** - Secret key for session cookie encryption.
 
 **static_cache** - Static files cache duration, e.g: "1d", "10m", "60s". Used mainly for development.
 
@@ -35,7 +35,7 @@ Libvirt socket path can be changed via ?socket=/path/to/libvirt-sock url option.
 
 **hypervisor** - Hypervisor definition, may be specified multiple times.
 
-**hypervisor.url** - Libvirt connection URL. 
+**hypervisor.url** - Libvirt connection URL.
 
 **hypervisor.image_storage_pool** - Libvirt storage pool name for VM images.
 

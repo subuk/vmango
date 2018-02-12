@@ -238,7 +238,7 @@ If there any errors during image name parsing, it will be skipped with warning i
 
 Two templates are used to tell Vmango how to create new machines on hypervisor. The first one is a domain xml template ([hypervisor.vm_template]({{% ref "vmango.conf.md#hypervisor" %}}) option), the second is a machine's root volume template ([hypervisor.volume_template]({{% ref "vmango.conf.md#hypervisor" %}})). By customizing this templates you can use any storage configuration and hypervisor driver supported by libvirt, but currently only QEMU/KVM machines with LVM or qcow2 storages are tested. Feel free to experiment and send pull requests for other configurations.
 
-The exact template content depends on your system configuration, but examples are shipped with deb/rpm packages ([vm.dist.xml.in](https://github.com/subuk/vmango/blob/master/vm.dist.xml.in) and [volume.dist.xml.in](https://github.com/subuk/vmango/blob/master/volume.dist.xml.in)). You may also look at [test fixtures](https://github.com/subuk/vmango/tree/master/fixtures/libvirt). 
+The exact template content depends on your system configuration, but examples are shipped with deb/rpm packages ([vm.dist.xml.in](https://github.com/subuk/vmango/blob/master/vm.dist.xml.in) and [volume.dist.xml.in](https://github.com/subuk/vmango/blob/master/volume.dist.xml.in)). You may also look at [test fixtures](https://github.com/subuk/vmango/tree/master/fixtures/libvirt).
 
 When customizing templates, remember that filename of root drive must ends with `_disk` suffix.
 
