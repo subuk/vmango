@@ -155,7 +155,11 @@ func (s *MachineService) RemoveMachine(providerId, machineId string) error {
 	if err != nil {
 		return err
 	}
-	return provider.Machines.Remove(&VirtualMachine{Id: machineId})
+	vm, err := s.GetMachine(providerId, machineId)
+	if err != nil {
+		return err
+	}
+	return provider.Machines.Remove(vm)
 }
 
 func (s *MachineService) DoAction(providerId, machineId, action string) error {

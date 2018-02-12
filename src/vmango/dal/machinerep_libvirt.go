@@ -40,12 +40,12 @@ type LibvirtMachinerep struct {
 	conn        *libvirt.Connect
 	vmtpl       *template.Template
 	voltpl      *template.Template
-	network     string
+	network     LibvirtNetwork
 	storagePool string
 	ignoreVms   []string
 }
 
-func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Template, network, pool string, ignoreVms []string) *LibvirtMachinerep {
+func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Template, network LibvirtNetwork, pool string, ignoreVms []string) *LibvirtMachinerep {
 	return &LibvirtMachinerep{
 		conn:        conn,
 		vmtpl:       vmtpl,
@@ -56,73 +56,7 @@ func NewLibvirtMachinerep(conn *libvirt.Connect, vmtpl, voltpl *template.Templat
 	}
 }
 
-func (store *LibvirtMachinerep) assignIP(vm *domain.VirtualMachine) error {
-	network, err := store.conn.LookupNetworkByName(store.network)
-	if err != nil {
-		return err
-	}
-	xmlString, err := network.GetXMLDesc(0)
-	if err != nil {
-		return err
-	}
-	networkConfig := netXMLConfig{}
-	if err := xml.Unmarshal([]byte(xmlString), &networkConfig); err != nil {
-		return fmt.Errorf("failed to parse network xml: %s", err)
-	}
-	addrs, err := listIPRange(
-		networkConfig.IP.DHCPRange.Start,
-		networkConfig.IP.DHCPRange.End,
-		networkConfig.IP.Address,
-		networkConfig.IP.Netmask,
-	)
-	if err != nil {
-		return err
-	}
-	var ip *domain.IP
-	for _, addr := range addrs {
-		if has := networkConfig.HasHost(addr); !has {
-			ip = &domain.IP{Address: addr}
-			break
-		}
-	}
-	if ip == nil {
-		return fmt.Errorf("failed to find free IP address")
-	}
-
-	return network.Update(
-		libvirt.NETWORK_UPDATE_COMMAND_ADD_LAST,
-		libvirt.NETWORK_SECTION_IP_DHCP_HOST,
-		-1,
-		fmt.Sprintf(
-			`<host mac="%s" name="%s" ip="%s" />`,
-			vm.HWAddr, vm.Name, ip.Address,
-		),
-		libvirt.NETWORK_UPDATE_AFFECT_LIVE|libvirt.NETWORK_UPDATE_AFFECT_CONFIG,
-	)
-}
-
-func (store *LibvirtMachinerep) releaseIP(vm *domain.VirtualMachine) error {
-	network, err := store.conn.LookupNetworkByName(store.network)
-	if err != nil {
-		return err
-	}
-	if vm.Ip == nil {
-		logrus.WithField("machine", vm.Name).Warn("no ip to release")
-		return nil
-	}
-	return network.Update(
-		libvirt.NETWORK_UPDATE_COMMAND_DELETE,
-		libvirt.NETWORK_SECTION_IP_DHCP_HOST,
-		-1,
-		fmt.Sprintf(
-			`<host mac="%s" name="%s" ip="%s" />`,
-			vm.HWAddr, vm.Name, vm.Ip.Address,
-		),
-		libvirt.NETWORK_UPDATE_AFFECT_LIVE|libvirt.NETWORK_UPDATE_AFFECT_CONFIG,
-	)
-}
-
-func (store *LibvirtMachinerep) fillVm(vm *domain.VirtualMachine, virDomain *libvirt.Domain, network *libvirt.Network) error {
+func (store *LibvirtMachinerep) fillVm(vm *domain.VirtualMachine, virDomain *libvirt.Domain) error {
 	name, err := virDomain.GetName()
 	if err != nil {
 		return err
@@ -195,19 +129,8 @@ func (store *LibvirtMachinerep) fillVm(vm *domain.VirtualMachine, virDomain *lib
 	for _, key := range domainConfig.SSHKeys {
 		vm.SSHKeys = append(vm.SSHKeys, &domain.SSHKey{Name: key.Name, Public: key.Public})
 	}
-
-	networkXMLString, err := network.GetXMLDesc(0)
-	if err != nil {
-		return err
-	}
-	networkConfig := netXMLConfig{}
-	if err := xml.Unmarshal([]byte(networkXMLString), &networkConfig); err != nil {
-		return fmt.Errorf("failed to parse network xml: %s", err)
-	}
-	for _, host := range networkConfig.IP.Hosts {
-		if host.HWAddr == vm.HWAddr {
-			vm.Ip = &domain.IP{Address: host.IPAddr}
-		}
+	if err := store.network.LookupIP(vm); err != nil {
+		return fmt.Errorf("failed to fetch machine ip: %s", err)
 	}
 
 	return nil
@@ -227,10 +150,6 @@ func (store *LibvirtMachinerep) List(machines *domain.VirtualMachineList) error 
 	if err != nil {
 		return err
 	}
-	network, err := store.conn.LookupNetworkByName(store.network)
-	if err != nil {
-		return err
-	}
 
 	for _, virDomain := range domains {
 		domainName, err := virDomain.GetName()
@@ -241,7 +160,7 @@ func (store *LibvirtMachinerep) List(machines *domain.VirtualMachineList) error 
 			continue
 		}
 		vm := &domain.VirtualMachine{}
-		if err := store.fillVm(vm, &virDomain, network); err != nil {
+		if err := store.fillVm(vm, &virDomain); err != nil {
 			return err
 		}
 		machines.Add(vm)
@@ -253,10 +172,6 @@ func (store *LibvirtMachinerep) Get(machine *domain.VirtualMachine) (bool, error
 	if machine.Id == "" {
 		panic("no id specified for LibvirtMachinerep.Get()")
 	}
-	network, err := store.conn.LookupNetworkByName(store.network)
-	if err != nil {
-		return false, fmt.Errorf("failed to find network '%s'", err)
-	}
 	domain, err := store.conn.LookupDomainByUUIDString(machine.Id)
 	if err != nil {
 		virErr := err.(libvirt.Error)
@@ -265,7 +180,7 @@ func (store *LibvirtMachinerep) Get(machine *domain.VirtualMachine) (bool, error
 		}
 		return false, virErr
 	}
-	if err := store.fillVm(machine, domain, network); err != nil {
+	if err := store.fillVm(machine, domain); err != nil {
 		return true, fmt.Errorf("failed to fetch machine info: %s", err)
 	}
 	return true, nil
@@ -405,11 +320,6 @@ func (store *LibvirtMachinerep) Create(machine *domain.VirtualMachine, image *do
 		return fmt.Errorf("failed to lookup image storage pool: %s", err.(libvirt.Error).Message)
 	}
 
-	network, err := store.conn.LookupNetworkByName(store.network)
-	if err != nil {
-		return err
-	}
-
 	if _, err := store.conn.LookupDomainByName(machine.Name); err == nil {
 		return fmt.Errorf("domain with name '%s' already exists", machine.Name)
 	}
@@ -453,7 +363,7 @@ func (store *LibvirtMachinerep) Create(machine *domain.VirtualMachine, image *do
 		VolumePath string
 		Network    string
 		Metadata   string
-	}{machine, image, plan, rootVolumePath, store.network, store.renderMetadata(machine)}
+	}{machine, image, plan, rootVolumePath, store.network.Name(), store.renderMetadata(machine)}
 	if err := store.vmtpl.Execute(&domainCreationXml, vmtplContext); err != nil {
 		return err
 	}
@@ -462,10 +372,10 @@ func (store *LibvirtMachinerep) Create(machine *domain.VirtualMachine, image *do
 	if err != nil {
 		return err
 	}
-	if err := store.fillVm(machine, domain, network); err != nil {
+	if err := store.fillVm(machine, domain); err != nil {
 		return err
 	}
-	if err := store.assignIP(machine); err != nil {
+	if err := store.network.AssignIP(machine); err != nil {
 		return err
 	}
 
@@ -496,7 +406,7 @@ func (store *LibvirtMachinerep) Create(machine *domain.VirtualMachine, image *do
 			return fmt.Errorf("failed to resize root volume: %s", err)
 		}
 	}
-	return store.fillVm(machine, domain, network)
+	return store.fillVm(machine, domain)
 }
 
 func (store *LibvirtMachinerep) Remove(machine *domain.VirtualMachine) error {
@@ -545,7 +455,7 @@ func (store *LibvirtMachinerep) Remove(machine *domain.VirtualMachine) error {
 			return err
 		}
 	}
-	if err := store.releaseIP(machine); err != nil {
+	if err := store.network.ReleaseIP(machine); err != nil {
 		return fmt.Errorf("failed to release machine ip: %s", err)
 	}
 	if err := domain.Undefine(); err != nil {
