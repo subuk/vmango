@@ -1,11 +1,12 @@
 package testool
 
 import (
-	"github.com/libvirt/libvirt-go"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
-	"text/template"
+
+	"github.com/libvirt/libvirt-go"
 )
 
 const TEST_URI_ENV_KEY = "VMANGO_TEST_LIBVIRT_URI"
@@ -17,12 +18,13 @@ type LibvirtTestPoolFixture struct {
 }
 
 type LibvirtTest struct {
-	VMTpl      *template.Template
-	VMTplPath  string
-	VolTpl     *template.Template
-	VolTplPath string
-	VirConnect *libvirt.Connect
-	VirURI     string
+	VMTplContent  string
+	VMTplPath     string
+	VolTplContent string
+	VolTplPath    string
+	VirConnect    *libvirt.Connect
+	VirURI        string
+	NetworkScript string
 
 	Fixtures struct {
 		Domains  []string
@@ -53,10 +55,19 @@ func (suite *LibvirtTest) SetupSuite() {
 }
 
 func (suite *LibvirtTest) SetupTest() {
+	suite.NetworkScript = filepath.Join(SourceDir(), "fixtures/stub_network_script.py")
 	suite.VMTplPath = filepath.Join(SourceDir(), "fixtures/libvirt", os.Getenv(TEST_TYPE_ENV_KEY), "vm.xml.in")
 	suite.VolTplPath = filepath.Join(SourceDir(), "fixtures/libvirt", os.Getenv(TEST_TYPE_ENV_KEY), "volume.xml.in")
-	suite.VMTpl = template.Must(template.New("vm.xml.in").ParseFiles(suite.VMTplPath))
-	suite.VolTpl = template.Must(template.New("volume.xml.in").ParseFiles(suite.VolTplPath))
+	vmTplContent, err := ioutil.ReadFile(suite.VMTplPath)
+	if err != nil {
+		panic(err)
+	}
+	volTplContent, err := ioutil.ReadFile(suite.VolTplPath)
+	if err != nil {
+		panic(err)
+	}
+	suite.VMTplContent = string(vmTplContent)
+	suite.VolTplContent = string(volTplContent)
 
 	for _, poolFixture := range suite.Fixtures.Pools {
 		pool, err := CreatePool(suite.VirConnect, poolFixture.Name)

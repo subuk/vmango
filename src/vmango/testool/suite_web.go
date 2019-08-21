@@ -1,20 +1,34 @@
 package testool
 
 import (
-	"github.com/gorilla/sessions"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"vmango/dal"
+	"vmango/domain"
 	"vmango/web"
+
+	"github.com/gorilla/sessions"
 )
 
 type WebTest struct {
 	Context *web.Context
 	Headers http.Header
+
+	SSHKeys         *dal.ConfigSSHKeyrep
+	Plans           *dal.ConfigPlanrep
+	ProviderFactory *dal.StubProviderFactory
 }
 
 func (suite *WebTest) SetupTest() {
 	suite.Context = NewTestContext()
+	suite.ProviderFactory = dal.NewStubProviderFactory()
+	suite.Plans = &dal.ConfigPlanrep{}
+	suite.SSHKeys = &dal.ConfigSSHKeyrep{}
+	suite.Context.Machines = domain.NewMachineService(
+		suite.ProviderFactory.Configs, suite.ProviderFactory.Produce,
+		suite.SSHKeys, suite.Plans,
+	)
 	suite.Headers = http.Header{}
 }
 
@@ -56,4 +70,8 @@ func (suite *WebTest) DoPost(url string, body io.Reader) *httptest.ResponseRecor
 
 func (suite *WebTest) DoDelete(url string) *httptest.ResponseRecorder {
 	return suite.DoRequest("DELETE", url, nil)
+}
+
+func (suite *WebTest) DoBad(url string) *httptest.ResponseRecorder {
+	return suite.DoRequest("BAD", url, nil)
 }

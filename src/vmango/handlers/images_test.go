@@ -4,12 +4,13 @@ package handlers_test
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/suite"
 	"testing"
 	"time"
 	"vmango/dal"
-	"vmango/models"
+	"vmango/domain"
 	"vmango/testool"
+
+	"github.com/stretchr/testify/suite"
 )
 
 const IMAGES_URL = "/images/"
@@ -42,40 +43,40 @@ func (suite *ImageHandlersTestSuite) TestAPIPostNotAllowed() {
 
 func (suite *ImageHandlersTestSuite) TestOk() {
 	suite.Authenticate()
-	suite.Context.Providers.Add(&dal.StubProvider{
-		TName: "test1",
-		TImages: &dal.StubImagerep{Data: []*models.Image{
+	suite.ProviderFactory.Add(&domain.Provider{
+		Name: "test1",
+		Images: &dal.StubImagerep{Data: []*domain.Image{
 			{
 				Id:   "test_image.img",
 				OS:   "TestOS",
-				Arch: models.ARCH_X86,
-				Type: models.IMAGE_FMT_RAW,
+				Arch: domain.ARCH_X86,
+				Type: domain.IMAGE_FMT_RAW,
 				Date: time.Unix(1484891107, 0),
 			},
 			{
 				Id:   "test_image2.img",
 				OS:   "OsTest-4.0",
-				Arch: models.ARCH_X86_64,
-				Type: models.IMAGE_FMT_QCOW2,
+				Arch: domain.ARCH_X86_64,
+				Type: domain.IMAGE_FMT_QCOW2,
 				Date: time.Unix(1484831107, 0),
 			},
 		}},
 	})
-	suite.Context.Providers.Add(&dal.StubProvider{
-		TName: "test2",
-		TImages: &dal.StubImagerep{Data: []*models.Image{
+	suite.ProviderFactory.Add(&domain.Provider{
+		Name: "test2",
+		Images: &dal.StubImagerep{Data: []*domain.Image{
 			{
 				Id:   "test_image.img",
 				OS:   "TestOS",
-				Arch: models.ARCH_X86,
-				Type: models.IMAGE_FMT_RAW,
+				Arch: domain.ARCH_X86,
+				Type: domain.IMAGE_FMT_RAW,
 				Date: time.Unix(1484891107, 0),
 			},
 			{
 				Id:   "test_image2.img",
 				OS:   "OsTest-4.0",
-				Arch: models.ARCH_X86_64,
-				Type: models.IMAGE_FMT_QCOW2,
+				Arch: domain.ARCH_X86_64,
+				Type: domain.IMAGE_FMT_QCOW2,
 				Date: time.Unix(1484831107, 0),
 			},
 		}},
@@ -87,22 +88,22 @@ func (suite *ImageHandlersTestSuite) TestOk() {
 
 func (suite *ImageHandlersTestSuite) TestAPIOk() {
 	suite.APIAuthenticate("admin", "secret")
-	suite.Context.Providers.Add(&dal.StubProvider{
-		TName: "test2",
-		TImages: &dal.StubImagerep{Data: []*models.Image{
+	suite.ProviderFactory.Add(&domain.Provider{
+		Name: "test2",
+		Images: &dal.StubImagerep{Data: []*domain.Image{
 			{
 				Id:       "test_image.img",
 				OS:       "TestOS",
-				Arch:     models.ARCH_X86,
-				Type:     models.IMAGE_FMT_RAW,
+				Arch:     domain.ARCH_X86,
+				Type:     domain.IMAGE_FMT_RAW,
 				Date:     time.Unix(1484891107, 0).UTC(),
 				PoolName: "hello",
 			},
 			{
 				Id:       "test_image2.img",
 				OS:       "OsTest-4.0",
-				Arch:     models.ARCH_X86_64,
-				Type:     models.IMAGE_FMT_QCOW2,
+				Arch:     domain.ARCH_X86_64,
+				Type:     domain.IMAGE_FMT_QCOW2,
 				Date:     time.Unix(1484831107, 0).UTC(),
 				PoolName: "hello2",
 			},
@@ -138,14 +139,14 @@ func (suite *ImageHandlersTestSuite) TestAPIOk() {
 
 func (suite *ImageHandlersTestSuite) TestRepFail() {
 	suite.Authenticate()
-	suite.Context.Providers.Add(&dal.StubProvider{
-		TName: "test1",
-		TImages: &dal.StubImagerep{
+	suite.ProviderFactory.Add(&domain.Provider{
+		Name: "test1",
+		Images: &dal.StubImagerep{
 			ListErr: fmt.Errorf("test repo error"),
 		},
 	})
 	rr := suite.DoGet(IMAGES_URL)
-	suite.Assert().Equal(500, rr.Code, rr.Body.String())
+	suite.Assert().Equal(500, rr.Code)
 }
 
 func TestImageHandlersTestSuite(t *testing.T) {

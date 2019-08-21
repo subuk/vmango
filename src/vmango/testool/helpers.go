@@ -3,9 +3,6 @@ package testool
 import (
 	"encoding/xml"
 	"fmt"
-	"github.com/Sirupsen/logrus"
-	"github.com/gorilla/sessions"
-	"github.com/libvirt/libvirt-go"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -15,6 +12,10 @@ import (
 	"vmango/dal"
 	"vmango/web"
 	web_router "vmango/web/router"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/gorilla/sessions"
+	"github.com/libvirt/libvirt-go"
 )
 
 type StubSessionStore struct {
@@ -46,7 +47,6 @@ func NewTestContext() *web.Context {
 		{Username: "testuser", PasswordHash: "$2a$10$K6XfNbM2e5Tn/etSW7HpvuCAsWT62Y1Zrcituk9U1ktAHHVYh5kBS"},
 	})
 	ctx.Logger = logrus.New()
-	ctx.Providers = dal.Providers{}
 	store := &StubSessionStore{}
 	session := sessions.NewSession(store, "vmango")
 	session.Values = map[interface{}]interface{}{}

@@ -2,19 +2,19 @@ package dal
 
 import (
 	"vmango/cfg"
-	"vmango/models"
+	"vmango/domain"
 )
 
 type ConfigSSHKeyrep struct {
-	keys []*models.SSHKey
+	keys []*domain.SSHKey
 }
 
 func NewConfigSSHKeyrep(keyConfigs []cfg.SSHKeyConfig) *ConfigSSHKeyrep {
 	repo := &ConfigSSHKeyrep{
-		keys: []*models.SSHKey{},
+		keys: []*domain.SSHKey{},
 	}
 	for _, keyConfig := range keyConfigs {
-		key := &models.SSHKey{
+		key := &domain.SSHKey{
 			Name:   keyConfig.Name,
 			Public: keyConfig.Public,
 		}
@@ -23,13 +23,13 @@ func NewConfigSSHKeyrep(keyConfigs []cfg.SSHKeyConfig) *ConfigSSHKeyrep {
 	return repo
 }
 
-func (repo *ConfigSSHKeyrep) List(keys *[]*models.SSHKey) error {
+func (repo *ConfigSSHKeyrep) List(keys *[]*domain.SSHKey) error {
 	*keys = *(&repo.keys)
 	return nil
 
 }
 
-func (repo *ConfigSSHKeyrep) Get(needle *models.SSHKey) (bool, error) {
+func (repo *ConfigSSHKeyrep) Get(needle *domain.SSHKey) (bool, error) {
 	for _, key := range repo.keys {
 		if key.Name == needle.Name {
 			*needle = *key

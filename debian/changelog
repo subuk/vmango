@@ -1,3 +1,10 @@
+vmango (0.7.0) vmango; urgency=medium
+
+  * Add support for scripted network configuration
+  * Add request method to access log
+
+ -- Matvey Kruglov <kubuzzzz@gmail.com>  Mon, 12 Feb 2018 23:07:14 +0300
+
 vmango (0.6.0) vmango; urgency=medium
 
   * Preserve machine plan, creator and source image for virtual machines

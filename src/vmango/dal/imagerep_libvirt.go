@@ -3,12 +3,13 @@ package dal
 import (
 	"encoding/xml"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/libvirt/libvirt-go"
 	"strconv"
 	"strings"
 	"time"
-	"vmango/models"
+	"vmango/domain"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/libvirt/libvirt-go"
 )
 
 type volumeXMLConfig struct {
@@ -56,7 +57,7 @@ func NewLibvirtImagerep(conn *libvirt.Connect, name string) *LibvirtImagerep {
 	return &LibvirtImagerep{pool: name, conn: conn}
 }
 
-func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.StorageVol) error {
+func (repo *LibvirtImagerep) fillImage(image *domain.Image, volume *libvirt.StorageVol) error {
 	volumeXMLString, err := volume.GetXMLDesc(0)
 	if err != nil {
 		return err
@@ -71,12 +72,12 @@ func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.Stor
 		return fmt.Errorf("invalid name: %s", volumeConfig.Name)
 	}
 
-	image.Arch = models.ParseHWArch(imginfo[1])
-	if image.Arch == models.ARCH_UNKNOWN {
+	image.Arch = domain.ParseHWArch(imginfo[1])
+	if image.Arch == domain.ARCH_UNKNOWN {
 		return fmt.Errorf("unknown image arch: %s", volumeConfig.Name)
 	}
-	image.Type = models.ParseImageFormat(imginfo[2])
-	if image.Type == models.IMAGE_FMT_UNKNOWN {
+	image.Type = domain.ParseImageFormat(imginfo[2])
+	if image.Type == domain.IMAGE_FMT_UNKNOWN {
 		return fmt.Errorf("unknown image format: %s", volumeConfig.Name)
 	}
 
@@ -88,7 +89,7 @@ func (repo *LibvirtImagerep) fillImage(image *models.Image, volume *libvirt.Stor
 	return nil
 }
 
-func (repo *LibvirtImagerep) List(images *models.ImageList) error {
+func (repo *LibvirtImagerep) List(images *domain.ImageList) error {
 	pool, err := repo.conn.LookupStoragePoolByName(repo.pool)
 	if err != nil {
 		return err
@@ -98,9 +99,9 @@ func (repo *LibvirtImagerep) List(images *models.ImageList) error {
 		return err
 	}
 	for _, volume := range volumes {
-		image := &models.Image{}
+		image := &domain.Image{}
 		if err := repo.fillImage(image, &volume); err != nil {
-			log.WithError(err).Warn("skipping volume")
+			logrus.WithError(err).Warn("skipping volume")
 			continue
 		}
 		*images = append(*images, image)
@@ -108,7 +109,7 @@ func (repo *LibvirtImagerep) List(images *models.ImageList) error {
 	return nil
 }
 
-func (repo *LibvirtImagerep) Get(image *models.Image) (bool, error) {
+func (repo *LibvirtImagerep) Get(image *domain.Image) (bool, error) {
 	if image.Id == "" {
 		return false, fmt.Errorf("no image id provided")
 	}

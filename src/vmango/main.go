@@ -3,20 +3,22 @@ package main
 import (
 	"flag"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/codegangsta/negroni"
-	"github.com/gorilla/csrf"
-	"github.com/gorilla/sessions"
-	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 	"vmango/cfg"
 	"vmango/dal"
+	"vmango/domain"
 	"vmango/handlers"
 	"vmango/web"
 	vmango_router "vmango/web/router"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/codegangsta/negroni"
+	"github.com/gorilla/csrf"
+	"github.com/gorilla/sessions"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -28,22 +30,22 @@ var (
 
 func main() {
 	flag.Parse()
-	logLevel, err := log.ParseLevel(*LOG_LEVEL)
+	logLevel, err := logrus.ParseLevel(*LOG_LEVEL)
 
 	if err != nil {
-		log.WithError(err).Fatal("failed to parse loglevel")
+		logrus.WithError(err).Fatal("failed to parse loglevel")
 	}
-	log.SetLevel(logLevel)
+	logrus.SetLevel(logLevel)
 
 	if flag.Arg(0) == "genpw" {
 		plainpw := flag.Arg(1)
 		if plainpw == "" || plainpw == "--help" || plainpw == "-h" {
-			log.Fatal("Usage: vmango genpw <password>")
+			logrus.Fatal("Usage: vmango genpw <password>")
 			return
 		}
 		hashed, err := bcrypt.GenerateFromPassword([]byte(plainpw), bcrypt.DefaultCost)
 		if err != nil {
-			log.WithError(err).Fatal("failed to generate hash")
+			logrus.WithError(err).Fatal("failed to generate hash")
 			return
 		}
 		fmt.Println(string(hashed))
@@ -52,7 +54,7 @@ func main() {
 
 	config, err := cfg.ParseConfig(*CONFIG_PATH)
 	if err != nil {
-		log.WithError(err).WithField("filename", *CONFIG_PATH).Fatal("failed to parse config")
+		logrus.WithError(err).WithField("filename", *CONFIG_PATH).Fatal("failed to parse config")
 	}
 	if err := config.Sanitize(filepath.Dir(*CONFIG_PATH)); err != nil {
 		fmt.Fprintf(os.Stderr, "config validation failed, %s\n", err)
@@ -60,13 +62,13 @@ func main() {
 	}
 	staticCache, err := time.ParseDuration(config.StaticCache)
 	if err != nil {
-		log.WithError(err).Fatal("failed to parse static_cache from config")
+		logrus.WithError(err).Fatal("failed to parse static_cache from config")
 	}
 	if *CHECK_CONFIG {
 		os.Exit(0)
 	}
 	ctx := &web.Context{
-		Logger:      log.StandardLogger(),
+		Logger:      logrus.StandardLogger(),
 		StaticCache: staticCache,
 	}
 
@@ -83,24 +85,15 @@ func main() {
 	ctx.Router = vmango_router.New(ctx, csrfProtect)
 	ctx.Render = web.NewRenderer(VERSION, config.Debug, ctx)
 
-	providers := dal.Providers{}
-
-	for _, hConfig := range config.Hypervisors {
-		provider, err := dal.NewLibvirtProvider(hConfig)
-		if err != nil {
-			log.WithError(err).WithField("provider", hConfig.Name).Warning("failed to initialize libvirt hypervisor")
-			continue
-		}
-		providers.Add(provider)
-	}
-
 	planrep := dal.NewConfigPlanrep(config.Plans)
 	sshkeyrep := dal.NewConfigSSHKeyrep(config.SSHKeys)
 	authrep := dal.NewConfigAuthrep(config.Users)
+	providerconfigrep, err := dal.NewConfigProviderConfigrep(config.Hypervisors)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to initialize provider configuration repository")
+	}
 
-	ctx.Providers = providers
-	ctx.Plans = planrep
-	ctx.SSHKeys = sshkeyrep
+	ctx.Machines = domain.NewMachineService(providerconfigrep, dal.ProviderFactory, sshkeyrep, planrep)
 	ctx.AuthDB = authrep
 	ctx.SessionStore = sessions.NewCookieStore([]byte(config.SessionSecret))
 
@@ -112,7 +105,7 @@ func main() {
 	n.Use(negroni.NewRecovery())
 	n.UseHandler(ctx.Router)
 
-	log.WithFields(log.Fields{
+	logrus.WithFields(logrus.Fields{
 		"version": VERSION,
 		"address": config.Listen,
 		"tls":     config.IsTLS(),
@@ -120,8 +113,8 @@ func main() {
 	}).Info("starting server")
 
 	if config.IsTLS() {
-		log.Fatal(http.ListenAndServeTLS(config.Listen, config.SSLCert, config.SSLKey, n))
+		logrus.Fatal(http.ListenAndServeTLS(config.Listen, config.SSLCert, config.SSLKey, n))
 	} else {
-		log.Fatal(http.ListenAndServe(config.Listen, n))
+		logrus.Fatal(http.ListenAndServe(config.Listen, n))
 	}
 }

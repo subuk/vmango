@@ -2,17 +2,17 @@ package dal
 
 import (
 	"vmango/cfg"
-	"vmango/models"
+	"vmango/domain"
 )
 
 type ConfigAuthrep struct {
-	authdb []*models.User
+	authdb []*domain.User
 }
 
 func NewConfigAuthrep(db []cfg.AuthUserConfig) *ConfigAuthrep {
 	repo := &ConfigAuthrep{}
 	for _, userConfig := range db {
-		repo.authdb = append(repo.authdb, &models.User{
+		repo.authdb = append(repo.authdb, &domain.User{
 			Name:           userConfig.Username,
 			HashedPassword: []byte(userConfig.PasswordHash),
 		})
@@ -20,7 +20,7 @@ func NewConfigAuthrep(db []cfg.AuthUserConfig) *ConfigAuthrep {
 	return repo
 }
 
-func (repo *ConfigAuthrep) Get(needle *models.User) (bool, error) {
+func (repo *ConfigAuthrep) Get(needle *domain.User) (bool, error) {
 	for _, user := range repo.authdb {
 		if user.Name == needle.Name {
 			*needle = *user

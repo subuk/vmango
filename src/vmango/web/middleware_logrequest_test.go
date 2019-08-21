@@ -3,12 +3,13 @@
 package web
 
 import (
-	"github.com/Sirupsen/logrus"
-	logrus_test "github.com/Sirupsen/logrus/hooks/test"
-	"github.com/stretchr/testify/suite"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/Sirupsen/logrus"
+	logrus_test "github.com/Sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/suite"
 )
 
 type LogRequestMiddlewareTestSuite struct {
@@ -47,6 +48,7 @@ func (suite *LogRequestMiddlewareTestSuite) TestOk() {
 	suite.Equal("/test", entry.Data["path"])
 	suite.NotEqual(0, entry.Data["latency"])
 	suite.Equal("1.1.1.1", entry.Data["remote"])
+	suite.Equal("GET", entry.Data["method"])
 	suite.True(suite.NextCalled)
 }
 

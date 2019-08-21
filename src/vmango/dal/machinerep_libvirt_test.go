@@ -4,16 +4,15 @@ package dal_test
 
 import (
 	"encoding/xml"
-	"github.com/libvirt/libvirt-go"
-	"github.com/stretchr/testify/suite"
 	"strings"
 	"testing"
 	"vmango/dal"
-	"vmango/models"
+	"vmango/domain"
 	"vmango/testool"
-)
 
-const HYPERVISOR_NAME = "main"
+	"github.com/libvirt/libvirt-go"
+	"github.com/stretchr/testify/suite"
+)
 
 type MachinerepLibvirtSuite struct {
 	suite.Suite
@@ -36,31 +35,51 @@ func (suite *MachinerepLibvirtSuite) SetupSuite() {
 	}
 }
 
-func MustRepo(repo *dal.LibvirtMachinerep, err error) *dal.LibvirtMachinerep {
+func (suite *MachinerepLibvirtSuite) CreateRep(params ...map[string]interface{}) *dal.LibvirtMachinerep {
+	ignoreVms := ""
+	networkScript := ""
+	vmPool := suite.Fixtures.Pools[0].Name
+
+	if len(params) > 0 {
+		if v, ok := params[0]["ignore_vms"].(string); ok {
+			ignoreVms = v
+		}
+		if v, ok := params[0]["vm_pool"].(string); ok {
+			vmPool = v
+		}
+		if v, ok := params[0]["network_script"].(string); ok {
+			networkScript = v
+		}
+	}
+	provider, err := dal.ProviderFactory(&domain.ProviderConfig{
+		Name: "test-libvirt",
+		Type: dal.LibvirtProvider,
+		Params: map[string]string{
+			"url":                suite.LibvirtTest.VirURI,
+			"machine_template":   suite.LibvirtTest.VMTplContent,
+			"volume_template":    suite.LibvirtTest.VolTplContent,
+			"network":            suite.Fixtures.Networks[0],
+			"network_script":     networkScript,
+			"root_storage_pool":  vmPool,
+			"image_storage_pool": suite.Fixtures.Pools[1].Name,
+			"ignore_vms":         ignoreVms,
+		},
+	})
 	if err != nil {
 		panic(err)
 	}
-	return repo
-}
-
-func (suite *MachinerepLibvirtSuite) CreateRep() *dal.LibvirtMachinerep {
-
-	return MustRepo(dal.NewLibvirtMachinerep(
-		suite.VirConnect, suite.VMTpl, suite.VolTpl,
-		suite.Fixtures.Networks[0], suite.Fixtures.Pools[0].Name, HYPERVISOR_NAME,
-		[]string{},
-	))
+	return provider.Machines.(*dal.LibvirtMachinerep)
 }
 
 func (suite *MachinerepLibvirtSuite) TestListOk() {
-	machines := &models.VirtualMachineList{}
+	machines := &domain.VirtualMachineList{}
 	err := suite.CreateRep().List(machines)
 	suite.Require().NoError(err)
 	suite.Require().Equal(machines.Count(), 2)
 	oneVm := machines.Find("one")
 	suite.Require().NotNil(oneVm)
 	suite.Equal("one", oneVm.Name)
-	suite.Equal(models.STATE_RUNNING, oneVm.State)
+	suite.Equal(domain.STATE_RUNNING, oneVm.State)
 	suite.Equal("fb6c4f622cf346239aee23f0005eb5fb", oneVm.Id)
 	suite.Equal(536870912, oneVm.Memory)
 	suite.Equal(1, oneVm.Cpus)
@@ -84,7 +103,7 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	twoVm := machines.Find("two")
 	suite.Require().NotNil(twoVm)
 	suite.Equal("two", twoVm.Name)
-	suite.Equal(models.STATE_RUNNING, twoVm.State)
+	suite.Equal(domain.STATE_RUNNING, twoVm.State)
 	suite.Equal("c72cb377301a4f2aa34c547f70872b55", twoVm.Id)
 	suite.Equal(536870912, twoVm.Memory)
 	suite.Equal(1, twoVm.Cpus)
@@ -98,7 +117,6 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 	suite.Equal("test", twoVm.SSHKeys[0].Name)
 	expectedKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDXJjuFhloSumFjJRrrZfSinBE0q4e/o0nKzt4QfkD3VR56rrrrCtjHh+/wcZcIdm9I9QODxoFoSSvrPNOzLj0lfF0f64Ic7fUnC4hhRBEeyo/03KVpUQcHWHjeex+5OHQXa8s5Xy/dytZkhdvDYOCgEpMgC2tU6tk/mVuk84Q03QEnSYJQuIgj8VwvxC+22aGSpLzXtenpdXr+O8s7dkuhHQjl1w6WbiLADv0I06bFwW8iB6p7aHZCqJUYAUYa4XaCjXdVwoKAE/J23s17XCZzY10YmBIikRQQIjpvRIbHArzO0om4++2KMnY8m6xoMp2imyceD/0fIVlAqhLTEaBP test@vmango"
 	suite.Equal(expectedKey, twoVm.SSHKeys[0].Public)
-	suite.Nil(twoVm.Ip)
 	suite.Equal("StubOs-1.0", twoVm.OS)
 	suite.Equal("x86_64", twoVm.Arch.String())
 	suite.Equal("stubuser", twoVm.Creator)
@@ -106,12 +124,8 @@ func (suite *MachinerepLibvirtSuite) TestListOk() {
 }
 
 func (suite *MachinerepLibvirtSuite) TestIgnoredOk() {
-	repo := MustRepo(dal.NewLibvirtMachinerep(
-		suite.VirConnect, suite.VMTpl, suite.VolTpl,
-		suite.Fixtures.Networks[0], suite.Fixtures.Pools[0].Name, HYPERVISOR_NAME,
-		[]string{"one"},
-	))
-	machines := &models.VirtualMachineList{}
+	repo := suite.CreateRep(map[string]interface{}{"ignore_vms": "one"})
+	machines := &domain.VirtualMachineList{}
 	err := repo.List(machines)
 	suite.Require().NoError(err)
 	suite.Equal(machines.Count(), 1)
@@ -120,13 +134,13 @@ func (suite *MachinerepLibvirtSuite) TestIgnoredOk() {
 
 func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{Id: "c72cb377301a4f2aa34c547f70872b55"}
+	machine := &domain.VirtualMachine{Id: "c72cb377301a4f2aa34c547f70872b55"}
 	exists, err := repo.Get(machine)
 	suite.Require().True(exists)
 	suite.Require().Nil(err)
 
 	suite.Equal("two", machine.Name)
-	suite.Equal(models.STATE_RUNNING, machine.State)
+	suite.Equal(domain.STATE_RUNNING, machine.State)
 	suite.Equal("c72cb377301a4f2aa34c547f70872b55", machine.Id)
 	suite.Equal(536870912, machine.Memory)
 	suite.Equal(1, machine.Cpus)
@@ -142,15 +156,24 @@ func (suite *MachinerepLibvirtSuite) TestGetOk() {
 	suite.Equal("test", machine.SSHKeys[0].Name)
 	expectedKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDXJjuFhloSumFjJRrrZfSinBE0q4e/o0nKzt4QfkD3VR56rrrrCtjHh+/wcZcIdm9I9QODxoFoSSvrPNOzLj0lfF0f64Ic7fUnC4hhRBEeyo/03KVpUQcHWHjeex+5OHQXa8s5Xy/dytZkhdvDYOCgEpMgC2tU6tk/mVuk84Q03QEnSYJQuIgj8VwvxC+22aGSpLzXtenpdXr+O8s7dkuhHQjl1w6WbiLADv0I06bFwW8iB6p7aHZCqJUYAUYa4XaCjXdVwoKAE/J23s17XCZzY10YmBIikRQQIjpvRIbHArzO0om4++2KMnY8m6xoMp2imyceD/0fIVlAqhLTEaBP test@vmango"
 	suite.Equal(expectedKey, machine.SSHKeys[0].Public)
-	suite.Nil(machine.Ip)
 	suite.Equal("StubOs-1.0", machine.OS)
 	suite.Equal("x86_64", machine.Arch.String())
 	suite.Equal("large", machine.Plan)
 }
 
+func (suite *MachinerepLibvirtSuite) TestGetScriptedNetworkIPOk() {
+	repo := suite.CreateRep(map[string]interface{}{"network_script": suite.LibvirtTest.NetworkScript})
+	machine := &domain.VirtualMachine{Id: "c72cb377301a4f2aa34c547f70872b55"}
+	exists, err := repo.Get(machine)
+	suite.Require().True(exists)
+	suite.Require().Nil(err)
+
+	suite.Equal("44.43.42.41", machine.Ip.Address)
+}
+
 func (suite *MachinerepLibvirtSuite) TestGetNotFoundFail() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{Id: "deadbeefdeadbeefdeadbeefdeadbeef"}
+	machine := &domain.VirtualMachine{Id: "deadbeefdeadbeefdeadbeefdeadbeef"}
 	exists, err := repo.Get(machine)
 	suite.Require().False(exists)
 	suite.Require().Nil(err)
@@ -158,7 +181,7 @@ func (suite *MachinerepLibvirtSuite) TestGetNotFoundFail() {
 
 func (suite *MachinerepLibvirtSuite) TestGetNoNameFail() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{}
+	machine := &domain.VirtualMachine{}
 	suite.Require().Panics(func() {
 		repo.Get(machine)
 	})
@@ -166,7 +189,7 @@ func (suite *MachinerepLibvirtSuite) TestGetNoNameFail() {
 
 func (suite *MachinerepLibvirtSuite) TestRemoveWithIPOk() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{Id: "fb6c4f622cf346239aee23f0005eb5fb"}
+	machine := &domain.VirtualMachine{Id: "fb6c4f622cf346239aee23f0005eb5fb"}
 	suite.T().Log("Waiting for domain")
 	err := repo.Remove(machine)
 	suite.Require().NoError(err)
@@ -185,7 +208,7 @@ func (suite *MachinerepLibvirtSuite) TestRemoveWithIPOk() {
 
 func (suite *MachinerepLibvirtSuite) TestRemoveNotFoundFail() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{Id: "deadbeefdeadbeefdeadbeefdeadbeef"}
+	machine := &domain.VirtualMachine{Id: "deadbeefdeadbeefdeadbeefdeadbeef"}
 	err := repo.Remove(machine)
 	suite.Require().NotNil(err)
 	suite.T().Log(err.Error())
@@ -194,7 +217,7 @@ func (suite *MachinerepLibvirtSuite) TestRemoveNotFoundFail() {
 
 func (suite *MachinerepLibvirtSuite) TestRemoveNoIdFail() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{}
+	machine := &domain.VirtualMachine{}
 	suite.Require().Panics(func() {
 		repo.Remove(machine)
 	})
@@ -202,41 +225,37 @@ func (suite *MachinerepLibvirtSuite) TestRemoveNoIdFail() {
 
 func (suite *MachinerepLibvirtSuite) TestCreateNoImagePoolFail() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{}
-	image := &models.Image{PoolName: "doesntexist"}
-	plan := &models.Plan{}
+	machine := &domain.VirtualMachine{}
+	image := &domain.Image{PoolName: "doesntexist"}
+	plan := &domain.Plan{}
 	err := repo.Create(machine, image, plan)
 	suite.Contains(err.Error(), "failed to lookup image storage pool: Storage pool not found: ")
 }
 
 func (suite *MachinerepLibvirtSuite) TestCreateNoVMPoolFail() {
-	repo := MustRepo(dal.NewLibvirtMachinerep(
-		suite.VirConnect, suite.VMTpl, suite.VolTpl,
-		suite.Fixtures.Networks[0], "doesntexist", HYPERVISOR_NAME,
-		[]string{"one"},
-	))
-	machine := &models.VirtualMachine{}
-	image := &models.Image{PoolName: suite.Fixtures.Pools[1].Name}
-	plan := &models.Plan{}
+	repo := suite.CreateRep(map[string]interface{}{"vm_pool": "doesntexist"})
+	machine := &domain.VirtualMachine{}
+	image := &domain.Image{PoolName: suite.Fixtures.Pools[1].Name}
+	plan := &domain.Plan{}
 	err := repo.Create(machine, image, plan)
 	suite.Contains(err.Error(), "failed to lookup vm storage pool: Storage pool not found: ")
 }
 
 func (suite *MachinerepLibvirtSuite) TestCreateSameNameFail() {
 	repo := suite.CreateRep()
-	machine := &models.VirtualMachine{Name: "two"}
-	image := &models.Image{PoolName: suite.Fixtures.Pools[1].Name}
-	plan := &models.Plan{}
+	machine := &domain.VirtualMachine{Name: "two"}
+	image := &domain.Image{PoolName: suite.Fixtures.Pools[1].Name}
+	plan := &domain.Plan{}
 	err := repo.Create(machine, image, plan)
 	suite.EqualError(err, "domain with name 'two' already exists")
 }
 
 func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	repo := suite.CreateRep()
-	image := &models.Image{
+	image := &domain.Image{
 		OS:       "Ubuntu-12.04",
-		Arch:     models.ARCH_X86_64,
-		Type:     models.IMAGE_FMT_QCOW2,
+		Arch:     domain.ARCH_X86_64,
+		Type:     domain.IMAGE_FMT_QCOW2,
 		PoolName: suite.Fixtures.Pools[1].Name,
 		Id:       "test-image",
 	}
@@ -244,27 +263,27 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 		suite.FailNow("failed to create image volume", err.Error())
 	}
 
-	plan := &models.Plan{
+	plan := &domain.Plan{
 		Name:     "small",
 		Memory:   512 * 1024 * 1024,
 		Cpus:     2,
 		DiskSize: 5 * 1024 * 1024 * 1024,
 	}
-	machine := &models.VirtualMachine{
+	machine := &domain.VirtualMachine{
 		Name:     "test-create",
 		Userdata: "#!/bin/sh",
 		Creator:  "someuser",
-		SSHKeys: []*models.SSHKey{
+		SSHKeys: []*domain.SSHKey{
 			{Name: "home", Public: "asdf"},
 			{Name: "work", Public: "hello"},
 		},
 	}
 	err := repo.Create(machine, image, plan)
 	suite.Require().NoError(err)
-	domain, err := suite.VirConnect.LookupDomainByName("test-create")
+	virDomain, err := suite.VirConnect.LookupDomainByName("test-create")
 	suite.Require().NoError(err)
-	suite.AddCleanup(domain)
-	domainXMLString, err := domain.GetXMLDesc(0)
+	suite.AddCleanup(virDomain)
+	domainXMLString, err := virDomain.GetXMLDesc(0)
 	suite.Require().NoError(err)
 	domainConfig := struct {
 		Memory   string `xml:"memory"`
@@ -327,8 +346,8 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	suite.Equal("#!/bin/sh\n", machine.Userdata)
 	suite.Equal("Ubuntu-12.04", machine.OS)
 	suite.Equal("small", machine.Plan)
-	suite.Equal(models.HWArch(models.ARCH_X86_64), machine.Arch)
-	suite.Equal(models.STATE_STOPPED, machine.State)
+	suite.Equal(domain.HWArch(domain.ARCH_X86_64), machine.Arch)
+	suite.Equal(domain.STATE_STOPPED, machine.State)
 	suite.Equal(536870912, machine.Memory)
 	suite.Equal(2, machine.Cpus)
 	suite.Equal("test-image", machine.ImageId)
@@ -343,6 +362,42 @@ func (suite *MachinerepLibvirtSuite) TestCreateOk() {
 	suite.Equal(machine.SSHKeys[0].Public, "asdf")
 	suite.Equal(machine.SSHKeys[1].Name, "work")
 	suite.Equal(machine.SSHKeys[1].Public, "hello")
+}
+
+func (suite *MachinerepLibvirtSuite) TestCreateScriptedNetworkOk() {
+	repo := suite.CreateRep(map[string]interface{}{"network_script": suite.LibvirtTest.NetworkScript})
+	image := &domain.Image{
+		OS:       "Ubuntu-12.04",
+		Arch:     domain.ARCH_X86_64,
+		Type:     domain.IMAGE_FMT_QCOW2,
+		PoolName: suite.Fixtures.Pools[1].Name,
+		Id:       "test-image",
+	}
+	if err := testool.CreateVolume(suite.VirConnect, suite.Fixtures.Pools[1].Name, image.Id); err != nil {
+		suite.FailNow("failed to create image volume", err.Error())
+	}
+	plan := &domain.Plan{
+		Name:     "small",
+		Memory:   512 * 1024 * 1024,
+		Cpus:     2,
+		DiskSize: 5 * 1024 * 1024 * 1024,
+	}
+	machine := &domain.VirtualMachine{
+		Name:     "test-create-scripted-network",
+		Userdata: "#!/bin/sh",
+		Creator:  "someuser",
+		SSHKeys: []*domain.SSHKey{
+			{Name: "home", Public: "asdf"},
+			{Name: "work", Public: "hello"},
+		},
+	}
+	err := repo.Create(machine, image, plan)
+	suite.Require().NoError(err)
+	virDomain, err := suite.VirConnect.LookupDomainByName("test-create-scripted-network")
+	suite.Require().NoError(err)
+	suite.AddCleanup(virDomain)
+
+	suite.Require().Equal("44.43.42.41", machine.Ip.Address)
 }
 
 func TestMachinerepLibvirtSuite(t *testing.T) {

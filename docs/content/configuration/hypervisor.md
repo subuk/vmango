@@ -1,6 +1,6 @@
 +++
 weight = 10
-title = "Livirt Hypervisor"
+title = "Libvirt Hypervisor"
 date = "2017-02-09T23:36:17+03:00"
 toc = true
 +++
@@ -108,6 +108,53 @@ Nat network XML example:
 
 But, if you plan to use any VPN software (e.g. [OpenVPN](https://openvpn.net/)) to access machines on this server, don't use `<forward mode="nat"/>`, instead use `<forward mode="route"/>` with custom NAT iptables rule added on your server manually. In case of "nat" mode, libvirt adds iptables restrictions that may prevent you from access private network over VPN.
 
+### Scripted network
+
+If you want to use your own network configuration like bridge interfaces to expose virtual machines, you should use this type of network. Set hypervisor.network_script to path to executable and hypervisor.network to bridge name, e.g:
+
+```
+    hypervisor "REMOTE" {
+      url = "qemu+ssh://virt@192.168.84.19/system?socket=/var/run/libvirt/libvirt-sock"
+      image_storage_pool = "vmango-images"
+      root_storage_pool = "default"
+      network = "br0"
+      network_script = "./network_scripts/network_mikrotik.py"
+      vm_template = "vm.xml.in"
+      volume_template = "volume.xml.in"
+    }
+```
+
+And add bridge name to machine xml configuration template (vm.xml.in):
+
+```xml
+<domain type='kvm'>
+  ...
+  <devices>
+    ...
+    <interface type='bridge'>
+      <source bridge='{{ .Network }}'/>
+      <model type='virtio'/>
+    </interface>
+    ...
+  </devices>
+  ...
+</domain>
+```
+
+Vmango will call network_script on machine creation, machine deletion and to fetch current machine ip address on each API call or machine view. So, script should implement three actions:
+
+  - lookup-ip
+  - assign-ip
+  - release-ip
+
+Machine parameters can be fetched via environment variables with prefix `VMANGO_`, like `VMANGO_MACHINE_HWADDR`.
+
+To better understand what such scripts should be look like, check examples:
+
+  - [Testing stub](https://github.com/subuk/vmango/blob/master/fixtures/stub_network_script.py)
+  - [Mikrotik routers](https://github.com/subuk/vmango/blob/master/network_scripts/network_mikrotik.py)
+
+
 ## Storage
 
 You need two pools on each server. One for images and one for machine drives. Image pool should always be a directory, for machine drives you can use directory or LVM volume group.
@@ -191,7 +238,7 @@ If there any errors during image name parsing, it will be skipped with warning i
 
 Two templates are used to tell Vmango how to create new machines on hypervisor. The first one is a domain xml template ([hypervisor.vm_template]({{% ref "vmango.conf.md#hypervisor" %}}) option), the second is a machine's root volume template ([hypervisor.volume_template]({{% ref "vmango.conf.md#hypervisor" %}})). By customizing this templates you can use any storage configuration and hypervisor driver supported by libvirt, but currently only QEMU/KVM machines with LVM or qcow2 storages are tested. Feel free to experiment and send pull requests for other configurations.
 
-The exact template content depends on your system configuration, but examples are shipped with deb/rpm packages ([vm.dist.xml.in](https://github.com/subuk/vmango/blob/master/vm.dist.xml.in) and [volume.dist.xml.in](https://github.com/subuk/vmango/blob/master/volume.dist.xml.in)). You may also look at [test fixtures](https://github.com/subuk/vmango/tree/master/fixtures/libvirt). 
+The exact template content depends on your system configuration, but examples are shipped with deb/rpm packages ([vm.dist.xml.in](https://github.com/subuk/vmango/blob/master/vm.dist.xml.in) and [volume.dist.xml.in](https://github.com/subuk/vmango/blob/master/volume.dist.xml.in)). You may also look at [test fixtures](https://github.com/subuk/vmango/tree/master/fixtures/libvirt).
 
 When customizing templates, remember that filename of root drive must ends with `_disk` suffix.
 
