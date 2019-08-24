@@ -6,7 +6,7 @@
 /images/
 /*.db
 /coverage*.out
-/src/vmango/web/assets.go
+/web/assets_generated.go
 /dockerfile.build.*
 /rpm/vmango.spec
 /rpm/*.tar.gz

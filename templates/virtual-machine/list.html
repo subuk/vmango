@@ -1,0 +1,45 @@
+{{ template "header" . }}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Virtual Machines</li>
+</ol>
+
+<div class="container">
+
+  <div class="card border-0">
+    <div class="card-block">
+      <div class="row">
+        <div class="col-md-12">
+          <h4 class="card-title">Machines</h4>
+          <div class="small text-muted" style="margin-top:-10px;">Total: {{ len .Vms }}</div>
+        </div>
+
+        <div style="margin-top:40px;" class="col-md-12">
+          <table class="table table-hover table-outline m-b-0">
+            <thead class="thead-default">
+              <tr>
+                <th>Name</th>
+                <th>State</th>
+                <th>CPU</th>
+                <th>Memory</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{ range .Vms }}
+                <tr>
+                  <td><a href="{{ Url "virtual-machine-detail" "id" .Id }}">{{ .Id }}</a></td>
+                  <td>{{ .State }}</td>
+                  <td>{{ .VCpus }}</td>
+                  <td>{{ .MemoryMiB }}MiB</td>
+                </tr>
+              {{ end }}
+            </tbody>
+          </table>
+        </div>
+        <!--/.col-->
+      </div>
+      <!--/.row-->
+    </div>
+  </div>
+</div>
+{{ template "footer" . }}

@@ -1,0 +1,108 @@
+{{template "header" .}}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}">Machines</a></li>
+  <li class="breadcrumb-item active">{{ .Vm.Id }}</li>
+</ol>
+
+<div class="container">
+
+<div class="card border-0">
+  <div class="card-block">
+
+    <div class="row">
+      <div class="col-md-7">
+        <h1>{{ .Vm.Id }}</h1>
+        <div class="media">
+          <img src="{{ Static "vmango/img/linux-logo.png" }}" width="100" alt="linux">
+          <div class="media-body">
+            <p class="text-muted">
+              {{ .Vm.MemoryMiB }}MiB RAM, {{ len .Vm.Volumes }} Volume{{ if gt (len .Vm.Volumes) 1 }}s{{ end }}, {{ .Vm.VCpus }} CPU<br>
+              OS ??? {{ .Vm.Arch }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-5 text-right">
+        <p>
+
+          {{ if .Vm.IsRunning }}
+            <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "poweroff" }}">Power Off</a>
+            <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "reboot" }}">Reboot</a>
+          {{ else }}
+            <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "start" }}">Power On</a>
+          {{ end }}
+            <a class="btn btn-danger" href="{{ Url "virtual-machine-delete" "id" .Vm.Id }}">Remove</a>
+        </p>
+        <p>
+          Status: <b>{{ .Vm.State.String | Capitalize }}</b>
+        </p>
+        <p>
+          IP Address: <b> ???</b>
+        </p>
+      </div>
+    </div>
+    <hr>
+    <div class="row">
+      <div class="col-md-4">
+        <div class="card card-inverse card-info">
+          <div class="card-block text-xs-center">
+            <div class="text-muted small text-uppercase font-weight-bold">IP Address</div>
+            <div class="h2 p-1">???</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="card card-inverse card-warning">
+          <div class="card-block text-xs-center">
+            <div class="text-muted small text-uppercase font-weight-bold">Plan</div>
+            <div class="h2 p-1">???</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="card card-inverse card-warning">
+          <div class="card-block text-xs-center">
+            <div class="text-muted small text-uppercase font-weight-bold">Created by</div>
+            <div class="h2 p-1">???</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="row">
+      <div class="col-md-12">
+        <div class="card card-inverse card-success">
+          <div class="card-block text-xs-center">
+            <div class="text-muted small text-uppercase font-weight-bold">SSH Keys</div>
+            <div class="h2 p-1">
+              ???
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {{ if false }}
+    <div class="row">
+      <div class="col-md-12">
+        <div class="card">
+          <div class="card-block text-xs-center">
+            <div class="text-muted small text-uppercase font-weight-bold">Userdata</div>
+            <pre>
+              <code>
+{{ .Vm.Userdata }}
+              </code>
+            </pre>
+          </div>
+        </div>
+      </div>
+    </div>
+    {{ end }}
+  </div>
+</div>
+
+{{template "footer" .}}

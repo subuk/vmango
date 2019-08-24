@@ -18,16 +18,19 @@
     <a class="navbar-brand" href="/"></a>
     <ul class="nav navbar-nav hidden-md-down">
       <li class="nav-item px-1">
-        <a class="nav-link" href="{{ Url "index" }}">Providers</a>
+        <a class="nav-link" href="{{ Url "index" }}">Host</a>
       </li>
       <li class="nav-item px-1">
-        <a class="nav-link" href="{{ Url "machine-list" }}">Machines</a>
+        <a class="nav-link" href="{{ Url "virtual-machine-list" }}">Machines</a>
       </li>
       <li class="nav-item px-1">
-        <a class="nav-link" href="{{ Url "image-list" }}">Images</a>
+        <a class="nav-link" href="{{ Url "volume-list" }}">Volumes</a>
       </li>
       <li class="nav-item px-1">
-        <a class="nav-link" href="{{ Url "machine-add" }}">Create machine</a>
+        <a class="nav-link" href="{{ Url "key-list" }}">Keys</a>
+      </li>
+      <li class="nav-item px-1">
+        <a class="nav-link" href="{{ Url "virtual-machine-add" }}">Create machine</a>
       </li>
     </ul>
     <ul class="nav navbar-nav ml-auto pr-3">
@@ -45,17 +48,17 @@
             Menu
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="{{ Url "index" }}"><i class="icon-arrow-right"></i> Providers</a>
+            <a class="nav-link" href="{{ Url "index" }}"><i class="icon-arrow-right"></i> Host</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="{{ Url "machine-list" }}"><i class="icon-arrow-right"></i> Machines</a>
+            <a class="nav-link" href="{{ Url "virtual-machine-list" }}"><i class="icon-arrow-right"></i> Machines</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="{{ Url "image-list" }}"><i class="icon-arrow-right"></i> Images</a>
+            <a class="nav-link" href="{{ Url "volume-list" }}"><i class="icon-arrow-right"></i> Volumes</a>
           </li>
           <li class="divider"></li>
           <li class="nav-item">
-            <a class="nav-link" href="{{ Url "machine-add" }}"><i class="icon-arrow-right"></i> Create machine</a>
+            <a class="nav-link" href="{{ Url "virtual-machine-add" }}"><i class="icon-arrow-right"></i> Create machine</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="{{ Url "logout" }}"><i class="icon-arrow-right"></i> Logout</a>

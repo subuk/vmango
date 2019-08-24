@@ -1,0 +1,53 @@
+{{template "header" .}}
+
+<!-- Breadcrumb -->
+<ol class="breadcrumb">
+  <li class="breadcrumb-item active">Home</li>
+</ol>
+
+<div class="container">
+    <div class="card border-0">
+      <div class="card-block">
+        <div class="row">
+          <div class="col-md-12">
+            <h4 class="card-title">{{ .HostInfo.Hostname }}</h4>
+            <div class="small text-muted" style="margin-top:-10px;">
+              {{ .HostInfo.CpuVendor }} {{ .HostInfo.CpuModel }} {{ .HostInfo.CpuArch }}<br>
+              IOMMU {{ if .HostInfo.Iommu }}enabled{{ else }}disabled{{ end }}
+            </div>
+          </div>
+
+          <div style="margin-top:40px;" class="col-md-12">
+            <table class="table table-hover table-outline m-b-0">
+              <thead class="thead-default">
+                <tr>
+                  <th>NumaId</th>
+                  <th>Cores</th>
+                  <th>Memory</th>
+                  <th>Pages 4k</th>
+                  <th>Pages 2M</th>
+                  <th>Pages 1G</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{ range $numaId, $numa := .HostInfo.Numas }}
+                  <tr>
+                    <td>{{ $numaId }}</td>
+                    <td>{{ len $numa.Cores }}</td>
+                    <td>{{ $numa.Memory }}</td>
+                    <td>{{ $numa.Pages4k }}</td>
+                    <td>{{ $numa.Pages2m }}</td>
+                    <td>{{ $numa.Pages1g }}</td>
+                  </tr>
+                {{ end }}
+              </tbody>
+            </table>
+          </div>
+          <!--/.col-->
+        </div>
+        <!--/.row-->
+      </div>
+    </div>
+  </div>
+
+{{template "footer" .}}
