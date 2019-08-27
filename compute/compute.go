@@ -8,10 +8,11 @@ type Service struct {
 	virt VirtualMachineRepository
 	vol  VolumeRepository
 	host HostInfoRepository
+	key  KeyRepository
 }
 
-func New(virt VirtualMachineRepository, vol VolumeRepository, host HostInfoRepository) *Service {
-	return &Service{virt: virt, vol: vol, host: host}
+func New(virt VirtualMachineRepository, vol VolumeRepository, host HostInfoRepository, key KeyRepository) *Service {
+	return &Service{virt: virt, vol: vol, host: host, key: key}
 }
 
 func (service *Service) VirtualMachineList() ([]*VirtualMachine, error) {
@@ -41,4 +42,20 @@ func (service *Service) VirtualMachineAction(id string, action string) error {
 	case "start":
 		return service.virt.Start(id)
 	}
+}
+
+func (service *Service) KeyList() ([]*Key, error) {
+	return service.key.List()
+}
+
+func (service *Service) KeyDetail(fingerprint string) (*Key, error) {
+	return service.key.Get(fingerprint)
+}
+
+func (service *Service) KeyDelete(fingerprint string) error {
+	return service.key.Delete(fingerprint)
+}
+
+func (service *Service) KeyAdd(input string) error {
+	return service.key.Add([]byte(input))
 }

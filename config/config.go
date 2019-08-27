@@ -27,12 +27,14 @@ type WebConfig struct {
 
 type Config struct {
 	LibvirtUri string    `hcl:"libvirt_uri"`
+	KeyFile    string    `hcl:"key_file"`
 	Web        WebConfig `hcl:"web"`
 }
 
 func Default() Config {
 	return Config{
 		LibvirtUri: "qemu:///system",
+		KeyFile:    "~/.vmango/authorized_keys",
 		Web: WebConfig{
 			Listen:         ":8080",
 			Debug:          false,

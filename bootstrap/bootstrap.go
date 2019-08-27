@@ -6,6 +6,7 @@ import (
 	"os"
 	libcompute "subuk/vmango/compute"
 	"subuk/vmango/config"
+	"subuk/vmango/filesystem"
 	"subuk/vmango/libvirt"
 	"subuk/vmango/web"
 
@@ -24,7 +25,8 @@ func Web(configFilename string) {
 	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool)
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool)
 	hostInfoRepo := libvirt.NewHostInfoRepository(connectionPool)
-	compute := libcompute.New(machineRepo, volumeRepo, hostInfoRepo)
+	keyRepo := filesystem.NewKeyRepository(cfg.KeyFile, logger.With().Str("component", "key-repository").Logger())
+	compute := libcompute.New(machineRepo, volumeRepo, hostInfoRepo, keyRepo)
 
 	webenv := web.New(cfg, logger, compute)
 	server := http.Server{

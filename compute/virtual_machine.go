@@ -1,19 +1,5 @@
 package compute
 
-// <disk type='file' device='cdrom'>
-//   <driver name='qemu' type='raw'/>
-//   <source file='/var/lib/libvirt/images/ifunny-mongo-customs-rs1-1_config.iso'/>
-//   <target dev='hda' bus='ide'/>
-//   <readonly/>
-//   <address type='drive' controller='0' bus='0' target='0' unit='0'/>
-// </disk>
-// <disk type='block' device='disk'>
-//   <driver name='qemu' type='raw' cache='none' io='native'/>
-//   <source dev='/dev/io101-data/ifunny_mongo_customs_rs1_1'/>
-//   <target dev='vda' bus='virtio'/>
-//   <address type='pci' domain='0x0000' bus='0x01' slot='0x01' function='0x0'/>
-// </disk>
-
 type VirtualMachineRepository interface {
 	List() ([]*VirtualMachine, error)
 	Get(id string) (*VirtualMachine, error)

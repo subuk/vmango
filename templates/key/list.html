@@ -1,0 +1,62 @@
+{{ template "header" . }}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Keys</li>
+</ol>
+
+<div class="container">
+  <div class="card border-0">
+    <div class="card-block">
+      <div class="row">
+        <div class="col-md-12">
+          <h4 class="card-title">Keys</h4>
+          <div class="small text-muted" style="margin-top:-10px;">Total: {{ len .Keys }}</div>
+        </div>
+      </div>
+      <br>
+      <form method="post" action="{{ Url "key-add" }}">{{ CSRFField .Request }}
+        <div class="form-group row">
+          <div class="col-md-10">
+            <input required="required" class="form-control" name="Key" id="Name" aria-describedby="nameHelp">
+            <small id="nameHelp" class="form-text text-muted">Paste ssh public key here to add.</small>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-block btn-primary" data-loading="<i class='icon-refresh icons'></i> Creating machine..." type="submit">Add Key</button>
+          </div>
+        </div>
+      </form>
+
+        <div class="row">
+        <div style="margin-top:40px;" class="col-md-12">
+          <table class="table table-hover table-outline m-b-0">
+            <thead class="thead-default">
+              <tr>
+                <th>Type</th>
+                <th>Comment</th>
+                <th>Fingerprint</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{ range .Keys }}
+                <tr>
+                  <td>{{ .Type }}</td>
+                  <td>{{ .Comment }}</td>
+                  <td>{{ .Fingerprint }}</td>
+                  <td>
+                    <a href="{{ Url "key-delete-form" "fingerprint" .Fingerprint }}">Delete</a>
+                    <a href="{{ Url "key-show" "fingerprint" .Fingerprint }}">Show</a>
+                  </td>
+                </tr>
+              {{ end }}
+            </tbody>
+          </table>
+        </div>
+        </div>
+        <!--/.col-->
+
+      <!--/.row-->
+    </div>
+  </div>
+</div>
+{{ template "footer" . }}

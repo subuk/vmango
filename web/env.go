@@ -138,8 +138,11 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service)
 	router.HandleFunc("/volumes/", env.authenticated(env.VolumeList)).Name("volume-list")
 	router.HandleFunc("/volumes/{path}/", env.authenticated(nil)).Name("volume-detail")
 
-	router.HandleFunc("/keys/", env.authenticated(nil)).Name("key-list")
-	router.HandleFunc("/keys/{name}/", env.authenticated(nil)).Name("key-detail")
+	router.HandleFunc("/keys/", env.authenticated(env.KeyList)).Name("key-list")
+	router.HandleFunc("/keys/add/", env.authenticated(env.KeyAddFormProcess)).Methods("POST").Name("key-add")
+	router.HandleFunc("/keys/{fingerprint}/show/", env.authenticated(env.KeyShow)).Name("key-show")
+	router.HandleFunc("/keys/{fingerprint}/delete/", env.authenticated(env.KeyDeleteFormProcess)).Methods("POST").Name("key-delete-form")
+	router.HandleFunc("/keys/{fingerprint}/delete/", env.authenticated(env.KeyDeleteFormShow)).Name("key-delete-form")
 
 	router.HandleFunc("/machines/", env.authenticated(env.VirtualMachineList)).Name("virtual-machine-list")
 	router.HandleFunc("/machines/add/", nil).Name("virtual-machine-add")
@@ -172,16 +175,16 @@ func (env *Environ) error(rw http.ResponseWriter, req *http.Request, err error, 
 	}
 }
 
+// http://localhost:8080/keys/SHA256:7VonLZcZWM%252Fo43RvwZub3h9PzOB%252FCk40ZJQqfiBOYLg/delete/
 func (e *Environ) url(name string, params ...string) *neturl.URL {
 	route := e.router.Get(name)
 	if route == nil {
 		panic(fmt.Errorf("route named %s not found", name))
 	}
-	encodedParams := make([]string, len(params))
-	for _, param := range params {
-		encodedParams = append(encodedParams, strings.Replace(param, "/", "%2F", -1))
+	for i := 0; i < len(params); i++ {
+		params[i] = strings.Replace(params[i], "/", "%2F", -1)
 	}
-	url, err := route.URL(encodedParams...)
+	url, err := route.URL(params...)
 	if err != nil {
 		panic(util.NewError(err, "resolving failed with params %s", params))
 	}
