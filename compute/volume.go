@@ -11,6 +11,7 @@ type Volume struct {
 	Pool       string
 	Format     VolumeFormat
 	AttachedTo string
+	AttachedAs DeviceType
 }
 
 func (volume *Volume) Base() string {

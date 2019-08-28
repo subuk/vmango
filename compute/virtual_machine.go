@@ -45,9 +45,30 @@ func (vm *VirtualMachine) MemoryMiB() uint {
 	return vm.Memory / 1024
 }
 
+func (vm *VirtualMachine) Disks() []*VirtualMachineAttachedVolume {
+	disks := []*VirtualMachineAttachedVolume{}
+	for _, volume := range vm.Volumes {
+		if volume.Device == DeviceTypeDisk {
+			disks = append(disks, volume)
+		}
+	}
+	return disks
+}
+
+func (vm *VirtualMachine) Cdroms() []*VirtualMachineAttachedVolume {
+	cdroms := []*VirtualMachineAttachedVolume{}
+	for _, volume := range vm.Volumes {
+		if volume.Device == DeviceTypeCdrom {
+			cdroms = append(cdroms, volume)
+		}
+	}
+	return cdroms
+}
+
 type VirtualMachineAttachedVolume struct {
-	Type string
-	Path string
+	Type   string
+	Path   string
+	Device DeviceType
 }
 
 type VirtualMachineAttachedInterface struct {

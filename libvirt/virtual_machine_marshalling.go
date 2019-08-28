@@ -10,19 +10,23 @@ import (
 
 func VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig libvirtxml.DomainDisk) *compute.VirtualMachineAttachedVolume {
 	volume := &compute.VirtualMachineAttachedVolume{}
-	if diskConfig.Device != "disk" {
-		return nil
+	switch diskConfig.Device {
+	default:
+		volume.Device = compute.DeviceTypeUnknown
+	case "disk":
+		volume.Device = compute.DeviceTypeDisk
+	case "cdrom":
+		volume.Device = compute.DeviceTypeCdrom
 	}
-	if diskConfig.Source == nil {
-		return nil
-	}
-	if diskConfig.Source.File != nil {
-		volume.Type = "file"
-		volume.Path = diskConfig.Source.File.File
-	}
-	if diskConfig.Source.Block != nil {
-		volume.Type = "block"
-		volume.Path = diskConfig.Source.Block.Dev
+	if diskConfig.Source != nil {
+		if diskConfig.Source.File != nil {
+			volume.Type = "file"
+			volume.Path = diskConfig.Source.File.File
+		}
+		if diskConfig.Source.Block != nil {
+			volume.Type = "block"
+			volume.Path = diskConfig.Source.Block.Dev
+		}
 	}
 	return volume
 }
