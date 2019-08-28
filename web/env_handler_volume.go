@@ -9,17 +9,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func parseVolumeFormat(raw string) compute.VolumeFormat {
-	switch raw {
-	default:
-		return compute.FormatUnknown
-	case "qcow2":
-		return compute.FormatQcow2
-	case "raw":
-		return compute.FormatRaw
-	}
-}
-
 var UIVolumeFormats = []compute.VolumeFormat{compute.FormatQcow2, compute.FormatRaw}
 
 func (env *Environ) VolumeList(rw http.ResponseWriter, req *http.Request) {
@@ -104,14 +93,10 @@ func (env *Environ) VolumeCloneFormProcess(rw http.ResponseWriter, req *http.Req
 	}
 	name := req.Form.Get("Name")
 	pool := req.Form.Get("Pool")
+	format := req.Form.Get("Format")
 	size, err := strconv.ParseUint(req.Form.Get("Size"), 10, 64)
 	if err != nil {
 		http.Error(rw, "invalid new volume size: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	format := parseVolumeFormat(req.Form.Get("Format"))
-	if format == compute.FormatUnknown {
-		http.Error(rw, "invalid volume format '"+req.Form.Get("Format")+"'", http.StatusBadRequest)
 		return
 	}
 	if _, err := env.compute.VolumeClone(path, name, pool, format, size); err != nil {
@@ -181,14 +166,10 @@ func (env *Environ) VolumeAddFormProcess(rw http.ResponseWriter, req *http.Reque
 	}
 	name := req.Form.Get("Name")
 	pool := req.Form.Get("Pool")
+	format := req.Form.Get("Format")
 	size, err := strconv.ParseUint(req.Form.Get("Size"), 10, 64)
 	if err != nil {
 		http.Error(rw, "invalid volume size: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	format := parseVolumeFormat(req.Form.Get("Format"))
-	if format == compute.FormatUnknown {
-		http.Error(rw, "invalid volume format '"+req.Form.Get("Format")+"'", http.StatusBadRequest)
 		return
 	}
 

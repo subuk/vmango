@@ -31,8 +31,8 @@ func (service *Service) VolumeGet(path string) (*Volume, error) {
 	return service.vol.Get(path)
 }
 
-func (service *Service) VolumeClone(originalPath, volumeName, poolName string, volumeFormat VolumeFormat, newSizeMb uint64) (*Volume, error) {
-	return service.vol.Clone(originalPath, volumeName, poolName, volumeFormat, newSizeMb)
+func (service *Service) VolumeClone(originalPath, volumeName, poolName, volumeFormatName string, newSizeMb uint64) (*Volume, error) {
+	return service.vol.Clone(originalPath, volumeName, poolName, NewVolumeFormat(volumeFormatName), newSizeMb)
 }
 
 func (service *Service) VolumeResize(path string, size uint64) error {
@@ -43,8 +43,8 @@ func (service *Service) VolumePoolList() ([]*VolumePool, error) {
 	return service.vol.Pools()
 }
 
-func (service *Service) VolumeCreate(poolName, volumeName string, volumeFormat VolumeFormat, size uint64) (*Volume, error) {
-	return service.vol.Create(poolName, volumeName, volumeFormat, size)
+func (service *Service) VolumeCreate(poolName, volumeName, volumeFormatName string, size uint64) (*Volume, error) {
+	return service.vol.Create(poolName, volumeName, NewVolumeFormat(volumeFormatName), size)
 }
 
 func (service *Service) VolumeDelete(path string) error {
