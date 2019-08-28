@@ -49,6 +49,8 @@ func (repo *VolumeRepository) virVolumeToVolume(pool *libvirt.StoragePool, virVo
 
 	if virVolumeConfig.Target != nil && virVolumeConfig.Target.Format != nil {
 		switch virVolumeConfig.Target.Format.Type {
+		case "iso":
+			volume.Format = compute.FormatIso
 		case "qcow2":
 			volume.Format = compute.FormatQcow2
 		case "raw":
