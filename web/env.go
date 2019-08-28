@@ -136,7 +136,9 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service)
 	router.HandleFunc("/logout/", env.Logout).Name("logout")
 
 	router.HandleFunc("/volumes/", env.authenticated(env.VolumeList)).Name("volume-list")
-	router.HandleFunc("/volumes/{path}/", env.authenticated(nil)).Name("volume-detail")
+	router.HandleFunc("/volumes/add/", env.authenticated(env.VolumeAddFormProcess)).Methods("POST").Name("volume-add-form")
+	router.HandleFunc("/volumes/{path}/delete/", env.authenticated(env.VolumeDeleteFormProcess)).Methods("POST").Name("volume-delete-form")
+	router.HandleFunc("/volumes/{path}/delete/", env.authenticated(env.VolumeDeleteFormShow)).Name("volume-delete-form")
 
 	router.HandleFunc("/keys/", env.authenticated(env.KeyList)).Name("key-list")
 	router.HandleFunc("/keys/add/", env.authenticated(env.KeyAddFormProcess)).Methods("POST").Name("key-add")
@@ -175,7 +177,6 @@ func (env *Environ) error(rw http.ResponseWriter, req *http.Request, err error, 
 	}
 }
 
-// http://localhost:8080/keys/SHA256:7VonLZcZWM%252Fo43RvwZub3h9PzOB%252FCk40ZJQqfiBOYLg/delete/
 func (e *Environ) url(name string, params ...string) *neturl.URL {
 	route := e.router.Get(name)
 	if route == nil {

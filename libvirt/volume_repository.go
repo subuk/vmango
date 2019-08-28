@@ -27,15 +27,34 @@ func (repo *VolumeRepository) virVolumeToVolume(pool *libvirt.StoragePool, virVo
 	if err := virVolumeConfig.Unmarshal(virVolumeXml); err != nil {
 		return nil, util.NewError(err, "cannot unmarshal volume xml")
 	}
-	poolName, err := pool.GetName()
+	poolXml, err := pool.GetXMLDesc(0)
 	if err != nil {
-		return nil, util.NewError(err, "cannot get storage pool name")
+		return nil, util.NewError(err, "cannot get storage pool xml")
+	}
+	poolConfig := &libvirtxml.StoragePool{}
+	if err := poolConfig.Unmarshal(poolXml); err != nil {
+		return nil, util.NewError(err, "cannot unmarshal storage pool xml")
 	}
 
 	volume := &compute.Volume{}
 	volume.Type = virVolumeConfig.Type
 	volume.Path = virVolumeConfig.Target.Path
-	volume.Pool = poolName
+	volume.Pool = poolConfig.Name
+	volume.Format = compute.FormatUnknown
+
+	switch poolConfig.Type {
+	case "logical":
+		volume.Format = compute.FormatRaw
+	}
+
+	if virVolumeConfig.Target != nil && virVolumeConfig.Target.Format != nil {
+		switch virVolumeConfig.Target.Format.Type {
+		case "qcow2":
+			volume.Format = compute.FormatQcow2
+		case "raw":
+			volume.Format = compute.FormatRaw
+		}
+	}
 
 	switch virVolumeConfig.Capacity.Unit {
 	default:
@@ -145,14 +164,87 @@ func (repo *VolumeRepository) Pools() ([]*compute.VolumePool, error) {
 	}
 	volumePools := []*compute.VolumePool{}
 	for _, virPool := range virPools {
-		virPoolName, err := virPool.GetName()
+		virPoolXml, err := virPool.GetXMLDesc(0)
 		if err != nil {
 			return nil, util.NewError(err, "cannot get pool name")
 		}
+		virPoolConfig := &libvirtxml.StoragePool{}
+		if err := virPoolConfig.Unmarshal(virPoolXml); err != nil {
+			return nil, util.NewError(err, "cannot unmarshal volume pool xml")
+		}
 		volumePool := &compute.VolumePool{
-			Name: virPoolName,
+			Name: virPoolConfig.Name,
+		}
+		// Size: virPoolConfig.Capacity
+		if virPoolConfig.Capacity != nil {
+			volumePool.Size = ParseLibvirtSizeToMegabytes(virPoolConfig.Capacity.Unit, virPoolConfig.Capacity.Value)
+		}
+		if virPoolConfig.Allocation != nil {
+			volumePool.Used = ParseLibvirtSizeToMegabytes(virPoolConfig.Allocation.Unit, virPoolConfig.Allocation.Value)
+		}
+		if virPoolConfig.Available != nil {
+			volumePool.Free = ParseLibvirtSizeToMegabytes(virPoolConfig.Available.Unit, virPoolConfig.Available.Value)
 		}
 		volumePools = append(volumePools, volumePool)
 	}
 	return volumePools, nil
+}
+
+func (repo *VolumeRepository) Create(poolName, volumeName string, volumeFormat compute.VolumeFormat, size uint64) (*compute.Volume, error) {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return nil, util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virPool, err := conn.LookupStoragePoolByName(poolName)
+	if err != nil {
+		return nil, util.NewError(err, "cannot lookup libvirt pool")
+	}
+
+	virVolumeConfig := &libvirtxml.StorageVolume{}
+	virVolumeConfig.Name = volumeName
+	virVolumeConfig.Capacity = &libvirtxml.StorageVolumeSize{
+		Unit:  "MiB",
+		Value: size,
+	}
+	if volumeFormat == compute.FormatQcow2 {
+		virVolumeConfig.Target = &libvirtxml.StorageVolumeTarget{
+			Format: &libvirtxml.StorageVolumeTargetFormat{
+				Type: "qcow2",
+			},
+		}
+	}
+
+	virVolumeXml, err := virVolumeConfig.Marshal()
+	if err != nil {
+		return nil, util.NewError(err, "cannot marshal libvirt volume config")
+	}
+	virVolCreateFlags := libvirt.StorageVolCreateFlags(0)
+	if volumeFormat == compute.FormatQcow2 {
+		virVolCreateFlags |= libvirt.STORAGE_VOL_CREATE_PREALLOC_METADATA
+	}
+
+	virVolume, err := virPool.StorageVolCreateXML(virVolumeXml, virVolCreateFlags)
+	if err != nil {
+		return nil, util.NewError(err, "cannot create volume")
+	}
+	return repo.virVolumeToVolume(virPool, virVolume)
+}
+
+func (repo *VolumeRepository) Delete(path string) error {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virVolume, err := conn.LookupStorageVolByPath(path)
+	if err != nil {
+		return util.NewError(err, "cannot lookup storage volume")
+	}
+	if err := virVolume.Delete(libvirt.STORAGE_VOL_DELETE_NORMAL); err != nil {
+		return util.NewError(err, "cannot delete volume")
+	}
+	return nil
 }

@@ -27,6 +27,22 @@ func (service *Service) VolumeList() ([]*Volume, error) {
 	return service.vol.List()
 }
 
+func (service *Service) VolumeGet(path string) (*Volume, error) {
+	return service.vol.Get(path)
+}
+
+func (service *Service) VolumePoolList() ([]*VolumePool, error) {
+	return service.vol.Pools()
+}
+
+func (service *Service) VolumeCreate(poolName, volumeName string, volumeFormat VolumeFormat, size uint64) (*Volume, error) {
+	return service.vol.Create(poolName, volumeName, volumeFormat, size)
+}
+
+func (service *Service) VolumeDelete(path string) error {
+	return service.vol.Delete(path)
+}
+
 func (service *Service) HostInfo() (*HostInfo, error) {
 	return service.host.Get()
 }
