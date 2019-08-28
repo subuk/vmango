@@ -234,6 +234,92 @@ func (repo *VolumeRepository) Create(poolName, volumeName string, volumeFormat c
 	return repo.virVolumeToVolume(virPool, virVolume)
 }
 
+func (repo *VolumeRepository) Clone(originalPath, volumeName, poolName string, volumeFormat compute.VolumeFormat, newSizeMb uint64) (*compute.Volume, error) {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return nil, util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(conn)
+
+	originalVirVolume, err := conn.LookupStorageVolByPath(originalPath)
+	if err != nil {
+		return nil, util.NewError(err, "cannot lookup original volume")
+	}
+
+	virPool, err := conn.LookupStoragePoolByName(poolName)
+	if err != nil {
+		return nil, util.NewError(err, "cannot lookup libvirt pool")
+	}
+	virPoolXml, err := virPool.GetXMLDesc(0)
+	if err != nil {
+		return nil, util.NewError(err, "cannot get pool xml")
+	}
+	virPoolConfig := libvirtxml.StoragePool{}
+	if err := virPoolConfig.Unmarshal(virPoolXml); err != nil {
+		return nil, util.NewError(err, "cannot parse pool xml")
+	}
+
+	if virPoolConfig.Type == "logical" {
+		volumeFormat = compute.FormatRaw
+	}
+
+	virVolumeConfig := &libvirtxml.StorageVolume{}
+	virVolumeConfig.Capacity = &libvirtxml.StorageVolumeSize{
+		Unit:  "MiB",
+		Value: newSizeMb,
+	}
+
+	virVolumeConfig.Name = volumeName
+	switch volumeFormat {
+	case compute.FormatRaw:
+		virVolumeConfig.Target = &libvirtxml.StorageVolumeTarget{
+			Format: &libvirtxml.StorageVolumeTargetFormat{
+				Type: "raw",
+			},
+		}
+	case compute.FormatQcow2:
+		virVolumeConfig.Target = &libvirtxml.StorageVolumeTarget{
+			Format: &libvirtxml.StorageVolumeTargetFormat{
+				Type: "qcow2",
+			},
+		}
+	}
+
+	virVolumeXml, err := virVolumeConfig.Marshal()
+	if err != nil {
+		return nil, util.NewError(err, "cannot marshal libvirt volume config")
+	}
+
+	virVolCreateFlags := libvirt.StorageVolCreateFlags(0)
+	if volumeFormat == compute.FormatQcow2 {
+		virVolCreateFlags |= libvirt.STORAGE_VOL_CREATE_PREALLOC_METADATA
+	}
+
+	virVolume, err := virPool.StorageVolCreateXMLFrom(virVolumeXml, originalVirVolume, virVolCreateFlags)
+	if err != nil {
+		return nil, util.NewError(err, "cannot clone volume")
+	}
+	return repo.virVolumeToVolume(virPool, virVolume)
+}
+
+func (repo *VolumeRepository) Resize(path string, newSizeMb uint64) error {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virVolume, err := conn.LookupStorageVolByPath(path)
+	if err != nil {
+		return util.NewError(err, "cannot lookup original volume")
+	}
+
+	if err := virVolume.Resize(newSizeMb*1024*1024, 0); err != nil {
+		return util.NewError(err, "resize failed")
+	}
+	return nil
+}
+
 func (repo *VolumeRepository) Delete(path string) error {
 	conn, err := repo.pool.Acquire()
 	if err != nil {

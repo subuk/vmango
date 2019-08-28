@@ -1,0 +1,38 @@
+{{ template "header" . }}
+
+<!-- Breadcrumb -->
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "volume-list" }}">Volumes</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "volume-list" }}#{{ .Volume.Path }}">{{ .Volume.Base }}</a></li>
+  <li class="breadcrumb-item active">Resize</li>
+</ol>
+
+<div class="container">
+  <div class="card border-0">
+    <div class="card-block">
+        <h4>Resize Volume {{ .Volume.Path }}</h4>
+        <br>
+        <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
+            <div class="form-group row">
+              <div class="col-md-12">
+                <label>New Volume Size (megabytes)</label>
+                <input value="{{ .Volume.Size }}" required="required" class="form-control" name="Size" id="Name">
+                <small id="nameHelp" class="form-text text-muted">Volume size can only be increased, current size is {{ .Volume.Size }}M</small>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <div class="col-md-12">
+                <button class="btn btn-primary" data-loading="<i class='icon-refresh icons'></i> Resizing volume..." type="submit">Resize volume</button>
+              </div>
+            </div>
+          </form>
+
+    </div>
+    </div>
+  </div>
+</div>
+
+
+{{ template "footer" . }}

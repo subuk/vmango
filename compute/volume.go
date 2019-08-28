@@ -1,5 +1,9 @@
 package compute
 
+import (
+	"path/filepath"
+)
+
 type VolumeFormat int
 
 const (
@@ -31,6 +35,10 @@ type Volume struct {
 	AttachedTo string
 }
 
+func (volume *Volume) Base() string {
+	return filepath.Base(volume.Path)
+}
+
 type VolumePool struct {
 	Name string
 	Size uint64 // MiB
@@ -49,6 +57,8 @@ func (pool *VolumePool) FreeGB() uint64 {
 type VolumeRepository interface {
 	Get(path string) (*Volume, error)
 	Create(pool, name string, format VolumeFormat, size uint64) (*Volume, error)
+	Clone(originalPath, volumeName, poolName string, volumeFormat VolumeFormat, newSizeMb uint64) (*Volume, error)
+	Resize(path string, newSize uint64) error
 	Delete(path string) error
 	List() ([]*Volume, error)
 	Pools() ([]*VolumePool, error)

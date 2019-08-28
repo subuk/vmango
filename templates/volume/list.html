@@ -70,7 +70,9 @@
                     <td>{{ .Pool }}</td>
                     <td>{{ .AttachedTo }}</td>
                     <td>
-                      <a href="{{ Url "volume-delete-form" "path" .Path }}">Delete</a>
+                      <a title="Clone" href="{{ Url "volume-clone-form" "path" .Path }}">C</a> |
+                      <a title="Resize" href="{{ Url "volume-resize-form" "path" .Path }}">R</a> |
+                      <a title="Delete" style="color: red;" href="{{ Url "volume-delete-form" "path" .Path }}">D</a>
                     </td>
                   </tr>
                 {{ end }}
