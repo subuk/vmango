@@ -9,10 +9,11 @@ type Service struct {
 	vol  VolumeRepository
 	host HostInfoRepository
 	key  KeyRepository
+	net  NetworkRepository
 }
 
-func New(virt VirtualMachineRepository, vol VolumeRepository, host HostInfoRepository, key KeyRepository) *Service {
-	return &Service{virt: virt, vol: vol, host: host, key: key}
+func New(virt VirtualMachineRepository, vol VolumeRepository, host HostInfoRepository, key KeyRepository, net NetworkRepository) *Service {
+	return &Service{virt: virt, vol: vol, host: host, key: key, net: net}
 }
 
 func (service *Service) VirtualMachineList() ([]*VirtualMachine, error) {
@@ -82,4 +83,8 @@ func (service *Service) KeyDelete(fingerprint string) error {
 
 func (service *Service) KeyAdd(input string) error {
 	return service.key.Add([]byte(input))
+}
+
+func (service *Service) NetworkList() ([]*Network, error) {
+	return service.net.List()
 }

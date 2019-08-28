@@ -144,6 +144,8 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service)
 	router.HandleFunc("/volumes/{path}/resize/", env.authenticated(env.VolumeResizeFormProcess)).Methods("POST").Name("volume-resize-form")
 	router.HandleFunc("/volumes/{path}/resize/", env.authenticated(env.VolumeResizeFormShow)).Name("volume-resize-form")
 
+	router.HandleFunc("/networks/", env.authenticated(env.NetworkList)).Name("network-list")
+
 	router.HandleFunc("/keys/", env.authenticated(env.KeyList)).Name("key-list")
 	router.HandleFunc("/keys/add/", env.authenticated(env.KeyAddFormProcess)).Methods("POST").Name("key-add")
 	router.HandleFunc("/keys/{fingerprint}/show/", env.authenticated(env.KeyShow)).Name("key-show")

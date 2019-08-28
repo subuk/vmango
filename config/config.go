@@ -27,6 +27,7 @@ type WebConfig struct {
 
 type Config struct {
 	LibvirtUri string    `hcl:"libvirt_uri"`
+	Bridges    []string  `hcl:"bridges"`
 	KeyFile    string    `hcl:"key_file"`
 	Web        WebConfig `hcl:"web"`
 }

@@ -26,7 +26,8 @@ func Web(configFilename string) {
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool)
 	hostInfoRepo := libvirt.NewHostInfoRepository(connectionPool)
 	keyRepo := filesystem.NewKeyRepository(cfg.KeyFile, logger.With().Str("component", "key-repository").Logger())
-	compute := libcompute.New(machineRepo, volumeRepo, hostInfoRepo, keyRepo)
+	netRepo := libvirt.NewNetworkRepository(connectionPool, cfg.Bridges)
+	compute := libcompute.New(machineRepo, volumeRepo, hostInfoRepo, keyRepo, netRepo)
 
 	webenv := web.New(cfg, logger, compute)
 	server := http.Server{
