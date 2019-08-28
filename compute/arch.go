@@ -15,3 +15,12 @@ func (arch Arch) String() string {
 		return "x86_64"
 	}
 }
+
+func NewArch(input string) Arch {
+	switch input {
+	default:
+		return ArchUnknown
+	case "x86_64":
+		return ArchAmd64
+	}
+}
