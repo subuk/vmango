@@ -3,6 +3,8 @@ package compute
 type VirtualMachineRepository interface {
 	List() ([]*VirtualMachine, error)
 	Get(id string) (*VirtualMachine, error)
+	Create(id string, arch Arch, vcpus int, memoryKb uint, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface) (*VirtualMachine, error)
+	Delete(id string) error
 	Poweroff(id string) error
 	Reboot(id string) error
 	Start(id string) error
@@ -66,11 +68,15 @@ func (vm *VirtualMachine) Cdroms() []*VirtualMachineAttachedVolume {
 }
 
 type VirtualMachineAttachedVolume struct {
-	Type   string
+	Type   VolumeType
 	Path   string
+	Format VolumeFormat
 	Device DeviceType
 }
 
 type VirtualMachineAttachedInterface struct {
-	Mac string
+	Type    NetworkType
+	Network string
+	Mac     string
+	Model   string
 }

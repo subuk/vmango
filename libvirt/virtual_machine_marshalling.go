@@ -18,13 +18,17 @@ func VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig libvirtxml.Doma
 	case "cdrom":
 		volume.Device = compute.DeviceTypeCdrom
 	}
+	if diskConfig.Driver != nil {
+		volume.Format = compute.NewVolumeFormat(diskConfig.Driver.Type)
+	}
+	volume.Type = compute.VolumeTypeUnknown
 	if diskConfig.Source != nil {
 		if diskConfig.Source.File != nil {
-			volume.Type = "file"
+			volume.Type = compute.VolumeTypeFile
 			volume.Path = diskConfig.Source.File.File
 		}
 		if diskConfig.Source.Block != nil {
-			volume.Type = "block"
+			volume.Type = compute.VolumeTypeBlock
 			volume.Path = diskConfig.Source.Block.Dev
 		}
 	}
@@ -34,6 +38,21 @@ func VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig libvirtxml.Doma
 func VirtualMachineAttachedInterfaceFromInterfaceConfig(ifaceConfig libvirtxml.DomainInterface) *compute.VirtualMachineAttachedInterface {
 	iface := &compute.VirtualMachineAttachedInterface{}
 	iface.Mac = ifaceConfig.MAC.Address
+	if ifaceConfig.Model != nil {
+		iface.Model = ifaceConfig.Model.Type
+	}
+	if ifaceConfig.Source != nil {
+		if ifaceConfig.Source.Network != nil {
+			if ifaceConfig.Source.Network.Bridge != "" {
+				iface.Type = compute.NetworkTypeBridge
+				iface.Network = ifaceConfig.Source.Network.Bridge
+			}
+			if ifaceConfig.Source.Network.Network != "" {
+				iface.Type = compute.NetworkTypeLibvirt
+				iface.Network = ifaceConfig.Source.Network.Network
+			}
+		}
+	}
 	return iface
 }
 

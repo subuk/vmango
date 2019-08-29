@@ -37,7 +37,7 @@ func (repo *VolumeRepository) virVolumeToVolume(pool *libvirt.StoragePool, virVo
 	}
 
 	volume := &compute.Volume{}
-	volume.Type = virVolumeConfig.Type
+	volume.Type = compute.NewVolumeType(virVolumeConfig.Type)
 	volume.Path = virVolumeConfig.Target.Path
 	volume.Pool = poolConfig.Name
 	volume.Format = compute.FormatUnknown
@@ -95,6 +95,31 @@ func (repo *VolumeRepository) fetchAttachedVm(conn *libvirt.Connect, volumes []*
 		}
 	}
 	return nil
+}
+
+func (repo *VolumeRepository) GetByName(pool, name string) (*compute.Volume, error) {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return nil, util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virStoragePool, err := conn.LookupStoragePoolByName(pool)
+	if err != nil {
+		return nil, util.NewError(err, "cannot lookup storage pool")
+	}
+	virVolume, err := virStoragePool.LookupStorageVolByName(name)
+	if err != nil {
+		return nil, util.NewError(err, "cannot lookup volume")
+	}
+	volume, err := repo.virVolumeToVolume(virStoragePool, virVolume)
+	if err != nil {
+		return nil, util.NewError(err, "cannot parse volume")
+	}
+	if err := repo.fetchAttachedVm(conn, []*compute.Volume{volume}); err != nil {
+		return nil, util.NewError(err, "cannot fetch attached vm")
+	}
+	return volume, nil
 }
 
 func (repo *VolumeRepository) Get(path string) (*compute.Volume, error) {
@@ -247,6 +272,11 @@ func (repo *VolumeRepository) Clone(originalPath, volumeName, poolName string, v
 		return nil, util.NewError(err, "cannot lookup original volume")
 	}
 
+	originalVirVolumeInfo, err := originalVirVolume.GetInfo()
+	if err != nil {
+		return nil, util.NewError(err, "cannot get original volume info")
+	}
+
 	virPool, err := conn.LookupStoragePoolByName(poolName)
 	if err != nil {
 		return nil, util.NewError(err, "cannot lookup libvirt pool")
@@ -299,6 +329,11 @@ func (repo *VolumeRepository) Clone(originalPath, volumeName, poolName string, v
 	virVolume, err := virPool.StorageVolCreateXMLFrom(virVolumeXml, originalVirVolume, virVolCreateFlags)
 	if err != nil {
 		return nil, util.NewError(err, "cannot clone volume")
+	}
+	if volumeFormat == compute.FormatQcow2 && originalVirVolumeInfo.Capacity < newSizeMb*1024*1024 {
+		if err := virVolume.Resize(newSizeMb*1024*1024, 0); err != nil {
+			return nil, util.NewError(err, "cannot resize qcow2 image after clone")
+		}
 	}
 	return repo.virVolumeToVolume(virPool, virVolume)
 }

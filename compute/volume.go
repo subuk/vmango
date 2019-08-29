@@ -5,7 +5,7 @@ import (
 )
 
 type Volume struct {
-	Type       string
+	Type       VolumeType
 	Path       string
 	Size       uint64 // MiB
 	Pool       string
@@ -35,6 +35,7 @@ func (pool *VolumePool) FreeGB() uint64 {
 
 type VolumeRepository interface {
 	Get(path string) (*Volume, error)
+	GetByName(pool, name string) (*Volume, error)
 	Create(pool, name string, format VolumeFormat, size uint64) (*Volume, error)
 	Clone(originalPath, volumeName, poolName string, volumeFormat VolumeFormat, newSizeMb uint64) (*Volume, error)
 	Resize(path string, newSize uint64) error

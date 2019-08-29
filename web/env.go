@@ -153,12 +153,13 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service)
 	router.HandleFunc("/keys/{fingerprint}/delete/", env.authenticated(env.KeyDeleteFormShow)).Name("key-delete-form")
 
 	router.HandleFunc("/machines/", env.authenticated(env.VirtualMachineList)).Name("virtual-machine-list")
-	router.HandleFunc("/machines/add/", nil).Name("virtual-machine-add")
+	router.HandleFunc("/machines/add/", env.authenticated(env.VirtualMachineAddFormProcess)).Methods("POST").Name("virtual-machine-add")
+	router.HandleFunc("/machines/add/", env.authenticated(env.VirtualMachineAddFormShow)).Name("virtual-machine-add")
 	router.HandleFunc("/machines/{id}/", env.authenticated(env.VirtualMachineDetail)).Name("virtual-machine-detail")
 	router.HandleFunc("/machines/{id}/set-state/{action}/", env.authenticated(env.VirtualMachineStateSetFormProcess)).Name("virtual-machine-state-form").Methods("POST")
 	router.HandleFunc("/machines/{id}/set-state/{action}/", env.authenticated(env.VirtualMachineStateSetFormShow)).Name("virtual-machine-state-form")
-	router.HandleFunc("/machines/{id}/delete/", nil).Name("virtual-machine-delete").Methods("POST")
-	router.HandleFunc("/machines/{id}/delete/", nil).Name("virtual-machine-delete")
+	router.HandleFunc("/machines/{id}/delete/", env.authenticated(env.VirtualMachineDeleteFormProcess)).Name("virtual-machine-delete").Methods("POST")
+	router.HandleFunc("/machines/{id}/delete/", env.authenticated(env.VirtualMachineDeleteFormShow)).Name("virtual-machine-delete")
 
 	router.HandleFunc("/", env.authenticated(env.HostInfo)).Name("index")
 
