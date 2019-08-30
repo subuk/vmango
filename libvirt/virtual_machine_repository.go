@@ -10,6 +10,7 @@ import (
 	"strings"
 	"subuk/vmango/compute"
 	"subuk/vmango/util"
+	"sync"
 
 	"golang.org/x/crypto/ssh"
 
@@ -26,13 +27,15 @@ type VirtualMachineRepository struct {
 	logger                zerolog.Logger
 	configDriveVolumePool string
 	configDriveSuffix     string
+	configCache           map[string]*compute.VirtualMachineConfig
+	configCacheMu         *sync.Mutex
 }
 
 func NewVirtualMachineRepository(pool *ConnectionPool, configDriveVolumePool, configDriveSuffix string, logger zerolog.Logger) *VirtualMachineRepository {
 	if configDriveSuffix == "" {
 		panic("No config drive suffix specified")
 	}
-	return &VirtualMachineRepository{pool: pool, logger: logger, configDriveVolumePool: configDriveVolumePool, configDriveSuffix: configDriveSuffix}
+	return &VirtualMachineRepository{pool: pool, logger: logger, configDriveVolumePool: configDriveVolumePool, configDriveSuffix: configDriveSuffix, configCache: map[string]*compute.VirtualMachineConfig{}, configCacheMu: &sync.Mutex{}}
 }
 
 func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect, domainConfig *libvirtxml.Domain, config *compute.VirtualMachineConfig) (*compute.VirtualMachineAttachedVolume, error) {
@@ -134,6 +137,9 @@ func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect,
 		Path:   virVolumeConfig.Target.Path,
 		Device: compute.DeviceTypeCdrom,
 	}
+	repo.configCacheMu.Lock()
+	repo.configCache[attachedVolume.Path] = nil
+	repo.configCacheMu.Unlock()
 	return attachedVolume, nil
 }
 
@@ -226,12 +232,19 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, domain *
 			noConfigDriveVolumes = append(noConfigDriveVolumes, volume)
 			continue
 		}
-		config, err := repo.parseConfigDrive(conn, volume.Path)
-		if err != nil {
-			repo.logger.Warn().Err(err).Str("volume_path", volume.Path).Msg("cannot parse configdrive")
-			continue
+		if config := repo.configCache[volume.Path]; config != nil {
+			vm.Config = config
+		} else {
+			config, err := repo.parseConfigDrive(conn, volume.Path)
+			if err != nil {
+				repo.logger.Warn().Err(err).Str("volume_path", volume.Path).Msg("cannot parse configdrive")
+				continue
+			}
+			vm.Config = config
+			repo.configCacheMu.Lock()
+			repo.configCache[volume.Path] = config
+			repo.configCacheMu.Unlock()
 		}
-		vm.Config = config
 	}
 	vm.Volumes = noConfigDriveVolumes
 
