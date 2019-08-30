@@ -94,6 +94,24 @@
 
             <div class="form-group row">
               <div class="col-md-12">
+                <label>Keys</label>
+                <select multiple class="form-control" name="Keys">
+                    {{ range .Context.Keys }}
+                    <option value="{{ .Fingerprint }}">{{ .Comment }}</option>
+                    {{ end }}
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <div class="col-md-12">
+                <label>Userdata</label>
+                <textarea class="form-control" name="Userdata"></textarea>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <div class="col-md-12">
                 <button class="btn btn-primary" data-loading="<i class='icon-refresh icons'></i> Creating Virtual Machine..." type="submit">Create Virtual Machine</button>
               </div>
             </div>

@@ -22,7 +22,7 @@ func Web(configFilename string) {
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
 
 	connectionPool := libvirt.NewConnectionPool(cfg.LibvirtUri, logger.With().Str("component", "libvirt-connection-pool").Logger())
-	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool)
+	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool, cfg.LibvirtConfigDrivePool, cfg.LibvirtConfigDriveSuffix, logger.With().Str("component", "vm-repository").Logger())
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool)
 	hostInfoRepo := libvirt.NewHostInfoRepository(connectionPool)
 	keyRepo := filesystem.NewKeyRepository(cfg.KeyFile, logger.With().Str("component", "key-repository").Logger())

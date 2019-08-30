@@ -107,9 +107,6 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 
 	for _, diskConfig := range domainConfig.Devices.Disks {
 		volume := VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig)
-		if volume == nil {
-			continue
-		}
 		vm.Volumes = append(vm.Volumes, volume)
 	}
 	return vm, nil

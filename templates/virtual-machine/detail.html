@@ -17,6 +17,7 @@
           <img src="{{ Static "vmango/img/linux-logo.png" }}" width="100" alt="linux">
           <div class="media-body">
             <p class="text-muted">
+              {{ if .Vm.Config }}Configured<br>{{ end }}
               {{ .Vm.MemoryMiB }}MiB RAM, {{ .Vm.VCpus }} CPU<br>
               {{ len .Vm.Disks }} Disk{{ if gt (len .Vm.Disks) 1 }}s{{ end }}<br>
               OS ??? {{ .Vm.Arch }}
@@ -74,18 +75,22 @@
       </div>
 
     </div>
+    {{ if .Vm.Config }}
     <div class="row">
       <div class="col-md-12">
         <div class="card card-inverse card-success">
           <div class="card-block text-xs-center">
             <div class="text-muted small text-uppercase font-weight-bold">SSH Keys</div>
             <div class="h2 p-1">
-              ???
+              {{ range .Vm.Config.Keys }}
+              {{ .Comment }}
+              {{ end }}
             </div>
           </div>
         </div>
       </div>
     </div>
+    {{ end }}
 
     {{ if false }}
     <div class="row">

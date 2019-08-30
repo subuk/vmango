@@ -128,7 +128,11 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		MemoryKb:   uint(memoryMb) * 1024,
 		Volumes:    []compute.VirtualMachineCreateParamsVolume{rootVolumeParams},
 		Interfaces: []compute.VirtualMachineCreateParamsInterface{mainInterface},
-		Config:     compute.VirtualMachineCreateParamsConfig{},
+		Config: compute.VirtualMachineCreateParamsConfig{
+			Hostname:        req.Form.Get("Name"),
+			KeyFingerprints: req.Form["Keys"],
+			UserData:        req.Form.Get("Userdata"),
+		},
 	}
 	vm, err := env.compute.VirtualMachineCreate(params)
 	if err != nil {

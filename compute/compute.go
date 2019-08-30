@@ -29,9 +29,9 @@ func (service *Service) VirtualMachineDetail(id string) (*VirtualMachine, error)
 }
 
 type VirtualMachineCreateParamsConfig struct {
-	MetaData      map[string]interface{}
-	UserData      string
-	NetworkConfig string
+	Hostname        string
+	UserData        string
+	KeyFingerprints []string
 }
 
 type VirtualMachineCreateParamsVolume struct {
@@ -64,6 +64,7 @@ type VirtualMachineCreateContext struct {
 	Images   []*Volume
 	Pools    []*VolumePool
 	Networks []*Network
+	Keys     []*Key
 	Arches   []Arch
 }
 
@@ -90,6 +91,12 @@ func (service *Service) VirtualMachineCreateContext() (VirtualMachineCreateConte
 		return context, util.NewError(err, "cannot list pools")
 	}
 	context.Pools = pools
+
+	keys, err := service.key.List()
+	if err != nil {
+		return context, util.NewError(err, "cannot list keys")
+	}
+	context.Keys = keys
 
 	networks, err := service.net.List()
 	if err != nil {
@@ -143,8 +150,19 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 		}
 		interfaces = append(interfaces, iface)
 	}
+	config := &VirtualMachineConfig{
+		Hostname: params.Config.Hostname,
+		Userdata: []byte(params.Config.UserData),
+	}
+	for _, fingerprint := range params.Config.KeyFingerprints {
+		key, err := service.key.Get(fingerprint)
+		if err != nil {
+			return nil, util.NewError(err, "cannot load key")
+		}
+		config.Keys = append(config.Keys, key)
+	}
 
-	vm, err := service.virt.Create(params.Id, NewArch(params.Arch), params.VCpus, params.MemoryKb, volumes, interfaces)
+	vm, err := service.virt.Create(params.Id, NewArch(params.Arch), params.VCpus, params.MemoryKb, volumes, interfaces, config)
 	if err != nil {
 		return nil, util.NewError(err, "cannot create virtual machine")
 	}

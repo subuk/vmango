@@ -3,7 +3,7 @@ package compute
 type VirtualMachineRepository interface {
 	List() ([]*VirtualMachine, error)
 	Get(id string) (*VirtualMachine, error)
-	Create(id string, arch Arch, vcpus int, memoryKb uint, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface) (*VirtualMachine, error)
+	Create(id string, arch Arch, vcpus int, memoryKb uint, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface, config *VirtualMachineConfig) (*VirtualMachine, error)
 	Delete(id string) error
 	Poweroff(id string) error
 	Reboot(id string) error
@@ -29,6 +29,12 @@ func (state VirtualMachineState) String() string {
 	}
 }
 
+type VirtualMachineConfig struct {
+	Hostname string
+	Keys     []*Key
+	Userdata []byte
+}
+
 type VirtualMachine struct {
 	Id         string
 	VCpus      int
@@ -37,6 +43,7 @@ type VirtualMachine struct {
 	Memory     uint // KiB
 	Interfaces []*VirtualMachineAttachedInterface
 	Volumes    []*VirtualMachineAttachedVolume
+	Config     *VirtualMachineConfig
 }
 
 func (vm *VirtualMachine) IsRunning() bool {
