@@ -35,7 +35,14 @@ func NewVirtualMachineRepository(pool *ConnectionPool, configDriveVolumePool, co
 	if configDriveSuffix == "" {
 		panic("No config drive suffix specified")
 	}
-	return &VirtualMachineRepository{pool: pool, logger: logger, configDriveVolumePool: configDriveVolumePool, configDriveSuffix: configDriveSuffix, configCache: map[string]*compute.VirtualMachineConfig{}, configCacheMu: &sync.Mutex{}}
+	return &VirtualMachineRepository{
+		pool:                  pool,
+		logger:                logger,
+		configDriveVolumePool: configDriveVolumePool,
+		configDriveSuffix:     configDriveSuffix,
+		configCache:           map[string]*compute.VirtualMachineConfig{},
+		configCacheMu:         &sync.Mutex{},
+	}
 }
 
 func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect, domainConfig *libvirtxml.Domain, config *compute.VirtualMachineConfig) (*compute.VirtualMachineAttachedVolume, error) {
