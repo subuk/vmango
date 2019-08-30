@@ -24,10 +24,11 @@ func Web(configFilename string) {
 	connectionPool := libvirt.NewConnectionPool(cfg.LibvirtUri, logger.With().Str("component", "libvirt-connection-pool").Logger())
 	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool, cfg.LibvirtConfigDrivePool, cfg.LibvirtConfigDriveSuffix, logger.With().Str("component", "vm-repository").Logger())
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool)
+	volumePoolRepo := libvirt.NewVolumePoolRepository(connectionPool)
 	hostInfoRepo := libvirt.NewHostInfoRepository(connectionPool)
 	keyRepo := filesystem.NewKeyRepository(cfg.KeyFile, logger.With().Str("component", "key-repository").Logger())
 	netRepo := libvirt.NewNetworkRepository(connectionPool, cfg.Bridges)
-	compute := libcompute.New(machineRepo, volumeRepo, hostInfoRepo, keyRepo, netRepo)
+	compute := libcompute.New(machineRepo, volumeRepo, volumePoolRepo, hostInfoRepo, keyRepo, netRepo)
 
 	webenv := web.New(cfg, logger, compute)
 	server := http.Server{

@@ -9,15 +9,16 @@ import (
 var ErrArchNotsupported = errors.New("requested arch not supported")
 
 type Service struct {
-	virt VirtualMachineRepository
-	vol  VolumeRepository
-	host HostInfoRepository
-	key  KeyRepository
-	net  NetworkRepository
+	virt    VirtualMachineRepository
+	vol     VolumeRepository
+	volpool VolumePoolRepository
+	host    HostInfoRepository
+	key     KeyRepository
+	net     NetworkRepository
 }
 
-func New(virt VirtualMachineRepository, vol VolumeRepository, host HostInfoRepository, key KeyRepository, net NetworkRepository) *Service {
-	return &Service{virt: virt, vol: vol, host: host, key: key, net: net}
+func New(virt VirtualMachineRepository, vol VolumeRepository, volpool VolumePoolRepository, host HostInfoRepository, key KeyRepository, net NetworkRepository) *Service {
+	return &Service{virt: virt, vol: vol, volpool: volpool, host: host, key: key, net: net}
 }
 
 func (service *Service) VirtualMachineList() ([]*VirtualMachine, error) {
@@ -86,7 +87,7 @@ func (service *Service) VirtualMachineCreateContext() (VirtualMachineCreateConte
 	}
 	context.Images = images
 
-	pools, err := service.vol.Pools()
+	pools, err := service.volpool.List()
 	if err != nil {
 		return context, util.NewError(err, "cannot list pools")
 	}
@@ -190,7 +191,7 @@ func (service *Service) VolumeResize(path string, size uint64) error {
 }
 
 func (service *Service) VolumePoolList() ([]*VolumePool, error) {
-	return service.vol.Pools()
+	return service.volpool.List()
 }
 
 func (service *Service) VolumeCreate(poolName, volumeName, volumeFormatName string, size uint64) (*Volume, error) {
