@@ -1,7 +1,6 @@
 package libvirt
 
 import (
-	"fmt"
 	"subuk/vmango/util"
 	"sync"
 
@@ -31,21 +30,36 @@ func (p *ConnectionPool) Acquire() (*libvirt.Connect, error) {
 
 	if p.cached != nil {
 		conn = p.cached
-	} else {
+	}
+
+	if conn == nil {
 		p.logger.Debug().Msg("establishing new connection")
 		newConn, err := libvirt.NewConnect(p.uri)
 		if err != nil {
+			p.mutex.Unlock()
 			return nil, util.NewError(err, "cannot open libvirt connection")
 		}
-		conn = newConn
-		p.cached = conn
+		p.cached = newConn
+		return newConn, nil
 	}
 	alive, err := conn.IsAlive()
 	if err != nil {
-		return nil, util.NewError(err, "libvirt connection is not alive")
+		newConn, err := libvirt.NewConnect(p.uri)
+		if err != nil {
+			p.mutex.Unlock()
+			return nil, util.NewError(err, "cannot reopen libvirt connection")
+		}
+		p.cached = newConn
+		return newConn, nil
 	}
 	if !alive {
-		return nil, fmt.Errorf("libvirt connection is not alive")
+		newConn, err := libvirt.NewConnect(p.uri)
+		if err != nil {
+			p.mutex.Unlock()
+			return nil, util.NewError(err, "cannot reopen libvirt connection")
+		}
+		p.cached = newConn
+		return newConn, nil
 	}
 	return conn, nil
 }
