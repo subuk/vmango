@@ -4,10 +4,7 @@
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <meta name="description" content="CoreUI - Open Source Bootstrap Admin Template">
-  <meta name="author" content="Łukasz Holeczek">
-  <meta name="keyword" content="Bootstrap,Admin,Template,Open,Source,AngularJS,Angular,Angular2,jQuery,CSS,HTML,RWD,Dashboard">
-  <link rel="icon" href="{{ Url "static" "name" "vmango/img/favicon.png" }}">
+  <link rel="icon" href="{{ Static "vmango/img/favicon.png" }}">
   <title>{{ .Title }} — Vmango</title>
   {{ template "css" }}
 </head>
@@ -18,16 +15,22 @@
     <a class="navbar-brand" href="/"></a>
     <ul class="nav navbar-nav hidden-md-down">
       <li class="nav-item px-1">
-        <a class="nav-link" href="{{ Url "index" }}">Providers</a>
+        <a class="nav-link" href="{{ Url "index" }}">Host</a>
       </li>
       <li class="nav-item px-1">
-        <a class="nav-link" href="{{ Url "machine-list" }}">Machines</a>
+        <a class="nav-link" href="{{ Url "virtual-machine-list" }}">Machines</a>
       </li>
       <li class="nav-item px-1">
-        <a class="nav-link" href="{{ Url "image-list" }}">Images</a>
+        <a class="nav-link" href="{{ Url "volume-list" }}">Volumes</a>
       </li>
       <li class="nav-item px-1">
-        <a class="nav-link" href="{{ Url "machine-add" }}">Create machine</a>
+        <a class="nav-link" href="{{ Url "network-list" }}">Networks</a>
+      </li>
+      <li class="nav-item px-1">
+        <a class="nav-link" href="{{ Url "key-list" }}">Keys</a>
+      </li>
+      <li class="nav-item px-1">
+        <a class="nav-link" href="{{ Url "virtual-machine-add" }}">Create machine</a>
       </li>
     </ul>
     <ul class="nav navbar-nav ml-auto pr-3">
@@ -45,17 +48,20 @@
             Menu
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="{{ Url "index" }}"><i class="icon-arrow-right"></i> Providers</a>
+            <a class="nav-link" href="{{ Url "index" }}"><i class="icon-arrow-right"></i> Host</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="{{ Url "machine-list" }}"><i class="icon-arrow-right"></i> Machines</a>
+            <a class="nav-link" href="{{ Url "virtual-machine-list" }}"><i class="icon-arrow-right"></i> Machines</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="{{ Url "image-list" }}"><i class="icon-arrow-right"></i> Images</a>
+            <a class="nav-link" href="{{ Url "volume-list" }}"><i class="icon-arrow-right"></i> Volumes</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ Url "network-list" }}"><i class="icon-arrow-right"></i> Networks</a>
           </li>
           <li class="divider"></li>
           <li class="nav-item">
-            <a class="nav-link" href="{{ Url "machine-add" }}"><i class="icon-arrow-right"></i> Create machine</a>
+            <a class="nav-link" href="{{ Url "virtual-machine-add" }}"><i class="icon-arrow-right"></i> Create machine</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="{{ Url "logout" }}"><i class="icon-arrow-right"></i> Logout</a>

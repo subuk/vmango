@@ -1,8 +1,0 @@
-languageCode = "en-us"
-title = "Vmango"
-baseurl = "https://vmango.org/docs/"
-theme = "hugo-theme-learn"
-
-# TODO: add hypervisors
-[params]
-  menu = [ "installation", "configuration", "api", "screenshots" ]

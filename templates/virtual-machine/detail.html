@@ -1,0 +1,151 @@
+{{template "header" .}}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}">Virtual Machines</a></li>
+  <li class="breadcrumb-item active">{{ .Vm.Id }}</li>
+</ol>
+
+<div class="container">
+
+<div class="card border-0">
+  <div class="card-block">
+
+    <div class="row">
+      <div class="col-md-7">
+        <h1>{{ .Vm.Id }}</h1>
+        <div class="media">
+          <img src="{{ Static "vmango/img/linux-logo.png" }}" width="100" alt="linux">
+          <div class="media-body">
+            <p class="text-muted">
+              {{ if .Vm.Config }}Configured<br>{{ end }}
+              {{ .Vm.MemoryMiB }}MiB RAM, {{ .Vm.VCpus }} CPU<br>
+              {{ .Vm.Arch }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-5 text-right">
+        <p>
+
+          {{ if .Vm.IsRunning }}
+            <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "poweroff" }}">Power Off</a>
+            <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "reboot" }}">Reboot</a>
+          {{ else }}
+            <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "start" }}">Power On</a>
+          {{ end }}
+            <a class="btn btn-danger" href="{{ Url "virtual-machine-delete" "id" .Vm.Id }}">Remove</a>
+        </p>
+        <p>
+          Status: <b>{{ .Vm.State.String | Capitalize }}</b>
+        </p>
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="row">
+      <div class="col-md-12">
+        <div class="card-group">
+          {{ range .AttachedVolumes }}
+            <div class="card card-block" style="padding: 10px; margin-right: 10px;border: 0px;">
+              <div class="card-body">
+                <h5 class="card-title">Volume {{ .Base }}</h5>
+                <p class="card-text">
+                  Pool: {{ .Pool }}<br>
+                  Path: {{ .Path }}<br>
+                  Size: {{ if lt .Size 1024 }}{{ .SizeMb }}M{{ else }}{{ .SizeGb }}G{{ end }}<br>
+                </p>
+                <form method="post" action="{{ Url "virtual-machine-detach-volume" "id" $.Vm.Id }}">{{ CSRFField $.Request }}
+                  <input type="hidden" name="Path" value="{{ .Path }}">
+                  <button {{ if $.Vm.IsRunning }}disabled="disabled" title="Please stop machine"{{ end }} class="btn btn-primary" type="submit">Detach</button>
+                </form>
+              </div>
+            </div>
+          {{ end }}
+          <div class="card card-block" style="padding: 10px; margin-right: 10px;border: 0px;">
+              <h5 class="card-title">Attach Volume</h5>
+              <div class="card-body">
+                <form method="post" action="{{ Url "virtual-machine-attach-disk" "id" .Vm.Id }}">{{ CSRFField .Request }}
+                  <select required="required" class="form-control" name="Path">
+                    {{ range .AvailableVolumes }}
+                    <option value="{{ .Path }}">{{ .Path }}</option>
+                    {{ end }}
+                  </select>
+                  <br>
+                  <button {{ if .Vm.IsRunning }}disabled="disabled" title="Please stop machine"{{ end }} class="btn btn-primary" type="submit">Attach</button>
+                </form>
+              </div>
+            </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-12">
+        <div class="card-group">
+          {{ range .Vm.Interfaces }}
+            <div class="card card-block" style="padding: 10px; margin-right: 10px;border: 0px;">
+              <div class="card-body">
+                <h5 class="card-title">Interface {{ .Type }} {{ .Model }}</h5>
+                <p class="card-text">
+                  Network: {{ .Network }}<br>
+                  MAC: {{ .Mac }}<br>
+                  Model: {{ .Model }}<br>
+                </p>
+                <form method="post" action="{{ Url "virtual-machine-detach-interface" "id" $.Vm.Id }}">{{ CSRFField $.Request }}
+                  <input type="hidden" name="Mac" value="{{ .Mac }}">
+                  <button {{ if $.Vm.IsRunning }}disabled="disabled" title="Please stop machine"{{ end }} class="btn btn-primary" type="submit">Detach</button>
+                </form>
+              </div>
+            </div>
+          {{ end }}
+          <div class="card card-block" style="padding: 10px; margin-right: 10px;border: 0px;">
+              <div class="card-body">
+                <h5 class="card-title">Attach Network Interface</h5>
+                <form class="form-inline" method="post" action="{{ Url "virtual-machine-attach-interface" "id" .Vm.Id }}">{{ CSRFField .Request }}
+                  <div class="form-group mb-2">
+                    <label for="Network" class="sr-only">Network</label>
+                    <select id="Network" required="required" class="form-control" name="Network">
+                      {{ range .Networks }}
+                      <option value="{{ .Name }}">{{ .Name }} ({{ .Type }})</option>
+                      {{ end }}
+                    </select>
+                  </div>
+                  <div class="form-group mb-2">
+                    <label for="Mac" class="sr-only">Mac</label>
+                    <input class="form-control" type="text" name="Mac" id="Mac" placeholder="00:00:00:00:00:00">
+                  </div>
+                  <button {{ if .Vm.IsRunning }}disabled="disabled" title="Please stop machine"{{ end }} class="btn btn-primary mb-2" type="submit">Attach</button>
+                </form>
+              </div>
+            </div>
+        </div>
+      </div>
+    </div>
+
+
+    {{ if .Vm.Config }}
+
+    <div class="row">
+        <div class="col-md-12">
+          <div class="card-group">
+            {{ range .Vm.Config.Keys }}
+              <div class="card card-block" style="padding: 10px; margin-right: 10px;border: 0px;">
+                <div class="card-body">
+                  <h5 class="card-title">Key {{ .Comment }}</h5>
+                  <p class="card-text">
+                    Fingerprint {{ .Fingerprint }}
+                  </p>
+                </div>
+              </div>
+            {{ end }}
+          </div>
+        </div>
+      </div>
+    {{ end }}
+
+  </div>
+</div>
+
+{{template "footer" .}}

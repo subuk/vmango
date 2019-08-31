@@ -1,7 +1,5 @@
 # vmango
 
-[![Build Status](https://jenkins.vmango.org/job/subuk/job/vmango/job/develop/badge/icon)](https://jenkins.vmango.org/job/subuk/job/vmango/job/develop/)
-
 Vmango is a virtual machines management web interface written using [Go](http://golang.org/).
 
 The main goal of project is not to provide a hypervisor configuration tool,
@@ -14,74 +12,59 @@ Documentation: https://vmango.org/docs/
 Current features:
 
 * SSH keys management and injection
-* KVM via libvirt
-* Digitalocean-style interface
+* Volume management
+* KVM machines via libvirt
 * Support for cloud OS images (with cloud-init installed)
-* IP address management
-* Simple API
 * Custom userdata for cloud-init
 * Bridged network
 
-Hypervisor server requirements:
+## Hypervisor configuration
 
-* Libvirt 0.10+ (centos6+, ubuntu14.04+, debian8+)
+Install libvirt and qemu-kvm.
 
-Web interface server requirements:
-* Libvirt 1.2.0+ (Ubuntu 14.04+, debian8+, centos7+)
+Ubuntu:
 
+    sudo apt-get install libvirt-bin qemu-kvm qemu-system
 
-## Development
+Centos:
 
-### Hypervisor configuration (Ubuntu 14.04/16.04)
+    yum install -y libvirt qemu-kvm
+    systemctl enable --now libvirtd
 
-    sudo apt-get install libvirt-bin qemu-kvm qemu-system dnsmasq-utils
+Allow your user to access libvirt socket:
+
     sudo usermod -aG libvirtd [username]
     newgrp libvirtd
 
-Define libvirt network
+Download vm images to default libvirt pool location:
 
-    virsh net-define network.xml
-    virsh net-start vmango
-    virsh net-autostart vmango
+    cd /var/lib/libvirt/images/
+    wget https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1901.qcow2
+    wget https://cloud-images.ubuntu.com/minimal/releases/bionic/release/ubuntu-18.04-minimal-cloudimg-amd64.img
 
-Define libvirt images storage:
+Define default volume pool (if not exists):
 
-    sudo mkdir -p /var/lib/libvirt/images/vmango-images
-    virsh pool-define storage-pool-images.xml
-    virsh pool-start vmango-images
-    virsh pool-autostart vmango-images
+    virsh pool-define-as default dir --target /var/lib/libvirt/images/
 
-Install dhcp lease monitor hook (symlink doesn't work due to Apparmor restrictions):
 
-    sudo cp qemu-hook-lease-monitor.py /etc/libvirt/hooks/qemu
+## Local run
 
-Download vm images (file names matter!)
+Copy vmango.dist.conf to vmango.conf and change configuration if needed.
 
-    wget -O- http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2.xz |unxz - > Centos-7_amd64_qcow2.img
-    wget -O- https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img  > Ubuntu-16.04_amd64_qcow2.img
-    sudo chown root. *_qcow2.img
-    sudo mv Centos-7_amd64_qcow2.img /var/lib/libvirt/images/vmango-images/
-    sudo mv Ubuntu-16.04_amd64_qcow2.img /var/lib/libvirt/images/vmango-images/
-    virsh pool-refresh vmango-images
+Run app
 
-If your processor doesn't support hardware acceleration, change type from "kvm" to "qemu" in the first line of vm.xml.in (or you will get an error during first machine creation):
+    make && ./bin/vmango
 
-    <domain type='qemu'>
+View it on http://localhost:8080 (login with admin / admin by default)
+
 
 ### Dependencies for Ubuntu 14.04+
 
 Install libvirt and kvm
 
-    sudo apt-get install libvirt-dev libvirt-bin qemu-kvm virt-manager qemu-system dnsmasq-utils genisoimage
-    sudo usermod -aG libvirtd [username]
-    newgrp libvirtd
+    sudo apt-get install libvirt-dev libvirt-bin qemu-kvm qemu-system genisoimage
 
-Install Go 1.7
-
-    cd /usr/local
-    sudo wget https://storage.googleapis.com/golang/go1.7.4.linux-amd64.tar.gz
-    sudo tar xf go1.7.4.linux-amd64.tar.gz
-
+Install Go compiler.
 Configure libvirt as described above.
 Now you can use your own computer as hypervisor.
 
@@ -94,35 +77,4 @@ Install Go compiler, libvirt C library and mkisofs util (for configdrive creatio
     brew install dvdrtools
 
 You need a linux hypervisor somewhere in the world, because libvirt doesn't support MacOS.
-
-### Development
-
-Compile for development
-
-    make EXTRA_ASSETS_FLAGS=-debug
-
-Change libvirt url in config if needed
-
-    ...
-    hypervisor {
-        ...
-        url = "qemu+ssh://user@host/system"
-        ...
-    }
-    ...
-
-Run app
-
-    ./bin/vmango
-
-View it on http://localhost:8000
-
-### Run tests
-
-Unit tests
-
-    make test
-
-Libvirt integration tests tests (please, do not run tests on production servers)
-
-    VMANGO_TEST_TYPE=ubuntu_file VMANGO_TEST_LIBVIRT_URI=qemu:///system make test TEST_ARGS='-tags integration'
+Make sure to add ?socket option to remote libvirt urls.

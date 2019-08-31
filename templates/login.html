@@ -20,6 +20,11 @@
                 <div class="card-group mb-0">
                     <div class="card p-2">
                         <div class="card-block">
+                          {{ if .Error }}
+                          <div class="alert alert-danger" role="alert">
+                            {{ .Error }}
+                          </div>
+                          {{ end }}
                           <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
                             <h1>Vmango</h1>
                             <p class="text-muted">Sign In to your account</p>

@@ -1,9 +1,0 @@
-<volume>
-  <target>
-    <format type="{{ .Image.TypeString }}" />
-  </target>
-  <name>{{ .Machine.Name }}_disk</name>
-  <key>{{ .Machine.Name }}_disk.{{ .Image.TypeString }}</key>
-  <capacity unit="G">{{ .Plan.DiskSizeGigabytes }}</capacity>
-  <allocation unit="G">{{ .Plan.DiskSizeGigabytes }}</allocation>
-</volume>

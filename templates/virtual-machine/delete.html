@@ -1,0 +1,37 @@
+{{ template "header" . }}
+
+<!-- Breadcrumb -->
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}">Virtual Machines</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-detail" "id" .Vm.Id }}">{{ .Vm.Id }}</a></li>
+  <li class="breadcrumb-item active">Delete</li>
+</ol>
+
+<div class="container">
+  <div class="card border-0">
+    <div class="card-block">
+
+      <div class="row">
+        <div class="col-md-12">
+          <p>
+            Are you sure you want to remove machine <b>{{ .Vm.Id }}</b>?<br>
+            Only virtual machine will be destroyed, all attached volumes will be detached.
+          </p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-12">
+          <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
+            <button class="btn btn-primary" data-loading="<i class='icon-refresh icons'></i> Removing virtual machine..." type="submit">Remove Virtual Machine</button>
+            <a class="btn btn-secondary" href="{{ Url "virtual-machine-detail" "id" .Vm.Id }}">Cancel</a>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+{{ template "footer" . }}

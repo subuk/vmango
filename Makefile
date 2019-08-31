@@ -1,85 +1,66 @@
-GOPATH = $(CURDIR)/vendor:$(CURDIR)
-GO = GOPATH=$(GOPATH) go
-TAR = tar
-NAME = vmango
-SOURCES = $(shell find src/ -name *.go) src/vmango/web/assets.go
-ASSETS = $(shell find templates/ static/)
-TARBALL_SOURCES = $(SOURCES) $(ASSETS) vendor/src/ docs/ debian/ *.dist.* Makefile
-.PHONY = clean test show-coverage-html show-coverage-text
-PACKAGES = $(shell cd src/vmango; find . -type d|sed 's,^./,,' | sed 's,/,@,g' |sed '/^\.$$/d')
-TEST_ARGS = -race -tags "unit"
-test_coverage_targets = $(addprefix test-coverage-, $(PACKAGES))
-EXTRA_ASSETS_FLAGS =
-VERSION = $(shell git describe --tags)
-DESTDIR =
+export GOFLAGS=-mod=vendor
+export GOBIN=$(PWD)/bin/
+GO = go
 INSTALL = install
+GO_SOURCES = $(shell find . -name '*.go')
+ASSETS_SOURCES = $(shell find templates static)
+UNAME_S := $(shell uname -s)
+TARBALL_SOURCES = $(GO_SOURCES) Makefile README.md vmango.dist.conf vmango.service vendor/
+
+RPM_NAME = vmango
+VERSION = 0.8.0
+RELEASE = 1
+
+BUILD_LDFLAGS = -X subuk/vmango/web.AppVersion=$(VERSION)
+
+ifeq ($(UNAME_S),Darwin)
+	TAR = gtar
+else
+	TAR = tar
+endif
+
+DESTDIR =
+PREFIX = /usr
+CONF_DIR = $(DESTDIR)/etc
+BIN_DIR = $(DESTDIR)/$(PREFIX)/bin
 
 default: bin/vmango
 
-.PHONY: dependencies
-vendorize-dependencies:
-	$(GO) get -d -t vmango/...
-	$(GO) get -d github.com/jteeuwen/go-bindata/...
-	$(GO) get -d github.com/stretchr/testify
-	python make-vendor-json.py
-	find vendor/ -name .git -type d |xargs rm -rf
+bin/vmango: $(GO_SOURCES) web/assets_generated.go Makefile
+	$(GO) build -ldflags='$(BUILD_LDFLAGS)' -o bin/vmango
 
-vendor/bin/go-bindata:
-	$(GO) build -o vendor/bin/go-bindata github.com/jteeuwen/go-bindata/go-bindata
+.PHONY: vendor
+vendor:
+	$(GO) mod tidy -v
+	$(GO) mod vendor -v
 
-src/vmango/web/assets.go: vendor/bin/go-bindata $(ASSETS)
-	vendor/bin/go-bindata $(EXTRA_ASSETS_FLAGS) -o src/vmango/web/assets.go -pkg web static/... templates/...
+test:
+	go test vmango/...
 
-bin/vmango: $(SOURCES)
-	$(GO) build -ldflags "-X main.VERSION=${VERSION}" -o bin/vmango vmango
+bin/go-bindata:
+	$(GO) install github.com/go-bindata/go-bindata/...
 
-test-coverage-%:
-	$(GO) test $(TEST_ARGS) -coverprofile=coverage.$*.out --run=. vmango/$(shell echo $* | sed 's,@,/,g')
+web/assets_generated.go: bin/go-bindata $(ASSETS_SOURCES)
+	bin/go-bindata $(ASSETS_FLAGS) -o web/assets_generated.go -pkg web static/... templates/...
 
-test-coverage: $(test_coverage_targets)
+install: bin/vmango vmango.dist.conf
+	$(INSTALL) -d -m 0755 $(CONF_DIR)
+	$(INSTALL) -d -m 0755 $(BIN_DIR)
+	$(INSTALL) -m 0755 bin/vmango $(BIN_DIR)/
+	$(INSTALL) -m 0644 vmango.dist.conf $(CONF_DIR)/vmango.conf
 
-test: lint bin/vmango
-	$(GO) test $(TEST_ARGS)  vmango/...
+.PHONY: spec
+spec: $(RPM_NAME).spec.in
+	sed -e "s/@@_VERSION_@@/$(VERSION)/g" -e "s/@@_RELEASE_@@/$(RELEASE)/g" $(RPM_NAME).spec.in > $(RPM_NAME).spec
 
-show-coverage-html:
-	$(GO) tool cover -html=coverage.out
+.PHONY: apparchive
+apparchive: $(TARBALL_SOURCES) RELEASE_BUILD_COMMIT.txt
+	$(TAR) --transform "s,,$(RPM_NAME)-$(VERSION)/," -czf $(RPM_NAME)-$(VERSION).tar.gz $^
 
-show-coverage-text:
-	$(GO) tool cover -func=coverage.out
-
-lint:
-	$(GO) vet vmango/...
-
-install: bin/vmango
-	mkdir -p $(DESTDIR)/usr/bin
-	mkdir -p $(DESTDIR)/etc/vmango
-	$(INSTALL) -m 0755 -o root bin/vmango $(DESTDIR)/usr/bin/vmango
-	$(INSTALL) -m 0644 -o root vmango.dist.conf $(DESTDIR)/etc/vmango/vmango.conf
-	$(INSTALL) -m 0644 -o root vm.dist.xml.in $(DESTDIR)/etc/vmango/vm.xml.in
-	$(INSTALL) -m 0644 -o root volume.dist.xml.in $(DESTDIR)/etc/vmango/volume.xml.in
-
-tarball: $(NAME)-$(VERSION).tar.gz
-$(NAME)-$(VERSION).tar.gz: $(TARBALL_SOURCES)
-	$(TAR) --transform "s,^,$(NAME)-$(VERSION)/," -czf $(NAME)-$(VERSION).tar.gz $(TARBALL_SOURCES)
-
-package-debian-8-x64:
-	$(MAKE) -C deb TARGET_DISTRO=debian-8-x64
-
-package-debian-9-x64:
-	$(MAKE) -C deb TARGET_DISTRO=debian-9-x64
-
-package-ubuntu-trusty-x64:
-	$(MAKE) -C deb TARGET_DISTRO=ubuntu-trusty-x64
-
-package-ubuntu-xenial-x64:
-	$(MAKE) -C deb TARGET_DISTRO=ubuntu-xenial-x64
-
-package-centos-7-x64:
-	$(MAKE) -C rpm TARGET_DISTRO=centos-7-x64-epel
-
-package-all: package-debian-9-x64 package-debian-8-x64 package-ubuntu-trusty-x64 package-ubuntu-xenial-x64 package-centos-7-x64
+.PHONY: rpm
+rpm: spec apparchive
+	./build-rpm.sh centos-7 $(RPM_NAME).spec
 
 clean:
-	rm -rf bin/ pkg/ vendor/pkg/ vendor/bin pkg/ src/vmango/web/assets.go dockerfile.build.* vmango-*.tar.gz
-	rm -f $(NAME)-$(VERSION).tar.gz
-	make -C docs clean
+	rm -rf web/assets_generated.go result/ bin/ $(RPM_NAME).spec $(RPM_NAME)-*.tar.gz
+	$(GO) clean -testcache
