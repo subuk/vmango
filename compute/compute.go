@@ -174,6 +174,26 @@ func (service *Service) VirtualMachineDelete(id string) error {
 	return service.virt.Delete(id)
 }
 
+func (service *Service) VirtualMachineAttachVolume(id, path string, deviceType DeviceType) (*VirtualMachineAttachedVolume, error) {
+	vol, err := service.vol.Get(path)
+	if err != nil {
+		return nil, util.NewError(err, "cannot lookup volume")
+	}
+	return service.virt.AttachVolume(id, path, vol.Type, vol.Format, deviceType)
+}
+
+func (service *Service) VirtualMachineDetachVolume(id, path string) error {
+	return service.virt.DetachVolume(id, path)
+}
+
+func (service *Service) VirtualMachineAttachInterface(id, network, mac, model string, netType NetworkType) (*VirtualMachineAttachedInterface, error) {
+	return service.virt.AttachInterface(id, network, mac, model, netType)
+}
+
+func (service *Service) VirtualMachineDetachInterface(id, mac string) error {
+	return service.virt.DetachInterface(id, mac)
+}
+
 func (service *Service) VolumeList() ([]*Volume, error) {
 	return service.vol.List()
 }
@@ -237,4 +257,8 @@ func (service *Service) KeyAdd(input string) error {
 
 func (service *Service) NetworkList() ([]*Network, error) {
 	return service.net.List()
+}
+
+func (service *Service) NetworkGet(id string) (*Network, error) {
+	return service.net.Get(id)
 }

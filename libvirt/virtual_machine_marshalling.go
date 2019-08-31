@@ -42,15 +42,13 @@ func VirtualMachineAttachedInterfaceFromInterfaceConfig(ifaceConfig libvirtxml.D
 		iface.Model = ifaceConfig.Model.Type
 	}
 	if ifaceConfig.Source != nil {
+		if ifaceConfig.Source.Bridge != nil {
+			iface.Type = compute.NetworkTypeBridge
+			iface.Network = ifaceConfig.Source.Bridge.Bridge
+		}
 		if ifaceConfig.Source.Network != nil {
-			if ifaceConfig.Source.Network.Bridge != "" {
-				iface.Type = compute.NetworkTypeBridge
-				iface.Network = ifaceConfig.Source.Network.Bridge
-			}
-			if ifaceConfig.Source.Network.Network != "" {
-				iface.Type = compute.NetworkTypeLibvirt
-				iface.Network = ifaceConfig.Source.Network.Network
-			}
+			iface.Type = compute.NetworkTypeLibvirt
+			iface.Network = ifaceConfig.Source.Network.Network
 		}
 	}
 	return iface

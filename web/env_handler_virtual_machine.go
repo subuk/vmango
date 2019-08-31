@@ -29,16 +29,42 @@ func (env *Environ) VirtualMachineList(rw http.ResponseWriter, req *http.Request
 func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
-
 	if err != nil {
 		env.error(rw, req, err, "vm get failed", http.StatusInternalServerError)
 		return
 	}
+	volumes, err := env.compute.VolumeList()
+	if err != nil {
+		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
+		return
+	}
+	networks, err := env.compute.NetworkList()
+	if err != nil {
+		env.error(rw, req, err, "cannot list networks", http.StatusInternalServerError)
+		return
+	}
+
+	attachedVolumes := []*compute.Volume{}
+	availableVolumes := []*compute.Volume{}
+	for _, volume := range volumes {
+		if attachmentInfo := vm.AttachmentInfo(volume.Path); attachmentInfo != nil {
+			attachedVolumes = append(attachedVolumes, volume)
+			continue
+		}
+		if volume.AttachedTo == "" && volume.Format != compute.FormatIso {
+			availableVolumes = append(availableVolumes, volume)
+			continue
+		}
+	}
 	data := struct {
-		Title string
-		Vm    *compute.VirtualMachine
-		User  *User
-	}{"Virtual Machine", vm, env.Session(req).AuthUser()}
+		Title            string
+		Vm               *compute.VirtualMachine
+		AttachedVolumes  []*compute.Volume
+		AvailableVolumes []*compute.Volume
+		Networks         []*compute.Network
+		User             *User
+		Request          *http.Request
+	}{"Virtual Machine", vm, attachedVolumes, availableVolumes, networks, env.Session(req).AuthUser(), req}
 	if err := env.render.HTML(rw, http.StatusOK, "virtual-machine/detail", data); err != nil {
 		env.error(rw, req, err, "failed to render template", http.StatusInternalServerError)
 		return
@@ -169,5 +195,68 @@ func (env *Environ) VirtualMachineDeleteFormProcess(rw http.ResponseWriter, req 
 		return
 	}
 	redirectUrl := env.url("virtual-machine-list")
+	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+}
+
+func (env *Environ) VirtualMachineAttachDiskFormProcess(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+	if err := req.ParseForm(); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := env.compute.VirtualMachineAttachVolume(urlvars["id"], req.Form.Get("Path"), compute.DeviceTypeDisk); err != nil {
+		env.error(rw, req, err, "cannot attach disk", http.StatusInternalServerError)
+		return
+	}
+	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
+	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+}
+
+func (env *Environ) VirtualMachineDetachVolumeFormProcess(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+	if err := req.ParseForm(); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := env.compute.VirtualMachineDetachVolume(urlvars["id"], req.Form.Get("Path")); err != nil {
+		env.error(rw, req, err, "cannot detach disk", http.StatusInternalServerError)
+		return
+	}
+	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
+	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+}
+
+func (env *Environ) VirtualMachineAttachInterfaceFormProcess(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+	if err := req.ParseForm(); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	id := urlvars["id"]
+	mac := req.Form.Get("Mac")
+	network, err := env.compute.NetworkGet(req.Form.Get("Network"))
+	if err != nil {
+		env.error(rw, req, err, "cannot get network", http.StatusInternalServerError)
+		return
+	}
+	if _, err := env.compute.VirtualMachineAttachInterface(id, network.Name, mac, "virtio", network.Type); err != nil {
+		env.error(rw, req, err, "cannot attach interface", http.StatusInternalServerError)
+		return
+	}
+	redirectUrl := env.url("virtual-machine-detail", "id", id)
+	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+}
+
+func (env *Environ) VirtualMachineDetachInterfaceFormProcess(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+	if err := req.ParseForm(); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := env.compute.VirtualMachineDetachInterface(urlvars["id"], req.Form.Get("Mac")); err != nil {
+		env.error(rw, req, err, "cannot detach interface", http.StatusInternalServerError)
+		return
+	}
+	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
 	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
 }

@@ -161,6 +161,13 @@ func (repo *VolumeRepository) List() ([]*compute.Volume, error) {
 
 	volumes := []*compute.Volume{}
 	for _, pool := range pools {
+		active, err := pool.IsActive()
+		if err != nil {
+			return nil, util.NewError(err, "cannot check if pool is active")
+		}
+		if !active {
+			continue
+		}
 		virVolumes, err := pool.ListAllStorageVolumes(0)
 		if err != nil {
 			return nil, util.NewError(err, "cannot list storage volumes")

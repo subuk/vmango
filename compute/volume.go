@@ -18,6 +18,14 @@ func (volume *Volume) Base() string {
 	return filepath.Base(volume.Path)
 }
 
+func (volume *Volume) SizeMb() uint64 {
+	return volume.Size
+}
+
+func (volume *Volume) SizeGb() uint64 {
+	return volume.Size / 1024
+}
+
 type VolumeRepository interface {
 	Get(path string) (*Volume, error)
 	GetByName(pool, name string) (*Volume, error)

@@ -258,6 +258,90 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, domain *
 	return vm, nil
 }
 
+func (repo *VirtualMachineRepository) attachVolume(virDomainConfig *libvirtxml.Domain, volume *compute.VirtualMachineAttachedVolume) error {
+	disk := libvirtxml.DomainDisk{
+		Driver: &libvirtxml.DomainDiskDriver{Name: "qemu"},
+		Target: &libvirtxml.DomainDiskTarget{},
+	}
+	switch volume.Format {
+	default:
+		return fmt.Errorf("unsupported volume format '%s'", volume.Format)
+	case compute.FormatQcow2:
+		disk.Driver.Type = "qcow2"
+	case compute.FormatRaw:
+		disk.Driver.Type = "raw"
+	case compute.FormatIso:
+		disk.Driver.Type = "raw"
+	}
+	hdLetter := 'a'
+	vdLetter := 'c'
+	for _, disk := range virDomainConfig.Devices.Disks {
+		if disk.Target != nil {
+			if disk.Target.Dev == "" {
+				continue
+			}
+			if strings.HasPrefix(disk.Target.Dev, "hd") {
+				hdLetter++
+			} else {
+				vdLetter++
+			}
+		}
+	}
+	switch volume.Device {
+	default:
+		return fmt.Errorf("unsupported volume device type '%s'", volume.Device)
+	case compute.DeviceTypeCdrom:
+		disk.Device = "cdrom"
+		disk.ReadOnly = &libvirtxml.DomainDiskReadOnly{}
+		disk.Target.Bus = "ide"
+		disk.Target.Dev = "hd" + string(hdLetter)
+	case compute.DeviceTypeDisk:
+		disk.Device = "disk"
+		disk.Target.Bus = "virtio"
+		disk.Target.Dev = "vd" + string(vdLetter)
+	}
+	switch volume.Type {
+	default:
+		return fmt.Errorf("unknown volume type '%s'", volume.Type)
+	case compute.VolumeTypeFile:
+		disk.Source = &libvirtxml.DomainDiskSource{
+			File: &libvirtxml.DomainDiskSourceFile{File: volume.Path},
+		}
+	case compute.VolumeTypeBlock:
+		disk.Source = &libvirtxml.DomainDiskSource{
+			Block: &libvirtxml.DomainDiskSourceBlock{Dev: volume.Path},
+		}
+	}
+	virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, disk)
+	return nil
+}
+
+func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxml.Domain, attachedIface *compute.VirtualMachineAttachedInterface) error {
+	if attachedIface.Model == "" {
+		attachedIface.Model = "virtio"
+	}
+	domainIface := libvirtxml.DomainInterface{}
+	if attachedIface.Mac != "" {
+		domainIface.MAC = &libvirtxml.DomainInterfaceMAC{Address: attachedIface.Mac}
+	}
+	domainIface.Source = &libvirtxml.DomainInterfaceSource{}
+	domainIface.Model = &libvirtxml.DomainInterfaceModel{Type: attachedIface.Model}
+	switch attachedIface.Type {
+	default:
+		return fmt.Errorf("unsupported interface type %s", attachedIface.Type)
+	case compute.NetworkTypeLibvirt:
+		domainIface.Source.Network = &libvirtxml.DomainInterfaceSourceNetwork{
+			Network: attachedIface.Network,
+		}
+	case compute.NetworkTypeBridge:
+		domainIface.Source.Bridge = &libvirtxml.DomainInterfaceSourceBridge{
+			Bridge: attachedIface.Network,
+		}
+	}
+	virDomainConfig.Devices.Interfaces = append(virDomainConfig.Devices.Interfaces, domainIface)
+	return nil
+}
+
 func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus int, memoryKb uint, volumes []*compute.VirtualMachineAttachedVolume, interfaces []*compute.VirtualMachineAttachedInterface, config *compute.VirtualMachineConfig) (*compute.VirtualMachine, error) {
 	conn, err := repo.pool.Acquire()
 	if err != nil {
@@ -326,76 +410,15 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 	}
 	volumes = append(volumes, configVolume)
 
-	diskLastLetter := 'a'
-	cdromLastLetter := 'c'
 	for _, volume := range volumes {
-		disk := libvirtxml.DomainDisk{
-			Driver: &libvirtxml.DomainDiskDriver{Name: "qemu"},
-			Target: &libvirtxml.DomainDiskTarget{},
+		if err := repo.attachVolume(virDomainConfig, volume); err != nil {
+			return nil, util.NewError(err, "cannot attach volume")
 		}
-		switch volume.Format {
-		default:
-			return nil, fmt.Errorf("unsupported volume format '%s'", volume.Format)
-		case compute.FormatQcow2:
-			disk.Driver.Type = "qcow2"
-		case compute.FormatRaw:
-			disk.Driver.Type = "raw"
-		case compute.FormatIso:
-			disk.Driver.Type = "raw"
-		}
-		switch volume.Device {
-		default:
-			return nil, fmt.Errorf("unsupported volume device type '%s'", volume.Device)
-		case compute.DeviceTypeCdrom:
-			disk.Device = "cdrom"
-			disk.ReadOnly = &libvirtxml.DomainDiskReadOnly{}
-			disk.Target.Bus = "ide"
-			disk.Target.Dev = "hd" + string(cdromLastLetter)
-			cdromLastLetter++
-		case compute.DeviceTypeDisk:
-			disk.Device = "disk"
-			disk.Target.Bus = "virtio"
-			disk.Target.Dev = "vd" + string(diskLastLetter)
-			diskLastLetter++
-		}
-		switch volume.Type {
-		default:
-			return nil, fmt.Errorf("unknown volume type '%s'", volume.Type)
-		case compute.VolumeTypeFile:
-			disk.Source = &libvirtxml.DomainDiskSource{
-				File: &libvirtxml.DomainDiskSourceFile{File: volume.Path},
-			}
-		case compute.VolumeTypeBlock:
-			disk.Source = &libvirtxml.DomainDiskSource{
-				Block: &libvirtxml.DomainDiskSourceBlock{Dev: volume.Path},
-			}
-		}
-		virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, disk)
 	}
-
 	for _, attachedIface := range interfaces {
-		if attachedIface.Model == "" {
-			attachedIface.Model = "virtio"
+		if err := repo.attachInterface(virDomainConfig, attachedIface); err != nil {
+			return nil, util.NewError(err, "cannot attach interface")
 		}
-		domainIface := libvirtxml.DomainInterface{}
-		if attachedIface.Mac != "" {
-			domainIface.MAC = &libvirtxml.DomainInterfaceMAC{Address: attachedIface.Mac}
-		}
-		domainIface.Source = &libvirtxml.DomainInterfaceSource{}
-		domainIface.Model = &libvirtxml.DomainInterfaceModel{Type: attachedIface.Model}
-		switch attachedIface.Type {
-		default:
-			return nil, fmt.Errorf("unsupported interface type %s", attachedIface.Type)
-		case compute.NetworkTypeLibvirt:
-			domainIface.Source.Network = &libvirtxml.DomainInterfaceSourceNetwork{
-				Network: attachedIface.Network,
-			}
-		case compute.NetworkTypeBridge:
-			domainIface.Source.Bridge = &libvirtxml.DomainInterfaceSourceBridge{
-				Bridge: attachedIface.Network,
-			}
-		}
-		virDomainConfig.Devices.Interfaces = append(virDomainConfig.Devices.Interfaces, domainIface)
 	}
 	virDomainXml, err := virDomainConfig.Marshal()
 	if err != nil {
@@ -516,4 +539,204 @@ func (repo *VirtualMachineRepository) Start(id string) error {
 		return util.NewError(err, "domain lookup failed")
 	}
 	return domain.Create()
+}
+
+func (repo *VirtualMachineRepository) AttachVolume(id, path string, typ compute.VolumeType, format compute.VolumeFormat, device compute.DeviceType) (*compute.VirtualMachineAttachedVolume, error) {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return nil, util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virDomain, err := conn.LookupDomainByName(id)
+	if err != nil {
+		return nil, util.NewError(err, "domain lookup failed")
+	}
+	running, err := virDomain.IsActive()
+	if err != nil {
+		return nil, util.NewError(err, "cannot check if domain is running")
+	}
+	if running {
+		return nil, fmt.Errorf("domain must be stopped")
+	}
+
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	if err != nil {
+		return nil, util.NewError(err, "cannot get domain xml")
+	}
+	virDomainConfig := &libvirtxml.Domain{}
+	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
+		return nil, util.NewError(err, "cannot parse domain xml")
+	}
+	attachedVolume := &compute.VirtualMachineAttachedVolume{
+		Type:   typ,
+		Path:   path,
+		Format: format,
+		Device: compute.DeviceTypeDisk,
+	}
+	if err := repo.attachVolume(virDomainConfig, attachedVolume); err != nil {
+		return nil, err
+	}
+	virDomainXml, err = virDomainConfig.Marshal()
+	if err != nil {
+		return nil, util.NewError(err, "cannot create domain xml")
+	}
+	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
+		return nil, util.NewError(err, "cannot update domain xml")
+	}
+	return attachedVolume, nil
+}
+
+func (repo *VirtualMachineRepository) DetachVolume(id, needlePath string) error {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virDomain, err := conn.LookupDomainByName(id)
+	if err != nil {
+		return util.NewError(err, "domain lookup failed")
+	}
+	running, err := virDomain.IsActive()
+	if err != nil {
+		return util.NewError(err, "cannot check if domain is running")
+	}
+	if running {
+		return fmt.Errorf("domain must be stopped")
+	}
+
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	if err != nil {
+		return util.NewError(err, "cannot get domain xml")
+	}
+	virDomainConfig := &libvirtxml.Domain{}
+	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
+		return util.NewError(err, "cannot parse domain xml")
+	}
+	if virDomainConfig.Devices.Disks == nil {
+		return fmt.Errorf("no disk found")
+	}
+	newDisks := []libvirtxml.DomainDisk{}
+	needleFound := false
+	for _, disk := range virDomainConfig.Devices.Disks {
+		volume := VirtualMachineAttachedVolumeFromDomainDiskConfig(disk)
+		if volume.Path == needlePath {
+			needleFound = true
+			continue
+		}
+		newDisks = append(newDisks, disk)
+	}
+	if !needleFound {
+		return fmt.Errorf("no disk found")
+	}
+	virDomainConfig.Devices.Disks = newDisks
+	virDomainXml, err = virDomainConfig.Marshal()
+	if err != nil {
+		return util.NewError(err, "cannot create domain xml")
+	}
+	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
+		return util.NewError(err, "cannot update domain")
+	}
+	return nil
+}
+
+func (repo *VirtualMachineRepository) AttachInterface(id, network, mac, model string, ifaceType compute.NetworkType) (*compute.VirtualMachineAttachedInterface, error) {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return nil, util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virDomain, err := conn.LookupDomainByName(id)
+	if err != nil {
+		return nil, util.NewError(err, "domain lookup failed")
+	}
+	running, err := virDomain.IsActive()
+	if err != nil {
+		return nil, util.NewError(err, "cannot check if domain is running")
+	}
+	if running {
+		return nil, fmt.Errorf("domain must be stopped")
+	}
+
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	if err != nil {
+		return nil, util.NewError(err, "cannot get domain xml")
+	}
+	virDomainConfig := &libvirtxml.Domain{}
+	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
+		return nil, util.NewError(err, "cannot parse domain xml")
+	}
+	attachedIface := &compute.VirtualMachineAttachedInterface{
+		Type:    ifaceType,
+		Network: network,
+		Mac:     mac,
+		Model:   model,
+	}
+	if err := repo.attachInterface(virDomainConfig, attachedIface); err != nil {
+		return nil, err
+	}
+	virDomainXml, err = virDomainConfig.Marshal()
+	if err != nil {
+		return nil, util.NewError(err, "cannot create domain xml")
+	}
+	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
+		return nil, util.NewError(err, "cannot update domain xml")
+	}
+	return attachedIface, nil
+}
+
+func (repo *VirtualMachineRepository) DetachInterface(id, needleMac string) error {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virDomain, err := conn.LookupDomainByName(id)
+	if err != nil {
+		return util.NewError(err, "domain lookup failed")
+	}
+	running, err := virDomain.IsActive()
+	if err != nil {
+		return util.NewError(err, "cannot check if domain is running")
+	}
+	if running {
+		return fmt.Errorf("domain must be stopped")
+	}
+
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	if err != nil {
+		return util.NewError(err, "cannot get domain xml")
+	}
+	virDomainConfig := &libvirtxml.Domain{}
+	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
+		return util.NewError(err, "cannot parse domain xml")
+	}
+	if virDomainConfig.Devices.Interfaces == nil {
+		return fmt.Errorf("no interface found")
+	}
+	newInterfaces := []libvirtxml.DomainInterface{}
+	needleFound := false
+	for _, ifaceConfig := range virDomainConfig.Devices.Interfaces {
+		iface := VirtualMachineAttachedInterfaceFromInterfaceConfig(ifaceConfig)
+		if iface.Mac == needleMac {
+			needleFound = true
+			continue
+		}
+		newInterfaces = append(newInterfaces, ifaceConfig)
+	}
+	if !needleFound {
+		return fmt.Errorf("no interface found")
+	}
+	virDomainConfig.Devices.Interfaces = newInterfaces
+	virDomainXml, err = virDomainConfig.Marshal()
+	if err != nil {
+		return util.NewError(err, "cannot create domain xml")
+	}
+	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
+		return util.NewError(err, "cannot update domain")
+	}
+	return nil
 }

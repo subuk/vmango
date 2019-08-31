@@ -5,6 +5,10 @@ type VirtualMachineRepository interface {
 	Get(id string) (*VirtualMachine, error)
 	Create(id string, arch Arch, vcpus int, memoryKb uint, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface, config *VirtualMachineConfig) (*VirtualMachine, error)
 	Delete(id string) error
+	AttachVolume(id, path string, typ VolumeType, format VolumeFormat, device DeviceType) (*VirtualMachineAttachedVolume, error)
+	DetachVolume(id, path string) error
+	AttachInterface(id, network, mac, model string, netType NetworkType) (*VirtualMachineAttachedInterface, error)
+	DetachInterface(id, mac string) error
 	Poweroff(id string) error
 	Reboot(id string) error
 	Start(id string) error
@@ -44,6 +48,15 @@ type VirtualMachine struct {
 	Interfaces []*VirtualMachineAttachedInterface
 	Volumes    []*VirtualMachineAttachedVolume
 	Config     *VirtualMachineConfig
+}
+
+func (vm *VirtualMachine) AttachmentInfo(path string) *VirtualMachineAttachedVolume {
+	for _, attachedVolume := range vm.Volumes {
+		if attachedVolume.Path == path {
+			return attachedVolume
+		}
+	}
+	return nil
 }
 
 func (vm *VirtualMachine) IsRunning() bool {

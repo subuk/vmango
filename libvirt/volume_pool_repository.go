@@ -36,6 +36,13 @@ func (repo *VolumePoolRepository) List() ([]*compute.VolumePool, error) {
 		if err := virPoolConfig.Unmarshal(virPoolXml); err != nil {
 			return nil, util.NewError(err, "cannot unmarshal volume pool xml")
 		}
+		active, err := virPool.IsActive()
+		if err != nil {
+			return nil, util.NewError(err, "cannot check if pool %s is active", virPoolConfig.Name)
+		}
+		if !active {
+			continue
+		}
 		volumePool := &compute.VolumePool{
 			Name: virPoolConfig.Name,
 		}
