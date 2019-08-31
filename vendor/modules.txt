@@ -1,0 +1,51 @@
+# github.com/akamensky/argparse v0.0.0-20190309155458-28b0496b54cb
+github.com/akamensky/argparse
+# github.com/go-bindata/go-bindata v3.1.2+incompatible
+github.com/go-bindata/go-bindata/go-bindata
+github.com/go-bindata/go-bindata
+# github.com/google/uuid v1.1.1
+github.com/google/uuid
+# github.com/gorilla/csrf v1.6.0
+github.com/gorilla/csrf
+# github.com/gorilla/mux v1.7.3
+github.com/gorilla/mux
+# github.com/gorilla/securecookie v1.1.1
+github.com/gorilla/securecookie
+# github.com/gorilla/sessions v1.2.0
+github.com/gorilla/sessions
+# github.com/hashicorp/hcl v1.0.0
+github.com/hashicorp/hcl
+github.com/hashicorp/hcl/hcl/ast
+github.com/hashicorp/hcl/hcl/parser
+github.com/hashicorp/hcl/hcl/token
+github.com/hashicorp/hcl/json/parser
+github.com/hashicorp/hcl/hcl/scanner
+github.com/hashicorp/hcl/hcl/strconv
+github.com/hashicorp/hcl/json/scanner
+github.com/hashicorp/hcl/json/token
+# github.com/libvirt/libvirt-go v5.6.1+incompatible
+github.com/libvirt/libvirt-go
+# github.com/libvirt/libvirt-go-xml v5.6.0+incompatible
+github.com/libvirt/libvirt-go-xml
+# github.com/pkg/errors v0.8.1
+github.com/pkg/errors
+# github.com/rs/zerolog v1.15.0
+github.com/rs/zerolog
+github.com/rs/zerolog/internal/cbor
+github.com/rs/zerolog/internal/json
+# github.com/unrolled/render v1.0.1
+github.com/unrolled/render
+# golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
+golang.org/x/crypto/ssh
+golang.org/x/crypto/bcrypt
+golang.org/x/crypto/curve25519
+golang.org/x/crypto/ed25519
+golang.org/x/crypto/internal/chacha20
+golang.org/x/crypto/poly1305
+golang.org/x/crypto/blowfish
+golang.org/x/crypto/ed25519/internal/edwards25519
+golang.org/x/crypto/internal/subtle
+# golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a
+golang.org/x/sys/cpu
+# gopkg.in/yaml.v2 v2.2.2
+gopkg.in/yaml.v2
