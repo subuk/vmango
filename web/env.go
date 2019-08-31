@@ -33,6 +33,73 @@ type Environ struct {
 	cfg      *config.WebConfig
 }
 
+func TemplateFuncs(env *Environ) []template.FuncMap {
+	return []template.FuncMap{
+		template.FuncMap{
+			"CSRFField": func(req *http.Request) template.HTML {
+				return csrf.TemplateField(req)
+			},
+			"Version": func() string {
+				return AppVersion
+			},
+			"HumanizeBytes": func(max int, number uint64) string {
+				var suffixes = []string{"b", "K", "M", "G", "T"}
+				i := 0
+				for {
+					if number < 10240 {
+						break
+					}
+					number = number / 1024
+					i++
+					if i >= max || i >= len(suffixes) {
+						break
+					}
+				}
+				return fmt.Sprintf("%d%s", number, suffixes[i])
+			},
+			"LimitString": func(limit int, s string) string {
+				slen := len(s)
+				if slen <= limit {
+					return s
+				}
+				s = s[:limit]
+				if slen > limit {
+					s += "..."
+				}
+				return s
+			},
+			"IsAuthenticated": func(req *http.Request) bool {
+				return env.Session(req).IsAuthenticated()
+			},
+			"HasPrefix": strings.HasPrefix,
+			"HumanizeDate": func(date time.Time) string {
+				return date.Format("Mon Jan 2 15:04:05 -0700 MST 2006")
+			},
+			"Capitalize": strings.Title,
+			"Title": func(s string) string {
+				return strings.Title(s)
+			},
+			"Static": func(filename string) (string, error) {
+				route := env.router.Get("static")
+				if route == nil {
+					return "", fmt.Errorf("no 'static' route defined")
+				}
+				url, err := route.URL("name", filename)
+				if err != nil {
+					return "", err
+				}
+				return url.Path + "?v=" + env.cfg.StaticVersion, nil
+			},
+			"Url": func(name string, params ...string) *neturl.URL {
+				return env.url(name, params...)
+			},
+			"DateTimeLong": func(dt time.Time) string {
+				return dt.Format(time.UnixDate)
+			},
+		},
+	}
+}
+
 func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service) http.Handler {
 	env := &Environ{cfg: &cfg.Web}
 	router := mux.NewRouter()
@@ -43,70 +110,7 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service)
 		AssetNames:    AssetNames,
 		IndentJSON:    true,
 		IndentXML:     true,
-		Funcs: []template.FuncMap{
-			template.FuncMap{
-				"CSRFField": func(req *http.Request) template.HTML {
-					return csrf.TemplateField(req)
-				},
-				"Version": func() string {
-					return AppVersion
-				},
-				"HumanizeBytes": func(max int, number uint64) string {
-					var suffixes = []string{"b", "K", "M", "G", "T"}
-					i := 0
-					for {
-						if number < 10240 {
-							break
-						}
-						number = number / 1024
-						i++
-						if i >= max || i >= len(suffixes) {
-							break
-						}
-					}
-					return fmt.Sprintf("%d%s", number, suffixes[i])
-				},
-				"LimitString": func(limit int, s string) string {
-					slen := len(s)
-					if slen <= limit {
-						return s
-					}
-					s = s[:limit]
-					if slen > limit {
-						s += "..."
-					}
-					return s
-				},
-				"IsAuthenticated": func(req *http.Request) bool {
-					return env.Session(req).IsAuthenticated()
-				},
-				"HasPrefix": strings.HasPrefix,
-				"HumanizeDate": func(date time.Time) string {
-					return date.Format("Mon Jan 2 15:04:05 -0700 MST 2006")
-				},
-				"Capitalize": strings.Title,
-				"Title": func(s string) string {
-					return strings.Title(s)
-				},
-				"Static": func(filename string) (string, error) {
-					route := env.router.Get("static")
-					if route == nil {
-						return "", fmt.Errorf("no 'static' route defined")
-					}
-					url, err := route.URL("name", filename)
-					if err != nil {
-						return "", err
-					}
-					return url.Path + "?v=" + cfg.Web.StaticVersion, nil
-				},
-				"Url": func(name string, params ...string) *neturl.URL {
-					return env.url(name, params...)
-				},
-				"DateTimeLong": func(dt time.Time) string {
-					return dt.Format(time.UnixDate)
-				},
-			},
-		},
+		Funcs:         TemplateFuncs(env),
 	})
 
 	sessionStore := sessions.NewCookieStore([]byte(cfg.Web.SessionSecret))
