@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"subuk/vmango/compute"
 	"subuk/vmango/util"
 
@@ -20,8 +21,13 @@ type KeyRepository struct {
 	logger   zerolog.Logger
 }
 
-func NewKeyRepository(filename string, logger zerolog.Logger) *KeyRepository {
-	return &KeyRepository{filename: util.ExpandHomeDir(filename), logger: logger}
+func NewKeyRepository(filename string, logger zerolog.Logger) (*KeyRepository, error) {
+	dirname := filepath.Dir(filename)
+	if err := os.MkdirAll(dirname, 0755); err != nil {
+		return nil, util.NewError(err, "cannot create base directory")
+	}
+	repo := &KeyRepository{filename: util.ExpandHomeDir(filename), logger: logger}
+	return repo, nil
 }
 
 func (repo *KeyRepository) parseKey(input []byte) (*compute.Key, error) {
