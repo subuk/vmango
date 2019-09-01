@@ -99,7 +99,9 @@
                   {{ if gt .AccessVlan 0 }}
                   Vlan: {{ .AccessVlan }}<br>
                   {{ end }}
+                  {{ if gt (len .IpAddressList) 0 }}
                   IP: {{ .IpAddressList | Join " " }}
+                  {{ end }}
                 </p>
                 <form method="post" action="{{ Url "virtual-machine-detach-interface" "id" $.Vm.Id }}">{{ CSRFField $.Request }}
                   <input type="hidden" name="Mac" value="{{ .Mac }}">
