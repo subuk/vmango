@@ -354,6 +354,11 @@ func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxm
 			Bridge: attachedIface.Network,
 		}
 	}
+	if attachedIface.AccessVlan > 0 {
+		domainIface.VLan = &libvirtxml.DomainInterfaceVLan{
+			Tags: []libvirtxml.DomainInterfaceVLanTag{libvirtxml.DomainInterfaceVLanTag{ID: attachedIface.AccessVlan}},
+		}
+	}
 	virDomainConfig.Devices.Interfaces = append(virDomainConfig.Devices.Interfaces, domainIface)
 	return nil
 }
@@ -657,7 +662,7 @@ func (repo *VirtualMachineRepository) DetachVolume(id, needlePath string) error 
 	return nil
 }
 
-func (repo *VirtualMachineRepository) AttachInterface(id, network, mac, model string, ifaceType compute.NetworkType) (*compute.VirtualMachineAttachedInterface, error) {
+func (repo *VirtualMachineRepository) AttachInterface(id, network, mac, model string, accessVlan uint, ifaceType compute.NetworkType) (*compute.VirtualMachineAttachedInterface, error) {
 	conn, err := repo.pool.Acquire()
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire connection")
@@ -685,10 +690,11 @@ func (repo *VirtualMachineRepository) AttachInterface(id, network, mac, model st
 		return nil, util.NewError(err, "cannot parse domain xml")
 	}
 	attachedIface := &compute.VirtualMachineAttachedInterface{
-		Type:    ifaceType,
-		Network: network,
-		Mac:     mac,
-		Model:   model,
+		Type:       ifaceType,
+		Network:    network,
+		Mac:        mac,
+		Model:      model,
+		AccessVlan: accessVlan,
 	}
 	if err := repo.attachInterface(virDomainConfig, attachedIface); err != nil {
 		return nil, err

@@ -186,8 +186,8 @@ func (service *Service) VirtualMachineDetachVolume(id, path string) error {
 	return service.virt.DetachVolume(id, path)
 }
 
-func (service *Service) VirtualMachineAttachInterface(id, network, mac, model string, netType NetworkType) (*VirtualMachineAttachedInterface, error) {
-	return service.virt.AttachInterface(id, network, mac, model, netType)
+func (service *Service) VirtualMachineAttachInterface(id, network, mac, model string, accessVlan uint, netType NetworkType) (*VirtualMachineAttachedInterface, error) {
+	return service.virt.AttachInterface(id, network, mac, model, accessVlan, netType)
 }
 
 func (service *Service) VirtualMachineDetachInterface(id, mac string) error {

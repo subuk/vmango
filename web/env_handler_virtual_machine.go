@@ -234,12 +234,16 @@ func (env *Environ) VirtualMachineAttachInterfaceFormProcess(rw http.ResponseWri
 	}
 	id := urlvars["id"]
 	mac := req.Form.Get("Mac")
+	accessVlan, err := strconv.ParseUint(req.Form.Get("AccessVlan"), 10, 16)
+	if err != nil {
+		http.Error(rw, "invalid vcpus value: "+err.Error(), http.StatusBadRequest)
+	}
 	network, err := env.compute.NetworkGet(req.Form.Get("Network"))
 	if err != nil {
 		env.error(rw, req, err, "cannot get network", http.StatusInternalServerError)
 		return
 	}
-	if _, err := env.compute.VirtualMachineAttachInterface(id, network.Name, mac, "virtio", network.Type); err != nil {
+	if _, err := env.compute.VirtualMachineAttachInterface(id, network.Name, mac, "virtio", uint(accessVlan), network.Type); err != nil {
 		env.error(rw, req, err, "cannot attach interface", http.StatusInternalServerError)
 		return
 	}

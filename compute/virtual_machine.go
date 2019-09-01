@@ -7,7 +7,7 @@ type VirtualMachineRepository interface {
 	Delete(id string) error
 	AttachVolume(id, path string, typ VolumeType, format VolumeFormat, device DeviceType) (*VirtualMachineAttachedVolume, error)
 	DetachVolume(id, path string) error
-	AttachInterface(id, network, mac, model string, netType NetworkType) (*VirtualMachineAttachedInterface, error)
+	AttachInterface(id, network, mac, model string, accessVlan uint, netType NetworkType) (*VirtualMachineAttachedInterface, error)
 	DetachInterface(id, mac string) error
 	Poweroff(id string) error
 	Reboot(id string) error
