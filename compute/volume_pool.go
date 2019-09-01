@@ -12,7 +12,7 @@ type VolumePool struct {
 }
 
 func (pool *VolumePool) UsagePercent() int {
-	return int(100 * pool.Used / pool.Free)
+	return int(100 * pool.Used / pool.Size)
 }
 
 func (pool *VolumePool) FreeGB() uint64 {
