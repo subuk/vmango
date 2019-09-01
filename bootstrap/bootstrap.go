@@ -14,12 +14,13 @@ import (
 )
 
 func Web(configFilename string) {
+	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
+	logger.Info().Str("filename", configFilename).Msg("using configuration file")
 	cfg, err := config.Parse(configFilename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Configuration error: %s\n", err)
 		os.Exit(1)
 	}
-	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
 	connectionPool := libvirt.NewConnectionPool(cfg.LibvirtUri, logger.With().Str("component", "libvirt-connection-pool").Logger())
 	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool, cfg.LibvirtConfigDrivePool, cfg.LibvirtConfigDriveSuffix, logger.With().Str("component", "vm-repository").Logger())
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool)

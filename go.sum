@@ -1,5 +1,5 @@
-github.com/akamensky/argparse v0.0.0-20190309155458-28b0496b54cb h1:PbYR84S3iyS6IxmIhdUb9GsMdlnJMNn3LFJ4U1iZC+M=
-github.com/akamensky/argparse v0.0.0-20190309155458-28b0496b54cb/go.mod h1:pdh+2piXurh466J9tqIqq39/9GO2Y8nZt6Cxzu18T9A=
+github.com/akamensky/argparse v0.0.0-20190829110830-5293d9863374 h1:OXrDUfvEdzTnOp50avgJJvsMlwzISShBt3MAdjjELGM=
+github.com/akamensky/argparse v0.0.0-20190829110830-5293d9863374/go.mod h1:pdh+2piXurh466J9tqIqq39/9GO2Y8nZt6Cxzu18T9A=
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -19,6 +19,8 @@ github.com/gorilla/sessions v1.2.0 h1:S7P+1Hm5V/AT9cjEcUD5uDaQSX0OE577aCXgoaKpYb
 github.com/gorilla/sessions v1.2.0/go.mod h1:dk2InVEVJ0sfLlnXv9EAgkf6ecYs/i80K/zI+bUmuGM=
 github.com/hashicorp/hcl v1.0.0 h1:0Anlzjpi4vEasTeNFn2mLJgTSwt0+6sfsiTG8qcWGx4=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
+github.com/imdario/mergo v0.3.7 h1:Y+UAYTZ7gDEuOfhxKWy+dvb5dRQ6rJjFSdX2HZY1/gI=
+github.com/imdario/mergo v0.3.7/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJh5FfA=
 github.com/libvirt/libvirt-go v5.6.1+incompatible h1:XGmj2qqpGjjns2fyu72VLb+PKNZ1i1wxH4L8YiMcGkk=
 github.com/libvirt/libvirt-go v5.6.1+incompatible/go.mod h1:34zsnB4iGeOv7Byj6qotuW8Ya4v4Tr43ttjz/F0wjLE=
 github.com/libvirt/libvirt-go-xml v5.6.0+incompatible h1:K3EVO9fN3mROdGloTR5SwYQRAxFk+KFGK09USoizdrc=

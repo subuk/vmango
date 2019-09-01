@@ -5,6 +5,7 @@ import (
 	"subuk/vmango/util"
 
 	"github.com/hashicorp/hcl"
+	"github.com/imdario/mergo"
 )
 
 type UserWebConfig struct {
@@ -34,8 +35,8 @@ type Config struct {
 	Web                      WebConfig `hcl:"web"`
 }
 
-func Default() Config {
-	return Config{
+func Default() *Config {
+	return &Config{
 		LibvirtUri:               "qemu:///system",
 		LibvirtConfigDrivePool:   "default",
 		LibvirtConfigDriveSuffix: "_config.iso",
@@ -57,6 +58,9 @@ func Parse(filename string) (*Config, error) {
 	config := &Config{}
 	if err := hcl.Unmarshal(content, config); err != nil {
 		return nil, util.NewError(err, "invalid configuration format")
+	}
+	if err := mergo.Merge(config, Default()); err != nil {
+		return nil, util.NewError(err, "cannot apply default configuration value")
 	}
 	return config, nil
 }
