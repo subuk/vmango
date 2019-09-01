@@ -22,6 +22,7 @@
                 <th>State</th>
                 <th>CPU</th>
                 <th>Memory</th>
+                <th>IP</th>
               </tr>
             </thead>
             <tbody>
@@ -31,6 +32,7 @@
                   <td>{{ .State }}</td>
                   <td>{{ .VCpus }}</td>
                   <td>{{ .MemoryMiB }}MiB</td>
+                  <td>{{ .IpAddressList | Join " " }}</td>
                 </tr>
               {{ end }}
             </tbody>

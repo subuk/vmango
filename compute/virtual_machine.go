@@ -59,6 +59,14 @@ func (vm *VirtualMachine) AttachmentInfo(path string) *VirtualMachineAttachedVol
 	return nil
 }
 
+func (vm *VirtualMachine) IpAddressList() []string {
+	iplist := []string{}
+	for _, iface := range vm.Interfaces {
+		iplist = append(iplist, iface.IpAddressList...)
+	}
+	return iplist
+}
+
 func (vm *VirtualMachine) IsRunning() bool {
 	return vm.State == StateRunning
 }
@@ -95,8 +103,9 @@ type VirtualMachineAttachedVolume struct {
 }
 
 type VirtualMachineAttachedInterface struct {
-	Type    NetworkType
-	Network string
-	Mac     string
-	Model   string
+	Type          NetworkType
+	Network       string
+	Mac           string
+	Model         string
+	IpAddressList []string
 }

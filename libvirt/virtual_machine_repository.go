@@ -228,6 +228,22 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, domain *
 	if err != nil {
 		return nil, util.NewError(err, "cannot create virtual machine from domain config")
 	}
+	if vm.IsRunning() {
+		for _, attachedInterface := range vm.Interfaces {
+			virDomainIfaces, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_ARP)
+			if err != nil {
+				repo.logger.Info().Err(err).Msg("cannot get interfaces addresses")
+				continue
+			}
+			for _, virDomainIface := range virDomainIfaces {
+				if virDomainIface.Hwaddr == attachedInterface.Mac {
+					for _, addr := range virDomainIface.Addrs {
+						attachedInterface.IpAddressList = append(attachedInterface.IpAddressList, addr.Addr)
+					}
+				}
+			}
+		}
+	}
 
 	noConfigDriveVolumes := []*compute.VirtualMachineAttachedVolume{}
 	for _, volume := range vm.Volumes {

@@ -79,6 +79,9 @@ func TemplateFuncs(env *Environ) []template.FuncMap {
 			"Title": func(s string) string {
 				return strings.Title(s)
 			},
+			"Join": func(sep string, a []string) string {
+				return strings.Join(a, sep)
+			},
 			"Static": func(filename string) (string, error) {
 				route := env.router.Get("static")
 				if route == nil {
