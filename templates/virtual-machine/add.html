@@ -78,7 +78,7 @@
             </div>
 
             <div class="form-group row">
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label>Network</label>
                 <select required="required" class="form-control" name="Network">
                     {{ range .Networks }}
@@ -86,9 +86,13 @@
                     {{ end }}
                 </select>
               </div>
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label>MAC Address</label>
-                <input class="form-control" name="Mac" id="Mac">
+                <input class="form-control" name="Mac" id="Mac" placeholder="00:00:00:00:00:00">
+              </div>
+              <div class="col-md-4">
+                <label for="AccessVlan">Vlan</label>
+                <input type="number" class="form-control" name="AccessVlan" id="AccessVlan">
               </div>
             </div>
 

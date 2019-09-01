@@ -171,14 +171,22 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 	vcpus, err := strconv.ParseInt(req.Form.Get("Vcpus"), 10, 16)
 	if err != nil {
 		http.Error(rw, "invalid vcpus value: "+err.Error(), http.StatusBadRequest)
+		return
 	}
 	memoryMb, err := strconv.ParseUint(req.Form.Get("MemoryMb"), 10, 64)
 	if err != nil {
 		http.Error(rw, "invalid memoryMb value: "+err.Error(), http.StatusBadRequest)
+		return
 	}
 	rootVolumeSizeGb, err := strconv.ParseUint(req.Form.Get("RootVolumeSizeGb"), 10, 64)
 	if err != nil {
 		http.Error(rw, "invalid root volume size: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	accessVlan, err := strconv.ParseUint(req.Form.Get("AccessVlan"), 10, 16)
+	if err != nil {
+		http.Error(rw, "invalid vlan: "+err.Error(), http.StatusBadRequest)
+		return
 	}
 	rootVolumeParams := compute.VirtualMachineCreateParamsVolume{
 		Name: req.Form.Get("RootVolumeName"), Pool: req.Form.Get("RootVolumePool"),
@@ -187,8 +195,9 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		Format:     req.Form.Get("RootVolumeFormat"), SizeMb: rootVolumeSizeGb * 1024,
 	}
 	mainInterface := compute.VirtualMachineCreateParamsInterface{
-		Network: req.Form.Get("Network"),
-		Mac:     req.Form.Get("Mac"),
+		Network:    req.Form.Get("Network"),
+		Mac:        req.Form.Get("Mac"),
+		AccessVlan: uint(accessVlan),
 	}
 	params := compute.VirtualMachineCreateParams{
 		Id:         req.Form.Get("Name"),

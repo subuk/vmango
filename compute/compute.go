@@ -45,9 +45,10 @@ type VirtualMachineCreateParamsVolume struct {
 }
 
 type VirtualMachineCreateParamsInterface struct {
-	Network string
-	Mac     string
-	Model   string
+	Network    string
+	Mac        string
+	Model      string
+	AccessVlan uint
 }
 
 type VirtualMachineCreateParams struct {
@@ -97,9 +98,10 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 			return nil, util.NewError(err, "network get failed")
 		}
 		iface := &VirtualMachineAttachedInterface{
-			Type:    network.Type,
-			Network: ifaceParams.Network,
-			Mac:     ifaceParams.Mac,
+			Type:       network.Type,
+			Network:    ifaceParams.Network,
+			Mac:        ifaceParams.Mac,
+			AccessVlan: ifaceParams.AccessVlan,
 		}
 		interfaces = append(interfaces, iface)
 	}
