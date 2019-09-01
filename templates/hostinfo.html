@@ -17,7 +17,8 @@
             </div>
           </div>
 
-          <div style="margin-top:40px;" class="col-md-12">
+          <div class="col-md-12">
+            <h6>CPU Info</h6>
             <table class="table table-hover table-outline m-b-0">
               <thead class="thead-default">
                 <tr>
@@ -38,6 +39,30 @@
                     <td>{{ $numa.Pages4k }}</td>
                     <td>{{ $numa.Pages2m }}</td>
                     <td>{{ $numa.Pages1g }}</td>
+                  </tr>
+                {{ end }}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="col-md-12">
+            <h6>Volume Pools</h6>
+            <table class="table table-hover table-outline m-b-0">
+              <thead class="thead-default">
+                <tr>
+                  <th>Name</th>
+                  <th>Size</th>
+                  <th>Free</th>
+                  <th>Allocation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{ range .VolumePools }}
+                  <tr>
+                    <td>{{ .Name }}</td>
+                    <td>{{ .SizeGb }}G</td>
+                    <td>{{ .FreeGB }}G</td>
+                    <td>{{ .UsagePercent }}%</td>
                   </tr>
                 {{ end }}
               </tbody>

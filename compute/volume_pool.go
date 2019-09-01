@@ -18,3 +18,7 @@ func (pool *VolumePool) UsagePercent() int {
 func (pool *VolumePool) FreeGB() uint64 {
 	return pool.Free / 1024
 }
+
+func (pool *VolumePool) SizeGb() uint64 {
+	return pool.Size / 1024
+}
