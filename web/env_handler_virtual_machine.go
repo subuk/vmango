@@ -103,17 +103,60 @@ func (env *Environ) VirtualMachineStateSetFormProcess(rw http.ResponseWriter, re
 }
 
 func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.Request) {
-	context, err := env.compute.VirtualMachineCreateContext()
+	data := struct {
+		Title    string
+		User     *User
+		Request  *http.Request
+		Volumes  []*compute.Volume
+		Images   []*compute.Volume
+		Pools    []*compute.VolumePool
+		Networks []*compute.Network
+		Keys     []*compute.Key
+		Arches   []compute.Arch
+	}{
+		Title:   "Create Virtual Machine",
+		Request: req,
+		User:    env.Session(req).AuthUser(),
+		Arches:  []compute.Arch{compute.ArchAmd64},
+	}
+
+	volumes, err := env.compute.VolumeList()
 	if err != nil {
-		env.error(rw, req, err, "cannot fetch vm create context", http.StatusInternalServerError)
+		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
 		return
 	}
-	data := struct {
-		Title   string
-		Context compute.VirtualMachineCreateContext
-		User    *User
-		Request *http.Request
-	}{"Create Virtual Machine", context, env.Session(req).AuthUser(), req}
+	data.Volumes = volumes
+
+	images := []*compute.Volume{}
+	for _, volume := range volumes {
+		if volume.Format == compute.FormatIso {
+			continue
+		}
+		images = append(images, volume)
+	}
+	data.Images = images
+
+	pools, err := env.compute.VolumePoolList()
+	if err != nil {
+		env.error(rw, req, err, "cannot list pools", http.StatusInternalServerError)
+		return
+	}
+	data.Pools = pools
+
+	keys, err := env.compute.KeyList()
+	if err != nil {
+		env.error(rw, req, err, "cannot list keys", http.StatusInternalServerError)
+		return
+	}
+	data.Keys = keys
+
+	networks, err := env.compute.NetworkList()
+	if err != nil {
+		env.error(rw, req, err, "cannot list networks", http.StatusInternalServerError)
+		return
+	}
+	data.Networks = networks
+
 	if err := env.render.HTML(rw, http.StatusOK, "virtual-machine/add", data); err != nil {
 		env.error(rw, req, err, "failed to render template", http.StatusInternalServerError)
 		return
@@ -234,16 +277,13 @@ func (env *Environ) VirtualMachineAttachInterfaceFormProcess(rw http.ResponseWri
 	}
 	id := urlvars["id"]
 	mac := req.Form.Get("Mac")
+	network := req.Form.Get("Network")
 	accessVlan, err := strconv.ParseUint(req.Form.Get("AccessVlan"), 10, 16)
 	if err != nil {
 		http.Error(rw, "invalid vcpus value: "+err.Error(), http.StatusBadRequest)
-	}
-	network, err := env.compute.NetworkGet(req.Form.Get("Network"))
-	if err != nil {
-		env.error(rw, req, err, "cannot get network", http.StatusInternalServerError)
 		return
 	}
-	if _, err := env.compute.VirtualMachineAttachInterface(id, network.Name, mac, "virtio", uint(accessVlan), network.Type); err != nil {
+	if _, err := env.compute.VirtualMachineAttachInterface(id, network, mac, "virtio", uint(accessVlan)); err != nil {
 		env.error(rw, req, err, "cannot attach interface", http.StatusInternalServerError)
 		return
 	}

@@ -60,54 +60,6 @@ type VirtualMachineCreateParams struct {
 	Config     VirtualMachineCreateParamsConfig
 }
 
-type VirtualMachineCreateContext struct {
-	Volumes  []*Volume
-	Images   []*Volume
-	Pools    []*VolumePool
-	Networks []*Network
-	Keys     []*Key
-	Arches   []Arch
-}
-
-func (service *Service) VirtualMachineCreateContext() (VirtualMachineCreateContext, error) {
-	context := VirtualMachineCreateContext{}
-	context.Arches = []Arch{ArchAmd64}
-	volumes, err := service.vol.List()
-	if err != nil {
-		return context, util.NewError(err, "cannot list volumes")
-	}
-	context.Volumes = volumes
-
-	images := []*Volume{}
-	for _, volume := range volumes {
-		if volume.Format == FormatIso {
-			continue
-		}
-		images = append(images, volume)
-	}
-	context.Images = images
-
-	pools, err := service.volpool.List()
-	if err != nil {
-		return context, util.NewError(err, "cannot list pools")
-	}
-	context.Pools = pools
-
-	keys, err := service.key.List()
-	if err != nil {
-		return context, util.NewError(err, "cannot list keys")
-	}
-	context.Keys = keys
-
-	networks, err := service.net.List()
-	if err != nil {
-		return context, util.NewError(err, "cannot list networks")
-	}
-	context.Networks = networks
-
-	return context, nil
-}
-
 func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) (*VirtualMachine, error) {
 	volumes := []*VirtualMachineAttachedVolume{}
 	for _, volumeParams := range params.Volumes {
@@ -186,8 +138,12 @@ func (service *Service) VirtualMachineDetachVolume(id, path string) error {
 	return service.virt.DetachVolume(id, path)
 }
 
-func (service *Service) VirtualMachineAttachInterface(id, network, mac, model string, accessVlan uint, netType NetworkType) (*VirtualMachineAttachedInterface, error) {
-	return service.virt.AttachInterface(id, network, mac, model, accessVlan, netType)
+func (service *Service) VirtualMachineAttachInterface(id, network, mac, model string, accessVlan uint) (*VirtualMachineAttachedInterface, error) {
+	net, err := service.net.Get(network)
+	if err != nil {
+		return nil, util.NewError(err, "cannot get specified network")
+	}
+	return service.virt.AttachInterface(id, network, mac, model, accessVlan, net.Type)
 }
 
 func (service *Service) VirtualMachineDetachInterface(id, mac string) error {
