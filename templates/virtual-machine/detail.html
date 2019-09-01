@@ -96,6 +96,9 @@
                   Network: {{ .Network }}<br>
                   MAC: {{ .Mac }}<br>
                   Model: {{ .Model }}<br>
+                  {{ if gt .AccessVlan 0 }}
+                  Vlan: {{ .AccessVlan }}<br>
+                  {{ end }}
                   IP: {{ .IpAddressList | Join " " }}
                 </p>
                 <form method="post" action="{{ Url "virtual-machine-detach-interface" "id" $.Vm.Id }}">{{ CSRFField $.Request }}

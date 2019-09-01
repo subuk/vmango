@@ -114,4 +114,5 @@ type VirtualMachineAttachedInterface struct {
 	Mac           string
 	Model         string
 	IpAddressList []string
+	AccessVlan    uint
 }

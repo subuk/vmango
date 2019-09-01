@@ -51,6 +51,11 @@ func VirtualMachineAttachedInterfaceFromInterfaceConfig(ifaceConfig libvirtxml.D
 			iface.Network = ifaceConfig.Source.Network.Network
 		}
 	}
+	if ifaceConfig.VLan != nil {
+		if len(ifaceConfig.VLan.Tags) == 1 && ifaceConfig.VLan.Trunk == "" {
+			iface.AccessVlan = ifaceConfig.VLan.Tags[0].ID
+		}
+	}
 	return iface
 }
 
