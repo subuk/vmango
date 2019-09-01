@@ -97,6 +97,18 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	default:
 		return nil, fmt.Errorf("unknown memory unit '%s' for domain %s", domainConfig.Memory.Unit, domainConfig.Name)
 	}
+	if domainConfig.CPUTune != nil {
+		vm.Cpupin = &compute.VirtualMachineCpuPin{
+			Vcpus:    map[uint][]uint{},
+			Emulator: []uint{},
+		}
+		for _, vcpupin := range domainConfig.CPUTune.VCPUPin {
+			vm.Cpupin.Vcpus[vcpupin.VCPU] = ParseCpuAffinity(vcpupin.CPUSet)
+		}
+		if domainConfig.CPUTune.EmulatorPin != nil {
+			vm.Cpupin.Emulator = ParseCpuAffinity(domainConfig.CPUTune.EmulatorPin.CPUSet)
+		}
+	}
 
 	for _, netInterfaceConfig := range domainConfig.Devices.Interfaces {
 		iface := VirtualMachineAttachedInterfaceFromInterfaceConfig(netInterfaceConfig)

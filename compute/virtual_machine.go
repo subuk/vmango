@@ -33,6 +33,11 @@ func (state VirtualMachineState) String() string {
 	}
 }
 
+type VirtualMachineCpuPin struct {
+	Vcpus    map[uint][]uint
+	Emulator []uint
+}
+
 type VirtualMachineConfig struct {
 	Hostname string
 	Keys     []*Key
@@ -48,6 +53,7 @@ type VirtualMachine struct {
 	Interfaces []*VirtualMachineAttachedInterface
 	Volumes    []*VirtualMachineAttachedVolume
 	Config     *VirtualMachineConfig
+	Cpupin     *VirtualMachineCpuPin
 }
 
 func (vm *VirtualMachine) AttachmentInfo(path string) *VirtualMachineAttachedVolume {

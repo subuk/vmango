@@ -19,7 +19,13 @@
             <p class="text-muted">
               {{ if .Vm.Config }}Configured<br>{{ end }}
               {{ .Vm.MemoryMiB }}MiB RAM, {{ .Vm.VCpus }} CPU<br>
-              {{ .Vm.Arch }}
+              {{ .Vm.Arch }}<br>
+              {{ if .Vm.Cpupin }}
+                Emulator: {{ .Vm.Cpupin.Emulator | JoinUint "," }}<br>
+                {{ range $vcpu, $hostCpuSet := .Vm.Cpupin.Vcpus }}
+                Cpu{{ $vcpu }}:{{ $hostCpuSet | JoinUint "," }}
+                {{ end }}
+              {{ end }}
             </p>
           </div>
         </div>
@@ -41,8 +47,6 @@
         </p>
       </div>
     </div>
-
-    <hr>
 
     <div class="row">
       <div class="col-md-12">

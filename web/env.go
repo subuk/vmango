@@ -82,6 +82,13 @@ func TemplateFuncs(env *Environ) []template.FuncMap {
 			"Join": func(sep string, a []string) string {
 				return strings.Join(a, sep)
 			},
+			"JoinUint": func(sep string, uints []uint) string {
+				a := []string{}
+				for _, i := range uints {
+					a = append(a, fmt.Sprintf("%d", i))
+				}
+				return strings.Join(a, sep)
+			},
 			"Static": func(filename string) (string, error) {
 				route := env.router.Get("static")
 				if route == nil {
