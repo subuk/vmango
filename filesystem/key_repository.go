@@ -32,7 +32,7 @@ func NewKeyRepository(filename string, logger zerolog.Logger) (*KeyRepository, e
 	}
 	defer file.Close()
 
-	repo := &KeyRepository{filename: util.ExpandHomeDir(filename), logger: logger}
+	repo := &KeyRepository{filename: filename, logger: logger}
 	return repo, nil
 }
 

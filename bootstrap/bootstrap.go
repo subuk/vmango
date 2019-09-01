@@ -8,6 +8,7 @@ import (
 	"subuk/vmango/config"
 	"subuk/vmango/filesystem"
 	"subuk/vmango/libvirt"
+	"subuk/vmango/util"
 	"subuk/vmango/web"
 
 	"github.com/rs/zerolog"
@@ -26,7 +27,7 @@ func Web(configFilename string) {
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool)
 	volumePoolRepo := libvirt.NewVolumePoolRepository(connectionPool)
 	hostInfoRepo := libvirt.NewHostInfoRepository(connectionPool)
-	keyRepo, err := filesystem.NewKeyRepository(cfg.KeyFile, logger.With().Str("component", "key-repository").Logger())
+	keyRepo, err := filesystem.NewKeyRepository(util.ExpandHomeDir(cfg.KeyFile), logger.With().Str("component", "key-repository").Logger())
 	if err != nil {
 		logger.Error().Err(err).Msg("cannot initialize key storage")
 		os.Exit(1)
