@@ -67,7 +67,11 @@
                 <label>Source Image</label>
                 <select required="required" class="form-control" name="RootVolumeSource">
                     {{ range .Images }}
-                    <option value="{{ .Path }}">{{ .Path }}</option>
+                      {{ if eq .Metadata.OsName "" }}
+                      <option value="{{ .Path }}">{{ .Path }}</option>
+                      {{ else }}
+                      <option value="{{ .Path }}">{{ .Metadata.OsName }} {{ .Metadata.OsVersion }} ({{ .Metadata.OsArch }})</option>
+                      {{ end }}
                     {{ end }}
                 </select>
               </div>

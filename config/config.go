@@ -26,13 +26,21 @@ type WebConfig struct {
 	Users          []UserWebConfig `hcl:"user"`
 }
 
+type ImageConfig struct {
+	Path      string `hcl:",key"`
+	OsName    string `hcl:"os_name"`
+	OsVersion string `hcl:"os_version"`
+	OsArch    string `hcl:"os_arch"`
+}
+
 type Config struct {
-	LibvirtUri               string    `hcl:"libvirt_uri"`
-	LibvirtConfigDriveSuffix string    `hcl:"libvirt_config_drive_suffix"`
-	LibvirtConfigDrivePool   string    `hcl:"libvirt_config_drive_pool"`
-	Bridges                  []string  `hcl:"bridges"`
-	KeyFile                  string    `hcl:"key_file"`
-	Web                      WebConfig `hcl:"web"`
+	LibvirtUri               string        `hcl:"libvirt_uri"`
+	LibvirtConfigDriveSuffix string        `hcl:"libvirt_config_drive_suffix"`
+	LibvirtConfigDrivePool   string        `hcl:"libvirt_config_drive_pool"`
+	Images                   []ImageConfig `hcl:"image"`
+	Bridges                  []string      `hcl:"bridges"`
+	KeyFile                  string        `hcl:"key_file"`
+	Web                      WebConfig     `hcl:"web"`
 }
 
 func Default() *Config {

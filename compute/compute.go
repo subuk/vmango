@@ -156,6 +156,32 @@ func (service *Service) VolumeList() ([]*Volume, error) {
 	return service.vol.List()
 }
 
+func (service *Service) ImageList() ([]*Volume, error) {
+	volumes, err := service.vol.List()
+	if err != nil {
+		return nil, util.NewError(err, "cannot list volume")
+	}
+	annotatedVolumes := []*Volume{}
+	detachedVolumes := []*Volume{}
+	for _, volume := range volumes {
+		if volume.Format == FormatIso {
+			continue
+		}
+		if volume.AttachedTo != "" {
+			continue
+		}
+		if volume.Metadata.OsName != "" {
+			annotatedVolumes = append(annotatedVolumes, volume)
+			continue
+		}
+		detachedVolumes = append(detachedVolumes, volume)
+	}
+	if len(annotatedVolumes) > 0 {
+		return annotatedVolumes, nil
+	}
+	return detachedVolumes, nil
+}
+
 func (service *Service) VolumeGet(path string) (*Volume, error) {
 	return service.vol.Get(path)
 }

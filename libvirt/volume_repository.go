@@ -11,11 +11,12 @@ import (
 )
 
 type VolumeRepository struct {
-	pool *ConnectionPool
+	pool     *ConnectionPool
+	metadata map[string]compute.VolumeMetadata
 }
 
-func NewVolumeRepository(pool *ConnectionPool) *VolumeRepository {
-	return &VolumeRepository{pool: pool}
+func NewVolumeRepository(pool *ConnectionPool, metadata map[string]compute.VolumeMetadata) *VolumeRepository {
+	return &VolumeRepository{pool: pool, metadata: metadata}
 }
 
 func (repo *VolumeRepository) virVolumeToVolume(pool *libvirt.StoragePool, virVolume *libvirt.StorageVol) (*compute.Volume, error) {
@@ -41,6 +42,7 @@ func (repo *VolumeRepository) virVolumeToVolume(pool *libvirt.StoragePool, virVo
 	volume.Path = virVolumeConfig.Target.Path
 	volume.Pool = poolConfig.Name
 	volume.Format = compute.FormatUnknown
+	volume.Metadata = repo.metadata[virVolumeConfig.Target.Path]
 
 	switch poolConfig.Type {
 	case "logical":

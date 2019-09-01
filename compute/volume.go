@@ -4,6 +4,12 @@ import (
 	"path/filepath"
 )
 
+type VolumeMetadata struct {
+	OsName    string
+	OsVersion string
+	OsArch    Arch
+}
+
 type Volume struct {
 	Type       VolumeType
 	Path       string
@@ -12,6 +18,7 @@ type Volume struct {
 	Format     VolumeFormat
 	AttachedTo string
 	AttachedAs DeviceType
+	Metadata   VolumeMetadata
 }
 
 func (volume *Volume) Base() string {

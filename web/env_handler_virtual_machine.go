@@ -120,19 +120,10 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		Arches:  []compute.Arch{compute.ArchAmd64},
 	}
 
-	volumes, err := env.compute.VolumeList()
+	images, err := env.compute.ImageList()
 	if err != nil {
 		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
 		return
-	}
-	data.Volumes = volumes
-
-	images := []*compute.Volume{}
-	for _, volume := range volumes {
-		if volume.Format == compute.FormatIso {
-			continue
-		}
-		images = append(images, volume)
 	}
 	data.Images = images
 

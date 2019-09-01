@@ -22,9 +22,18 @@ func Web(configFilename string) {
 		fmt.Fprintf(os.Stderr, "Configuration error: %s\n", err)
 		os.Exit(1)
 	}
+	volumeMetadata := map[string]libcompute.VolumeMetadata{}
+	for _, image := range cfg.Images {
+		volumeMetadata[image.Path] = libcompute.VolumeMetadata{
+			OsName:    image.OsName,
+			OsVersion: image.OsVersion,
+			OsArch:    libcompute.NewArch(image.OsArch),
+		}
+	}
+
 	connectionPool := libvirt.NewConnectionPool(cfg.LibvirtUri, logger.With().Str("component", "libvirt-connection-pool").Logger())
 	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool, cfg.LibvirtConfigDrivePool, cfg.LibvirtConfigDriveSuffix, logger.With().Str("component", "vm-repository").Logger())
-	volumeRepo := libvirt.NewVolumeRepository(connectionPool)
+	volumeRepo := libvirt.NewVolumeRepository(connectionPool, volumeMetadata)
 	volumePoolRepo := libvirt.NewVolumePoolRepository(connectionPool)
 	hostInfoRepo := libvirt.NewHostInfoRepository(connectionPool)
 	keyRepo, err := filesystem.NewKeyRepository(util.ExpandHomeDir(cfg.KeyFile), logger.With().Str("component", "key-repository").Logger())
