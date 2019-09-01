@@ -51,7 +51,7 @@ func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Reque
 			attachedVolumes = append(attachedVolumes, volume)
 			continue
 		}
-		if volume.AttachedTo == "" && volume.Format != compute.FormatIso {
+		if volume.AttachedTo == "" && volume.Format != compute.FormatIso && volume.Metadata.OsName == "" {
 			availableVolumes = append(availableVolumes, volume)
 			continue
 		}
