@@ -174,10 +174,15 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		http.Error(rw, "invalid root volume size: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	accessVlan, err := strconv.ParseUint(req.Form.Get("AccessVlan"), 10, 16)
-	if err != nil {
-		http.Error(rw, "invalid vlan: "+err.Error(), http.StatusBadRequest)
-		return
+	var accessVlan uint
+	accessVlanRaw := req.Form.Get("AccessVlan")
+	if accessVlanRaw != "" {
+		parsed, err := strconv.ParseUint(accessVlanRaw, 10, 16)
+		if err != nil {
+			http.Error(rw, "invalid vlan: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		accessVlan = uint(parsed)
 	}
 	rootVolumeParams := compute.VirtualMachineCreateParamsVolume{
 		Name: req.Form.Get("RootVolumeName"), Pool: req.Form.Get("RootVolumePool"),
@@ -188,7 +193,7 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 	mainInterface := compute.VirtualMachineCreateParamsInterface{
 		Network:    req.Form.Get("Network"),
 		Mac:        req.Form.Get("Mac"),
-		AccessVlan: uint(accessVlan),
+		AccessVlan: accessVlan,
 	}
 	params := compute.VirtualMachineCreateParams{
 		Id:         req.Form.Get("Name"),
@@ -278,12 +283,19 @@ func (env *Environ) VirtualMachineAttachInterfaceFormProcess(rw http.ResponseWri
 	id := urlvars["id"]
 	mac := req.Form.Get("Mac")
 	network := req.Form.Get("Network")
-	accessVlan, err := strconv.ParseUint(req.Form.Get("AccessVlan"), 10, 16)
-	if err != nil {
-		http.Error(rw, "invalid vcpus value: "+err.Error(), http.StatusBadRequest)
-		return
+
+	var accessVlan uint
+	accessVlanRaw := req.Form.Get("AccessVlan")
+	if accessVlanRaw != "" {
+		parsed, err := strconv.ParseUint(accessVlanRaw, 10, 16)
+		if err != nil {
+			http.Error(rw, "invalid vlan: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		accessVlan = uint(parsed)
 	}
-	if _, err := env.compute.VirtualMachineAttachInterface(id, network, mac, "virtio", uint(accessVlan)); err != nil {
+
+	if _, err := env.compute.VirtualMachineAttachInterface(id, network, mac, "virtio", accessVlan); err != nil {
 		env.error(rw, req, err, "cannot attach interface", http.StatusInternalServerError)
 		return
 	}
