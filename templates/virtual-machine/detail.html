@@ -35,6 +35,7 @@
         <p>
 
           {{ if .Vm.IsRunning }}
+            <a class="btn btn-primary" href="{{ Url "virtual-machine-console-show" "id" .Vm.Id }}">Console</a>
             <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "poweroff" }}">Power Off</a>
             <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "reboot" }}">Reboot</a>
           {{ else }}

@@ -9,9 +9,16 @@ type VirtualMachineRepository interface {
 	DetachVolume(id, path string) error
 	AttachInterface(id, network, mac, model string, accessVlan uint, netType NetworkType) (*VirtualMachineAttachedInterface, error)
 	DetachInterface(id, mac string) error
+	GetConsoleStream(id string) (VirtualMachineConsoleStream, error)
 	Poweroff(id string) error
 	Reboot(id string) error
 	Start(id string) error
+}
+
+type VirtualMachineConsoleStream interface {
+	Read(buf []byte) (int, error)
+	Write(buf []byte) (int, error)
+	Close() error
 }
 
 type VirtualMachineState int

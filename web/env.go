@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/gorilla/csrf"
-
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
+	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 	"github.com/unrolled/render"
 	"golang.org/x/crypto/bcrypt"
@@ -30,6 +30,7 @@ type Environ struct {
 	sessions sessions.Store
 	random   *rand.Rand
 	compute  *libcompute.Service
+	ws       *websocket.Upgrader
 	cfg      *config.WebConfig
 }
 
@@ -138,6 +139,7 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service)
 
 	env.random = rand.New(rand.NewSource(time.Now().UnixNano()))
 	env.render = renderer
+	env.ws = &websocket.Upgrader{}
 	env.logger = logger
 	env.router = router
 	env.compute = compute
@@ -171,6 +173,8 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service)
 	router.HandleFunc("/machines/add/", env.authenticated(env.VirtualMachineAddFormShow)).Name("virtual-machine-add")
 	router.HandleFunc("/machines/{id}/", env.authenticated(env.VirtualMachineDetail)).Name("virtual-machine-detail")
 	router.HandleFunc("/machines/{id}/attach-disk/", env.authenticated(env.VirtualMachineAttachDiskFormProcess)).Methods("POST").Name("virtual-machine-attach-disk")
+	router.HandleFunc("/machines/{id}/console/", env.authenticated(env.VirtualMachineConsoleShow)).Name("virtual-machine-console-show")
+	router.HandleFunc("/machines/{id}/console-ws/", env.authenticated(env.VirtualMachineConsoleWS)).Name("virtual-machine-console-ws")
 	router.HandleFunc("/machines/{id}/detach-volume/", env.authenticated(env.VirtualMachineDetachVolumeFormProcess)).Methods("POST").Name("virtual-machine-detach-volume")
 	router.HandleFunc("/machines/{id}/attach-interface/", env.authenticated(env.VirtualMachineAttachInterfaceFormProcess)).Methods("POST").Name("virtual-machine-attach-interface")
 	router.HandleFunc("/machines/{id}/detach-interface/", env.authenticated(env.VirtualMachineDetachInterfaceFormProcess)).Methods("POST").Name("virtual-machine-detach-interface")

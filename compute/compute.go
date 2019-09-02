@@ -152,6 +152,10 @@ func (service *Service) VirtualMachineDetachInterface(id, mac string) error {
 	return service.virt.DetachInterface(id, mac)
 }
 
+func (service *Service) VirtualMachineGetConsoleStream(id string) (VirtualMachineConsoleStream, error) {
+	return service.virt.GetConsoleStream(id)
+}
+
 func (service *Service) VolumeList() ([]*Volume, error) {
 	return service.vol.List()
 }

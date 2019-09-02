@@ -363,6 +363,43 @@ func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxm
 	return nil
 }
 
+type virStreamReadWriteCloser struct {
+	*libvirt.Stream
+}
+
+func (r *virStreamReadWriteCloser) Read(b []byte) (int, error) {
+	return r.Recv(b)
+}
+
+func (r *virStreamReadWriteCloser) Write(b []byte) (int, error) {
+	return r.Send(b)
+}
+
+func (r *virStreamReadWriteCloser) Close() error {
+	return r.Stream.Finish()
+}
+
+func (repo *VirtualMachineRepository) GetConsoleStream(id string) (compute.VirtualMachineConsoleStream, error) {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return nil, util.NewError(err, "cannot acquire libvirt connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virDomain, err := conn.LookupDomainByName(id)
+	if err != nil {
+		return nil, util.NewError(err, "cannot get vm")
+	}
+	stream, err := conn.NewStream(0)
+	if err != nil {
+		return nil, util.NewError(err, "cannot create stream")
+	}
+	if err := virDomain.OpenConsole("", stream, libvirt.DOMAIN_CONSOLE_FORCE); err != nil {
+		return nil, util.NewError(err, "cannot open domain console")
+	}
+	return &virStreamReadWriteCloser{stream}, nil
+}
+
 func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus int, memoryKb uint, volumes []*compute.VirtualMachineAttachedVolume, interfaces []*compute.VirtualMachineAttachedInterface, config *compute.VirtualMachineConfig) (*compute.VirtualMachine, error) {
 	conn, err := repo.pool.Acquire()
 	if err != nil {

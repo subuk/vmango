@@ -10,8 +10,12 @@
 
 <script src="{{ Static "vmango/vmango.CheckboxCard.js" }}"></script>
 <script src="{{ Static "vmango/vmango.ReactiveForm.js" }}"></script>
+<script src="{{ Static "vmango/vmango.WSConsole.js" }}"></script>
 <script>
 $(function(){
+    $('.JS-WSConsole').each(function(idx, el){
+        Vmango.WSConsole(el);
+    });
     $('.JS-CheckboxCards').each(function(idx, el){
         Vmango.CheckboxCards(el);
     });
@@ -20,4 +24,3 @@ $(function(){
     });
 });
 </script>
-

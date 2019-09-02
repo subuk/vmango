@@ -7,6 +7,7 @@ import (
 	"subuk/vmango/compute"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 )
 
 func (env *Environ) VirtualMachineList(rw http.ResponseWriter, req *http.Request) {
@@ -315,4 +316,69 @@ func (env *Environ) VirtualMachineDetachInterfaceFormProcess(rw http.ResponseWri
 	}
 	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
 	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+}
+
+func (env *Environ) VirtualMachineConsoleShow(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
+	if err != nil {
+		env.error(rw, req, err, "cannot get vm", http.StatusInternalServerError)
+		return
+	}
+	data := struct {
+		Title   string
+		Vm      *compute.VirtualMachine
+		User    *User
+		Request *http.Request
+	}{"Virtual Machine Serial Console", vm, env.Session(req).AuthUser(), req}
+	if err := env.render.HTML(rw, http.StatusOK, "virtual-machine/console", data); err != nil {
+		env.error(rw, req, err, "failed to render template", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (env *Environ) VirtualMachineConsoleWS(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+
+	wsconn, err := env.ws.Upgrade(rw, req, nil)
+	if err != nil {
+		env.logger.Debug().Err(err).Msg("cannot upgrade websocket connection")
+		return
+	}
+
+	console, err := env.compute.VirtualMachineGetConsoleStream(urlvars["id"])
+	if err != nil {
+		env.error(rw, req, err, "cannot get vm console", http.StatusInternalServerError)
+		return
+	}
+	defer console.Close()
+
+	go func() {
+		for {
+			buf := make([]byte, 1024)
+			n, err := console.Read(buf)
+			if err != nil {
+				env.logger.Debug().Err(err).Msg("console read error")
+				return
+			}
+			if err := wsconn.WriteMessage(websocket.TextMessage, buf[0:n]); err != nil {
+				env.logger.Debug().Err(err).Msg("wsconn write error")
+				return
+			}
+		}
+	}()
+	for {
+		mt, message, err := wsconn.ReadMessage()
+		if err != nil {
+			env.logger.Debug().Err(err).Msg("ws read error")
+			return
+		}
+		if mt != websocket.TextMessage {
+			continue
+		}
+		if _, err := console.Write(message); err != nil {
+			env.logger.Debug().Err(err).Msg("console write error")
+			return
+		}
+	}
 }

@@ -1,0 +1,26 @@
+{{ template "header" . }}
+
+<!-- Breadcrumb -->
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}">Virtual Machines</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-detail" "id" .Vm.Id }}">{{ .Vm.Id }}</a></li>
+  <li class="breadcrumb-item active">Console</li>
+</ol>
+
+<div class="container">
+  <div class="card border-0">
+    <div class="card-block JS-WSConsole" data-JSConsole-WSUrl="{{ Url "virtual-machine-console-ws" "id" .Vm.Id }}">
+        <pre style="width: 100%; height: 600px; background-color:black; color: white; overflow: scroll;" class="JS-WSConsole-Window">Connecting...</pre>
+        <form class="form-inline JS-WSConsole-InputForm">
+            <div class="form-group mb-2">
+                <input autofocus type="text" class="form-control" name="Command">
+            </div>
+            <button class="btn btn-primary mb-2" type="submit">Send</button>
+        </form>
+    </div>
+  </div>
+</div>
+
+
+{{ template "footer" . }}
