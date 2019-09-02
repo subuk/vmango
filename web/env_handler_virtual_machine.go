@@ -354,8 +354,8 @@ func (env *Environ) VirtualMachineConsoleWS(rw http.ResponseWriter, req *http.Re
 	defer console.Close()
 
 	go func() {
+		buf := make([]byte, 1024)
 		for {
-			buf := make([]byte, 1024)
 			n, err := console.Read(buf)
 			if err != nil {
 				env.logger.Debug().Err(err).Msg("console read error")
@@ -368,13 +368,10 @@ func (env *Environ) VirtualMachineConsoleWS(rw http.ResponseWriter, req *http.Re
 		}
 	}()
 	for {
-		mt, message, err := wsconn.ReadMessage()
+		_, message, err := wsconn.ReadMessage()
 		if err != nil {
 			env.logger.Debug().Err(err).Msg("ws read error")
 			return
-		}
-		if mt != websocket.TextMessage {
-			continue
 		}
 		if _, err := console.Write(message); err != nil {
 			env.logger.Debug().Err(err).Msg("console write error")

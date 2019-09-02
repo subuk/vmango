@@ -4,8 +4,8 @@
         var loc = window.location,
             $consoleEl = $(el),
             $consoleWindowEl = $consoleEl.find('.JS-WSConsole-Window'),
-            $consoleInputFormEl = $consoleEl.find('.JS-WSConsole-InputForm'),
-            $consoleInputFieldEl = $consoleInputFormEl.find("input[name='Command']"),
+            terminal = new Terminal(),
+            firstMessage = true,
             wsUri;
         if (loc.protocol === "https:") {
             wsUri = "wss:";
@@ -14,24 +14,28 @@
         }
         wsUri += "//" + loc.host;
         wsUri += $consoleEl.attr('data-JSConsole-WSUrl');
+        terminal.off();
+        terminal.open($consoleWindowEl[0]);
+        terminal.focus();
+        terminal.write("Connecting...\r\n");
         var socket = new WebSocket(wsUri);
+        terminal.onData(function(data){
+            socket.send(data);
+        })
         socket.onopen = function(){
-            $consoleWindowEl.text('');
-            $consoleWindowEl.text("Connected, send any text to start");
+            terminal.on();
+            terminal.write("Connected! Type any key to start\r\n");
         }
         socket.onmessage = function(event){
-            $consoleWindowEl.append(event.data);
-            $consoleWindowEl.scrollTop($consoleWindowEl.prop('scrollHeight'));
+            if (firstMessage){
+                firstMessage = false;
+                terminal.clear();
+            }
+            terminal.write(event.data)
         }
         socket.onclose = function(){
-            $consoleWindowEl.append("\nConnection closed, reconnecting in 3 seconds...\n");
-            setTimeout(function(){start(websocketServerLocation)}, 3000);
+            terminal.off();
+            terminal.write("Disconnected... Try to reload page to reconnect...\r\n");
         };
-        $consoleInputFormEl.on("submit", function(){
-            socket.send($consoleInputFieldEl.val() + "\n");
-            $consoleInputFieldEl.val('');
-            return false
-        });
     }
-
 })(window);
