@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"subuk/vmango/compute"
@@ -361,19 +362,19 @@ func (env *Environ) VirtualMachineConsoleWS(rw http.ResponseWriter, req *http.Re
 				env.logger.Debug().Err(err).Msg("console read error")
 				return
 			}
-			if err := wsconn.WriteMessage(websocket.TextMessage, buf[0:n]); err != nil {
+			if err := wsconn.WriteMessage(websocket.BinaryMessage, buf[0:n]); err != nil {
 				env.logger.Debug().Err(err).Msg("wsconn write error")
 				return
 			}
 		}
 	}()
 	for {
-		_, message, err := wsconn.ReadMessage()
+		_, reader, err := wsconn.NextReader()
 		if err != nil {
-			env.logger.Debug().Err(err).Msg("ws read error")
+			env.logger.Debug().Err(err).Msg("ws message error")
 			return
 		}
-		if _, err := console.Write(message); err != nil {
+		if _, err := io.Copy(console, reader); err != nil {
 			env.logger.Debug().Err(err).Msg("console write error")
 			return
 		}

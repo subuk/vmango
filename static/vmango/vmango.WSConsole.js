@@ -5,7 +5,9 @@
             $consoleEl = $(el),
             $consoleWindowEl = $consoleEl.find('.JS-WSConsole-Window'),
             terminal = new Terminal(),
+            decoder = new TextDecoder("utf-8", {fatal: false}),
             firstMessage = true,
+            socket,
             wsUri;
         if (loc.protocol === "https:") {
             wsUri = "wss:";
@@ -18,7 +20,8 @@
         terminal.open($consoleWindowEl[0]);
         terminal.focus();
         terminal.write("Connecting...\r\n");
-        var socket = new WebSocket(wsUri);
+        socket = new WebSocket(wsUri);
+        socket.binaryType = "arraybuffer";
         terminal.onData(function(data){
             socket.send(data);
         })
@@ -31,7 +34,7 @@
                 firstMessage = false;
                 terminal.clear();
             }
-            terminal.write(event.data)
+            terminal.write(decoder.decode(event.data, {stream: true}));
         }
         socket.onclose = function(){
             terminal.off();
