@@ -18,6 +18,7 @@
         wsUri += $consoleEl.attr('data-JSConsole-WSUrl');
         terminal.off();
         terminal.open($consoleWindowEl[0]);
+        terminal.fit();
         terminal.focus();
         terminal.write("Connecting...\r\n");
         socket = new WebSocket(wsUri);

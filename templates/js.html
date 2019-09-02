@@ -7,11 +7,17 @@
 <script src="{{ Static "coreui/js/app.js" }}"></script>
 <!-- <script src="{{ Static "coreui/js/views/main.js" }}"></script> -->
 <script src="{{ Static "xterm/xterm.js" }}"></script>
+<script src="{{ Static "xterm/addons/fit/fit.js" }}"></script>
 
 <script src="{{ Static "vmango/vmango.CheckboxCard.js" }}"></script>
 <script src="{{ Static "vmango/vmango.ReactiveForm.js" }}"></script>
 <script src="{{ Static "vmango/vmango.WSConsole.js" }}"></script>
 <script>
+
+(function(exports){
+    Terminal.applyAddon(fit);
+})(window);
+
 $(function(){
     $('.JS-WSConsole').each(function(idx, el){
         Vmango.WSConsole(el);
