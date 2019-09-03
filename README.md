@@ -41,9 +41,10 @@ Download vm images to default libvirt pool location:
     wget https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1901.qcow2
     wget https://cloud-images.ubuntu.com/minimal/releases/bionic/release/ubuntu-18.04-minimal-cloudimg-amd64.img
 
-Define default volume pool (if not exists):
+Define default volume pool (if not exists) and start it:
 
     virsh pool-define-as default dir --target /var/lib/libvirt/images/
+    virsh pool-start default
 
 
 ## Local run
