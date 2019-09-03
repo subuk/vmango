@@ -14,6 +14,7 @@ Current features:
 * SSH keys management and injection
 * Volume management
 * KVM machines via libvirt
+* [Web console](https://streamja.com/LLEA)
 * Support for cloud OS images (with cloud-init installed)
 * Custom userdata for cloud-init
 * Bridged network

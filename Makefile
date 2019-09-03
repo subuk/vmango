@@ -8,7 +8,7 @@ UNAME_S := $(shell uname -s)
 TARBALL_SOURCES = $(GO_SOURCES) Makefile README.md vmango.dist.conf vmango.service static/ templates/ vendor/ go.mod go.sum
 
 RPM_NAME = vmango
-VERSION = 0.8.0
+VERSION = 0.9.0
 RELEASE = 1
 
 BUILD_LDFLAGS = -X subuk/vmango/web.AppVersion=$(VERSION)
