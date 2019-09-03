@@ -5,7 +5,7 @@ INSTALL = install
 GO_SOURCES = $(shell find . -name '*.go')
 ASSETS_SOURCES = $(shell find templates static)
 UNAME_S := $(shell uname -s)
-TARBALL_SOURCES = $(GO_SOURCES) Makefile README.md vmango.dist.conf vmango.service vendor/
+TARBALL_SOURCES = $(GO_SOURCES) Makefile README.md vmango.dist.conf vmango.service static/ templates/ vendor/ go.mod go.sum
 
 RPM_NAME = vmango
 VERSION = 0.8.0
@@ -54,7 +54,7 @@ spec: $(RPM_NAME).spec.in
 	sed -e "s/@@_VERSION_@@/$(VERSION)/g" -e "s/@@_RELEASE_@@/$(RELEASE)/g" $(RPM_NAME).spec.in > $(RPM_NAME).spec
 
 .PHONY: apparchive
-apparchive: $(TARBALL_SOURCES) RELEASE_BUILD_COMMIT.txt
+apparchive: $(TARBALL_SOURCES)
 	$(TAR) --transform "s,,$(RPM_NAME)-$(VERSION)/," -czf $(RPM_NAME)-$(VERSION).tar.gz $^
 
 .PHONY: rpm

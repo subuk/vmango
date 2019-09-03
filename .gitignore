@@ -12,3 +12,6 @@
 /rpm/*.tar.gz
 /deb/*.tar.gz
 /.vscode/
+/vmango.spec
+/result/
+/vmango.conf

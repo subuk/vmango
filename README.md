@@ -78,3 +78,10 @@ Install Go compiler, libvirt C library and mkisofs util (for configdrive creatio
 
 You need a linux hypervisor somewhere in the world, because libvirt doesn't support MacOS.
 Make sure to add ?socket option to remote libvirt urls.
+
+
+## Build RPM
+
+Requires docker command.
+
+    make clean rpm

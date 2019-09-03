@@ -1,0 +1,52 @@
+%define debug_package %{nil}
+
+Name: vmango
+Summary: Virtual Machine Manager
+Version: @@_VERSION_@@
+Release: @@_RELEASE_@@%{dist}
+Source0: %{name}-%{version}.tar.gz
+License: GPLv3
+Group: Other
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}.buildroot
+Vendor: subuk
+BuildRequires: golang = 1.12.9
+BuildRequires: libvirt-devel
+Requires(pre): shadow-utils
+%{?systemd_requires}
+
+%description
+%{summary}
+
+%prep
+%setup -q
+
+%build
+make
+
+%install
+make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
+install -d %{buildroot}%{_unitdir}
+install vmango.service %{buildroot}%{_unitdir}/
+
+%pre
+getent group vmango >/dev/null || groupadd -r vmango
+getent passwd vmango >/dev/null || \
+    useradd -r -g vmango -d /var/lib/vmango -s /sbin/nologin -c "github.com/subuk/vmango" vmango
+exit 0
+
+%postun
+%systemd_postun vmango.service
+
+%preun
+%systemd_preun vmango.service
+
+%post
+%systemd_post vmango.service
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%files
+%attr(0755,root,root) %{_prefix}/bin/vmango
+%config(noreplace) /etc/vmango.conf
+%{_unitdir}/vmango.service

@@ -1,0 +1,15 @@
+[Unit]
+Description=Virtual Machine Manager
+After=network.target
+
+[Service]
+EnvironmentFile=-/etc/sysconfig/vmango
+User=vmango
+Group=vmango
+ExecStart=/usr/bin/vmango --config /etc/vmango.conf
+Restart=on-failure
+RestartSec=5s
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
