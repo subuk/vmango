@@ -7,8 +7,6 @@ because that problem already solved by many configuration management systems
 like Ansible or Puppet, but provide a convenient way to manage virtual
 machines on existing hypervisors.
 
-Documentation: https://vmango.org/docs/
-
 Current features:
 
 * SSH keys management and injection
