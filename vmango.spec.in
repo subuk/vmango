@@ -9,6 +9,7 @@ License: GPLv3
 Group: Other
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}.buildroot
 Vendor: subuk
+Requires: genisoimage
 BuildRequires: golang = 1.12.9
 BuildRequires: libvirt-devel
 Requires(pre): shadow-utils
@@ -27,6 +28,7 @@ make
 make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 install -d %{buildroot}%{_unitdir}
 install vmango.service %{buildroot}%{_unitdir}/
+install -d %{buildroot}/var/lib/vmango/
 
 %pre
 getent group vmango >/dev/null || groupadd -r vmango
@@ -48,5 +50,6 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %attr(0755,root,root) %{_prefix}/bin/vmango
+%attr(0755,vmango,vmango) /var/lib/vmango
 %config(noreplace) /etc/vmango.conf
 %{_unitdir}/vmango.service
