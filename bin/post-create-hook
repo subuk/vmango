@@ -1,0 +1,10 @@
+#! /bin/bash
+#
+# post-create-hook
+#
+#     $1 id (name)
+#     $2 root volume path
+#
+
+echo $1, $2 > /tmp/out.txt
+exit 0
