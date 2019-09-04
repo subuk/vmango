@@ -6,6 +6,7 @@ import (
 	"os"
 	libcompute "subuk/vmango/compute"
 	"subuk/vmango/config"
+	"subuk/vmango/configdrive"
 	"subuk/vmango/filesystem"
 	"subuk/vmango/libvirt"
 	"subuk/vmango/util"
@@ -31,8 +32,17 @@ func Web(configFilename string) {
 		}
 	}
 
+	libvirtConfigDriveWriteFormat := configdrive.NewFormat(cfg.LibvirtConfigDriveWriteFormat)
+	if libvirtConfigDriveWriteFormat == configdrive.FormatUnknown {
+		logger.Error().
+			Str("format", cfg.LibvirtConfigDriveWriteFormat).
+			Strs("allowed", configdrive.AllFormatsStrings()).
+			Msg("unknown libvirt configdrive write format")
+		os.Exit(1)
+	}
+
 	connectionPool := libvirt.NewConnectionPool(cfg.LibvirtUri, logger.With().Str("component", "libvirt-connection-pool").Logger())
-	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool, cfg.LibvirtConfigDrivePool, cfg.LibvirtConfigDriveSuffix, logger.With().Str("component", "vm-repository").Logger())
+	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool, cfg.LibvirtConfigDrivePool, cfg.LibvirtConfigDriveSuffix, libvirtConfigDriveWriteFormat, logger.With().Str("component", "vm-repository").Logger())
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool, volumeMetadata)
 	volumePoolRepo := libvirt.NewVolumePoolRepository(connectionPool)
 	hostInfoRepo := libvirt.NewHostInfoRepository(connectionPool)

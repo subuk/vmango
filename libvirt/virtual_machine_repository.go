@@ -2,13 +2,10 @@ package libvirt
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"subuk/vmango/compute"
+	"subuk/vmango/configdrive"
 	"subuk/vmango/util"
 	"sync"
 
@@ -23,49 +20,37 @@ import (
 const ConfigDriveMaxSize = 5 * 1024 * 1024
 
 type VirtualMachineRepository struct {
-	pool                  *ConnectionPool
-	logger                zerolog.Logger
-	configDriveVolumePool string
-	configDriveSuffix     string
-	configCache           map[string]*compute.VirtualMachineConfig
-	configCacheMu         *sync.Mutex
+	pool                   *ConnectionPool
+	logger                 zerolog.Logger
+	configDriveVolumePool  string
+	configDriveSuffix      string
+	configDriveWriteFormat configdrive.Format
+	configCache            map[string]*compute.VirtualMachineConfig
+	configCacheMu          *sync.Mutex
 }
 
-func NewVirtualMachineRepository(pool *ConnectionPool, configDriveVolumePool, configDriveSuffix string, logger zerolog.Logger) *VirtualMachineRepository {
+func NewVirtualMachineRepository(pool *ConnectionPool, configDriveVolumePool, configDriveSuffix string, configDriveWriteFormat configdrive.Format, logger zerolog.Logger) *VirtualMachineRepository {
 	if configDriveSuffix == "" {
 		panic("No config drive suffix specified")
 	}
 	return &VirtualMachineRepository{
-		pool:                  pool,
-		logger:                logger,
-		configDriveVolumePool: configDriveVolumePool,
-		configDriveSuffix:     configDriveSuffix,
-		configCache:           map[string]*compute.VirtualMachineConfig{},
-		configCacheMu:         &sync.Mutex{},
+		pool:                   pool,
+		logger:                 logger,
+		configDriveVolumePool:  configDriveVolumePool,
+		configDriveSuffix:      configDriveSuffix,
+		configDriveWriteFormat: configDriveWriteFormat,
+		configCache:            map[string]*compute.VirtualMachineConfig{},
+		configCacheMu:          &sync.Mutex{},
 	}
 }
 
 func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect, domainConfig *libvirtxml.Domain, config *compute.VirtualMachineConfig) (*compute.VirtualMachineAttachedVolume, error) {
-	md := &CloudInitMetadata{
-		InstanceId:    domainConfig.UUID,
-		Hostname:      config.Hostname,
-		LocalHostname: config.Hostname,
-	}
-	for _, key := range config.Keys {
-		md.PublicKeys = append(md.PublicKeys, string(key.Value))
-	}
-	mdBytes, err := md.Marshal()
-	if err != nil {
-		return nil, util.NewError(err, "cannot marshal config metadata")
-	}
-
 	virPool, err := conn.LookupStoragePoolByName(repo.configDriveVolumePool)
 	if err != nil {
 		return nil, util.NewError(err, "cannot lookup configdrive storage pool")
 	}
 
 	configVolumeName := strings.ReplaceAll(domainConfig.Name, "-", "_") + repo.configDriveSuffix
-
 	if existingVolume, err := virPool.LookupStorageVolByName(configVolumeName); err == nil && existingVolume != nil {
 		existingVolumeInfo, err := existingVolume.GetInfo()
 		if err == nil && existingVolumeInfo.Capacity <= 2*1024*1024 {
@@ -75,26 +60,46 @@ func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect,
 		}
 	}
 
-	tmpdir, err := ioutil.TempDir("", "vmango-configdrive-content")
-	if err != nil {
-		return nil, util.NewError(err, "cannot create tmp directory")
+	var data configdrive.Data
+	switch repo.configDriveWriteFormat {
+	default:
+		panic(fmt.Errorf("unknown configdrive write format '%s'", repo.configDriveWriteFormat))
+	case configdrive.FormatOpenstack:
+		osData := &configdrive.Openstack{
+			Userdata: config.Userdata,
+			Metadata: configdrive.OpenstackMetadata{
+				Az:          "none",
+				Files:       []struct{}{},
+				Hostname:    config.Hostname,
+				LaunchIndex: 0,
+				Name:        config.Hostname,
+				Meta:        map[string]string{},
+				PublicKeys:  map[string]string{},
+				UUID:        domainConfig.UUID,
+			},
+		}
+		for _, key := range config.Keys {
+			osData.Metadata.PublicKeys[key.Comment] = string(key.Value)
+		}
+		data = osData
+	case configdrive.FormatNoCloud:
+		nocloudData := &configdrive.NoCloud{
+			Userdata: config.Userdata,
+			Metadata: configdrive.NoCloudMetadata{
+				InstanceId:    domainConfig.UUID,
+				Hostname:      config.Hostname,
+				LocalHostname: config.Hostname,
+			},
+		}
+		for _, key := range config.Keys {
+			nocloudData.Metadata.PublicKeys = append(nocloudData.Metadata.PublicKeys, string(key.Value))
+		}
+		data = nocloudData
 	}
-	defer os.RemoveAll(tmpdir)
 
-	if err := ioutil.WriteFile(filepath.Join(tmpdir, "meta-data"), mdBytes, 0644); err != nil {
-		return nil, util.NewError(err, "cannot write metadata file to config drive")
-	}
-	if err := ioutil.WriteFile(filepath.Join(tmpdir, "user-data"), config.Userdata, 0644); err != nil {
-		return nil, util.NewError(err, "cannot write userdata file to config drive")
-	}
-	localConfigdriveFilename := filepath.Join(tmpdir, "drive.iso")
-	cmd := exec.Command("mkisofs", "-o", localConfigdriveFilename, "-V", "cidata", "-r", "-J", "--quiet", tmpdir)
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-	configdriveSize, err := util.GetFileSize(localConfigdriveFilename)
+	localConfigDriveFile, err := configdrive.GenerateIso(data)
 	if err != nil {
-		return nil, util.NewError(err, "cannot get local configdrive size")
+		return nil, util.NewError(err, "cannot generate iso")
 	}
 
 	virVolumeConfig := &libvirtxml.StorageVolume{}
@@ -109,16 +114,16 @@ func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect,
 	if err != nil {
 		return nil, util.NewError(err, "cannot create configdrive storage volume")
 	}
+	configdriveContent, err := ioutil.ReadAll(localConfigDriveFile)
+	if err != nil {
+		return nil, util.NewError(err, "cannot read local configdrive file")
+	}
 	stream, err := conn.NewStream(0)
 	if err != nil {
 		return nil, util.NewError(err, "cannot initialize configdrive upload stream")
 	}
-	if err := virVolume.Upload(stream, 0, configdriveSize, 0); err != nil {
+	if err := virVolume.Upload(stream, 0, uint64(len(configdriveContent)), 0); err != nil {
 		return nil, util.NewError(err, "cannot start configdrive upload")
-	}
-	configdriveContent, err := ioutil.ReadFile(localConfigdriveFilename)
-	if err != nil {
-		return nil, util.NewError(err, "cannot read local configdrive file")
 	}
 	if _, err := stream.Send(configdriveContent); err != nil {
 		return nil, util.NewError(err, "configdrive upload failed")
@@ -170,30 +175,14 @@ func (repo *VirtualMachineRepository) parseConfigDrive(conn *libvirt.Connect, vo
 	if err := virVolume.Download(stream, 0, ConfigDriveMaxSize, 0); err != nil {
 		return nil, util.NewError(err, "cannot start configdrive download")
 	}
-	tmpfile, err := ioutil.TempFile("", "vmango-read-configdrive")
+	data, err := configdrive.ParseIso(configdrive.AllFormats, &virStreamReader{stream})
 	if err != nil {
-		return nil, util.NewError(err, "cannot create tmp file")
-	}
-	defer tmpfile.Close()
-	defer os.Remove(tmpfile.Name())
-	if _, err := io.Copy(tmpfile, &virStreamReader{stream}); err != nil {
-		return nil, util.NewError(err, "cannot download configdrive")
-	}
-	mdCmd := exec.Command("isoinfo", "-J", "-x", "/meta-data", "-i", tmpfile.Name())
-	mdBytes, err := mdCmd.Output()
-	if err != nil {
-		return nil, util.NewError(err, "cannot extract metadata from file")
-	}
-
-	md := &CloudInitMetadata{}
-	if err := md.Unmarshal(mdBytes); err != nil {
-		return nil, util.NewError(err, "cannot parse metadata")
+		return nil, util.NewError(err, "cannot parse configdrive iso")
 	}
 	config := &compute.VirtualMachineConfig{
-		Hostname: md.Hostname,
+		Hostname: data.Hostname(),
 	}
-
-	for _, rawKey := range md.PublicKeys {
+	for _, rawKey := range data.PublicKeys() {
 		pubkey, comment, options, _, err := ssh.ParseAuthorizedKey([]byte(rawKey))
 		if err != nil {
 			repo.logger.Warn().Msg("ignoring invalid ssh key")

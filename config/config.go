@@ -2,6 +2,7 @@ package config
 
 import (
 	"io/ioutil"
+	"subuk/vmango/configdrive"
 	"subuk/vmango/util"
 
 	"github.com/hashicorp/hcl"
@@ -34,21 +35,23 @@ type ImageConfig struct {
 }
 
 type Config struct {
-	LibvirtUri               string        `hcl:"libvirt_uri"`
-	LibvirtConfigDriveSuffix string        `hcl:"libvirt_config_drive_suffix"`
-	LibvirtConfigDrivePool   string        `hcl:"libvirt_config_drive_pool"`
-	Images                   []ImageConfig `hcl:"image"`
-	Bridges                  []string      `hcl:"bridges"`
-	KeyFile                  string        `hcl:"key_file"`
-	Web                      WebConfig     `hcl:"web"`
+	LibvirtUri                    string        `hcl:"libvirt_uri"`
+	LibvirtConfigDriveSuffix      string        `hcl:"libvirt_config_drive_suffix"`
+	LibvirtConfigDrivePool        string        `hcl:"libvirt_config_drive_pool"`
+	LibvirtConfigDriveWriteFormat string        `hcl:"libvirt_config_drive_write_format"`
+	Images                        []ImageConfig `hcl:"image"`
+	Bridges                       []string      `hcl:"bridges"`
+	KeyFile                       string        `hcl:"key_file"`
+	Web                           WebConfig     `hcl:"web"`
 }
 
 func Default() *Config {
 	return &Config{
-		LibvirtUri:               "qemu:///system",
-		LibvirtConfigDrivePool:   "default",
-		LibvirtConfigDriveSuffix: "_config.iso",
-		KeyFile:                  "~/.vmango/authorized_keys",
+		LibvirtUri:                    "qemu:///system",
+		LibvirtConfigDrivePool:        "default",
+		LibvirtConfigDriveSuffix:      "_config.iso",
+		LibvirtConfigDriveWriteFormat: configdrive.FormatNoCloud.String(),
+		KeyFile:                       "~/.vmango/authorized_keys",
 		Web: WebConfig{
 			Listen:         ":8080",
 			Debug:          false,
