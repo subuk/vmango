@@ -101,11 +101,15 @@ func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect,
 	if err != nil {
 		return nil, util.NewError(err, "cannot generate iso")
 	}
+	configdriveContent, err := ioutil.ReadAll(localConfigDriveFile)
+	if err != nil {
+		return nil, util.NewError(err, "cannot read local configdrive file")
+	}
 
 	virVolumeConfig := &libvirtxml.StorageVolume{}
 	virVolumeConfig.Name = configVolumeName
 	virVolumeConfig.Target = &libvirtxml.StorageVolumeTarget{Format: &libvirtxml.StorageVolumeTargetFormat{Type: "raw"}}
-	virVolumeConfig.Capacity = &libvirtxml.StorageVolumeSize{Unit: "MiB", Value: 2}
+	virVolumeConfig.Capacity = &libvirtxml.StorageVolumeSize{Unit: "bytes", Value: uint64(len(configdriveContent))}
 	virVolumeXml, err := virVolumeConfig.Marshal()
 	if err != nil {
 		return nil, util.NewError(err, "cannot marshal configdrive volume to xml")
@@ -113,10 +117,6 @@ func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect,
 	virVolume, err := virPool.StorageVolCreateXML(virVolumeXml, 0)
 	if err != nil {
 		return nil, util.NewError(err, "cannot create configdrive storage volume")
-	}
-	configdriveContent, err := ioutil.ReadAll(localConfigDriveFile)
-	if err != nil {
-		return nil, util.NewError(err, "cannot read local configdrive file")
 	}
 	stream, err := conn.NewStream(0)
 	if err != nil {
