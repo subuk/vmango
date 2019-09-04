@@ -491,6 +491,10 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 	if err != nil {
 		return nil, util.NewError(err, "cannot parse domain to vm")
 	}
+	cmd := exec.Command("post-create-hook", id, volumes)
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
 	return vm, nil
 }
 
