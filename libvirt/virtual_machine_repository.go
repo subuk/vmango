@@ -491,10 +491,16 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 	if err != nil {
 		return nil, util.NewError(err, "cannot parse domain to vm")
 	}
-	cmd := exec.Command("post-create-hook", id, volumes)
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
+
+        logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
+        logger.Info().Str(id, volumes[0].Path).Msg("Executing post-create-hook on vm:")
+
+        //ASSUMPTION: since this is executed during VM creation the first (and only) volume is the root
+        cmd := exec.Command("post-create-hook", id, volumes[0].Path)
+        if err := cmd.Run(); err != nil {
+                logger.Error().Msg("Error executing post-create-hook")
+        }
+	
 	return vm, nil
 }
 
