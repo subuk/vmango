@@ -239,9 +239,9 @@ func (env *Environ) authenticated(handler http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (env *Environ) checkPassword(email string, password string) *User {
+func (env *Environ) checkPassword(userId string, password string) *User {
 	for _, user := range env.cfg.Users {
-		if user.Email != email {
+		if user.Id != userId {
 			continue
 		}
 		if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(password)); err != nil {
@@ -249,12 +249,13 @@ func (env *Environ) checkPassword(email string, password string) *User {
 			return nil
 		}
 		return &User{
+			Id:            userId,
 			Email:         user.Email,
 			FullName:      user.FullName,
 			Authenticated: true,
 		}
 	}
-	env.logger.Warn().Str("email", email).Msg("user not found")
+	env.logger.Warn().Str("id", userId).Msg("user not found")
 	return nil
 }
 

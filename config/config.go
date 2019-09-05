@@ -10,6 +10,7 @@ import (
 )
 
 type UserWebConfig struct {
+	Id             string `hcl:",key"`
 	FullName       string `hcl:"full_name"`
 	Email          string `hcl:"email"`
 	HashedPassword string `hcl:"hashed_password"`

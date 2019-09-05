@@ -50,7 +50,7 @@ func (env *Environ) Logout(rw http.ResponseWriter, req *http.Request) {
 			env.error(rw, req, err, "failed to save session", http.StatusInternalServerError)
 			return
 		}
-		env.logger.Info().Str("user", user.Email).Msg("user logged out")
+		env.logger.Info().Str("user", user.Id).Msg("user logged out")
 	}
 	http.Redirect(rw, req, "/", http.StatusFound)
 }
