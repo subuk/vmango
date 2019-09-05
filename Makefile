@@ -5,11 +5,9 @@ INSTALL = install
 GO_SOURCES = $(shell find . -name '*.go')
 ASSETS_SOURCES = $(shell find templates static)
 UNAME_S := $(shell uname -s)
-TARBALL_SOURCES = $(GO_SOURCES) Makefile README.md vmango.dist.conf vmango.service static/ templates/ vendor/ go.mod go.sum
+TARBALL_SOURCES = $(GO_SOURCES) Makefile Makefile.RPM.mk README.md vmango.dist.conf vmango.service static/ templates/ vendor/ go.mod go.sum
 
-RPM_NAME = vmango
 VERSION = 0.9.0
-RELEASE = 1
 
 BUILD_LDFLAGS = -X subuk/vmango/web.AppVersion=$(VERSION)
 
@@ -29,14 +27,6 @@ default: bin/vmango
 bin/vmango: $(GO_SOURCES) web/assets_generated.go Makefile
 	$(GO) build -ldflags='$(BUILD_LDFLAGS)' -o bin/vmango
 
-.PHONY: vendor
-vendor:
-	$(GO) mod tidy -v
-	$(GO) mod vendor -v
-
-test:
-	go test vmango/...
-
 bin/go-bindata:
 	$(GO) install github.com/go-bindata/go-bindata/go-bindata
 
@@ -49,18 +39,21 @@ install: bin/vmango vmango.dist.conf
 	$(INSTALL) -m 0755 bin/vmango $(BIN_DIR)/
 	$(INSTALL) -m 0644 vmango.dist.conf $(CONF_DIR)/vmango.conf
 
-.PHONY: spec
-spec: $(RPM_NAME).spec.in
-	sed -e "s/@@_VERSION_@@/$(VERSION)/g" -e "s/@@_RELEASE_@@/$(RELEASE)/g" $(RPM_NAME).spec.in > $(RPM_NAME).spec
+tarball: vmango-$(VERSION).tar.gz
+vmango-$(VERSION).tar.gz: $(TARBALL_SOURCES)
+	$(TAR) --transform "s,,vmango-$(VERSION)/," -czf vmango-$(VERSION).tar.gz $^
 
-.PHONY: apparchive
-apparchive: $(TARBALL_SOURCES)
-	$(TAR) --transform "s,,$(RPM_NAME)-$(VERSION)/," -czf $(RPM_NAME)-$(VERSION).tar.gz $^
+.PHONY: vendor
+vendor:
+	$(GO) mod tidy -v
+	$(GO) mod vendor -v
 
-.PHONY: rpm
-rpm: spec apparchive
-	./build-rpm.sh centos-7 $(RPM_NAME).spec
+.PHONY: test
+test:
+	go test vmango/...
 
+.PHONY: clean
 clean:
-	rm -rf web/assets_generated.go result/ bin/ $(RPM_NAME).spec $(RPM_NAME)-*.tar.gz
-	$(GO) clean -testcache
+	rm -rf web/assets_generated.go bin/ $(RPM_NAME)*.spec $(RPM_NAME)-*.tar.gz *.rpm
+
+include Makefile.RPM.mk

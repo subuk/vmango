@@ -83,6 +83,10 @@ Make sure to add ?socket option to remote libvirt urls.
 
 ## Build RPM
 
-Requires docker command.
+With docker for Centos 7:
+
+    make clean docker-rpm
+
+Locally:
 
     make clean rpm
