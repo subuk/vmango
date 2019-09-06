@@ -17,6 +17,26 @@ Current features:
 * Custom userdata for cloud-init
 * Bridged network
 
+## Installation
+
+There are two RPM repositories:
+
+* `vmango` for the latest tagged release, it may be considered stable
+* `vmango-devel` contains packages built automatically from the latest commit in master branch
+
+### Centos 7
+
+1. Enable copr reposotory, use `subuk/vmango-devel` for the latest version, `subuk/vmango` for stable
+1. Install package
+1. Edit configuration file `/etc/vmango.conf`
+1. Start and enable systemd service `vmango`
+
+```
+yum install -y yum-plugin-copr && yum copr -y enable subuk/vmango
+yum install -y vmango
+systemctl enable --now vmango
+```
+
 ## Hypervisor configuration
 
 Install libvirt and qemu-kvm.
