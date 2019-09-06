@@ -45,7 +45,7 @@ Define default volume pool (if not exists) and start it:
 
     virsh pool-define-as default dir --target /var/lib/libvirt/images/
     virsh pool-start default
-    virsh pool-autostart default    
+    virsh pool-autostart default
 
 
 ## Local run
