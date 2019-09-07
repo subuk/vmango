@@ -37,6 +37,17 @@ yum install -y vmango
 systemctl enable --now vmango
 ```
 
+### Ubuntu 18.04
+
+1. Follow instructions on vmango or vmango-devel ppa page https://launchpad.net/~subuk/+archive/ubuntu/vmango
+1. Install package
+1. Edit configuration file `/etc/vmango.conf`
+
+```
+sudo add-apt-repository ppa:subuk/vmango
+sudo apt-get install vmango
+```
+
 ## Hypervisor configuration
 
 Install libvirt and qemu-kvm.
