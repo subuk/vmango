@@ -1,3 +1,9 @@
+vmango (0.9.1-1) unstable; urgency=medium
+
+  * Update upstream to 0.9.1
+
+ -- Matvey Kruglov <kubuzzzz@gmail.com>  Sat, 07 Sep 2019 20:31:31 +0000
+
 vmango (0.9.0-1) unstable; urgency=medium
 
   * Initial release

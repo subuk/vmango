@@ -53,3 +53,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(0755,vmango,vmango) /var/lib/vmango
 %config(noreplace) /etc/vmango.conf
 %{_unitdir}/vmango.service
+
+%changelog
+* Sat Sep 7 2019 20:11:31 +0000 Matvey Kruglov <kubuzzzz@gmail.com> 0.9.1-1
+- Update upstream to 0.9.1
