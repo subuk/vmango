@@ -17,7 +17,7 @@ endif
 
 
 spec: $(RPM_SPEC)
-$(RPM_SPEC): $(RPM_NAME)-$(RPM_VERSION)-$(RPM_RELEASE).spec
+$(RPM_SPEC): $(RPM_NAME)-$(RPM_VERSION)-$(RPM_RELEASE).spec Makefile.RPM.mk
 	cp $(RPM_NAME)-$(RPM_VERSION)-$(RPM_RELEASE).spec $(RPM_SPEC)
 $(RPM_NAME)-$(RPM_VERSION)-$(RPM_RELEASE).spec: $(RPM_NAME).spec.in
 	sed -e "s/@@_VERSION_@@/$(RPM_VERSION)/g" -e "s/@@_RELEASE_@@/$(RPM_RELEASE)/g" $(RPM_NAME).spec.in > $(RPM_NAME)-$(RPM_VERSION)-$(RPM_RELEASE).spec
@@ -35,7 +35,3 @@ $(RPM_OUTDIR)/$(RPM_NAME)-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).$(RPM_ARCH).r
 	yum-builddep -y $(RPM_OUTDIR)/$(RPM_NAME)-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm
 	rpmbuild --rebuild $(RPM_OUTDIR)/$(RPM_NAME)-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).src.rpm
 	mv $(RPM_TOPDIR)/RPMS/$(RPM_ARCH)/$(RPM_NAME)-$(RPM_VERSION)-$(RPM_RELEASE)$(RPM_DIST).$(RPM_ARCH).rpm $(RPM_OUTDIR)/
-
-.PHONY: docker-rpm
-docker-rpm:
-	./dockerbuild.sh centos-7 rpm

@@ -1,0 +1,2 @@
+# git-build-recipe format 0.4 deb-version {debupstream}-{time}~{git-commit}
+lp:~subuk/+git/vmango feature/debian_packaging

@@ -1,0 +1,13 @@
+[Unit]
+Description=Vmango web service
+After=network-online.target
+
+[Service]
+Type=simple
+User=vmango
+Group=vmango
+EnvironmentFile=-/etc/default/vmango
+ExecStart=/usr/bin/vmango --config /etc/vmango.conf
+
+[Install]
+WantedBy=multi-user.target

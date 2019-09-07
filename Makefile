@@ -1,11 +1,13 @@
 export GOFLAGS=-mod=vendor
 export GOBIN=$(PWD)/bin/
+# Fix for debian sbuild
+export GOCACHE=/tmp/.vmango-go-build-cache
 GO = go
 INSTALL = install
 GO_SOURCES = $(shell find . -name '*.go')
 ASSETS_SOURCES = $(shell find templates static)
 UNAME_S := $(shell uname -s)
-TARBALL_SOURCES = $(GO_SOURCES) Makefile Makefile.RPM.mk README.md vmango.dist.conf vmango.service static/ templates/ vendor/ go.mod go.sum
+TARBALL_SOURCES = $(GO_SOURCES) Makefile README.md vmango.dist.conf vmango.service static/ templates/ vendor/ go.mod go.sum
 
 VERSION = 0.9.0
 
@@ -28,7 +30,7 @@ bin/vmango: $(GO_SOURCES) web/assets_generated.go Makefile
 	$(GO) build -ldflags='$(BUILD_LDFLAGS)' -o bin/vmango
 
 bin/go-bindata:
-	$(GO) install github.com/go-bindata/go-bindata/go-bindata
+	$(GO) build -o bin/go-bindata github.com/go-bindata/go-bindata/go-bindata
 
 web/assets_generated.go: bin/go-bindata $(ASSETS_SOURCES)
 	bin/go-bindata $(ASSETS_FLAGS) -o web/assets_generated.go -pkg web static/... templates/...
@@ -50,10 +52,11 @@ vendor:
 
 .PHONY: test
 test:
-	go test vmango/...
+	go test
 
 .PHONY: clean
 clean:
-	rm -rf web/assets_generated.go bin/ $(RPM_NAME)*.spec $(RPM_NAME)-*.tar.gz *.rpm
+	rm -rf web/assets_generated.go bin/ *.tar.gz *.tar.hz *.rpm *.deb *_source.buildinfo *_source.changes *_source.ppa.upload *.debian.tar.xz *.dsc
 
-include Makefile.RPM.mk
+-include Makefile.RPM.mk
+-include Makefile.DEB.mk

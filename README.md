@@ -105,8 +105,18 @@ Make sure to add ?socket option to remote libvirt urls.
 
 With docker for Centos 7:
 
-    make clean docker-rpm
+    ./dockerbuild.sh centos-7 make rpm
 
 Locally:
 
-    make clean rpm
+    make rpm
+
+## Build DEB
+
+With docker for Ubuntu 18.04:
+
+    ./dockerbuild.sh ubuntu-1804 make deb
+
+Locally:
+
+    make deb
