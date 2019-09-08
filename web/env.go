@@ -180,6 +180,8 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service)
 	router.HandleFunc("/machines/{id}/detach-interface/", env.authenticated(env.VirtualMachineDetachInterfaceFormProcess)).Methods("POST").Name("virtual-machine-detach-interface")
 	router.HandleFunc("/machines/{id}/set-state/{action}/", env.authenticated(env.VirtualMachineStateSetFormProcess)).Name("virtual-machine-state-form").Methods("POST")
 	router.HandleFunc("/machines/{id}/set-state/{action}/", env.authenticated(env.VirtualMachineStateSetFormShow)).Name("virtual-machine-state-form")
+	router.HandleFunc("/machines/{id}/disable-guest-agent/", env.authenticated(env.VirtualMachineDisableGuestAgentFormProcess)).Methods("POST").Name("virtual-machine-disable-guest-agent-form")
+	router.HandleFunc("/machines/{id}/enable-guest-agent/", env.authenticated(env.VirtualMachineEnableGuestAgentFormProcess)).Methods("POST").Name("virtual-machine-enable-guest-agent-form")
 	router.HandleFunc("/machines/{id}/delete/", env.authenticated(env.VirtualMachineDeleteFormProcess)).Name("virtual-machine-delete").Methods("POST")
 	router.HandleFunc("/machines/{id}/delete/", env.authenticated(env.VirtualMachineDeleteFormShow)).Name("virtual-machine-delete")
 

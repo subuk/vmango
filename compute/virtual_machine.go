@@ -9,6 +9,8 @@ type VirtualMachineRepository interface {
 	DetachVolume(id, path string) error
 	AttachInterface(id, network, mac, model string, accessVlan uint, netType NetworkType) (*VirtualMachineAttachedInterface, error)
 	DetachInterface(id, mac string) error
+	EnableGuestAgent(id string) error
+	DisableGuestAgent(id string) error
 	GetConsoleStream(id string) (VirtualMachineConsoleStream, error)
 	Poweroff(id string) error
 	Reboot(id string) error
@@ -61,6 +63,7 @@ type VirtualMachine struct {
 	Volumes    []*VirtualMachineAttachedVolume
 	Config     *VirtualMachineConfig
 	Cpupin     *VirtualMachineCpuPin
+	GuestAgent bool
 }
 
 func (vm *VirtualMachine) AttachmentInfo(path string) *VirtualMachineAttachedVolume {

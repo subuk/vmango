@@ -18,6 +18,7 @@
           <div class="media-body">
             <p class="text-muted">
               {{ if .Vm.Config }}Configured<br>{{ end }}
+              {{ if .Vm.GuestAgent }}Guest agent integration enabled<br>{{ end }}
               {{ .Vm.MemoryMiB }}MiB RAM, {{ .Vm.VCpus }} CPU<br>
               {{ .Vm.Arch }}<br>
               {{ if .Vm.Cpupin }}
@@ -33,7 +34,6 @@
 
       <div class="col-md-5 text-right">
         <p>
-
           {{ if .Vm.IsRunning }}
             <a class="btn btn-primary" href="{{ Url "virtual-machine-console-show" "id" .Vm.Id }}">Console</a>
             <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "poweroff" }}">Power Off</a>
@@ -44,7 +44,17 @@
             <a class="btn btn-danger" href="{{ Url "virtual-machine-delete" "id" .Vm.Id }}">Remove</a>
         </p>
         <p>
-          Status: <b>{{ .Vm.State.String | Capitalize }}</b>
+          {{ if not .Vm.IsRunning }}
+          {{ if .Vm.GuestAgent }}
+            <form class="float-right form-inline JS-ReactiveForm" method="post" action="{{ Url "virtual-machine-disable-guest-agent-form" "id" .Vm.Id }}">{{ CSRFField $.Request }}
+              <button {{ if .Vm.IsRunning }}disabled title="Please shutdown vm before"{{ end }} type="submit" class="btn btn-primary mb-2">Disable Guest Agent</button>
+            </form>
+          {{ else }}
+            <form class="float-right form-inline JS-ReactiveForm" method="post" action="{{ Url "virtual-machine-enable-guest-agent-form" "id" .Vm.Id }}">{{ CSRFField $.Request }}
+              <button {{ if .Vm.IsRunning }}disabled title="Please shutdown vm before"{{ end }} type="submit" class="btn btn-primary mb-2">Enable Guest Agent</button>
+            </form>
+          {{ end }}
+          {{ end }}
         </p>
       </div>
     </div>
@@ -101,7 +111,7 @@
                   Vlan: {{ .AccessVlan }}<br>
                   {{ end }}
                   {{ if gt (len .IpAddressList) 0 }}
-                  IP: {{ .IpAddressList | Join " " }}
+                  IP: {{ .IpAddressList | Join "," }}
                   {{ end }}
                 </p>
                 <form method="post" action="{{ Url "virtual-machine-detach-interface" "id" $.Vm.Id }}">{{ CSRFField $.Request }}

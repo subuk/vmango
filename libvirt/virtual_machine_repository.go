@@ -219,10 +219,15 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, domain *
 	}
 	if vm.IsRunning() {
 		for _, attachedInterface := range vm.Interfaces {
-			virDomainIfaces, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_ARP)
+			virDomainIfaces, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT)
 			if err != nil {
-				repo.logger.Info().Err(err).Msg("cannot get interfaces addresses")
-				continue
+				repo.logger.Debug().Str("vm", vm.Id).Err(err).Msg("cannot get interfaces addresses with qemu guest agent")
+				virDomainIfacesLease, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_LEASE)
+				if err != nil {
+					repo.logger.Debug().Str("vm", vm.Id).Err(err).Msg("cannot get interfaces addresses with dhcp leases")
+					continue
+				}
+				virDomainIfaces = virDomainIfacesLease
 			}
 			for _, virDomainIface := range virDomainIfaces {
 				if virDomainIface.Hwaddr == attachedInterface.Mac {
@@ -450,7 +455,10 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 
 	virDomainConfig.Devices = &libvirtxml.DomainDeviceList{Emulator: domCapsConfig.Path}
 	virDomainConfig.Devices.Consoles = append(virDomainConfig.Devices.Consoles, libvirtxml.DomainConsole{})
-
+	virDomainConfig.Devices.Channels = append(virDomainConfig.Devices.Channels, libvirtxml.DomainChannel{
+		Protocol: &libvirtxml.DomainChardevProtocol{Type: "unix"},
+		Target:   &libvirtxml.DomainChannelTarget{VirtIO: &libvirtxml.DomainChannelTargetVirtIO{Name: "org.qemu.guest_agent.0"}},
+	})
 	configVolume, err := repo.generateConfigDrive(conn, virDomainConfig, config)
 	if err != nil {
 		return nil, util.NewError(err, "cannot generate config drive")
@@ -586,6 +594,92 @@ func (repo *VirtualMachineRepository) Start(id string) error {
 		return util.NewError(err, "domain lookup failed")
 	}
 	return domain.Create()
+}
+
+func (repo *VirtualMachineRepository) EnableGuestAgent(id string) error {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virDomain, err := conn.LookupDomainByName(id)
+	if err != nil {
+		return util.NewError(err, "domain lookup failed")
+	}
+	running, err := virDomain.IsActive()
+	if err != nil {
+		return util.NewError(err, "cannot check if domain is running")
+	}
+	if running {
+		return fmt.Errorf("domain must be stopped")
+	}
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	if err != nil {
+		return util.NewError(err, "cannot get domain xml")
+	}
+	virDomainConfig := &libvirtxml.Domain{}
+	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
+		return util.NewError(err, "cannot parse domain xml")
+	}
+	virDomainConfig.Devices.Channels = append(virDomainConfig.Devices.Channels, libvirtxml.DomainChannel{
+		Protocol: &libvirtxml.DomainChardevProtocol{Type: "unix"},
+		Target:   &libvirtxml.DomainChannelTarget{VirtIO: &libvirtxml.DomainChannelTargetVirtIO{Name: "org.qemu.guest_agent.0"}},
+		Source:   &libvirtxml.DomainChardevSource{UNIX: &libvirtxml.DomainChardevSourceUNIX{}},
+	})
+	virDomainXml, err = virDomainConfig.Marshal()
+	if err != nil {
+		return util.NewError(err, "cannot create domain xml")
+	}
+	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
+		return util.NewError(err, "cannot update domain xml")
+	}
+	return nil
+}
+
+func (repo *VirtualMachineRepository) DisableGuestAgent(id string) error {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virDomain, err := conn.LookupDomainByName(id)
+	if err != nil {
+		return util.NewError(err, "domain lookup failed")
+	}
+	running, err := virDomain.IsActive()
+	if err != nil {
+		return util.NewError(err, "cannot check if domain is running")
+	}
+	if running {
+		return fmt.Errorf("domain must be stopped")
+	}
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	if err != nil {
+		return util.NewError(err, "cannot get domain xml")
+	}
+	virDomainConfig := &libvirtxml.Domain{}
+	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
+		return util.NewError(err, "cannot parse domain xml")
+	}
+	newChannels := []libvirtxml.DomainChannel{}
+	for _, channel := range virDomainConfig.Devices.Channels {
+		if channel.Target != nil && channel.Target.VirtIO != nil && channel.Target.VirtIO.Name == "org.qemu.guest_agent.0" {
+			continue
+		}
+		newChannels = append(newChannels, channel)
+	}
+	virDomainConfig.Devices.Channels = newChannels
+
+	virDomainXml, err = virDomainConfig.Marshal()
+	if err != nil {
+		return util.NewError(err, "cannot create domain xml")
+	}
+	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
+		return util.NewError(err, "cannot update domain xml")
+	}
+	return nil
 }
 
 func (repo *VirtualMachineRepository) AttachVolume(id, path string, typ compute.VolumeType, format compute.VolumeFormat, device compute.DeviceType) (*compute.VirtualMachineAttachedVolume, error) {

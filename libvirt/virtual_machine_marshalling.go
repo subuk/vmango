@@ -124,5 +124,10 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 		volume := VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig)
 		vm.Volumes = append(vm.Volumes, volume)
 	}
+	for _, channel := range domainConfig.Devices.Channels {
+		if channel.Target != nil && channel.Target.VirtIO != nil && channel.Target.VirtIO.Name == "org.qemu.guest_agent.0" {
+			vm.GuestAgent = true
+		}
+	}
 	return vm, nil
 }

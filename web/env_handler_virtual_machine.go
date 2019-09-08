@@ -380,3 +380,23 @@ func (env *Environ) VirtualMachineConsoleWS(rw http.ResponseWriter, req *http.Re
 		}
 	}
 }
+
+func (env *Environ) VirtualMachineEnableGuestAgentFormProcess(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+	if err := env.compute.VirtualMachineEnableGuestAgent(urlvars["id"]); err != nil {
+		env.error(rw, req, err, "cannot enable guest agent", http.StatusInternalServerError)
+		return
+	}
+	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
+	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+}
+
+func (env *Environ) VirtualMachineDisableGuestAgentFormProcess(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+	if err := env.compute.VirtualMachineDisableGuestAgent(urlvars["id"]); err != nil {
+		env.error(rw, req, err, "cannot disable guest agent", http.StatusInternalServerError)
+		return
+	}
+	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
+	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+}

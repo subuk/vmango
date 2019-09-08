@@ -156,6 +156,14 @@ func (service *Service) VirtualMachineGetConsoleStream(id string) (VirtualMachin
 	return service.virt.GetConsoleStream(id)
 }
 
+func (service *Service) VirtualMachineDisableGuestAgent(id string) error {
+	return service.virt.DisableGuestAgent(id)
+}
+
+func (service *Service) VirtualMachineEnableGuestAgent(id string) error {
+	return service.virt.EnableGuestAgent(id)
+}
+
 func (service *Service) VolumeList() ([]*Volume, error) {
 	return service.vol.List()
 }
