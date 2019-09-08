@@ -52,4 +52,4 @@ $(DEB_OUTDIR)/$(DEB_NAME)_$(DEB_VERSION)-$(DEB_RELEASE)_$(DEB_ARCH).deb: $(DEB_O
 	cd $(DEB_TOPDIR)/vmango-$(DEB_VERSION)/ && mk-build-deps -t 'apt-get -y' --remove --install debian/control
 	cd $(DEB_TOPDIR)/vmango-$(DEB_VERSION)/ && DEB_BUILD_OPTIONS=noddebs debuild -us -uc
 
-	cp $(DEB_TOPDIR)/$(DEB_OUTDIR)/$(DEB_NAME)_$(DEB_VERSION)-$(DEB_RELEASE)_$(DEB_ARCH).deb $(DEB_OUTDIR)/
+	cp $(DEB_TOPDIR)/$(DEB_NAME)_$(DEB_VERSION)-$(DEB_RELEASE)_$(DEB_ARCH).deb $(DEB_OUTDIR)/
