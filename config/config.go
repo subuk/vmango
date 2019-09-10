@@ -35,15 +35,22 @@ type ImageConfig struct {
 	OsArch    string `hcl:"os_arch"`
 }
 
+type SubscribeConfig struct {
+	Event     string `hcl:",key"`
+	Script    string `hcl:"script"`
+	Mandatory bool   `hcl:"mandatory"`
+}
+
 type Config struct {
-	LibvirtUri                    string        `hcl:"libvirt_uri"`
-	LibvirtConfigDriveSuffix      string        `hcl:"libvirt_config_drive_suffix"`
-	LibvirtConfigDrivePool        string        `hcl:"libvirt_config_drive_pool"`
-	LibvirtConfigDriveWriteFormat string        `hcl:"libvirt_config_drive_write_format"`
-	Images                        []ImageConfig `hcl:"image"`
-	Bridges                       []string      `hcl:"bridges"`
-	KeyFile                       string        `hcl:"key_file"`
-	Web                           WebConfig     `hcl:"web"`
+	LibvirtUri                    string            `hcl:"libvirt_uri"`
+	LibvirtConfigDriveSuffix      string            `hcl:"libvirt_config_drive_suffix"`
+	LibvirtConfigDrivePool        string            `hcl:"libvirt_config_drive_pool"`
+	LibvirtConfigDriveWriteFormat string            `hcl:"libvirt_config_drive_write_format"`
+	Images                        []ImageConfig     `hcl:"image"`
+	Bridges                       []string          `hcl:"bridges"`
+	KeyFile                       string            `hcl:"key_file"`
+	Web                           WebConfig         `hcl:"web"`
+	Subscribes                    []SubscribeConfig `hcl:"subscribe"`
 }
 
 func Default() *Config {

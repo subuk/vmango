@@ -52,7 +52,12 @@ func Web(configFilename string) {
 		os.Exit(1)
 	}
 	netRepo := libvirt.NewNetworkRepository(connectionPool, cfg.Bridges)
-	compute := libcompute.New(machineRepo, volumeRepo, volumePoolRepo, hostInfoRepo, keyRepo, netRepo)
+
+	epub := filesystem.NewScriptedComputeEventBroker(logger.With().Str("component", "compute-event-broker").Logger())
+	for _, sub := range cfg.Subscribes {
+		epub.Subscribe(sub.Event, sub.Script, sub.Mandatory)
+	}
+	compute := libcompute.New(epub, machineRepo, volumeRepo, volumePoolRepo, hostInfoRepo, keyRepo, netRepo)
 
 	webenv := web.New(cfg, logger, compute)
 	server := http.Server{

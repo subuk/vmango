@@ -8,6 +8,15 @@ import (
 
 var ErrArchNotsupported = errors.New("requested arch not supported")
 
+type Event interface {
+	Name() string
+	Plain() map[string]string
+}
+
+type EventPublisher interface {
+	Publish(event Event) error
+}
+
 type Service struct {
 	virt    VirtualMachineRepository
 	vol     VolumeRepository
@@ -15,10 +24,11 @@ type Service struct {
 	host    HostInfoRepository
 	key     KeyRepository
 	net     NetworkRepository
+	epub    EventPublisher
 }
 
-func New(virt VirtualMachineRepository, vol VolumeRepository, volpool VolumePoolRepository, host HostInfoRepository, key KeyRepository, net NetworkRepository) *Service {
-	return &Service{virt: virt, vol: vol, volpool: volpool, host: host, key: key, net: net}
+func New(epub EventPublisher, virt VirtualMachineRepository, vol VolumeRepository, volpool VolumePoolRepository, host HostInfoRepository, key KeyRepository, net NetworkRepository) *Service {
+	return &Service{epub: epub, virt: virt, vol: vol, volpool: volpool, host: host, key: key, net: net}
 }
 
 func (service *Service) VirtualMachineList() ([]*VirtualMachine, error) {
@@ -120,6 +130,10 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 	vm, err := service.virt.Create(params.Id, NewArch(params.Arch), params.VCpus, params.MemoryKb, volumes, interfaces, config)
 	if err != nil {
 		return nil, util.NewError(err, "cannot create virtual machine")
+	}
+	if err := service.epub.Publish(NewEventVirtualMachineCreated(vm)); err != nil {
+		service.virt.Delete(vm.Id) // Ignore error
+		return nil, util.NewError(err, "cannot publish event virtual machine created")
 	}
 	return vm, nil
 }
