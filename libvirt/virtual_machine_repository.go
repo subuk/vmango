@@ -50,7 +50,7 @@ func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect,
 		return nil, util.NewError(err, "cannot lookup configdrive storage pool")
 	}
 
-	configVolumeName := strings.ReplaceAll(domainConfig.Name, "-", "_") + repo.configDriveSuffix
+	configVolumeName := strings.Replace(domainConfig.Name, "-", "_", -1) + repo.configDriveSuffix
 	if existingVolume, err := virPool.LookupStorageVolByName(configVolumeName); err == nil && existingVolume != nil {
 		existingVolumeInfo, err := existingVolume.GetInfo()
 		if err == nil && existingVolumeInfo.Capacity <= 2*1024*1024 {

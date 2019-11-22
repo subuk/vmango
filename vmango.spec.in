@@ -10,7 +10,7 @@ Group: Other
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}.buildroot
 Vendor: subuk
 Requires: genisoimage
-BuildRequires: golang = 1.12.9
+BuildRequires: go >= 1.11
 BuildRequires: libvirt-devel
 Requires(pre): shadow-utils
 %{?systemd_requires}
