@@ -1,11 +1,25 @@
 #!/bin/bash
 set -e
 
-USAGE="Usage: $0 [centos-7|ubuntu-1804] <make args...>"
+USAGE="Usage: $0 [centos-7|centos-8|ubuntu-1804] <make args...>"
 CACHE_DIR=/tmp/vmango-package-build-cache
 mkdir -p $CACHE_DIR
 
 case "$1" in
+    "centos-8")
+        DOCKER_IMAGE=vmango:build_centos8
+        YUM_CONFIG=`pwd`/dockerbuild/centos8.yum.conf
+        if [[ "Y$(docker images -q $DOCKER_IMAGE)" == "Y" || "Y${FORCE_REBUILD}" != "Y" ]]; then
+            docker build -t $DOCKER_IMAGE -f dockerbuild/centos8.dockerfile .
+        fi
+        shift
+        exec docker run --rm -it \
+            -v `pwd`:/source \
+            -v $CACHE_DIR:/cache \
+            -v $YUM_CONFIG:/etc/yum.conf \
+            -w /source \
+            $DOCKER_IMAGE $@
+    ;;
     "centos-7")
         DOCKER_IMAGE=vmango:build_centos7
         YUM_CONFIG=`pwd`/dockerbuild/centos7.yum.conf
