@@ -240,7 +240,8 @@ func (env *Environ) VirtualMachineDeleteFormShow(rw http.ResponseWriter, req *ht
 
 func (env *Environ) VirtualMachineDeleteFormProcess(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
-	if err := env.compute.VirtualMachineDelete(urlvars["id"]); err != nil {
+	deleteVolumes := req.FormValue("DeleteVolumes") == "true"
+	if err := env.compute.VirtualMachineDelete(urlvars["id"], deleteVolumes); err != nil {
 		env.error(rw, req, err, "cannot delete virtual machine", http.StatusInternalServerError)
 		return
 	}

@@ -138,8 +138,26 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 	return vm, nil
 }
 
-func (service *Service) VirtualMachineDelete(id string) error {
-	return service.virt.Delete(id)
+func (service *Service) VirtualMachineDelete(id string, deleteVolumes bool) error {
+	volumesToDelete := []*VirtualMachineAttachedVolume{}
+	if deleteVolumes {
+		vm, err := service.virt.Get(id)
+		if err != nil {
+			return util.NewError(err, "cannot fetch vm info")
+		}
+		for _, volume := range vm.Volumes {
+			volumesToDelete = append(volumesToDelete, volume)
+		}
+	}
+	if err := service.virt.Delete(id); err != nil {
+		return util.NewError(err, "cannot delete vm")
+	}
+	for _, volume := range volumesToDelete {
+		if err := service.vol.Delete(volume.Path); err != nil {
+			return util.NewError(err, "cannot delete volume")
+		}
+	}
+	return nil
 }
 
 func (service *Service) VirtualMachineAttachVolume(id, path string, deviceType DeviceType) (*VirtualMachineAttachedVolume, error) {

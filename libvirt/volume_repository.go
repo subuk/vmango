@@ -5,7 +5,7 @@ import (
 	"subuk/vmango/compute"
 	"subuk/vmango/util"
 
-	"github.com/libvirt/libvirt-go-xml"
+	libvirtxml "github.com/libvirt/libvirt-go-xml"
 
 	libvirt "github.com/libvirt/libvirt-go"
 )
