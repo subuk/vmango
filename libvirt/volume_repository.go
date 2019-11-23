@@ -337,6 +337,9 @@ func (repo *VolumeRepository) Delete(path string) error {
 	if err != nil {
 		return util.NewError(err, "cannot lookup storage volume")
 	}
+	if md, ok := repo.metadata[path]; ok && md.Protected {
+		return fmt.Errorf("volume is protected")
+	}
 	if err := virVolume.Delete(libvirt.STORAGE_VOL_DELETE_NORMAL); err != nil {
 		return util.NewError(err, "cannot delete volume")
 	}

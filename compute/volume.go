@@ -8,6 +8,7 @@ type VolumeMetadata struct {
 	OsName    string
 	OsVersion string
 	OsArch    Arch
+	Protected bool
 }
 
 type Volume struct {

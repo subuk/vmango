@@ -29,6 +29,7 @@ func Web(configFilename string) {
 			OsName:    image.OsName,
 			OsVersion: image.OsVersion,
 			OsArch:    libcompute.NewArch(image.OsArch),
+			Protected: image.Protected,
 		}
 	}
 

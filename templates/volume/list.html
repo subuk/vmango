@@ -74,9 +74,11 @@
                       {{ end }}
                     </td>
                     <td>
-                      <a title="Clone" href="{{ Url "volume-clone-form" "path" .Path }}">C</a> |
-                      <a title="Resize" href="{{ Url "volume-resize-form" "path" .Path }}">R</a> |
-                      <a title="Delete" style="color: red;" href="{{ Url "volume-delete-form" "path" .Path }}">D</a>
+                      <a title="Clone" href="{{ Url "volume-clone-form" "path" .Path }}">C</a>
+                      | <a title="Resize" href="{{ Url "volume-resize-form" "path" .Path }}">R</a>
+                      {{ if not .Metadata.Protected }}
+                        | <a title="Delete" style="color: red;" href="{{ Url "volume-delete-form" "path" .Path }}">D</a>
+                      {{ end }}
                     </td>
                   </tr>
                 {{ end }}
