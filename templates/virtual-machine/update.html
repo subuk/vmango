@@ -33,6 +33,15 @@
 
         <div class="form-group row">
           <div class="col-md-12">
+            <div class="custom-control custom-checkbox">
+              <input id="autostart" name="Autostart" value="true" class="custom-control-input" type="checkbox" {{ if .Vm.Autostart }}checked{{ end }} />
+              <label class="custom-control-label" for="autostart">Autostart</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-md-12">
             <button class="btn btn-primary"
               data-loading="<i class='icon-refresh icons'></i> Updating..." type="submit">Update</button>
           </div>

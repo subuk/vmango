@@ -284,7 +284,8 @@ func (env *Environ) VirtualMachineUpdateFormProcess(rw http.ResponseWriter, req 
 		http.Error(rw, "invalid memoryMb value: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := env.compute.VirtualMachineUpdate(urlvars["id"], int(vcpus), uint(memoryMb*1024)); err != nil {
+	autostart := req.Form.Get("Autostart") == "true"
+	if err := env.compute.VirtualMachineUpdate(urlvars["id"], int(vcpus), uint(memoryMb*1024), &autostart); err != nil {
 		env.error(rw, req, err, "cannot update virtual machine", http.StatusInternalServerError)
 		return
 	}

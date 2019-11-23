@@ -217,6 +217,13 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, domain *
 	if err != nil {
 		return nil, util.NewError(err, "cannot create virtual machine from domain config")
 	}
+
+	autostart, err := domain.GetAutostart()
+	if err != nil {
+		return nil, util.NewError(err, "cannot get domain autostart value")
+	}
+	vm.Autostart = autostart
+
 	if vm.IsRunning() {
 		for _, attachedInterface := range vm.Interfaces {
 			virDomainIfaces, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT)
@@ -491,7 +498,7 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 	return vm, nil
 }
 
-func (repo *VirtualMachineRepository) Update(id string, vcpus int, memoryKb uint) error {
+func (repo *VirtualMachineRepository) Update(id string, vcpus int, memoryKb uint, autostart *bool) error {
 	conn, err := repo.pool.Acquire()
 	if err != nil {
 		return util.NewError(err, "cannot acquire libvirt connection")
@@ -509,6 +516,11 @@ func (repo *VirtualMachineRepository) Update(id string, vcpus int, memoryKb uint
 	virDomainConfig := &libvirtxml.Domain{}
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
 		return util.NewError(err, "cannot unmarshal domain xml")
+	}
+	if autostart != nil {
+		if err := virDomain.SetAutostart(*autostart); err != nil {
+			return util.NewError(err, "cannot set autostart to %t", *autostart)
+		}
 	}
 	if vcpus > 0 {
 		virDomainConfig.VCPU.Value = vcpus

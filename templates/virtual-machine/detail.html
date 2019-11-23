@@ -18,6 +18,7 @@
           <div class="media-body">
             <p class="text-muted">
               {{ if .Vm.Config }}Configured<br>{{ end }}
+              Autostart {{ if .Vm.Autostart }}enabled{{ else }}disabled{{ end }}<br>
               {{ if .Vm.GuestAgent }}Guest agent integration enabled<br>{{ end }}
               {{ .Vm.MemoryMiB }}MiB RAM, {{ .Vm.VCpus }} CPU<br>
               {{ .Vm.Arch }}<br>
