@@ -202,6 +202,7 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		VCpus:      int(vcpus),
 		Arch:       req.Form.Get("Arch"),
 		MemoryKb:   uint(memoryMb) * 1024,
+		Start:      req.Form.Get("Start") == "true",
 		Volumes:    []compute.VirtualMachineCreateParamsVolume{rootVolumeParams},
 		Interfaces: []compute.VirtualMachineCreateParamsInterface{mainInterface},
 		Config: compute.VirtualMachineCreateParamsConfig{
@@ -215,8 +216,14 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		env.error(rw, req, err, "cannot fetch create vm", http.StatusInternalServerError)
 		return
 	}
-	redirectUrl := env.url("virtual-machine-detail", "id", vm.Id)
-	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+
+	redirectPath := ""
+	if params.Start {
+		redirectPath = env.url("virtual-machine-console-show", "id", vm.Id).Path
+	} else {
+		redirectPath = env.url("virtual-machine-detail", "id", vm.Id).Path
+	}
+	http.Redirect(rw, req, redirectPath, http.StatusFound)
 }
 
 func (env *Environ) VirtualMachineDeleteFormShow(rw http.ResponseWriter, req *http.Request) {

@@ -69,6 +69,7 @@ type VirtualMachineCreateParams struct {
 	Volumes    []VirtualMachineCreateParamsVolume
 	Interfaces []VirtualMachineCreateParamsInterface
 	Config     VirtualMachineCreateParamsConfig
+	Start      bool
 }
 
 func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) (*VirtualMachine, error) {
@@ -134,6 +135,11 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 	if err := service.epub.Publish(NewEventVirtualMachineCreated(vm)); err != nil {
 		service.virt.Delete(vm.Id) // Ignore error
 		return nil, util.NewError(err, "cannot publish event virtual machine created")
+	}
+	if params.Start {
+		if err := service.virt.Start(vm.Id); err != nil {
+			return nil, util.NewError(err, "cannot start vm")
+		}
 	}
 	return vm, nil
 }
