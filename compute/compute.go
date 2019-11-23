@@ -180,6 +180,10 @@ func (service *Service) VirtualMachineAttachInterface(id, network, mac, model st
 	return service.virt.AttachInterface(id, network, mac, model, accessVlan, net.Type)
 }
 
+func (service *Service) VirtualMachineUpdate(id string, vcpus int, memoryKb uint) error {
+	return service.virt.Update(id, vcpus, memoryKb)
+}
+
 func (service *Service) VirtualMachineDetachInterface(id, mac string) error {
 	return service.virt.DetachInterface(id, mac)
 }

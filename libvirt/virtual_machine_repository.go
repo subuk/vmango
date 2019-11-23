@@ -491,6 +491,42 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 	return vm, nil
 }
 
+func (repo *VirtualMachineRepository) Update(id string, vcpus int, memoryKb uint) error {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return util.NewError(err, "cannot acquire libvirt connection")
+	}
+	defer repo.pool.Release(conn)
+
+	virDomain, err := conn.LookupDomainByName(id)
+	if err != nil {
+		return util.NewError(err, "lookup domain failed")
+	}
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	if err != nil {
+		return util.NewError(err, "cannot fetch domain xml")
+	}
+	virDomainConfig := &libvirtxml.Domain{}
+	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
+		return util.NewError(err, "cannot unmarshal domain xml")
+	}
+	if vcpus > 0 {
+		virDomainConfig.VCPU.Value = vcpus
+	}
+	if memoryKb > 0 {
+		virDomainConfig.Memory.Value = memoryKb
+		virDomainConfig.Memory.Unit = "kib"
+	}
+	virDomainXmlUpdated, err := virDomainConfig.Marshal()
+	if err != nil {
+		return util.NewError(err, "cannot marshal updated domain xml")
+	}
+	if _, err := conn.DomainDefineXML(virDomainXmlUpdated); err != nil {
+		return util.NewError(err, "cannot update domain xml")
+	}
+	return nil
+}
+
 func (repo *VirtualMachineRepository) Delete(id string) error {
 	conn, err := repo.pool.Acquire()
 	if err != nil {

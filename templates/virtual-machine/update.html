@@ -1,0 +1,48 @@
+{{ template "header" . }}
+
+<!-- Breadcrumb -->
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}">Virtual Machines</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-detail" "id" .Vm.Id }}">{{ .Vm.Id }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
+</ol>
+
+
+<div class="container">
+  <div class="card border-0">
+    <div class="card-block">
+      <h4>Update Virtual Machine</h4>
+      <br>
+
+      <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
+        <div class="form-group row">
+          <div class="col-md-12">
+            <label>Cpu Count</label>
+            <input required="required" value="{{ .Vm.VCpus }}" type="number" min="1" class="form-control" name="Vcpus" id="Vcpus">
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-md-12">
+            <label>Memory Megabytes</label>
+            <input required="required" value="{{ .Vm.MemoryMiB }}" min="1" class="form-control" type="number" name="MemoryMb"
+              id="MemoryMb">
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-md-12">
+            <button class="btn btn-primary"
+              data-loading="<i class='icon-refresh icons'></i> Updating..." type="submit">Update</button>
+          </div>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+</div>
+
+
+{{ template "footer" . }}

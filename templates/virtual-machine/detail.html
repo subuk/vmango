@@ -36,9 +36,11 @@
         <p>
           {{ if .Vm.IsRunning }}
             <a class="btn btn-primary" href="{{ Url "virtual-machine-console-show" "id" .Vm.Id }}">Console</a>
+            <button class="btn btn-primary" title="Stop machine before editing" disabled>Edit</button>
             <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "poweroff" }}">Power Off</a>
             <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "reboot" }}">Reboot</a>
           {{ else }}
+            <a class="btn btn-primary" href="{{ Url "virtual-machine-update" "id" .Vm.Id }}">Edit</a>
             <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "start" }}">Power On</a>
           {{ end }}
             <a class="btn btn-danger" href="{{ Url "virtual-machine-delete" "id" .Vm.Id }}">Remove</a>

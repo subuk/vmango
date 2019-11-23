@@ -184,6 +184,8 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service)
 	router.HandleFunc("/machines/{id}/enable-guest-agent/", env.authenticated(env.VirtualMachineEnableGuestAgentFormProcess)).Methods("POST").Name("virtual-machine-enable-guest-agent-form")
 	router.HandleFunc("/machines/{id}/delete/", env.authenticated(env.VirtualMachineDeleteFormProcess)).Name("virtual-machine-delete").Methods("POST")
 	router.HandleFunc("/machines/{id}/delete/", env.authenticated(env.VirtualMachineDeleteFormShow)).Name("virtual-machine-delete")
+	router.HandleFunc("/machines/{id}/update/", env.authenticated(env.VirtualMachineUpdateFormProcess)).Name("virtual-machine-update").Methods("POST")
+	router.HandleFunc("/machines/{id}/update/", env.authenticated(env.VirtualMachineUpdateFormShow)).Name("virtual-machine-update")
 
 	router.HandleFunc("/", env.authenticated(env.HostInfo)).Name("index")
 

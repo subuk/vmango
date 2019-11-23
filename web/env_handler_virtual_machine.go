@@ -249,6 +249,49 @@ func (env *Environ) VirtualMachineDeleteFormProcess(rw http.ResponseWriter, req 
 	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
 }
 
+func (env *Environ) VirtualMachineUpdateFormShow(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
+	if err != nil {
+		env.error(rw, req, err, "virtual-machine detail failed", http.StatusInternalServerError)
+		return
+	}
+	data := struct {
+		Title   string
+		Vm      *compute.VirtualMachine
+		User    *User
+		Request *http.Request
+	}{"Update VirtualMachine", vm, env.Session(req).AuthUser(), req}
+	if err := env.render.HTML(rw, http.StatusOK, "virtual-machine/update", data); err != nil {
+		env.error(rw, req, err, "failed to render template", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (env *Environ) VirtualMachineUpdateFormProcess(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+	if err := req.ParseForm(); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	vcpus, err := strconv.ParseInt(req.Form.Get("Vcpus"), 10, 16)
+	if err != nil {
+		http.Error(rw, "invalid vcpus value: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	memoryMb, err := strconv.ParseUint(req.Form.Get("MemoryMb"), 10, 32)
+	if err != nil {
+		http.Error(rw, "invalid memoryMb value: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := env.compute.VirtualMachineUpdate(urlvars["id"], int(vcpus), uint(memoryMb*1024)); err != nil {
+		env.error(rw, req, err, "cannot update virtual machine", http.StatusInternalServerError)
+		return
+	}
+	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
+	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+}
+
 func (env *Environ) VirtualMachineAttachDiskFormProcess(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	if err := req.ParseForm(); err != nil {
