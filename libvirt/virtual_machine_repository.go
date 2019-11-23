@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/libvirt/libvirt-go"
-	"github.com/libvirt/libvirt-go-xml"
+	libvirtxml "github.com/libvirt/libvirt-go-xml"
 	"github.com/rs/zerolog"
 )
 
@@ -506,6 +506,14 @@ func (repo *VirtualMachineRepository) Delete(id string) error {
 	if err != nil {
 		return util.NewError(err, "cannot check if domain is running")
 	}
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	if err != nil {
+		return util.NewError(err, "cannot fetch domain xml")
+	}
+	virDomainConfig := &libvirtxml.Domain{}
+	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
+		return util.NewError(err, "cannot parse domain xml")
+	}
 	if virDomainRunning {
 		if err := virDomain.Destroy(); err != nil {
 			return util.NewError(err, "cannot destroy domain")
@@ -513,6 +521,23 @@ func (repo *VirtualMachineRepository) Delete(id string) error {
 	}
 	if err := virDomain.Undefine(); err != nil {
 		return util.NewError(err, "cannot undefine domain")
+	}
+	for _, diskConfig := range virDomainConfig.Devices.Disks {
+		volume := VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig)
+		if volume.Device != compute.DeviceTypeCdrom {
+			continue
+		}
+		if !strings.HasSuffix(volume.Path, repo.configDriveSuffix) {
+			continue
+		}
+		virVolume, err := conn.LookupStorageVolByPath(volume.Path)
+		if err != nil {
+			return util.NewError(err, "cannot lookup config volume")
+		}
+		if err := virVolume.Delete(libvirt.STORAGE_VOL_DELETE_NORMAL); err != nil {
+			return util.NewError(err, "cannot delete config volume")
+		}
+		return nil
 	}
 	return nil
 }
