@@ -51,8 +51,8 @@
               <thead class="thead-default">
                 <tr>
                   <th>Name</th>
-                  <th>Size</th>
                   <th>Free</th>
+                  <th>Size</th>
                   <th>Allocation</th>
                 </tr>
               </thead>
@@ -60,8 +60,8 @@
                 {{ range .VolumePools }}
                   <tr>
                     <td>{{ .Name }}</td>
-                    <td>{{ .SizeGb }}G</td>
                     <td>{{ .FreeGB }}G</td>
+                    <td>{{ .SizeGb }}G</td>
                     <td>{{ .UsagePercent }}%</td>
                   </tr>
                 {{ end }}
