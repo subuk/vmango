@@ -10,18 +10,45 @@ import (
 )
 
 type ConnectionPool struct {
-	uri    string
-	mutex  *sync.Mutex
-	logger zerolog.Logger
-	cached *libvirt.Connect
+	uri      string
+	username string
+	password string
+	mutex    *sync.Mutex
+	logger   zerolog.Logger
+	cached   *libvirt.Connect
 }
 
-func NewConnectionPool(uri string, logger zerolog.Logger) *ConnectionPool {
+func NewConnectionPool(uri, username, password string, logger zerolog.Logger) *ConnectionPool {
 	return &ConnectionPool{
-		uri:    uri,
-		mutex:  &sync.Mutex{},
-		logger: logger,
+		uri:      uri,
+		username: username,
+		password: password,
+		mutex:    &sync.Mutex{},
+		logger:   logger,
 	}
+}
+
+func (p *ConnectionPool) connect() (*libvirt.Connect, error) {
+	if p.username == "" && p.password == "" {
+		return libvirt.NewConnect(p.uri)
+	}
+	auth := &libvirt.ConnectAuth{
+		CredType: []libvirt.ConnectCredentialType{libvirt.CRED_AUTHNAME, libvirt.CRED_PASSPHRASE},
+		Callback: func(creds []*libvirt.ConnectCredential) {
+			for _, cred := range creds {
+				switch cred.Type {
+				default:
+				case libvirt.CRED_AUTHNAME:
+					cred.Result = p.username
+					cred.ResultLen = len(p.username)
+				case libvirt.CRED_PASSPHRASE:
+					cred.Result = p.password
+					cred.ResultLen = len(p.password)
+				}
+			}
+		},
+	}
+	return libvirt.NewConnectWithAuth(p.uri, auth, 0)
 }
 
 func (p *ConnectionPool) Acquire() (*libvirt.Connect, error) {
@@ -34,7 +61,7 @@ func (p *ConnectionPool) Acquire() (*libvirt.Connect, error) {
 
 	if conn == nil {
 		p.logger.Debug().Msg("establishing new connection")
-		newConn, err := libvirt.NewConnect(p.uri)
+		newConn, err := p.connect()
 		if err != nil {
 			p.mutex.Unlock()
 			return nil, util.NewError(err, "cannot open libvirt connection")
@@ -44,7 +71,7 @@ func (p *ConnectionPool) Acquire() (*libvirt.Connect, error) {
 	}
 	alive, err := conn.IsAlive()
 	if err != nil {
-		newConn, err := libvirt.NewConnect(p.uri)
+		newConn, err := p.connect()
 		if err != nil {
 			p.mutex.Unlock()
 			return nil, util.NewError(err, "cannot reopen libvirt connection")
@@ -53,7 +80,7 @@ func (p *ConnectionPool) Acquire() (*libvirt.Connect, error) {
 		return newConn, nil
 	}
 	if !alive {
-		newConn, err := libvirt.NewConnect(p.uri)
+		newConn, err := p.connect()
 		if err != nil {
 			p.mutex.Unlock()
 			return nil, util.NewError(err, "cannot reopen libvirt connection")

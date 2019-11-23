@@ -41,7 +41,7 @@ func Web(configFilename string) {
 		os.Exit(1)
 	}
 
-	connectionPool := libvirt.NewConnectionPool(cfg.LibvirtUri, logger.With().Str("component", "libvirt-connection-pool").Logger())
+	connectionPool := libvirt.NewConnectionPool(cfg.LibvirtUri, cfg.LibvirtUsername, cfg.LibvirtPassword, logger.With().Str("component", "libvirt-connection-pool").Logger())
 	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool, cfg.LibvirtConfigDrivePool, cfg.LibvirtConfigDriveSuffix, libvirtConfigDriveWriteFormat, logger.With().Str("component", "vm-repository").Logger())
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool, volumeMetadata)
 	volumePoolRepo := libvirt.NewVolumePoolRepository(connectionPool)

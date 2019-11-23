@@ -43,6 +43,8 @@ type SubscribeConfig struct {
 
 type Config struct {
 	LibvirtUri                    string            `hcl:"libvirt_uri"`
+	LibvirtUsername               string            `hcl:"libvirt_username"`
+	LibvirtPassword               string            `hcl:"libvirt_password"`
 	LibvirtConfigDriveSuffix      string            `hcl:"libvirt_config_drive_suffix"`
 	LibvirtConfigDrivePool        string            `hcl:"libvirt_config_drive_pool"`
 	LibvirtConfigDriveWriteFormat string            `hcl:"libvirt_config_drive_write_format"`
