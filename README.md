@@ -24,7 +24,7 @@ There are two RPM repositories:
 * `vmango` for the latest tagged release, it may be considered stable
 * `vmango-devel` contains packages built automatically from the latest commit in master branch
 
-### Centos 7
+### CentOS 7 and 8
 
 1. Enable copr reposotory, use `subuk/vmango-devel` for the latest version, `subuk/vmango` for stable
 1. Install package
