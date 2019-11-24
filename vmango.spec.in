@@ -55,5 +55,8 @@ rm -rf $RPM_BUILD_ROOT
 %{_unitdir}/vmango.service
 
 %changelog
+* Sun Nov 24 2019 11:56:03 +0000 Matvey Kruglov <kubuzzzz@gmail.com> 0.10.0-1
+- Update upstream to 0.10.0
+
 * Sat Sep 7 2019 20:11:31 +0000 Matvey Kruglov <kubuzzzz@gmail.com> 0.9.1-1
 - Update upstream to 0.9.1

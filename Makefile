@@ -9,7 +9,7 @@ ASSETS_SOURCES = $(shell find templates static)
 UNAME_S := $(shell uname -s)
 TARBALL_SOURCES = $(GO_SOURCES) Makefile README.md vmango.dist.conf vmango.service static/ templates/ vendor/ go.mod go.sum
 
-VERSION = 0.9.1
+VERSION = 0.10.0
 
 BUILD_LDFLAGS = -X subuk/vmango/web.AppVersion=$(VERSION)
 
@@ -56,7 +56,7 @@ test:
 
 .PHONY: clean
 clean:
-	rm -rf web/assets_generated.go bin/ *.tar.gz *.tar.hz *.rpm *.deb *_source.buildinfo *_source.changes *_source.ppa.upload *.debian.tar.xz *.dsc
+	rm -rf web/assets_generated.go bin/ *.tar.gz *.tar.hz *.rpm *.deb *_source.buildinfo *_source.changes *_source.ppa.upload *.debian.tar.xz *.dsc *.spec
 
 -include Makefile.RPM.mk
 -include Makefile.DEB.mk
