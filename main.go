@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"subuk/vmango/bootstrap"
 	"subuk/vmango/util"
@@ -14,8 +15,16 @@ func main() {
 		Default: util.GetenvDefault("VMANGO_CONFIG", "vmango.conf"),
 		Help:    "Configuration file path",
 	})
+	webCommand := parser.NewCommand("web", "Start web server")
+	genpwCommand := parser.NewCommand("genpw", "Generate password")
 	if err := parser.Parse(os.Args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
 	}
-	bootstrap.Web(*configFilename)
+	switch {
+	case webCommand.Happened():
+		bootstrap.Web(*configFilename)
+	case genpwCommand.Happened():
+		bootstrap.GenPassword()
+	}
 }

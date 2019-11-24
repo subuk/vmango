@@ -85,7 +85,7 @@ Copy vmango.dist.conf to vmango.conf and change configuration if needed.
 
 Run app
 
-    make && ./bin/vmango
+    make && ./bin/vmango web
 
 View it on http://localhost:8080 (login with admin / admin by default)
 
