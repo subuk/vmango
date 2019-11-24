@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/akamensky/argparse v0.0.0-20190829110830-5293d9863374
+	github.com/dustin/go-humanize v1.0.0
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/csrf v1.6.0

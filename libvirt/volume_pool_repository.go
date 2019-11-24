@@ -4,7 +4,7 @@ import (
 	"subuk/vmango/compute"
 	"subuk/vmango/util"
 
-	"github.com/libvirt/libvirt-go-xml"
+	libvirtxml "github.com/libvirt/libvirt-go-xml"
 )
 
 type VolumePoolRepository struct {
@@ -48,13 +48,13 @@ func (repo *VolumePoolRepository) List() ([]*compute.VolumePool, error) {
 		}
 		// Size: virPoolConfig.Capacity
 		if virPoolConfig.Capacity != nil {
-			volumePool.Size = ParseLibvirtSizeToMegabytes(virPoolConfig.Capacity.Unit, virPoolConfig.Capacity.Value)
+			volumePool.Size = ParseLibvirtSizeToBytes(virPoolConfig.Capacity.Unit, virPoolConfig.Capacity.Value)
 		}
 		if virPoolConfig.Allocation != nil {
-			volumePool.Used = ParseLibvirtSizeToMegabytes(virPoolConfig.Allocation.Unit, virPoolConfig.Allocation.Value)
+			volumePool.Used = ParseLibvirtSizeToBytes(virPoolConfig.Allocation.Unit, virPoolConfig.Allocation.Value)
 		}
 		if virPoolConfig.Available != nil {
-			volumePool.Free = ParseLibvirtSizeToMegabytes(virPoolConfig.Available.Unit, virPoolConfig.Available.Value)
+			volumePool.Free = ParseLibvirtSizeToBytes(virPoolConfig.Available.Unit, virPoolConfig.Available.Value)
 		}
 		volumePools = append(volumePools, volumePool)
 	}

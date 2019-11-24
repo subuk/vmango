@@ -49,7 +49,7 @@
                 <label>Volume Pool</label>
                 <select required="required" class="form-control" name="RootVolumePool">
                   {{ range .Pools }}
-                  <option value="{{ .Name }}">{{ .Name }} ({{ .FreeGB }}G free {{ .UsagePercent }}% used)</option>
+                  <option value="{{ .Name }}">{{ .Name }} ({{ .Free | HumanizeBytes }} free {{ .UsagePercent }}% used)</option>
                   {{ end }}
                 </select>
               </div>

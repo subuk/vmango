@@ -20,7 +20,7 @@
               {{ if .Vm.Config }}Configured<br>{{ end }}
               Autostart {{ if .Vm.Autostart }}enabled{{ else }}disabled{{ end }}<br>
               {{ if .Vm.GuestAgent }}Guest agent integration enabled<br>{{ end }}
-              {{ .Vm.MemoryMiB }}MiB RAM, {{ .Vm.VCpus }} CPU<br>
+              {{ .Vm.Memory | HumanizeBytes }} RAM, {{ .Vm.VCpus }} CPU<br>
               {{ .Vm.Arch }}<br>
               {{ if .Vm.Cpupin }}
                 Emulator: {{ .Vm.Cpupin.Emulator | JoinUint "," }}<br>
@@ -72,7 +72,7 @@
                 <p class="card-text">
                   Pool: {{ .Pool }}<br>
                   Path: {{ .Path }}<br>
-                  Size: {{ if lt .Size 1024 }}{{ .SizeMb }}M{{ else }}{{ .SizeGb }}G{{ end }}<br>
+                  Size: {{ .Size | HumanizeBytes }}<br>
                 </p>
                 <form method="post" action="{{ Url "virtual-machine-detach-volume" "id" $.Vm.Id }}">{{ CSRFField $.Request }}
                   <input type="hidden" name="Path" value="{{ .Path }}">

@@ -59,7 +59,7 @@ type VirtualMachine struct {
 	VCpus      int
 	Arch       Arch
 	State      VirtualMachineState
-	Memory     uint // KiB
+	Memory     uint64 // Bytes
 	Interfaces []*VirtualMachineAttachedInterface
 	Volumes    []*VirtualMachineAttachedVolume
 	Config     *VirtualMachineConfig
@@ -89,8 +89,8 @@ func (vm *VirtualMachine) IsRunning() bool {
 	return vm.State == StateRunning
 }
 
-func (vm *VirtualMachine) MemoryMiB() uint {
-	return vm.Memory / 1024
+func (vm *VirtualMachine) MemoryMiB() uint64 {
+	return vm.Memory / 1024 / 1024
 }
 
 func (vm *VirtualMachine) Disks() []*VirtualMachineAttachedVolume {

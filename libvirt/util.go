@@ -1,16 +1,21 @@
 package libvirt
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
 
-func ParseLibvirtSizeToMegabytes(unit string, value uint64) uint64 {
+func ParseLibvirtSizeToBytes(unit string, value uint64) uint64 {
 	switch unit {
 	default:
-		panic("unknown storage pool capacity unit")
+		panic(fmt.Sprintf("unknown libvirt size unit '%s'", unit))
 	case "bytes":
-		return value / 1024 / 1024
+		return value
+	case "KiB":
+		return value * 1024
+	case "MiB":
+		return value * 1024 * 1024
 	}
 }
 

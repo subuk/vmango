@@ -1,11 +1,10 @@
 package libvirt
 
 import (
-	"fmt"
 	"subuk/vmango/compute"
 
 	"github.com/libvirt/libvirt-go"
-	"github.com/libvirt/libvirt-go-xml"
+	libvirtxml "github.com/libvirt/libvirt-go-xml"
 )
 
 func VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig libvirtxml.DomainDisk) *compute.VirtualMachineAttachedVolume {
@@ -63,6 +62,7 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	vm := &compute.VirtualMachine{}
 	vm.Id = domainConfig.Name
 	vm.VCpus = domainConfig.VCPU.Value
+	vm.Memory = ParseLibvirtSizeToBytes(domainConfig.Memory.Unit, uint64(domainConfig.Memory.Value))
 
 	switch domainConfig.OS.Type.Arch {
 	default:
@@ -92,16 +92,6 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 		vm.State = compute.StateStopped
 	}
 
-	switch domainConfig.Memory.Unit {
-	case "KiB":
-		vm.Memory = domainConfig.Memory.Value
-	case "MiB":
-		vm.Memory = domainConfig.Memory.Value * 1024
-	case "GiB":
-		vm.Memory = domainConfig.Memory.Value * 1024
-	default:
-		return nil, fmt.Errorf("unknown memory unit '%s' for domain %s", domainConfig.Memory.Unit, domainConfig.Name)
-	}
 	if domainConfig.CPUTune != nil {
 		vm.Cpupin = &compute.VirtualMachineCpuPin{
 			Vcpus:    map[uint][]uint{},

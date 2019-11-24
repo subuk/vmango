@@ -12,6 +12,7 @@ import (
 	"subuk/vmango/util"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -43,20 +44,8 @@ func TemplateFuncs(env *Environ) []template.FuncMap {
 			"Version": func() string {
 				return AppVersion
 			},
-			"HumanizeBytes": func(max int, number uint64) string {
-				var suffixes = []string{"b", "K", "M", "G", "T"}
-				i := 0
-				for {
-					if number < 10240 {
-						break
-					}
-					number = number / 1024
-					i++
-					if i >= max || i >= len(suffixes) {
-						break
-					}
-				}
-				return fmt.Sprintf("%d%s", number, suffixes[i])
+			"HumanizeBytes": func(number uint64) string {
+				return humanize.IBytes(number)
 			},
 			"LimitString": func(limit int, s string) string {
 				slen := len(s)

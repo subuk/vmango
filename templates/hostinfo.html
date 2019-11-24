@@ -60,8 +60,8 @@
                 {{ range .VolumePools }}
                   <tr>
                     <td>{{ .Name }}</td>
-                    <td>{{ .FreeGB }}G</td>
-                    <td>{{ .SizeGb }}G</td>
+                    <td>{{ .Free | HumanizeBytes }}</td>
+                    <td>{{ .Size | HumanizeBytes }}</td>
                     <td>{{ .UsagePercent }}%</td>
                   </tr>
                 {{ end }}

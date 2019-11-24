@@ -14,7 +14,7 @@ type VolumeMetadata struct {
 type Volume struct {
 	Type       VolumeType
 	Path       string
-	Size       uint64 // MiB
+	Size       uint64 // Bytes
 	Pool       string
 	Format     VolumeFormat
 	AttachedTo string
@@ -24,14 +24,6 @@ type Volume struct {
 
 func (volume *Volume) Base() string {
 	return filepath.Base(volume.Path)
-}
-
-func (volume *Volume) SizeMb() uint64 {
-	return volume.Size
-}
-
-func (volume *Volume) SizeGb() uint64 {
-	return volume.Size / 1024
 }
 
 type VolumeRepository interface {

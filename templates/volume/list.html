@@ -35,7 +35,7 @@
             <div class="col-md-3">
               <select required="required" class="form-control" name="Pool">
                 {{ range .Pools }}
-                  <option value="{{ .Name }}">{{ .Name }} ({{ .FreeGB }}G free {{ .UsagePercent }}% used)</option>
+                  <option value="{{ .Name }}">{{ .Name }} ({{ .Free | HumanizeBytes }} free {{ .UsagePercent }}% used)</option>
                 {{ end }}
               </select>
               <small id="nameHelp" class="form-text text-muted">Pool</small>
@@ -66,7 +66,7 @@
                     <td>{{ .Path }}</td>
                     <td>{{ .Type }}</td>
                     <td>{{ .Format }}</td>
-                    <td>{{ .Size }}MiB</td>
+                    <td>{{ .Size | HumanizeBytes }}</td>
                     <td>{{ .Pool }}</td>
                     <td>
                       {{ if .AttachedTo }}

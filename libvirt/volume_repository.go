@@ -43,6 +43,7 @@ func (repo *VolumeRepository) virVolumeToVolume(pool *libvirt.StoragePool, virVo
 	volume.Pool = poolConfig.Name
 	volume.Format = compute.FormatUnknown
 	volume.Metadata = repo.metadata[virVolumeConfig.Target.Path]
+	volume.Size = ParseLibvirtSizeToBytes(virVolumeConfig.Capacity.Unit, virVolumeConfig.Capacity.Value)
 
 	switch poolConfig.Type {
 	case "logical":
@@ -58,13 +59,6 @@ func (repo *VolumeRepository) virVolumeToVolume(pool *libvirt.StoragePool, virVo
 		case "raw":
 			volume.Format = compute.FormatRaw
 		}
-	}
-
-	switch virVolumeConfig.Capacity.Unit {
-	default:
-		return nil, fmt.Errorf("unknown volume capacity unit '%s'", virVolumeConfig.Capacity.Unit)
-	case "bytes":
-		volume.Size = virVolumeConfig.Capacity.Value / 1024 / 1024
 	}
 	return volume, nil
 }
