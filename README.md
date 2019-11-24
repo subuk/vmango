@@ -78,6 +78,7 @@ Define default volume pool (if not exists) and start it:
     virsh pool-start default
     virsh pool-autostart default
 
+See docs folder in this repo for more complex host configurations.
 
 ## Local run
 
