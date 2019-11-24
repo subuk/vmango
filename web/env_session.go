@@ -6,7 +6,7 @@ import (
 	"github.com/gorilla/sessions"
 )
 
-const SESSION_NAME = "funrepo"
+const SESSION_NAME = "vmango"
 const SESSION_USER_KEY = "auth_user"
 
 type Session struct {
