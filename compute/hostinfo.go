@@ -10,7 +10,7 @@ type HostInfoNumaCore struct {
 }
 
 type HostInfoNuma struct {
-	Memory  uint64 // KiB
+	Memory  uint64 // Bytes
 	Pages4k uint64
 	Pages2m uint64
 	Pages1g uint64

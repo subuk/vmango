@@ -4,7 +4,7 @@ import (
 	"subuk/vmango/compute"
 	"subuk/vmango/util"
 
-	"github.com/libvirt/libvirt-go-xml"
+	libvirtxml "github.com/libvirt/libvirt-go-xml"
 )
 
 type HostInfoRepository struct {
@@ -60,7 +60,7 @@ func (repo *HostInfoRepository) Get() (*compute.HostInfo, error) {
 				numa = compute.HostInfoNuma{Cores: map[int]compute.HostInfoNumaCore{}}
 			}
 			if numaInfo.Memory != nil {
-				numa.Memory = numaInfo.Memory.Size
+				numa.Memory = ParseLibvirtSizeToBytes(numaInfo.Memory.Unit, numaInfo.Memory.Size)
 			}
 			for _, pageInfo := range numaInfo.PageInfo {
 				switch pageInfo.Size {

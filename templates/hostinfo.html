@@ -35,7 +35,7 @@
                   <tr>
                     <td>{{ $numaId }}</td>
                     <td>{{ len $numa.Cores }}</td>
-                    <td>{{ $numa.Memory }}</td>
+                    <td>{{ $numa.Memory | HumanizeBytes }}</td>
                     <td>{{ $numa.Pages4k }}</td>
                     <td>{{ $numa.Pages2m }}</td>
                     <td>{{ $numa.Pages1g }}</td>
