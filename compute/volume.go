@@ -22,6 +22,10 @@ type Volume struct {
 	Metadata   VolumeMetadata
 }
 
+func (v *Volume) SizeMb() uint64 {
+	return v.Size / 1024 / 1024
+}
+
 func (volume *Volume) Base() string {
 	return filepath.Base(volume.Path)
 }

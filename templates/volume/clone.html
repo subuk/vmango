@@ -19,7 +19,7 @@
                 <label>New Volume Pool</label>
                 <select required="required" class="form-control" name="Pool">
                   {{ range .Pools }}
-                    <option value="{{ .Name }}">{{ .Name }} ({{ .FreeGB }}G free {{ .UsagePercent }}% used)</option>
+                    <option value="{{ .Name }}">{{ .Name }} ({{ .Free | HumanizeBytes }} free {{ .UsagePercent }}% used)</option>
                   {{ end }}
                 </select>
               </div>
@@ -44,8 +44,8 @@
             <div class="form-group row">
               <div class="col-md-12">
                 <label>New Volume Size (megabytes)</label>
-                <input value="{{ .Volume.Size }}" required="required" name="Size" class="form-control" id="Size">
-                <small id="nameHelp" class="form-text text-muted">Volume can be resized after creation</small>
+                <input value="{{ .Volume.SizeMb }}" required="required" name="Size" class="form-control" id="Size">
+                <small id="nameHelp" class="form-text text-muted">LVM volumes cannot be resized after creation</small>
               </div>
             </div>
 
