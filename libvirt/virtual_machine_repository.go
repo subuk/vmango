@@ -550,11 +550,20 @@ func (repo *VirtualMachineRepository) Update(id string, params compute.VirtualMa
 			return util.NewError(err, "domain must be stopped to change guest agent integration state")
 		}
 		if *params.GuestAgent {
-			virDomainConfig.Devices.Channels = append(virDomainConfig.Devices.Channels, libvirtxml.DomainChannel{
-				Protocol: &libvirtxml.DomainChardevProtocol{Type: "unix"},
-				Target:   &libvirtxml.DomainChannelTarget{VirtIO: &libvirtxml.DomainChannelTargetVirtIO{Name: "org.qemu.guest_agent.0"}},
-				Source:   &libvirtxml.DomainChardevSource{UNIX: &libvirtxml.DomainChardevSourceUNIX{}},
-			})
+			hasGuestAgent := false
+			for _, channel := range virDomainConfig.Devices.Channels {
+				if channel.Target != nil && channel.Target.VirtIO != nil && channel.Target.VirtIO.Name == "org.qemu.guest_agent.0" {
+					hasGuestAgent = true
+					break
+				}
+			}
+			if !hasGuestAgent {
+				virDomainConfig.Devices.Channels = append(virDomainConfig.Devices.Channels, libvirtxml.DomainChannel{
+					Protocol: &libvirtxml.DomainChardevProtocol{Type: "unix"},
+					Target:   &libvirtxml.DomainChannelTarget{VirtIO: &libvirtxml.DomainChannelTargetVirtIO{Name: "org.qemu.guest_agent.0"}},
+					Source:   &libvirtxml.DomainChardevSource{UNIX: &libvirtxml.DomainChardevSourceUNIX{}},
+				})
+			}
 		} else {
 			newChannels := []libvirtxml.DomainChannel{}
 			for _, channel := range virDomainConfig.Devices.Channels {
