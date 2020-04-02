@@ -224,19 +224,31 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, domain *
 	}
 	vm.Autostart = autostart
 
-	if vm.IsRunning() {
-		for _, attachedInterface := range vm.Interfaces {
-			virDomainIfaces, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT)
+	if vm.IsRunning() && len(vm.Interfaces) > 0 {
+		virDomainIfaces := []libvirt.DomainInterface{}
+		if vm.GuestAgent {
+			ifaces, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT)
 			if err != nil {
-				repo.logger.Debug().Str("vm", vm.Id).Err(err).Msg("cannot get interfaces addresses with qemu guest agent")
-				virDomainIfacesLease, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_LEASE)
-				if err != nil {
-					repo.logger.Debug().Str("vm", vm.Id).Err(err).Msg("cannot get interfaces addresses with dhcp leases")
-					continue
-				}
-				virDomainIfaces = virDomainIfacesLease
+				repo.logger.Debug().Str("vm", vm.Id).Err(err).Msg("cannot get interfaces addresses from guest agent")
 			}
-			for _, virDomainIface := range virDomainIfaces {
+			virDomainIfaces = ifaces
+		}
+		if len(virDomainIfaces) <= 0 {
+			ifaces, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_LEASE)
+			if err != nil {
+				repo.logger.Debug().Str("vm", vm.Id).Err(err).Msg("cannot get interfaces addresses from dhcp leases")
+			}
+			virDomainIfaces = ifaces
+		}
+		if len(virDomainIfaces) <= 0 {
+			ifaces, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_ARP)
+			if err != nil {
+				repo.logger.Debug().Str("vm", vm.Id).Err(err).Msg("cannot get interfaces addresses from arp tables")
+			}
+			virDomainIfaces = ifaces
+		}
+		for _, virDomainIface := range virDomainIfaces {
+			for _, attachedInterface := range vm.Interfaces {
 				if virDomainIface.Hwaddr == attachedInterface.Mac {
 					for _, addr := range virDomainIface.Addrs {
 						attachedInterface.IpAddressList = append(attachedInterface.IpAddressList, addr.Addr)
