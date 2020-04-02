@@ -186,8 +186,15 @@ func (service *Service) VirtualMachineAttachInterface(id, network, mac, model st
 	return service.virt.AttachInterface(id, network, mac, model, accessVlan, net.Type)
 }
 
-func (service *Service) VirtualMachineUpdate(id string, vcpus int, memoryKb uint, autostart *bool) error {
-	return service.virt.Update(id, vcpus, memoryKb, autostart)
+type VirtualMachineUpdateParams struct {
+	Vcpus      *int
+	MemoryKb   *uint
+	Autostart  *bool
+	GuestAgent *bool
+}
+
+func (service *Service) VirtualMachineUpdate(id string, params VirtualMachineUpdateParams) error {
+	return service.virt.Update(id, params)
 }
 
 func (service *Service) VirtualMachineDetachInterface(id, mac string) error {
@@ -196,14 +203,6 @@ func (service *Service) VirtualMachineDetachInterface(id, mac string) error {
 
 func (service *Service) VirtualMachineGetConsoleStream(id string) (VirtualMachineConsoleStream, error) {
 	return service.virt.GetConsoleStream(id)
-}
-
-func (service *Service) VirtualMachineDisableGuestAgent(id string) error {
-	return service.virt.DisableGuestAgent(id)
-}
-
-func (service *Service) VirtualMachineEnableGuestAgent(id string) error {
-	return service.virt.EnableGuestAgent(id)
 }
 
 func (service *Service) VolumeList() ([]*Volume, error) {

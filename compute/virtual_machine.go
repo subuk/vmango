@@ -5,13 +5,11 @@ type VirtualMachineRepository interface {
 	Get(id string) (*VirtualMachine, error)
 	Create(id string, arch Arch, vcpus int, memoryKb uint, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface, config *VirtualMachineConfig) (*VirtualMachine, error)
 	Delete(id string) error
-	Update(id string, vcpus int, memoryKb uint, autostart *bool) error
+	Update(id string, params VirtualMachineUpdateParams) error
 	AttachVolume(id, path string, typ VolumeType, format VolumeFormat, device DeviceType) (*VirtualMachineAttachedVolume, error)
 	DetachVolume(id, path string) error
 	AttachInterface(id, network, mac, model string, accessVlan uint, netType NetworkType) (*VirtualMachineAttachedInterface, error)
 	DetachInterface(id, mac string) error
-	EnableGuestAgent(id string) error
-	DisableGuestAgent(id string) error
 	GetConsoleStream(id string) (VirtualMachineConsoleStream, error)
 	Poweroff(id string) error
 	Reboot(id string) error

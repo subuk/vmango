@@ -281,18 +281,31 @@ func (env *Environ) VirtualMachineUpdateFormProcess(rw http.ResponseWriter, req 
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
+	params := compute.VirtualMachineUpdateParams{}
+
 	vcpus, err := strconv.ParseInt(req.Form.Get("Vcpus"), 10, 16)
 	if err != nil {
 		http.Error(rw, "invalid vcpus value: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	vcpusInt := int(vcpus)
+	params.Vcpus = &vcpusInt
+
 	memoryMb, err := strconv.ParseUint(req.Form.Get("MemoryMb"), 10, 32)
 	if err != nil {
 		http.Error(rw, "invalid memoryMb value: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	memoryKb := uint(memoryMb * 1024)
+	params.MemoryKb = &memoryKb
+
 	autostart := req.Form.Get("Autostart") == "true"
-	if err := env.compute.VirtualMachineUpdate(urlvars["id"], int(vcpus), uint(memoryMb*1024), &autostart); err != nil {
+	params.Autostart = &autostart
+
+	guestagent := req.Form.Get("GuestAgent") == "true"
+	params.GuestAgent = &guestagent
+
+	if err := env.compute.VirtualMachineUpdate(urlvars["id"], params); err != nil {
 		env.error(rw, req, err, "cannot update virtual machine", http.StatusInternalServerError)
 		return
 	}
@@ -431,24 +444,4 @@ func (env *Environ) VirtualMachineConsoleWS(rw http.ResponseWriter, req *http.Re
 			return
 		}
 	}
-}
-
-func (env *Environ) VirtualMachineEnableGuestAgentFormProcess(rw http.ResponseWriter, req *http.Request) {
-	urlvars := mux.Vars(req)
-	if err := env.compute.VirtualMachineEnableGuestAgent(urlvars["id"]); err != nil {
-		env.error(rw, req, err, "cannot enable guest agent", http.StatusInternalServerError)
-		return
-	}
-	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
-	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
-}
-
-func (env *Environ) VirtualMachineDisableGuestAgentFormProcess(rw http.ResponseWriter, req *http.Request) {
-	urlvars := mux.Vars(req)
-	if err := env.compute.VirtualMachineDisableGuestAgent(urlvars["id"]); err != nil {
-		env.error(rw, req, err, "cannot disable guest agent", http.StatusInternalServerError)
-		return
-	}
-	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
-	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
 }

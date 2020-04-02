@@ -37,6 +37,10 @@
               <input id="autostart" name="Autostart" value="true" class="custom-control-input" type="checkbox" {{ if .Vm.Autostart }}checked{{ end }} />
               <label class="custom-control-label" for="autostart">Autostart</label>
             </div>
+            <div class="custom-control custom-checkbox">
+              <input id="guestagent" name="GuestAgent" value="true" class="custom-control-input" type="checkbox" {{ if .Vm.GuestAgent }}checked{{ end }} />
+              <label class="custom-control-label" for="guestagent">Guest Agent</label>
+            </div>            
           </div>
         </div>
 

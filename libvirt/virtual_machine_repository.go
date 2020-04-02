@@ -498,7 +498,7 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 	return vm, nil
 }
 
-func (repo *VirtualMachineRepository) Update(id string, vcpus int, memoryKb uint, autostart *bool) error {
+func (repo *VirtualMachineRepository) Update(id string, params compute.VirtualMachineUpdateParams) error {
 	conn, err := repo.pool.Acquire()
 	if err != nil {
 		return util.NewError(err, "cannot acquire libvirt connection")
@@ -509,6 +509,10 @@ func (repo *VirtualMachineRepository) Update(id string, vcpus int, memoryKb uint
 	if err != nil {
 		return util.NewError(err, "lookup domain failed")
 	}
+	virDomainRunning, err := virDomain.IsActive()
+	if err != nil {
+		return util.NewError(err, "cannot check if domain is running")
+	}
 	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
 	if err != nil {
 		return util.NewError(err, "cannot fetch domain xml")
@@ -517,17 +521,38 @@ func (repo *VirtualMachineRepository) Update(id string, vcpus int, memoryKb uint
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
 		return util.NewError(err, "cannot unmarshal domain xml")
 	}
-	if autostart != nil {
-		if err := virDomain.SetAutostart(*autostart); err != nil {
-			return util.NewError(err, "cannot set autostart to %t", *autostart)
+	if params.Autostart != nil {
+		if err := virDomain.SetAutostart(*params.Autostart); err != nil {
+			return util.NewError(err, "cannot set autostart to %t", *params.Autostart)
 		}
 	}
-	if vcpus > 0 {
-		virDomainConfig.VCPU.Value = vcpus
+	if params.Vcpus != nil {
+		virDomainConfig.VCPU.Value = *params.Vcpus
 	}
-	if memoryKb > 0 {
-		virDomainConfig.Memory.Value = memoryKb
+	if params.MemoryKb != nil {
+		virDomainConfig.Memory.Value = *params.MemoryKb
 		virDomainConfig.Memory.Unit = "kib"
+	}
+	if params.GuestAgent != nil {
+		if virDomainRunning {
+			return util.NewError(err, "domain must be stopped to change guest agent integration state")
+		}
+		if *params.GuestAgent {
+			virDomainConfig.Devices.Channels = append(virDomainConfig.Devices.Channels, libvirtxml.DomainChannel{
+				Protocol: &libvirtxml.DomainChardevProtocol{Type: "unix"},
+				Target:   &libvirtxml.DomainChannelTarget{VirtIO: &libvirtxml.DomainChannelTargetVirtIO{Name: "org.qemu.guest_agent.0"}},
+				Source:   &libvirtxml.DomainChardevSource{UNIX: &libvirtxml.DomainChardevSourceUNIX{}},
+			})
+		} else {
+			newChannels := []libvirtxml.DomainChannel{}
+			for _, channel := range virDomainConfig.Devices.Channels {
+				if channel.Target != nil && channel.Target.VirtIO != nil && channel.Target.VirtIO.Name == "org.qemu.guest_agent.0" {
+					continue
+				}
+				newChannels = append(newChannels, channel)
+			}
+			virDomainConfig.Devices.Channels = newChannels
+		}
 	}
 	virDomainXmlUpdated, err := virDomainConfig.Marshal()
 	if err != nil {
@@ -667,92 +692,6 @@ func (repo *VirtualMachineRepository) Start(id string) error {
 		return util.NewError(err, "domain lookup failed")
 	}
 	return domain.Create()
-}
-
-func (repo *VirtualMachineRepository) EnableGuestAgent(id string) error {
-	conn, err := repo.pool.Acquire()
-	if err != nil {
-		return util.NewError(err, "cannot acquire connection")
-	}
-	defer repo.pool.Release(conn)
-
-	virDomain, err := conn.LookupDomainByName(id)
-	if err != nil {
-		return util.NewError(err, "domain lookup failed")
-	}
-	running, err := virDomain.IsActive()
-	if err != nil {
-		return util.NewError(err, "cannot check if domain is running")
-	}
-	if running {
-		return fmt.Errorf("domain must be stopped")
-	}
-	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
-	if err != nil {
-		return util.NewError(err, "cannot get domain xml")
-	}
-	virDomainConfig := &libvirtxml.Domain{}
-	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return util.NewError(err, "cannot parse domain xml")
-	}
-	virDomainConfig.Devices.Channels = append(virDomainConfig.Devices.Channels, libvirtxml.DomainChannel{
-		Protocol: &libvirtxml.DomainChardevProtocol{Type: "unix"},
-		Target:   &libvirtxml.DomainChannelTarget{VirtIO: &libvirtxml.DomainChannelTargetVirtIO{Name: "org.qemu.guest_agent.0"}},
-		Source:   &libvirtxml.DomainChardevSource{UNIX: &libvirtxml.DomainChardevSourceUNIX{}},
-	})
-	virDomainXml, err = virDomainConfig.Marshal()
-	if err != nil {
-		return util.NewError(err, "cannot create domain xml")
-	}
-	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
-		return util.NewError(err, "cannot update domain xml")
-	}
-	return nil
-}
-
-func (repo *VirtualMachineRepository) DisableGuestAgent(id string) error {
-	conn, err := repo.pool.Acquire()
-	if err != nil {
-		return util.NewError(err, "cannot acquire connection")
-	}
-	defer repo.pool.Release(conn)
-
-	virDomain, err := conn.LookupDomainByName(id)
-	if err != nil {
-		return util.NewError(err, "domain lookup failed")
-	}
-	running, err := virDomain.IsActive()
-	if err != nil {
-		return util.NewError(err, "cannot check if domain is running")
-	}
-	if running {
-		return fmt.Errorf("domain must be stopped")
-	}
-	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
-	if err != nil {
-		return util.NewError(err, "cannot get domain xml")
-	}
-	virDomainConfig := &libvirtxml.Domain{}
-	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return util.NewError(err, "cannot parse domain xml")
-	}
-	newChannels := []libvirtxml.DomainChannel{}
-	for _, channel := range virDomainConfig.Devices.Channels {
-		if channel.Target != nil && channel.Target.VirtIO != nil && channel.Target.VirtIO.Name == "org.qemu.guest_agent.0" {
-			continue
-		}
-		newChannels = append(newChannels, channel)
-	}
-	virDomainConfig.Devices.Channels = newChannels
-
-	virDomainXml, err = virDomainConfig.Marshal()
-	if err != nil {
-		return util.NewError(err, "cannot create domain xml")
-	}
-	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
-		return util.NewError(err, "cannot update domain xml")
-	}
-	return nil
 }
 
 func (repo *VirtualMachineRepository) AttachVolume(id, path string, typ compute.VolumeType, format compute.VolumeFormat, device compute.DeviceType) (*compute.VirtualMachineAttachedVolume, error) {
