@@ -8,7 +8,7 @@ type VirtualMachineRepository interface {
 	Update(id string, params VirtualMachineUpdateParams) error
 	AttachVolume(id, path string, typ VolumeType, format VolumeFormat, device DeviceType) (*VirtualMachineAttachedVolume, error)
 	DetachVolume(id, path string) error
-	AttachInterface(id, network, mac, model string, accessVlan uint, netType NetworkType) (*VirtualMachineAttachedInterface, error)
+	AttachInterface(id string, iface *VirtualMachineAttachedInterface) error
 	DetachInterface(id, mac string) error
 	GetConsoleStream(id string) (VirtualMachineConsoleStream, error)
 	Poweroff(id string) error
@@ -119,8 +119,8 @@ type VirtualMachineAttachedVolume struct {
 }
 
 type VirtualMachineAttachedInterface struct {
-	Type          NetworkType
-	Network       string
+	NetworkType   NetworkType
+	NetworkName   string
 	Mac           string
 	Model         string
 	IpAddressList []string

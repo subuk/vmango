@@ -92,9 +92,9 @@
           {{ range .Vm.Interfaces }}
             <div class="card card-block" style="padding: 10px; margin-right: 10px;border: 0px;">
               <div class="card-body">
-                <h5 class="card-title">Interface {{ .Type }} {{ .Model }}</h5>
+                <h5 class="card-title">{{ .NetworkType.String | Capitalize }} interface {{ .Model }}</h5>
                 <p class="card-text">
-                  Network: {{ .Network }}<br>
+                  Network: {{ .NetworkName }}<br>
                   MAC: {{ .Mac }}<br>
                   Model: {{ .Model }}<br>
                   {{ if gt .AccessVlan 0 }}

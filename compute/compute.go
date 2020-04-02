@@ -109,10 +109,10 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 			return nil, util.NewError(err, "network get failed")
 		}
 		iface := &VirtualMachineAttachedInterface{
-			Type:       network.Type,
-			Network:    ifaceParams.Network,
-			Mac:        ifaceParams.Mac,
-			AccessVlan: ifaceParams.AccessVlan,
+			NetworkType: network.Type,
+			NetworkName: ifaceParams.Network,
+			Mac:         ifaceParams.Mac,
+			AccessVlan:  ifaceParams.AccessVlan,
 		}
 		interfaces = append(interfaces, iface)
 	}
@@ -178,12 +178,16 @@ func (service *Service) VirtualMachineDetachVolume(id, path string) error {
 	return service.virt.DetachVolume(id, path)
 }
 
-func (service *Service) VirtualMachineAttachInterface(id, network, mac, model string, accessVlan uint) (*VirtualMachineAttachedInterface, error) {
-	net, err := service.net.Get(network)
-	if err != nil {
-		return nil, util.NewError(err, "cannot get specified network")
-	}
-	return service.virt.AttachInterface(id, network, mac, model, accessVlan, net.Type)
+type VirtualMachineAttachInterfaceParams struct {
+	NetworkName string
+	NetworkType NetworkType
+	Mac         string
+	Model       string
+	AccessVlan  uint
+}
+
+func (service *Service) VirtualMachineAttachInterface(id string, iface *VirtualMachineAttachedInterface) error {
+	return service.virt.AttachInterface(id, iface)
 }
 
 type VirtualMachineUpdateParams struct {

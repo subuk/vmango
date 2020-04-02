@@ -355,16 +355,16 @@ func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxm
 	}
 	domainIface.Source = &libvirtxml.DomainInterfaceSource{}
 	domainIface.Model = &libvirtxml.DomainInterfaceModel{Type: attachedIface.Model}
-	switch attachedIface.Type {
+	switch attachedIface.NetworkType {
 	default:
-		return fmt.Errorf("unsupported interface type %s", attachedIface.Type)
+		return fmt.Errorf("unsupported interface type %s", attachedIface.NetworkType)
 	case compute.NetworkTypeLibvirt:
 		domainIface.Source.Network = &libvirtxml.DomainInterfaceSourceNetwork{
-			Network: attachedIface.Network,
+			Network: attachedIface.NetworkName,
 		}
 	case compute.NetworkTypeBridge:
 		domainIface.Source.Bridge = &libvirtxml.DomainInterfaceSourceBridge{
-			Bridge: attachedIface.Network,
+			Bridge: attachedIface.NetworkName,
 		}
 	}
 	if attachedIface.AccessVlan > 0 {
@@ -806,51 +806,43 @@ func (repo *VirtualMachineRepository) DetachVolume(id, needlePath string) error 
 	return nil
 }
 
-func (repo *VirtualMachineRepository) AttachInterface(id, network, mac, model string, accessVlan uint, ifaceType compute.NetworkType) (*compute.VirtualMachineAttachedInterface, error) {
+func (repo *VirtualMachineRepository) AttachInterface(id string, attachedIface *compute.VirtualMachineAttachedInterface) error {
 	conn, err := repo.pool.Acquire()
 	if err != nil {
-		return nil, util.NewError(err, "cannot acquire connection")
+		return util.NewError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(conn)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return nil, util.NewError(err, "domain lookup failed")
+		return util.NewError(err, "domain lookup failed")
 	}
 	running, err := virDomain.IsActive()
 	if err != nil {
-		return nil, util.NewError(err, "cannot check if domain is running")
+		return util.NewError(err, "cannot check if domain is running")
 	}
 	if running {
-		return nil, fmt.Errorf("domain must be stopped")
+		return fmt.Errorf("domain must be stopped")
 	}
-
 	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
 	if err != nil {
-		return nil, util.NewError(err, "cannot get domain xml")
+		return util.NewError(err, "cannot get domain xml")
 	}
 	virDomainConfig := &libvirtxml.Domain{}
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return nil, util.NewError(err, "cannot parse domain xml")
-	}
-	attachedIface := &compute.VirtualMachineAttachedInterface{
-		Type:       ifaceType,
-		Network:    network,
-		Mac:        mac,
-		Model:      model,
-		AccessVlan: accessVlan,
+		return util.NewError(err, "cannot parse domain xml")
 	}
 	if err := repo.attachInterface(virDomainConfig, attachedIface); err != nil {
-		return nil, err
+		return err
 	}
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {
-		return nil, util.NewError(err, "cannot create domain xml")
+		return util.NewError(err, "cannot create domain xml")
 	}
 	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
-		return nil, util.NewError(err, "cannot update domain xml")
+		return util.NewError(err, "cannot update domain xml")
 	}
-	return attachedIface, nil
+	return nil
 }
 
 func (repo *VirtualMachineRepository) DetachInterface(id, needleMac string) error {

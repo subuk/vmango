@@ -349,7 +349,7 @@ func (env *Environ) VirtualMachineAttachInterfaceFormProcess(rw http.ResponseWri
 	}
 	id := urlvars["id"]
 	mac := req.Form.Get("Mac")
-	network := req.Form.Get("Network")
+	networkName := req.Form.Get("Network")
 
 	var accessVlan uint
 	accessVlanRaw := req.Form.Get("AccessVlan")
@@ -362,7 +362,20 @@ func (env *Environ) VirtualMachineAttachInterfaceFormProcess(rw http.ResponseWri
 		accessVlan = uint(parsed)
 	}
 
-	if _, err := env.compute.VirtualMachineAttachInterface(id, network, mac, "virtio", accessVlan); err != nil {
+	network, err := env.compute.NetworkGet(networkName)
+	if err != nil {
+		http.Error(rw, "cannot get network", http.StatusInternalServerError)
+		return
+	}
+
+	attachedIface := &compute.VirtualMachineAttachedInterface{
+		NetworkType: network.Type,
+		NetworkName: network.Name,
+		Mac:         mac,
+		Model:       "virtio",
+		AccessVlan:  accessVlan,
+	}
+	if err := env.compute.VirtualMachineAttachInterface(id, attachedIface); err != nil {
 		env.error(rw, req, err, "cannot attach interface", http.StatusInternalServerError)
 		return
 	}
