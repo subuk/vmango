@@ -29,17 +29,17 @@
             </thead>
             <tbody>
               {{ range $provider, $images := .Images }}
-                {{ range $images }}
-                <tr>
-                  <td>{{ .Id }}</td>
-                  <td>{{ .OS }}</td>
-                  <td>{{ .Arch }}</td>
-                  <td>{{ .SizeMegabytes }}Mb</td>
-                  <td>{{ .TypeString }}</td>
-                  <td>{{ HumanizeDate .Date }}</td>
-                  <td>{{ $provider }}</td>
-                </tr>
-                {{ end }}
+              {{ range $images }}
+              <tr>
+                <td>{{ .Id }}</td>
+                <td>{{ .OS }}</td>
+                <td>{{ .Arch }}</td>
+                <td>{{ .SizeMegabytes }}Mb</td>
+                <td>{{ .TypeString }}</td>
+                <td>{{ HumanizeDate .Date }}</td>
+                <td>{{ $provider }}</td>
+              </tr>
+              {{ end }}
               {{ end }}
             </tbody>
           </table>

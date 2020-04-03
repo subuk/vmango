@@ -27,13 +27,13 @@
             </thead>
             <tbody>
               {{ range .Vms }}
-                <tr>
-                  <td><a href="{{ Url "virtual-machine-detail" "id" .Id }}">{{ .Id }}</a></td>
-                  <td>{{ .State }}</td>
-                  <td>{{ .VCpus }}</td>
-                  <td>{{ .Memory | HumanizeBytes }}</td>
-                  <td>{{ .IpAddressList | Join " " }}</td>
-                </tr>
+              <tr>
+                <td><a href="{{ Url "virtual-machine-detail" "id" .Id }}">{{ .Id }}</a></td>
+                <td>{{ .State }}</td>
+                <td>{{ .VCpus }}</td>
+                <td>{{ .Memory | HumanizeBytes }}</td>
+                <td>{{ .IpAddressList | Join " " }}</td>
+              </tr>
               {{ end }}
             </tbody>
           </table>

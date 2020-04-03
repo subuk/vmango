@@ -2,59 +2,60 @@
 <html lang="en">
 
 <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description" content="CoreUI Bootstrap 4 Admin Template">
-    <meta name="author" content="Lukasz Holeczek">
-    <meta name="keyword" content="CoreUI Bootstrap 4 Admin Template">
-    <link rel="icon" href="{{ Url "static" "name" "vmango/img/favicon.png" }}">
-    <title>Sign In — Vmango</title>
-    {{ template "css" . }}
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="CoreUI Bootstrap 4 Admin Template">
+  <meta name="author" content="Lukasz Holeczek">
+  <meta name="keyword" content="CoreUI Bootstrap 4 Admin Template">
+  <link rel="icon" href="{{ Url "static" "name" "vmango/img/favicon.png" }}">
+  <title>Sign In — Vmango</title>
+  {{ template "css" . }}
 </head>
 
 <body class="app flex-row align-items-center">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-8 col-lg-6">
-                <div class="card-group mb-0">
-                    <div class="card p-2">
-                        <div class="card-block">
-                          {{ if .Error }}
-                          <div class="alert alert-danger" role="alert">
-                            {{ .Error }}
-                          </div>
-                          {{ end }}
-                          <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
-                            <h1>Vmango</h1>
-                            <p class="text-muted">Sign In to your account</p>
-                            <div class="input-group mb-1">
-                                <span class="input-group-addon"><i class="icon-user"></i>
-                                </span>
-                                <input name="Username" type="text" class="form-control" placeholder="Username">
-                            </div>
-                            <div class="input-group mb-2">
-                                <span class="input-group-addon"><i class="icon-lock"></i>
-                                </span>
-                                <input name="Password" type="password" class="form-control" placeholder="Password">
-                            </div>
-                            <div class="row">
-                                <div class="col-6">
-                                    <button data-loading="<i class='icon-refresh icons'></i> Logging in..." type="submit" class="btn btn-primary px-2">Login</button>
-                                </div>
-                                <div class="col-6 text-right">
-
-                                </div>
-                            </div>
-                          </form>
-                        </div>
-                    </div>
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-md-8 col-lg-6">
+        <div class="card-group mb-0">
+          <div class="card p-2">
+            <div class="card-block">
+              {{ if .Error }}
+              <div class="alert alert-danger" role="alert">
+                {{ .Error }}
+              </div>
+              {{ end }}
+              <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
+                <h1>Vmango</h1>
+                <p class="text-muted">Sign In to your account</p>
+                <div class="input-group mb-1">
+                  <span class="input-group-addon"><i class="icon-user"></i>
+                  </span>
+                  <input name="Username" type="text" class="form-control" placeholder="Username">
                 </div>
-            </div>
-        </div>
-    </div>
+                <div class="input-group mb-2">
+                  <span class="input-group-addon"><i class="icon-lock"></i>
+                  </span>
+                  <input name="Password" type="password" class="form-control" placeholder="Password">
+                </div>
+                <div class="row">
+                  <div class="col-6">
+                    <button data-loading="<i class='icon-refresh icons'></i> Logging in..." type="submit"
+                      class="btn btn-primary px-2">Login</button>
+                  </div>
+                  <div class="col-6 text-right">
 
-    {{ template "js" . }}
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {{ template "js" . }}
 </body>
 
 </html>

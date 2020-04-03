@@ -10,133 +10,139 @@
 <div class="container">
   <div class="card border-0">
     <div class="card-block">
-        <h4>Create Virtual Machine</h4>
-        <br>
-        <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
+      <h4>Create Virtual Machine</h4>
+      <br>
+      <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
 
-            <div class="form-group row">
-              <div class="col-md-10">
-                <label>Name</label>
-                <input required="required" class="form-control" name="Name" id="Name">
-              </div>
-              <div class="col-md-2">
-                <label>Arch</label>
-                <select required="required" class="form-control" name="Arch">
-                  {{ range .Arches }}
-                    <option value="{{ . }}">{{ . }}</option>
-                  {{ end }}
-                </select>
-              </div>
+        <div class="form-group row">
+          <div class="col-md-10">
+            <label>Name</label>
+            <input required="required" class="form-control" name="Name" id="Name">
+          </div>
+          <div class="col-md-2">
+            <label>Arch</label>
+            <select required="required" class="form-control" name="Arch">
+              {{ range .Arches }}
+              <option value="{{ . }}">{{ . }}</option>
+              {{ end }}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-md-6">
+            <label>Cpu Count</label>
+            <input required="required" value="2" type="number" min="1" class="form-control" name="Vcpus" id="Vcpus">
+          </div>
+          <div class="col-md-6">
+            <label>Memory Megabytes</label>
+            <input required="required" value="2048" min="1" class="form-control" type="number" name="MemoryMb"
+              id="MemoryMb">
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-md-8">
+            <label>Volume Name</label>
+            <input required="required" class="form-control" name="RootVolumeName" id="RootVolumeName">
+          </div>
+          <div class="col-md-4">
+            <label>Volume Pool</label>
+            <select required="required" class="form-control" name="RootVolumePool">
+              {{ range .Pools }}
+              <option value="{{ .Name }}">{{ .Name }} ({{ .Free | HumanizeBytes }} free {{ .UsagePercent }}% used)
+              </option>
+              {{ end }}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-md-3">
+            <label>Format</label>
+            <select required="required" class="form-control" name="RootVolumeFormat">
+              <option selected value="qcow2">qcow2</option>
+              <option value="raw">raw</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label>Source Image</label>
+            <select required="required" class="form-control" name="RootVolumeSource">
+              {{ range .Images }}
+              {{ if eq .Metadata.OsName "" }}
+              <option value="{{ .Path }}">{{ .Path }}</option>
+              {{ else }}
+              <option value="{{ .Path }}">{{ .Metadata.OsName }} {{ .Metadata.OsVersion }} ({{ .Metadata.OsArch }})
+              </option>
+              {{ end }}
+              {{ end }}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label>Size Gigabytes</label>
+            <input required="required" value="10" type="number" min="1" class="form-control" name="RootVolumeSizeGb"
+              id="RootVolumeSizeGb">
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-md-4">
+            <label>Network</label>
+            <select required="required" class="form-control" name="Network">
+              {{ range .Networks }}
+              <option value="{{ .Name }}">{{ .Name }} ({{ .Type }})</option>
+              {{ end }}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label>MAC Address</label>
+            <input class="form-control" name="Mac" id="Mac" placeholder="00:00:00:00:00:00">
+          </div>
+          <div class="col-md-4">
+            <label for="AccessVlan">Vlan</label>
+            <input type="number" min="0" class="form-control" name="AccessVlan" id="AccessVlan">
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-md-12">
+            <label>Keys</label>
+            <select multiple class="form-control" name="Keys">
+              {{ range .Keys }}
+              <option value="{{ .Fingerprint }}">{{ .Comment }}</option>
+              {{ end }}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-md-12">
+            <label>Userdata</label>
+            <textarea class="form-control" name="Userdata"></textarea>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-md-12">
+            <div class="custom-control custom-checkbox">
+              <input id="start" name="Start" value="true" class="custom-control-input" type="checkbox" checked />
+              <label class="custom-control-label" for="start">Start immediately after creation</label>
             </div>
+          </div>
+        </div>
 
-            <div class="form-group row">
-              <div class="col-md-6">
-                <label>Cpu Count</label>
-                <input required="required" value="2" type="number" min="1" class="form-control" name="Vcpus" id="Vcpus">
-              </div>
-              <div class="col-md-6">
-                <label>Memory Megabytes</label>
-                <input required="required" value="2048" min="1" class="form-control" type="number" name="MemoryMb" id="MemoryMb">
-              </div>
-            </div>
+        <div class="form-group row">
+          <div class="col-md-12">
+            <button class="btn btn-primary"
+              data-loading="<i class='icon-refresh icons'></i> Creating Virtual Machine..." type="submit">Create Virtual
+              Machine</button>
+          </div>
+        </div>
+      </form>
 
-            <div class="form-group row">
-              <div class="col-md-8">
-                <label>Volume Name</label>
-                <input required="required" class="form-control" name="RootVolumeName" id="RootVolumeName">
-              </div>
-              <div class="col-md-4">
-                <label>Volume Pool</label>
-                <select required="required" class="form-control" name="RootVolumePool">
-                  {{ range .Pools }}
-                  <option value="{{ .Name }}">{{ .Name }} ({{ .Free | HumanizeBytes }} free {{ .UsagePercent }}% used)</option>
-                  {{ end }}
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group row">
-              <div class="col-md-3">
-                <label>Format</label>
-                <select required="required" class="form-control" name="RootVolumeFormat">
-                  <option selected value="qcow2">qcow2</option>
-                  <option value="raw">raw</option>
-                </select>
-              </div>
-              <div class="col-md-6">
-                <label>Source Image</label>
-                <select required="required" class="form-control" name="RootVolumeSource">
-                    {{ range .Images }}
-                      {{ if eq .Metadata.OsName "" }}
-                      <option value="{{ .Path }}">{{ .Path }}</option>
-                      {{ else }}
-                      <option value="{{ .Path }}">{{ .Metadata.OsName }} {{ .Metadata.OsVersion }} ({{ .Metadata.OsArch }})</option>
-                      {{ end }}
-                    {{ end }}
-                </select>
-              </div>
-              <div class="col-md-3">
-                <label>Size Gigabytes</label>
-                <input required="required" value="10" type="number" min="1" class="form-control" name="RootVolumeSizeGb" id="RootVolumeSizeGb">
-              </div>
-            </div>
-
-            <div class="form-group row">
-              <div class="col-md-4">
-                <label>Network</label>
-                <select required="required" class="form-control" name="Network">
-                    {{ range .Networks }}
-                    <option value="{{ .Name }}">{{ .Name }} ({{ .Type }})</option>
-                    {{ end }}
-                </select>
-              </div>
-              <div class="col-md-4">
-                <label>MAC Address</label>
-                <input class="form-control" name="Mac" id="Mac" placeholder="00:00:00:00:00:00">
-              </div>
-              <div class="col-md-4">
-                <label for="AccessVlan">Vlan</label>
-                <input type="number" min="0" class="form-control" name="AccessVlan" id="AccessVlan">
-              </div>
-            </div>
-
-            <div class="form-group row">
-              <div class="col-md-12">
-                <label>Keys</label>
-                <select multiple class="form-control" name="Keys">
-                    {{ range .Keys }}
-                    <option value="{{ .Fingerprint }}">{{ .Comment }}</option>
-                    {{ end }}
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group row">
-              <div class="col-md-12">
-                <label>Userdata</label>
-                <textarea class="form-control" name="Userdata"></textarea>
-              </div>
-            </div>
-
-            <div class="form-group row">
-              <div class="col-md-12">
-                <div class="custom-control custom-checkbox">
-                  <input id="start" name="Start" value="true" class="custom-control-input" type="checkbox" checked/>
-                  <label class="custom-control-label" for="start">Start immediately after creation</label>
-                </div>
-              </div>
-            </div>
-
-            <div class="form-group row">
-              <div class="col-md-12">
-                <button class="btn btn-primary" data-loading="<i class='icon-refresh icons'></i> Creating Virtual Machine..." type="submit">Create Virtual Machine</button>
-              </div>
-            </div>
-          </form>
-
-    </div>
     </div>
   </div>
+</div>
 </div>
 
 

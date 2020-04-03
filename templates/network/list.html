@@ -15,24 +15,24 @@
       </div>
 
       <div class="row">
-      <div style="margin-top:40px;" class="col-md-12">
-        <table class="table table-hover table-outline m-b-0">
-          <thead class="thead-default">
-            <tr>
-              <th>Name</th>
-              <th>Type</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{ range .Networks }}
+        <div style="margin-top:40px;" class="col-md-12">
+          <table class="table table-hover table-outline m-b-0">
+            <thead class="thead-default">
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{ range .Networks }}
               <tr>
                 <td>{{ .Name }}</td>
                 <td>{{ .Type }}</td>
               </tr>
-            {{ end }}
-          </tbody>
-        </table>
-      </div>
+              {{ end }}
+            </tbody>
+          </table>
+        </div>
       </div>
       <!--/.col-->
 

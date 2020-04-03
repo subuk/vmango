@@ -3,9 +3,6 @@
 <script src="{{ Static "coreui/js/bootstrap.min.js" }}"></script>
 <script src="{{ Static "coreui/js/pace.min.js" }}"></script>
 
-<!-- <script src="{{ Static "coreui/js/Chart.min.js" }}"></script> -->
-<script src="{{ Static "coreui/js/app.js" }}"></script>
-<!-- <script src="{{ Static "coreui/js/views/main.js" }}"></script> -->
 <script src="{{ Static "xterm/xterm.js" }}"></script>
 <script src="{{ Static "xterm/addons/fit/fit.js" }}"></script>
 
@@ -13,20 +10,19 @@
 <script src="{{ Static "vmango/vmango.ReactiveForm.js" }}"></script>
 <script src="{{ Static "vmango/vmango.WSConsole.js" }}"></script>
 <script>
-
-(function(exports){
+  (function (exports) {
     Terminal.applyAddon(fit);
-})(window);
+  })(window);
 
-$(function(){
-    $('.JS-WSConsole').each(function(idx, el){
-        Vmango.WSConsole(el);
+  $(function () {
+    $('.JS-WSConsole').each(function (idx, el) {
+      Vmango.WSConsole(el);
     });
-    $('.JS-CheckboxCards').each(function(idx, el){
-        Vmango.CheckboxCards(el);
+    $('.JS-CheckboxCards').each(function (idx, el) {
+      Vmango.CheckboxCards(el);
     });
-    $('.JS-ReactiveForm').each(function(idx, el){
-        Vmango.ReactiveForm(el);
+    $('.JS-ReactiveForm').each(function (idx, el) {
+      Vmango.ReactiveForm(el);
     });
-});
+  });
 </script>

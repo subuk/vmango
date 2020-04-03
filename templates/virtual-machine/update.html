@@ -19,35 +19,38 @@
         <div class="form-group row">
           <div class="col-md-12">
             <label>Cpu Count</label>
-            <input required="required" value="{{ .Vm.VCpus }}" type="number" min="1" class="form-control" name="Vcpus" id="Vcpus">
+            <input required="required" value="{{ .Vm.VCpus }}" type="number" min="1" class="form-control" name="Vcpus"
+              id="Vcpus">
           </div>
         </div>
 
         <div class="form-group row">
           <div class="col-md-12">
             <label>Memory Megabytes</label>
-            <input required="required" value="{{ .Vm.MemoryMiB }}" min="1" class="form-control" type="number" name="MemoryMb"
-              id="MemoryMb">
+            <input required="required" value="{{ .Vm.MemoryMiB }}" min="1" class="form-control" type="number"
+              name="MemoryMb" id="MemoryMb">
           </div>
         </div>
 
         <div class="form-group row">
           <div class="col-md-12">
             <div class="custom-control custom-checkbox">
-              <input id="autostart" name="Autostart" value="true" class="custom-control-input" type="checkbox" {{ if .Vm.Autostart }}checked{{ end }} />
+              <input id="autostart" name="Autostart" value="true" class="custom-control-input" type="checkbox"
+                {{ if .Vm.Autostart }}checked{{ end }} />
               <label class="custom-control-label" for="autostart">Autostart</label>
             </div>
             <div class="custom-control custom-checkbox">
-              <input id="guestagent" name="GuestAgent" value="true" class="custom-control-input" type="checkbox" {{ if .Vm.GuestAgent }}checked{{ end }} />
+              <input id="guestagent" name="GuestAgent" value="true" class="custom-control-input" type="checkbox"
+                {{ if .Vm.GuestAgent }}checked{{ end }} />
               <label class="custom-control-label" for="guestagent">Guest Agent</label>
-            </div>            
+            </div>
           </div>
         </div>
 
         <div class="form-group row">
           <div class="col-md-12">
-            <button class="btn btn-primary"
-              data-loading="<i class='icon-refresh icons'></i> Updating..." type="submit">Update</button>
+            <button class="btn btn-primary" data-loading="<i class='icon-refresh icons'></i> Updating..."
+              type="submit">Update</button>
           </div>
         </div>
       </form>

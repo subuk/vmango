@@ -21,12 +21,13 @@
             <small id="nameHelp" class="form-text text-muted">Paste ssh public key here to add.</small>
           </div>
           <div class="col-md-2">
-            <button class="btn btn-block btn-primary" data-loading="<i class='icon-refresh icons'></i> Creating machine..." type="submit">Add Key</button>
+            <button class="btn btn-block btn-primary"
+              data-loading="<i class='icon-refresh icons'></i> Creating machine..." type="submit">Add Key</button>
           </div>
         </div>
       </form>
 
-        <div class="row">
+      <div class="row">
         <div style="margin-top:40px;" class="col-md-12">
           <table class="table table-hover table-outline m-b-0">
             <thead class="thead-default">
@@ -39,21 +40,21 @@
             </thead>
             <tbody>
               {{ range .Keys }}
-                <tr>
-                  <td>{{ .Type }}</td>
-                  <td>{{ .Comment }}</td>
-                  <td>{{ .Fingerprint }}</td>
-                  <td>
-                    <a href="{{ Url "key-delete-form" "fingerprint" .Fingerprint }}">Delete</a>
-                    <a href="{{ Url "key-show" "fingerprint" .Fingerprint }}">Show</a>
-                  </td>
-                </tr>
+              <tr>
+                <td>{{ .Type }}</td>
+                <td>{{ .Comment }}</td>
+                <td>{{ .Fingerprint }}</td>
+                <td>
+                  <a href="{{ Url "key-delete-form" "fingerprint" .Fingerprint }}">Delete</a>
+                  <a href="{{ Url "key-show" "fingerprint" .Fingerprint }}">Show</a>
+                </td>
+              </tr>
               {{ end }}
             </tbody>
           </table>
         </div>
-        </div>
-        <!--/.col-->
+      </div>
+      <!--/.col-->
 
       <!--/.row-->
     </div>

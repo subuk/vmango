@@ -14,27 +14,29 @@
       <h4>Delete {{ .Vm.Id }} machine</h4>
       <br>
       <p>
-          Are you sure you want to remove <b>{{ .Vm.Id }}</b>?
-          <br>
-          It has the following volumes attached:
-          <ul>
+        Are you sure you want to remove <b>{{ .Vm.Id }}</b>?
+        <br>
+        It has the following volumes attached:
+        <ul>
           {{ range .Vm.Volumes }}
-            <li>{{ .Path }}</li>
+          <li>{{ .Path }}</li>
           {{ end }}
-          </ul>
+        </ul>
       </p>
       <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
         <div class="form-group row">
           <div class="col-md-12">
             <div class="custom-control custom-checkbox">
-              <input id="deleteVolumes" name="DeleteVolumes" value="true" class="custom-control-input" type="checkbox" />
+              <input id="deleteVolumes" name="DeleteVolumes" value="true" class="custom-control-input"
+                type="checkbox" />
               <label class="custom-control-label" for="deleteVolumes">Remove volumes</label>
             </div>
           </div>
         </div>
         <div class="form-group row">
           <div class="col-md-12">
-            <button class="btn btn-danger" data-loading="<i class='icon-refresh icons'></i> Removing virtual machine..." type="submit">Remove Virtual Machine</button>
+            <button class="btn btn-danger" data-loading="<i class='icon-refresh icons'></i> Removing virtual machine..."
+              type="submit">Remove Virtual Machine</button>
             <a class="btn btn-secondary" href="{{ Url "virtual-machine-detail" "id" .Vm.Id }}">Cancel</a>
           </div>
         </div>

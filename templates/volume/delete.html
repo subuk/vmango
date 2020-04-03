@@ -13,12 +13,14 @@
 
       {{ if .Volume.AttachedTo }}
       <div class="row">
-          <div class="col-md-12">
-            <p class="alert alert-danger">
-              This volume attached to Vm <a href="{{ Url "virtual-machine-detail" "id" .Volume.AttachedTo }}">{{ .Volume.AttachedTo }}</a>, please detach before.
-            </p>
-          </div>
+        <div class="col-md-12">
+          <p class="alert alert-danger">
+            This volume attached to Vm <a
+              href="{{ Url "virtual-machine-detail" "id" .Volume.AttachedTo }}">{{ .Volume.AttachedTo }}</a>, please
+            detach before.
+          </p>
         </div>
+      </div>
       {{ else }}
       <div class="alert alert-danger" role="alert">
         This action cannot be undone!
@@ -34,7 +36,8 @@
       <div class="row">
         <div class="col-md-12">
           <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
-            <button class="btn btn-primary" data-loading="<i class='icon-refresh icons'></i> Deleting Volume..." type="submit">Delete</button>
+            <button class="btn btn-primary" data-loading="<i class='icon-refresh icons'></i> Deleting Volume..."
+              type="submit">Delete</button>
             <a class="btn btn-secondary" href="{{ Url "volume-list" }}">Cancel</a>
           </form>
         </div>

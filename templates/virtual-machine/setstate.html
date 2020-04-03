@@ -28,8 +28,7 @@
           <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
 
 
-            <button
-              class="btn {{ if eq .Action "stop" }}btn-danger{{ else }}btn-primary{{ end }}"
+            <button class="btn {{ if eq .Action "stop" }}btn-danger{{ else }}btn-primary{{ end }}"
               data-loading="<i class='icon-refresh icons'></i> Applying..."
               type="submit">{{ .Action | Capitalize }}</button>
             <a class="btn btn-secondary" href="{{ Url "virtual-machine-detail" "id" .Vm.Id }}">Cancel</a>
