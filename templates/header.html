@@ -12,65 +12,39 @@
 
 <body class="app sidebar-hidden">
   <header class="app-header navbar">
-    <button class="navbar-toggler mobile-sidebar-toggler hidden-lg-up" type="button">☰</button>
-    <a class="navbar-brand" href="/"></a>
-    <ul class="nav navbar-nav hidden-md-down">
-      <li class="nav-item px-1">
+    <button class="navbar-toggler sidebar-toggler d-lg-none mr-auto" type="button" data-toggle="sidebar-show">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <a class="navbar-brand" href="/">
+      <img class="navbar-brand-full" src="{{ Static "vmango/img/logo.png" }}" width="89" height="25" alt="CoreUI Logo">
+    </a>
+    <ul class="nav navbar-nav d-md-down-none">
+      <li class="nav-item px-3">
         <a class="nav-link" href="{{ Url "index" }}">Host</a>
       </li>
-      <li class="nav-item px-1">
+      <li class="nav-item px-3">
         <a class="nav-link" href="{{ Url "virtual-machine-list" }}">Machines</a>
       </li>
-      <li class="nav-item px-1">
+      <li class="nav-item px-3">
         <a class="nav-link" href="{{ Url "volume-list" }}">Volumes</a>
       </li>
-      <li class="nav-item px-1">
+      <li class="nav-item px-3">
         <a class="nav-link" href="{{ Url "network-list" }}">Networks</a>
       </li>
-      <li class="nav-item px-1">
+      <li class="nav-item px-3">
         <a class="nav-link" href="{{ Url "key-list" }}">Keys</a>
       </li>
-      <li class="nav-item px-1">
+      <li class="nav-item px-3">
         <a class="nav-link" href="{{ Url "virtual-machine-add" }}">Create machine</a>
       </li>
     </ul>
-    <ul class="nav navbar-nav ml-auto pr-3">
-      <li class="nav-item hidden-md-down">
+    <ul class="nav navbar-nav d-md-down-none ml-auto pr-3">
+      <li class="nav-item px-3">
         <a class="nav-link" href="{{ Url "logout" }}">Logout</a>
       </li>
     </ul>
   </header>
 
   <div class="app-body">
-    <div class="sidebar">
-      <nav class="sidebar-nav">
-        <ul class="nav">
-          <li class="nav-title">
-            Menu
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ Url "index" }}"><i class="icon-arrow-right"></i> Host</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ Url "virtual-machine-list" }}"><i class="icon-arrow-right"></i> Machines</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ Url "volume-list" }}"><i class="icon-arrow-right"></i> Volumes</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ Url "network-list" }}"><i class="icon-arrow-right"></i> Networks</a>
-          </li>
-          <li class="divider"></li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ Url "virtual-machine-add" }}"><i class="icon-arrow-right"></i> Create
-              machine</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ Url "logout" }}"><i class="icon-arrow-right"></i> Logout</a>
-          </li>
-        </ul>
-      </nav>
-    </div>
-
     <!-- Main content -->
     <main class="main">

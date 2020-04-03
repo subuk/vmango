@@ -5,93 +5,94 @@
 </ol>
 
 <div class="container">
-  <div class="card border-0">
-    <div class="card-block">
-      <div class="row">
-        <div class="col-md-12">
-          <h4 class="card-title">Volumes</h4>
-          <div class="small text-muted" style="margin-top:-10px;">Total: {{ len .Volumes }}</div>
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-12">
+              <h4 class="card-title">Volumes</h4>
+              <div class="small text-muted" style="margin-top:-10px;">Total: {{ len .Volumes }}</div>
+            </div>
+          </div>
+          <br>
+          <form method="post" action="{{ Url "volume-add-form" }}">{{ CSRFField .Request }}
+            <div class="form-group row">
+              <div class="col-md-3">
+                <input required="required" class="form-control" name="Name" id="Name" aria-describedby="nameHelp">
+                <small id="nameHelp" class="form-text text-muted">Volume name</small>
+              </div>
+              <div class="col-md-2">
+                <input required="required" class="form-control" name="Size" min="1" id="Size" type="number"
+                  aria-describedby="nameHelp">
+                <small id="nameHelp" class="form-text text-muted">Size in megabytes</small>
+              </div>
+              <div class="col-md-2">
+                <select required="required" class="form-control" name="Format">
+                  {{ range .VolumeFormats }}
+                  <option value="{{ . }}">{{ . }}</option>
+                  {{ end }}
+                </select>
+                <small id="nameHelp" class="form-text text-muted">Format</small>
+              </div>
+              <div class="col-md-3">
+                <select required="required" class="form-control" name="Pool">
+                  {{ range .Pools }}
+                  <option value="{{ .Name }}">{{ .Name }} ({{ .Free | HumanizeBytes }} free {{ .UsagePercent }}% used)
+                  </option>
+                  {{ end }}
+                </select>
+                <small id="nameHelp" class="form-text text-muted">Pool</small>
+              </div>
+              <div class="col-md-2">
+                <button class="btn btn-block btn-primary"
+                  data-loading="<i class='icon-refresh icons'></i> Creating machine..." type="submit">Add Volume</button>
+              </div>
+            </div>
+          </form>
+
+          <div class="row">
+            <div class="col-md-12 mt-5">
+              <table class="table">
+                <thead class="thead-light">
+                  <tr>
+                    <th>Path</th>
+                    <th>Type</th>
+                    <th>Format</th>
+                    <th>Size</th>
+                    <th>Pool</th>
+                    <th>AttachedTo</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{ range .Volumes }}
+                  <tr>
+                    <td>{{ .Path }}</td>
+                    <td>{{ .Type }}</td>
+                    <td>{{ .Format }}</td>
+                    <td>{{ .Size | HumanizeBytes }}</td>
+                    <td>{{ .Pool }}</td>
+                    <td>
+                      {{ if .AttachedTo }}
+                      {{ .AttachedTo }} as {{ .AttachedAs }}
+                      {{ end }}
+                    </td>
+                    <td>
+                      <a title="Clone" href="{{ Url "volume-clone-form" "path" .Path }}">C</a>
+                      | <a title="Resize" href="{{ Url "volume-resize-form" "path" .Path }}">R</a>
+                      {{ if not .Metadata.Protected }}
+                      | <a title="Delete" style="color: red;" href="{{ Url "volume-delete-form" "path" .Path }}">D</a>
+                      {{ end }}
+                    </td>
+                  </tr>
+                  {{ end }}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
-      <br>
-      <form method="post" action="{{ Url "volume-add-form" }}">{{ CSRFField .Request }}
-        <div class="form-group row">
-          <div class="col-md-3">
-            <input required="required" class="form-control" name="Name" id="Name" aria-describedby="nameHelp">
-            <small id="nameHelp" class="form-text text-muted">Volume name</small>
-          </div>
-          <div class="col-md-2">
-            <input required="required" class="form-control" name="Size" min="1" id="Size" type="number"
-              aria-describedby="nameHelp">
-            <small id="nameHelp" class="form-text text-muted">Size in megabytes</small>
-          </div>
-          <div class="col-md-2">
-            <select required="required" class="form-control" name="Format">
-              {{ range .VolumeFormats }}
-              <option value="{{ . }}">{{ . }}</option>
-              {{ end }}
-            </select>
-            <small id="nameHelp" class="form-text text-muted">Format</small>
-          </div>
-          <div class="col-md-3">
-            <select required="required" class="form-control" name="Pool">
-              {{ range .Pools }}
-              <option value="{{ .Name }}">{{ .Name }} ({{ .Free | HumanizeBytes }} free {{ .UsagePercent }}% used)
-              </option>
-              {{ end }}
-            </select>
-            <small id="nameHelp" class="form-text text-muted">Pool</small>
-          </div>
-          <div class="col-md-2">
-            <button class="btn btn-block btn-primary"
-              data-loading="<i class='icon-refresh icons'></i> Creating machine..." type="submit">Add Volume</button>
-          </div>
-        </div>
-      </form>
-
-      <div class="row">
-        <div style="margin-top:40px;" class="col-md-12">
-          <table class="table table-hover table-outline m-b-0">
-            <thead class="thead-default">
-              <tr>
-                <th>Path</th>
-                <th>Type</th>
-                <th>Format</th>
-                <th>Size</th>
-                <th>Pool</th>
-                <th>AttachedTo</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{ range .Volumes }}
-              <tr>
-                <td>{{ .Path }}</td>
-                <td>{{ .Type }}</td>
-                <td>{{ .Format }}</td>
-                <td>{{ .Size | HumanizeBytes }}</td>
-                <td>{{ .Pool }}</td>
-                <td>
-                  {{ if .AttachedTo }}
-                  {{ .AttachedTo }} as {{ .AttachedAs }}
-                  {{ end }}
-                </td>
-                <td>
-                  <a title="Clone" href="{{ Url "volume-clone-form" "path" .Path }}">C</a>
-                  | <a title="Resize" href="{{ Url "volume-resize-form" "path" .Path }}">R</a>
-                  {{ if not .Metadata.Protected }}
-                  | <a title="Delete" style="color: red;" href="{{ Url "volume-delete-form" "path" .Path }}">D</a>
-                  {{ end }}
-                </td>
-              </tr>
-              {{ end }}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <!--/.col-->
-
-      <!--/.row-->
     </div>
   </div>
 </div>

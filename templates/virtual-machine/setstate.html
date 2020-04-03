@@ -9,30 +9,27 @@
 </ol>
 
 <div class="container">
-  <div class="card border-0">
-    <div class="card-block">
-
-      <div class="row">
-        <div class="col-md-12">
-          <p>
-            Are you sure you want to {{ .Action }} machine <b>{{ .Vm.Id }}</b>?<br>
-            {{ if eq .Action "stop" }}
-            It feels like a power loss inside a machine!
-            {{ end }}
-          </p>
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="col-md-12">
-          <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
-
-
-            <button class="btn {{ if eq .Action "stop" }}btn-danger{{ else }}btn-primary{{ end }}"
-              data-loading="<i class='icon-refresh icons'></i> Applying..."
-              type="submit">{{ .Action | Capitalize }}</button>
-            <a class="btn btn-secondary" href="{{ Url "virtual-machine-detail" "id" .Vm.Id }}">Cancel</a>
-          </form>
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-12">
+              <p>
+                Are you sure you want to {{ .Action }} machine <b>{{ .Vm.Id }}</b>?<br>
+              </p>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-12">
+              <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
+                <button class="btn {{ if eq .Action "stop" }}btn-danger{{ else }}btn-primary{{ end }}"
+                  data-loading="<i class='icon-refresh icons'></i> Applying..."
+                  type="submit">{{ .Action | Capitalize }}</button>
+                <a class="btn btn-secondary" href="{{ Url "virtual-machine-detail" "id" .Vm.Id }}">Cancel</a>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
     </div>

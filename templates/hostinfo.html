@@ -6,71 +6,72 @@
 </ol>
 
 <div class="container">
-  <div class="card border-0">
-    <div class="card-block">
-      <div class="row">
-        <div class="col-md-12">
-          <h4 class="card-title">{{ .HostInfo.Hostname }}</h4>
-          <div class="small text-muted" style="margin-top:-10px;">
-            {{ .HostInfo.CpuVendor }} {{ .HostInfo.CpuModel }} {{ .HostInfo.CpuArch }}<br>
-            IOMMU {{ if .HostInfo.Iommu }}enabled{{ else }}disabled{{ end }}
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-12">
+              <h3 class="card-title">{{ .HostInfo.Hostname }}</h3>
+              <div class="small text-muted" style="margin-top:-10px;">
+                {{ .HostInfo.CpuVendor }} {{ .HostInfo.CpuModel }} {{ .HostInfo.CpuArch }}<br>
+                IOMMU {{ if .HostInfo.Iommu }}enabled{{ else }}disabled{{ end }}
+              </div>
+            </div>
+            <div class="col-md-12 mt-5">
+              <h5>CPU Info</h5>
+              <table class="table">
+                <thead class="thead-light">
+                  <tr>
+                    <th>NumaId</th>
+                    <th>Cores</th>
+                    <th>Memory</th>
+                    <th>Pages 4k</th>
+                    <th>Pages 2M</th>
+                    <th>Pages 1G</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{ range $numaId, $numa := .HostInfo.Numas }}
+                  <tr>
+                    <td>{{ $numaId }}</td>
+                    <td>{{ len $numa.Cores }}</td>
+                    <td>{{ $numa.Memory | HumanizeBytes }}</td>
+                    <td>{{ $numa.Pages4k }}</td>
+                    <td>{{ $numa.Pages2m }}</td>
+                    <td>{{ $numa.Pages1g }}</td>
+                  </tr>
+                  {{ end }}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="col-md-12">
+              <h5>Volume Pools</h5>
+              <table class="table">
+                <thead class="thead-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>Free</th>
+                    <th>Size</th>
+                    <th>Allocation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{ range .VolumePools }}
+                  <tr>
+                    <td>{{ .Name }}</td>
+                    <td>{{ .Free | HumanizeBytes }}</td>
+                    <td>{{ .Size | HumanizeBytes }}</td>
+                    <td>{{ .UsagePercent }}%</td>
+                  </tr>
+                  {{ end }}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-
-        <div class="col-md-12">
-          <h6>CPU Info</h6>
-          <table class="table table-hover table-outline m-b-0">
-            <thead class="thead-default">
-              <tr>
-                <th>NumaId</th>
-                <th>Cores</th>
-                <th>Memory</th>
-                <th>Pages 4k</th>
-                <th>Pages 2M</th>
-                <th>Pages 1G</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{ range $numaId, $numa := .HostInfo.Numas }}
-              <tr>
-                <td>{{ $numaId }}</td>
-                <td>{{ len $numa.Cores }}</td>
-                <td>{{ $numa.Memory | HumanizeBytes }}</td>
-                <td>{{ $numa.Pages4k }}</td>
-                <td>{{ $numa.Pages2m }}</td>
-                <td>{{ $numa.Pages1g }}</td>
-              </tr>
-              {{ end }}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="col-md-12">
-          <h6>Volume Pools</h6>
-          <table class="table table-hover table-outline m-b-0">
-            <thead class="thead-default">
-              <tr>
-                <th>Name</th>
-                <th>Free</th>
-                <th>Size</th>
-                <th>Allocation</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{ range .VolumePools }}
-              <tr>
-                <td>{{ .Name }}</td>
-                <td>{{ .Free | HumanizeBytes }}</td>
-                <td>{{ .Size | HumanizeBytes }}</td>
-                <td>{{ .UsagePercent }}%</td>
-              </tr>
-              {{ end }}
-            </tbody>
-          </table>
-        </div>
-        <!--/.col-->
       </div>
-      <!--/.row-->
     </div>
   </div>
 </div>

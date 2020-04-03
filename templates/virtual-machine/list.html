@@ -5,42 +5,43 @@
 </ol>
 
 <div class="container">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-12">
+              <h4 class="card-title">Machines</h4>
+              <div class="small text-muted" style="margin-top:-10px;">Total: {{ len .Vms }}</div>
+            </div>
 
-  <div class="card border-0">
-    <div class="card-block">
-      <div class="row">
-        <div class="col-md-12">
-          <h4 class="card-title">Machines</h4>
-          <div class="small text-muted" style="margin-top:-10px;">Total: {{ len .Vms }}</div>
+            <div class="col-md-12 mt-5">
+              <table class="table table-hover">
+                <thead class="thead-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>State</th>
+                    <th>CPU</th>
+                    <th>Memory</th>
+                    <th>IP</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{ range .Vms }}
+                  <tr>
+                    <td><a href="{{ Url "virtual-machine-detail" "id" .Id }}">{{ .Id }}</a></td>
+                    <td>{{ .State }}</td>
+                    <td>{{ .VCpus }}</td>
+                    <td>{{ .Memory | HumanizeBytes }}</td>
+                    <td>{{ .IpAddressList | Join " " }}</td>
+                  </tr>
+                  {{ end }}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-
-        <div style="margin-top:40px;" class="col-md-12">
-          <table class="table table-hover table-outline m-b-0">
-            <thead class="thead-default">
-              <tr>
-                <th>Name</th>
-                <th>State</th>
-                <th>CPU</th>
-                <th>Memory</th>
-                <th>IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{ range .Vms }}
-              <tr>
-                <td><a href="{{ Url "virtual-machine-detail" "id" .Id }}">{{ .Id }}</a></td>
-                <td>{{ .State }}</td>
-                <td>{{ .VCpus }}</td>
-                <td>{{ .Memory | HumanizeBytes }}</td>
-                <td>{{ .IpAddressList | Join " " }}</td>
-              </tr>
-              {{ end }}
-            </tbody>
-          </table>
-        </div>
-        <!--/.col-->
       </div>
-      <!--/.row-->
     </div>
   </div>
 </div>
