@@ -178,14 +178,6 @@ func (service *Service) VirtualMachineDetachVolume(id, path string) error {
 	return service.virt.DetachVolume(id, path)
 }
 
-type VirtualMachineAttachInterfaceParams struct {
-	NetworkName string
-	NetworkType NetworkType
-	Mac         string
-	Model       string
-	AccessVlan  uint
-}
-
 func (service *Service) VirtualMachineAttachInterface(id string, iface *VirtualMachineAttachedInterface) error {
 	return service.virt.AttachInterface(id, iface)
 }
