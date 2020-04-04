@@ -4,18 +4,36 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"subuk/vmango/compute"
 )
 
-func ParseLibvirtSizeToBytes(unit string, value uint64) uint64 {
+func ComputeSizeUnitToLibvirtUnit(input compute.SizeUnit) string {
+	switch input {
+	default:
+		panic(fmt.Errorf("unknown size unit '%+v'", input))
+	case compute.SizeUnitB:
+		return "bytes"
+	case compute.SizeUnitK:
+		return "KiB"
+	case compute.SizeUnitM:
+		return "MiB"
+	case compute.SizeUnitG:
+		return "GiB"
+	}
+}
+
+func ComputeSizeFromLibvirtSize(unit string, value uint64) compute.Size {
 	switch unit {
 	default:
 		panic(fmt.Sprintf("unknown libvirt size unit '%s'", unit))
 	case "bytes":
-		return value
+		return compute.NewSize(value, compute.SizeUnitB)
 	case "KiB":
-		return value * 1024
+		return compute.NewSize(value, compute.SizeUnitK)
 	case "MiB":
-		return value * 1024 * 1024
+		return compute.NewSize(value, compute.SizeUnitM)
+	case "GiB":
+		return compute.NewSize(value, compute.SizeUnitG)
 	}
 }
 

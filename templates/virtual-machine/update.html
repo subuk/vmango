@@ -19,7 +19,7 @@
 
           <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
             <div class="form-group row">
-              <div class="col-md-12">
+              <div class="col-md-6">
                 <label>Cpu Count</label>
                 <input required="required" value="{{ .Vm.VCpus }}" type="number" min="1" class="form-control" name="Vcpus"
                   id="Vcpus">
@@ -27,10 +27,19 @@
             </div>
 
             <div class="form-group row">
-              <div class="col-md-12">
-                <label>Memory Megabytes</label>
-                <input required="required" value="{{ .Vm.MemoryMiB }}" min="1" class="form-control" type="number"
-                  name="MemoryMb" id="MemoryMb">
+              <div class="col-md-6">
+                <label>Memory</label>
+                <div class="input-group">
+                  <input required="required" class="form-control" name="MemoryValue" min="1" id="MemoryValue" type="number" value="{{ .Vm.Memory.M }}">
+                  <div class="input-group-append">
+                    <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="MemoryUnit" class="form-control">
+                      <option value="B">B</option>
+                      <option value="K">K</option>
+                      <option value="M" selected>M</option>
+                      <option value="G">G</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
 

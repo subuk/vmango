@@ -62,7 +62,7 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	vm := &compute.VirtualMachine{}
 	vm.Id = domainConfig.Name
 	vm.VCpus = domainConfig.VCPU.Value
-	vm.Memory = ParseLibvirtSizeToBytes(domainConfig.Memory.Unit, uint64(domainConfig.Memory.Value))
+	vm.Memory = ComputeSizeFromLibvirtSize(domainConfig.Memory.Unit, uint64(domainConfig.Memory.Value))
 
 	switch domainConfig.OS.Type.Arch {
 	default:

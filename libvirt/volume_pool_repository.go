@@ -48,13 +48,13 @@ func (repo *VolumePoolRepository) List() ([]*compute.VolumePool, error) {
 		}
 		// Size: virPoolConfig.Capacity
 		if virPoolConfig.Capacity != nil {
-			volumePool.Size = ParseLibvirtSizeToBytes(virPoolConfig.Capacity.Unit, virPoolConfig.Capacity.Value)
+			volumePool.Size = ComputeSizeFromLibvirtSize(virPoolConfig.Capacity.Unit, virPoolConfig.Capacity.Value)
 		}
 		if virPoolConfig.Allocation != nil {
-			volumePool.Used = ParseLibvirtSizeToBytes(virPoolConfig.Allocation.Unit, virPoolConfig.Allocation.Value)
+			volumePool.Used = ComputeSizeFromLibvirtSize(virPoolConfig.Allocation.Unit, virPoolConfig.Allocation.Value)
 		}
 		if virPoolConfig.Available != nil {
-			volumePool.Free = ParseLibvirtSizeToBytes(virPoolConfig.Available.Unit, virPoolConfig.Available.Value)
+			volumePool.Free = ComputeSizeFromLibvirtSize(virPoolConfig.Available.Unit, virPoolConfig.Available.Value)
 		}
 		volumePools = append(volumePools, volumePool)
 	}

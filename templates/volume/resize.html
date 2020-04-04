@@ -18,10 +18,20 @@
           <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
             <div class="form-group row">
               <div class="col-md-12">
-                <label>New Volume Size (megabytes)</label>
-                <input value="{{ .Volume.SizeMb }}" required="required" class="form-control" name="Size" id="Name">
-                <small id="nameHelp" class="form-text text-muted">Volume size can only be increased, current size is
-                  {{ .Volume.Size }}M</small>
+                <label>New Volume Size</label>
+                <div class="input-group">
+                  <input required="required" class="form-control" name="SizeValue" min="1" id="Size" type="number" value="{{ .Volume.Size.M }}">
+                  <div class="input-group-append">
+                    <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="SizeUnit" class="form-control">
+                      <option value="B">B</option>
+                      <option value="K">K</option>
+                      <option selected value="M">M</option>
+                      <option value="G">G</option>
+                    </select>
+                  </div>
+                </div>
+                <small class="form-text text-muted">Volume size can only be increased, current size is
+                  {{ .Volume.Size.M }}M</small>
               </div>
             </div>
 

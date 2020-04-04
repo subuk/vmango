@@ -3,7 +3,7 @@ package compute
 type VirtualMachineRepository interface {
 	List() ([]*VirtualMachine, error)
 	Get(id string) (*VirtualMachine, error)
-	Create(id string, arch Arch, vcpus int, memoryKb uint, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface, config *VirtualMachineConfig) (*VirtualMachine, error)
+	Create(id string, arch Arch, vcpus int, memory Size, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface, config *VirtualMachineConfig) (*VirtualMachine, error)
 	Delete(id string) error
 	Update(id string, params VirtualMachineUpdateParams) error
 	AttachVolume(id, path string, typ VolumeType, format VolumeFormat, device DeviceType) (*VirtualMachineAttachedVolume, error)
@@ -57,7 +57,7 @@ type VirtualMachine struct {
 	VCpus      int
 	Arch       Arch
 	State      VirtualMachineState
-	Memory     uint64 // Bytes
+	Memory     Size
 	Interfaces []*VirtualMachineAttachedInterface
 	Volumes    []*VirtualMachineAttachedVolume
 	Config     *VirtualMachineConfig
@@ -85,10 +85,6 @@ func (vm *VirtualMachine) IpAddressList() []string {
 
 func (vm *VirtualMachine) IsRunning() bool {
 	return vm.State == StateRunning
-}
-
-func (vm *VirtualMachine) MemoryMiB() uint64 {
-	return vm.Memory / 1024 / 1024
 }
 
 func (vm *VirtualMachine) Disks() []*VirtualMachineAttachedVolume {

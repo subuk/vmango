@@ -23,9 +23,18 @@
                 <small id="nameHelp" class="form-text text-muted">Volume name</small>
               </div>
               <div class="col-md-2">
-                <input required="required" class="form-control" name="Size" min="1" id="Size" type="number"
-                  aria-describedby="nameHelp">
-                <small id="nameHelp" class="form-text text-muted">Size in megabytes</small>
+                <div class="input-group">
+                  <input required="required" class="form-control" name="SizeValue" min="1" id="Size" type="number">
+                  <div class="input-group-append">
+                    <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="SizeUnit" class="form-control">
+                      <option value="B">B</option>
+                      <option value="K">K</option>
+                      <option value="M">M</option>
+                      <option selected value="G">G</option>
+                    </select>
+                  </div>
+                </div>
+                <small class="form-text text-muted">Size</small>
               </div>
               <div class="col-md-2">
                 <select required="required" class="form-control" name="Format">
@@ -38,7 +47,7 @@
               <div class="col-md-3">
                 <select required="required" class="form-control" name="Pool">
                   {{ range .Pools }}
-                  <option value="{{ .Name }}">{{ .Name }} ({{ .Free | HumanizeBytes }} free {{ .UsagePercent }}% used)
+                  <option value="{{ .Name }}">{{ .Name }} ({{ .Free.Bytes | HumanizeBytes }} free {{ .UsagePercent }}% used)
                   </option>
                   {{ end }}
                 </select>
@@ -71,7 +80,7 @@
                     <td>{{ .Path }}</td>
                     <td>{{ .Type }}</td>
                     <td>{{ .Format }}</td>
-                    <td>{{ .Size | HumanizeBytes }}</td>
+                    <td>{{ .Size.Bytes | HumanizeBytes }}</td>
                     <td>{{ .Pool }}</td>
                     <td>
                       {{ if .AttachedTo }}

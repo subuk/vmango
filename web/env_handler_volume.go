@@ -86,20 +86,28 @@ func (env *Environ) VolumeCloneFormShow(rw http.ResponseWriter, req *http.Reques
 func (env *Environ) VolumeCloneFormProcess(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	path := strings.Replace(urlvars["path"], "%2F", "/", -1)
-
 	if err := req.ParseForm(); err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
-	name := req.Form.Get("Name")
-	pool := req.Form.Get("Pool")
-	format := req.Form.Get("Format")
-	size, err := strconv.ParseUint(req.Form.Get("Size"), 10, 64)
+	sizeValue, err := strconv.ParseUint(req.Form.Get("SizeValue"), 10, 64)
 	if err != nil {
 		http.Error(rw, "invalid new volume size: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, err := env.compute.VolumeClone(path, name, pool, format, size); err != nil {
+	sizeUnit := compute.NewSizeUnit(req.Form.Get("SizeUnit"))
+	if sizeUnit == compute.SizeUnitUnknown {
+		http.Error(rw, "unknown size unit: "+req.Form.Get("SizeUnit"), http.StatusBadRequest)
+		return
+	}
+	params := compute.VolumeCloneParams{
+		Format:       compute.NewVolumeFormat(req.Form.Get("Format")),
+		OriginalPath: path,
+		NewName:      req.Form.Get("Name"),
+		NewPool:      req.Form.Get("Pool"),
+		NewSize:      compute.NewSize(sizeValue, sizeUnit),
+	}
+	if _, err := env.compute.VolumeClone(params); err != nil {
 		env.error(rw, req, err, "volume clone failed", http.StatusInternalServerError)
 		return
 	}
@@ -135,12 +143,17 @@ func (env *Environ) VolumeResizeFormProcess(rw http.ResponseWriter, req *http.Re
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
-	newSize, err := strconv.ParseUint(req.Form.Get("Size"), 10, 64)
+	newSizeValue, err := strconv.ParseUint(req.Form.Get("SizeValue"), 10, 64)
 	if err != nil {
 		http.Error(rw, "invalid new volume size: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := env.compute.VolumeResize(path, newSize); err != nil {
+	newSizeUnit := compute.NewSizeUnit(req.Form.Get("SizeUnit"))
+	if newSizeUnit == compute.SizeUnitUnknown {
+		http.Error(rw, "unknown size unit: "+req.Form.Get("SizeUnit"), http.StatusBadRequest)
+		return
+	}
+	if err := env.compute.VolumeResize(path, compute.NewSize(newSizeValue, newSizeUnit)); err != nil {
 		env.error(rw, req, err, "volume clone failed", http.StatusInternalServerError)
 		return
 	}
@@ -164,16 +177,23 @@ func (env *Environ) VolumeAddFormProcess(rw http.ResponseWriter, req *http.Reque
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
-	name := req.Form.Get("Name")
-	pool := req.Form.Get("Pool")
-	format := req.Form.Get("Format")
-	size, err := strconv.ParseUint(req.Form.Get("Size"), 10, 64)
+	sizeValue, err := strconv.ParseUint(req.Form.Get("SizeValue"), 10, 64)
 	if err != nil {
 		http.Error(rw, "invalid volume size: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	if _, err := env.compute.VolumeCreate(pool, name, format, size); err != nil {
+	sizeUnit := compute.NewSizeUnit(req.Form.Get("SizeUnit"))
+	if sizeUnit == compute.SizeUnitUnknown {
+		http.Error(rw, "unknown size unit: "+req.Form.Get("SizeUnit"), http.StatusBadRequest)
+		return
+	}
+	params := compute.VolumeCreateParams{
+		Name:   req.Form.Get("Name"),
+		Pool:   req.Form.Get("Pool"),
+		Format: compute.NewVolumeFormat(req.Form.Get("Format")),
+		Size:   compute.NewSize(sizeValue, sizeUnit),
+	}
+	if _, err := env.compute.VolumeCreate(params); err != nil {
 		env.error(rw, req, err, "cannot add key", http.StatusInternalServerError)
 		return
 	}

@@ -60,7 +60,7 @@ func (repo *HostInfoRepository) Get() (*compute.HostInfo, error) {
 				numa = compute.HostInfoNuma{Cores: map[int]compute.HostInfoNumaCore{}}
 			}
 			if numaInfo.Memory != nil {
-				numa.Memory = ParseLibvirtSizeToBytes(numaInfo.Memory.Unit, numaInfo.Memory.Size)
+				numa.Memory = ComputeSizeFromLibvirtSize(numaInfo.Memory.Unit, numaInfo.Memory.Size)
 			}
 			for _, pageInfo := range numaInfo.PageInfo {
 				switch pageInfo.Size {

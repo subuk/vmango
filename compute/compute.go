@@ -49,9 +49,9 @@ type VirtualMachineCreateParamsVolume struct {
 	CloneFrom  string
 	Name       string
 	Pool       string
-	Format     string
+	Format     VolumeFormat
 	DeviceType string
-	SizeMb     uint64
+	Size       Size
 }
 
 type VirtualMachineCreateParamsInterface struct {
@@ -65,7 +65,7 @@ type VirtualMachineCreateParams struct {
 	Id         string
 	VCpus      int
 	Arch       string
-	MemoryKb   uint // KiB
+	Memory     Size
 	Volumes    []VirtualMachineCreateParamsVolume
 	Interfaces []VirtualMachineCreateParamsInterface
 	Config     VirtualMachineCreateParamsConfig
@@ -78,13 +78,27 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 		volume, _ := service.vol.GetByName(volumeParams.Pool, volumeParams.Name)
 		if volume == nil {
 			if volumeParams.CloneFrom != "" {
-				clonedVolume, err := service.VolumeClone(volumeParams.CloneFrom, volumeParams.Name, volumeParams.Pool, volumeParams.Format, volumeParams.SizeMb)
+				volumeCloneParams := VolumeCloneParams{
+					// volumeParams.CloneFrom, volumeParams.Name, volumeParams.Pool, volumeParams.Format, volumeParams.Size
+					Format:       volumeParams.Format,
+					OriginalPath: volumeParams.CloneFrom,
+					NewName:      volumeParams.Name,
+					NewPool:      volumeParams.Pool,
+					NewSize:      volumeParams.Size,
+				}
+				clonedVolume, err := service.VolumeClone(volumeCloneParams)
 				if err != nil {
 					return nil, err
 				}
 				volume = clonedVolume
 			} else {
-				createdVolume, err := service.VolumeCreate(volumeParams.Name, volumeParams.Pool, volumeParams.Format, volumeParams.SizeMb)
+				volumeCreateParams := VolumeCreateParams{
+					Name:   volumeParams.Name,
+					Pool:   volumeParams.Pool,
+					Format: volumeParams.Format,
+					Size:   volumeParams.Size,
+				}
+				createdVolume, err := service.VolumeCreate(volumeCreateParams)
 				if err != nil {
 					return nil, err
 				}
@@ -128,7 +142,7 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 		config.Keys = append(config.Keys, key)
 	}
 
-	vm, err := service.virt.Create(params.Id, NewArch(params.Arch), params.VCpus, params.MemoryKb, volumes, interfaces, config)
+	vm, err := service.virt.Create(params.Id, NewArch(params.Arch), params.VCpus, params.Memory, volumes, interfaces, config)
 	if err != nil {
 		return nil, util.NewError(err, "cannot create virtual machine")
 	}
@@ -184,7 +198,7 @@ func (service *Service) VirtualMachineAttachInterface(id string, iface *VirtualM
 
 type VirtualMachineUpdateParams struct {
 	Vcpus      *int
-	MemoryKb   *uint
+	Memory     *Size
 	Autostart  *bool
 	GuestAgent *bool
 }
@@ -235,11 +249,19 @@ func (service *Service) VolumeGet(path string) (*Volume, error) {
 	return service.vol.Get(path)
 }
 
-func (service *Service) VolumeClone(originalPath, volumeName, poolName, volumeFormatName string, newSizeMb uint64) (*Volume, error) {
-	return service.vol.Clone(originalPath, volumeName, poolName, NewVolumeFormat(volumeFormatName), newSizeMb)
+type VolumeCloneParams struct {
+	Format       VolumeFormat
+	OriginalPath string
+	NewName      string
+	NewPool      string
+	NewSize      Size
 }
 
-func (service *Service) VolumeResize(path string, size uint64) error {
+func (service *Service) VolumeClone(params VolumeCloneParams) (*Volume, error) {
+	return service.vol.Clone(params)
+}
+
+func (service *Service) VolumeResize(path string, size Size) error {
 	return service.vol.Resize(path, size)
 }
 
@@ -247,8 +269,15 @@ func (service *Service) VolumePoolList() ([]*VolumePool, error) {
 	return service.volpool.List()
 }
 
-func (service *Service) VolumeCreate(poolName, volumeName, volumeFormatName string, size uint64) (*Volume, error) {
-	return service.vol.Create(poolName, volumeName, NewVolumeFormat(volumeFormatName), size)
+type VolumeCreateParams struct {
+	Name   string
+	Pool   string
+	Format VolumeFormat
+	Size   Size
+}
+
+func (service *Service) VolumeCreate(params VolumeCreateParams) (*Volume, error) {
+	return service.vol.Create(params)
 }
 
 func (service *Service) VolumeDelete(path string) error {

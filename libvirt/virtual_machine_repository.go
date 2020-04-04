@@ -413,7 +413,7 @@ func (repo *VirtualMachineRepository) GetConsoleStream(id string) (compute.Virtu
 	return &virStreamReadWriteCloser{stream}, nil
 }
 
-func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus int, memoryKb uint, volumes []*compute.VirtualMachineAttachedVolume, interfaces []*compute.VirtualMachineAttachedInterface, config *compute.VirtualMachineConfig) (*compute.VirtualMachine, error) {
+func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus int, memory compute.Size, volumes []*compute.VirtualMachineAttachedVolume, interfaces []*compute.VirtualMachineAttachedInterface, config *compute.VirtualMachineConfig) (*compute.VirtualMachine, error) {
 	conn, err := repo.pool.Acquire()
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire libvirt connection")
@@ -452,7 +452,7 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 	virDomainConfig.Type = domCapsConfig.Domain
 	virDomainConfig.Name = id
 	virDomainConfig.VCPU = &libvirtxml.DomainVCPU{Placement: "static", Value: vcpus}
-	virDomainConfig.Memory = &libvirtxml.DomainMemory{Unit: "KiB", Value: memoryKb}
+	virDomainConfig.Memory = &libvirtxml.DomainMemory{Unit: "bytes", Value: uint(memory.Bytes())}
 	virDomainConfig.OS = &libvirtxml.DomainOS{
 		Type: &libvirtxml.DomainOSType{Type: "hvm", Machine: domCapsConfig.Machine, Arch: libvirtArch},
 		BootDevices: []libvirtxml.DomainBootDevice{
@@ -541,9 +541,10 @@ func (repo *VirtualMachineRepository) Update(id string, params compute.VirtualMa
 	if params.Vcpus != nil {
 		virDomainConfig.VCPU.Value = *params.Vcpus
 	}
-	if params.MemoryKb != nil {
-		virDomainConfig.Memory.Value = *params.MemoryKb
-		virDomainConfig.Memory.Unit = "kib"
+	if params.Memory != nil {
+		virDomainConfig.Memory.Value = uint((*params.Memory).Bytes())
+		virDomainConfig.Memory.Unit = "bytes"
+		virDomainConfig.CurrentMemory = nil
 	}
 	if params.GuestAgent != nil {
 		if virDomainRunning {

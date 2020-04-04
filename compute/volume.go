@@ -14,16 +14,12 @@ type VolumeMetadata struct {
 type Volume struct {
 	Type       VolumeType
 	Path       string
-	Size       uint64 // Bytes
+	Size       Size
 	Pool       string
 	Format     VolumeFormat
 	AttachedTo string
 	AttachedAs DeviceType
 	Metadata   VolumeMetadata
-}
-
-func (v *Volume) SizeMb() uint64 {
-	return v.Size / 1024 / 1024
 }
 
 func (volume *Volume) Base() string {
@@ -33,9 +29,9 @@ func (volume *Volume) Base() string {
 type VolumeRepository interface {
 	Get(path string) (*Volume, error)
 	GetByName(pool, name string) (*Volume, error)
-	Create(pool, name string, format VolumeFormat, size uint64) (*Volume, error)
-	Clone(originalPath, volumeName, poolName string, volumeFormat VolumeFormat, newSizeMb uint64) (*Volume, error)
-	Resize(path string, newSize uint64) error
+	Create(params VolumeCreateParams) (*Volume, error)
+	Clone(params VolumeCloneParams) (*Volume, error)
+	Resize(path string, newSize Size) error
 	Delete(path string) error
 	List() ([]*Volume, error)
 }

@@ -166,14 +166,25 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		http.Error(rw, "invalid vcpus value: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	memoryMb, err := strconv.ParseUint(req.Form.Get("MemoryMb"), 10, 64)
+	memoryValue, err := strconv.ParseUint(req.Form.Get("MemoryValue"), 10, 64)
 	if err != nil {
-		http.Error(rw, "invalid memoryMb value: "+err.Error(), http.StatusBadRequest)
+		http.Error(rw, "invalid memory size: "+req.Form.Get("MemoryValue"), http.StatusBadRequest)
 		return
 	}
-	rootVolumeSizeGb, err := strconv.ParseUint(req.Form.Get("RootVolumeSizeGb"), 10, 64)
+	memoryUnit := compute.NewSizeUnit(req.Form.Get("MemoryUnit"))
+	if memoryUnit == compute.SizeUnitUnknown {
+		http.Error(rw, "unknown memory size unit: "+req.Form.Get("MemoryUnit"), http.StatusBadRequest)
+		return
+	}
+
+	rootVolumeSizeValue, err := strconv.ParseUint(req.Form.Get("RootVolumeSizeValue"), 10, 64)
 	if err != nil {
 		http.Error(rw, "invalid root volume size: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	rootVolumeSizeUnit := compute.NewSizeUnit(req.Form.Get("RootVolumeSizeUnit"))
+	if rootVolumeSizeUnit == compute.SizeUnitUnknown {
+		http.Error(rw, "unknown root volume size unit: "+req.Form.Get("RootVolumeSizeUnit"), http.StatusBadRequest)
 		return
 	}
 	var accessVlan uint
@@ -187,10 +198,12 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		accessVlan = uint(parsed)
 	}
 	rootVolumeParams := compute.VirtualMachineCreateParamsVolume{
-		Name: req.Form.Get("RootVolumeName"), Pool: req.Form.Get("RootVolumePool"),
+		Name:       req.Form.Get("RootVolumeName"),
+		Pool:       req.Form.Get("RootVolumePool"),
 		CloneFrom:  req.Form.Get("RootVolumeSource"),
 		DeviceType: compute.DeviceTypeDisk.String(),
-		Format:     req.Form.Get("RootVolumeFormat"), SizeMb: rootVolumeSizeGb * 1024,
+		Format:     compute.NewVolumeFormat(req.Form.Get("RootVolumeFormat")),
+		Size:       compute.NewSize(rootVolumeSizeValue, rootVolumeSizeUnit),
 	}
 	mainInterface := compute.VirtualMachineCreateParamsInterface{
 		Network:    req.Form.Get("Network"),
@@ -201,7 +214,7 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		Id:         req.Form.Get("Name"),
 		VCpus:      int(vcpus),
 		Arch:       req.Form.Get("Arch"),
-		MemoryKb:   uint(memoryMb) * 1024,
+		Memory:     compute.NewSize(memoryValue, memoryUnit),
 		Start:      req.Form.Get("Start") == "true",
 		Volumes:    []compute.VirtualMachineCreateParamsVolume{rootVolumeParams},
 		Interfaces: []compute.VirtualMachineCreateParamsInterface{mainInterface},
@@ -291,13 +304,18 @@ func (env *Environ) VirtualMachineUpdateFormProcess(rw http.ResponseWriter, req 
 	vcpusInt := int(vcpus)
 	params.Vcpus = &vcpusInt
 
-	memoryMb, err := strconv.ParseUint(req.Form.Get("MemoryMb"), 10, 32)
+	memoryValue, err := strconv.ParseUint(req.Form.Get("MemoryValue"), 10, 32)
 	if err != nil {
 		http.Error(rw, "invalid memoryMb value: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	memoryKb := uint(memoryMb * 1024)
-	params.MemoryKb = &memoryKb
+	memoryUnit := compute.NewSizeUnit(req.Form.Get("MemoryUnit"))
+	if memoryUnit == compute.SizeUnitUnknown {
+		http.Error(rw, "unknown memory unit: "+req.Form.Get("MemoryUnit"), http.StatusBadRequest)
+		return
+	}
+	memory := compute.NewSize(memoryValue, memoryUnit)
+	params.Memory = &memory
 
 	autostart := req.Form.Get("Autostart") == "true"
 	params.Autostart = &autostart

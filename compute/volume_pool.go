@@ -6,11 +6,11 @@ type VolumePoolRepository interface {
 
 type VolumePool struct {
 	Name string
-	Size uint64 // Bytes
-	Used uint64 // Bytes
-	Free uint64 // Bytes
+	Size Size
+	Used Size
+	Free Size
 }
 
 func (pool *VolumePool) UsagePercent() int {
-	return int(100 * pool.Used / pool.Size)
+	return int(100 * pool.Used.Bytes() / pool.Size.Bytes())
 }
