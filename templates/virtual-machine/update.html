@@ -44,6 +44,24 @@
             </div>
 
             <div class="form-group row">
+              <div class="col-md-6">
+                <label for="GraphicType">Graphic Type</label>
+                <select required="required" class="form-control" name="GraphicType" id="GraphicType">
+                  {{ range .GraphicTypes }}
+                  <option {{ if eq $.Vm.Graphic.Type . }}selected{{ end }} value="{{ .String }}">{{ .String | Capitalize }}</option>
+                  {{ end }}
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <div class="col-md-6">
+                <label for="GraphicListen">Graphic Listen</label>
+                <input value="{{ .Vm.Graphic.Listen }}" class="form-control" name="GraphicListen" id="GraphicListen">
+              </div>
+            </div>
+
+            <div class="form-group row">
               <div class="col-md-12">
                 <div class="custom-control custom-checkbox">
                   <input id="autostart" name="Autostart" value="true" class="custom-control-input" type="checkbox"

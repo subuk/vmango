@@ -64,6 +64,7 @@ type VirtualMachine struct {
 	Cpupin     *VirtualMachineCpuPin
 	GuestAgent bool
 	Autostart  bool
+	Graphic    VirtualMachineGraphic
 }
 
 func (vm *VirtualMachine) AttachmentInfo(path string) *VirtualMachineAttachedVolume {

@@ -197,10 +197,12 @@ func (service *Service) VirtualMachineAttachInterface(id string, iface *VirtualM
 }
 
 type VirtualMachineUpdateParams struct {
-	Vcpus      *int
-	Memory     *Size
-	Autostart  *bool
-	GuestAgent *bool
+	Vcpus         *int
+	Memory        *Size
+	Autostart     *bool
+	GuestAgent    *bool
+	GraphicType   *GraphicType
+	GraphicListen *string
 }
 
 func (service *Service) VirtualMachineUpdate(id string, params VirtualMachineUpdateParams) error {

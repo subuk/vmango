@@ -119,5 +119,22 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 			vm.GuestAgent = true
 		}
 	}
+
+	for _, graphic := range domainConfig.Devices.Graphics {
+		if graphic.VNC != nil {
+			vm.Graphic.Type = compute.GraphicTypeVnc
+			vm.Graphic.Listen = graphic.VNC.Listen
+			break
+		}
+		if graphic.Spice != nil {
+			vm.Graphic.Type = compute.GraphicTypeSpice
+			vm.Graphic.Listen = graphic.Spice.Listen
+			break
+		}
+	}
+	if vm.Graphic.Type == compute.GraphicTypeUnknown {
+		vm.Graphic.Type = compute.GraphicTypeNone
+	}
+
 	return vm, nil
 }

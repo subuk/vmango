@@ -269,6 +269,12 @@ func (env *Environ) VirtualMachineDeleteFormProcess(rw http.ResponseWriter, req 
 	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
 }
 
+var GraphicTypes = []compute.GraphicType{
+	compute.GraphicTypeNone,
+	compute.GraphicTypeVnc,
+	compute.GraphicTypeSpice,
+}
+
 func (env *Environ) VirtualMachineUpdateFormShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
@@ -277,11 +283,12 @@ func (env *Environ) VirtualMachineUpdateFormShow(rw http.ResponseWriter, req *ht
 		return
 	}
 	data := struct {
-		Title   string
-		Vm      *compute.VirtualMachine
-		User    *User
-		Request *http.Request
-	}{"Update VirtualMachine", vm, env.Session(req).AuthUser(), req}
+		Title        string
+		Vm           *compute.VirtualMachine
+		GraphicTypes []compute.GraphicType
+		User         *User
+		Request      *http.Request
+	}{"Update VirtualMachine", vm, GraphicTypes, env.Session(req).AuthUser(), req}
 	if err := env.render.HTML(rw, http.StatusOK, "virtual-machine/update", data); err != nil {
 		env.error(rw, req, err, "failed to render template", http.StatusInternalServerError)
 		return
@@ -322,6 +329,16 @@ func (env *Environ) VirtualMachineUpdateFormProcess(rw http.ResponseWriter, req 
 
 	guestagent := req.Form.Get("GuestAgent") == "true"
 	params.GuestAgent = &guestagent
+
+	graphicType := compute.NewGraphicType(req.Form.Get("GraphicType"))
+	if graphicType == compute.GraphicTypeUnknown {
+		http.Error(rw, "unknown graphic type: "+req.Form.Get("GraphicType"), http.StatusBadRequest)
+		return
+	}
+	params.GraphicType = &graphicType
+
+	graphicListen := req.Form.Get("GraphicListen")
+	params.GraphicListen = &graphicListen
 
 	if err := env.compute.VirtualMachineUpdate(urlvars["id"], params); err != nil {
 		env.error(rw, req, err, "cannot update virtual machine", http.StatusInternalServerError)

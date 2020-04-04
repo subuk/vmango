@@ -576,6 +576,41 @@ func (repo *VirtualMachineRepository) Update(id string, params compute.VirtualMa
 			virDomainConfig.Devices.Channels = newChannels
 		}
 	}
+
+	if params.GraphicType != nil {
+		if virDomainRunning {
+			return util.NewError(err, "domain must be stopped to change graphic")
+		}
+		switch *params.GraphicType {
+		default:
+			panic("unknown graphic type")
+		case compute.GraphicTypeNone:
+			virDomainConfig.Devices.Graphics = nil
+			virDomainConfig.Devices.Videos = nil
+		case compute.GraphicTypeVnc:
+			vncGraphic := &libvirtxml.DomainGraphicVNC{Port: -1, AutoPort: "yes"}
+			virDomainConfig.Devices.Graphics = []libvirtxml.DomainGraphic{
+				libvirtxml.DomainGraphic{
+					VNC: vncGraphic,
+				},
+			}
+			if params.GraphicListen != nil {
+				vncGraphic.Listen = *params.GraphicListen
+			}
+		case compute.GraphicTypeSpice:
+			spiceGraphic := &libvirtxml.DomainGraphicSpice{Port: -1, AutoPort: "yes"}
+			virDomainConfig.Devices.Graphics = []libvirtxml.DomainGraphic{
+				libvirtxml.DomainGraphic{
+					Spice: spiceGraphic,
+				},
+			}
+			if params.GraphicListen != nil {
+				spiceGraphic.Listen = *params.GraphicListen
+			}
+
+		}
+
+	}
 	virDomainXmlUpdated, err := virDomainConfig.Marshal()
 	if err != nil {
 		return util.NewError(err, "cannot marshal updated domain xml")
