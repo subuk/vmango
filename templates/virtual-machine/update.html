@@ -19,15 +19,12 @@
 
           <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
             <div class="form-group row">
-              <div class="col-md-6">
+              <div class="col-md-2">
                 <label>Cpu Count</label>
                 <input required="required" value="{{ .Vm.VCpus }}" type="number" min="1" class="form-control" name="Vcpus"
                   id="Vcpus">
               </div>
-            </div>
-
-            <div class="form-group row">
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label>Memory</label>
                 <div class="input-group">
                   <input required="required" class="form-control" name="MemoryValue" min="1" id="MemoryValue" type="number" value="{{ .Vm.Memory.M }}">
@@ -44,7 +41,7 @@
             </div>
 
             <div class="form-group row">
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label for="GraphicType">Graphic Type</label>
                 <select required="required" class="form-control" name="GraphicType" id="GraphicType">
                   {{ range .GraphicTypes }}
@@ -52,11 +49,8 @@
                   {{ end }}
                 </select>
               </div>
-            </div>
-
-            <div class="form-group row">
-              <div class="col-md-6">
-                <label for="GraphicListen">Graphic Listen</label>
+              <div class="col-md-2">
+                <label for="GraphicListen">Graphic Listen Host</label>
                 <input value="{{ .Vm.Graphic.Listen }}" class="form-control" name="GraphicListen" id="GraphicListen">
               </div>
             </div>

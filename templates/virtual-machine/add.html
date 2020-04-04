@@ -15,20 +15,16 @@
           <h4>Create Virtual Machine</h4>
           <br>
           <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
-
             <div class="form-group row">
-              <div class="col-md-10">
+              <div class="col-md-6">
                 <label>Name</label>
                 <input required="required" class="form-control" name="Name" id="Name">
               </div>
-            </div>
-
-            <div class="form-group row">
-              <div class="col-md-3">
+              <div class="col-md-2">
                 <label>Cpu Count</label>
                 <input required="required" value="2" type="number" min="1" class="form-control" name="Vcpus" id="Vcpus">
               </div>
-              <div class="col-md-3">
+              <div class="col-md-2">
                 <label>Memory</label>
                 <div class="input-group">
                   <input required="required" class="form-control" name="MemoryValue" min="1" id="MemoryValue" type="number" value="2048">
