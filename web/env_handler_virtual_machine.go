@@ -28,6 +28,21 @@ func (env *Environ) VirtualMachineList(rw http.ResponseWriter, req *http.Request
 	}
 }
 
+var DeviceTypes = []compute.DeviceType{
+	compute.DeviceTypeDisk,
+	compute.DeviceTypeCdrom,
+}
+
+var DeviceBuses = []compute.DeviceBus{
+	compute.DeviceBusVirtio,
+	compute.DeviceBusScsi,
+	compute.DeviceBusIde,
+}
+
+var InterfaceModels = []string{
+	"virtio",
+}
+
 func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
@@ -46,14 +61,14 @@ func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	attachedVolumes := []*compute.Volume{}
+	attachedVolumes := map[string]*compute.Volume{}
 	availableVolumes := []*compute.Volume{}
 	for _, volume := range volumes {
 		if attachmentInfo := vm.AttachmentInfo(volume.Path); attachmentInfo != nil {
-			attachedVolumes = append(attachedVolumes, volume)
+			attachedVolumes[attachmentInfo.Path] = volume
 			continue
 		}
-		if volume.AttachedTo == "" && volume.Format != compute.FormatIso && volume.Metadata.OsName == "" {
+		if volume.AttachedTo == "" && volume.Metadata.OsName == "" {
 			availableVolumes = append(availableVolumes, volume)
 			continue
 		}
@@ -61,12 +76,16 @@ func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Reque
 	data := struct {
 		Title            string
 		Vm               *compute.VirtualMachine
-		AttachedVolumes  []*compute.Volume
+		AttachedVolumes  map[string]*compute.Volume
 		AvailableVolumes []*compute.Volume
+		DeviceTypes      []compute.DeviceType
+		DeviceBuses      []compute.DeviceBus
+		InterfaceModels  []string
 		Networks         []*compute.Network
+		ActiveTab        string
 		User             *User
 		Request          *http.Request
-	}{"Virtual Machine", vm, attachedVolumes, availableVolumes, networks, env.Session(req).AuthUser(), req}
+	}{"Virtual Machine", vm, attachedVolumes, availableVolumes, DeviceTypes, DeviceBuses, InterfaceModels, networks, req.URL.Query().Get("tab"), env.Session(req).AuthUser(), req}
 	if err := env.render.HTML(rw, http.StatusOK, "virtual-machine/detail", data); err != nil {
 		env.error(rw, req, err, "failed to render template", http.StatusInternalServerError)
 		return
@@ -198,12 +217,11 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		accessVlan = uint(parsed)
 	}
 	rootVolumeParams := compute.VirtualMachineCreateParamsVolume{
-		Name:       req.Form.Get("RootVolumeName"),
-		Pool:       req.Form.Get("RootVolumePool"),
-		CloneFrom:  req.Form.Get("RootVolumeSource"),
-		DeviceType: compute.DeviceTypeDisk.String(),
-		Format:     compute.NewVolumeFormat(req.Form.Get("RootVolumeFormat")),
-		Size:       compute.NewSize(rootVolumeSizeValue, rootVolumeSizeUnit),
+		Name:      req.Form.Get("RootVolumeName"),
+		Pool:      req.Form.Get("RootVolumePool"),
+		CloneFrom: req.Form.Get("RootVolumeSource"),
+		Format:    compute.NewVolumeFormat(req.Form.Get("RootVolumeFormat")),
+		Size:      compute.NewSize(rootVolumeSizeValue, rootVolumeSizeUnit),
 	}
 	mainInterface := compute.VirtualMachineCreateParamsInterface{
 		Network:    req.Form.Get("Network"),
@@ -354,7 +372,24 @@ func (env *Environ) VirtualMachineAttachDiskFormProcess(rw http.ResponseWriter, 
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, err := env.compute.VirtualMachineAttachVolume(urlvars["id"], req.Form.Get("Path"), compute.DeviceTypeDisk); err != nil {
+	deviceType := compute.NewDeviceType(req.Form.Get("DeviceType"))
+	if deviceType == compute.DeviceTypeUnknown {
+		http.Error(rw, "unknown device type", http.StatusBadRequest)
+		return
+	}
+	deviceBus := compute.NewDeviceBus(req.Form.Get("DeviceBus"))
+	if deviceBus == compute.DeviceBusUnknown {
+		http.Error(rw, "unknown device bus", http.StatusBadRequest)
+		return
+	}
+	params := compute.VolumeAttachmentParams{
+		MachineId:  urlvars["id"],
+		DeviceName: req.Form.Get("DeviceName"),
+		VolumePath: req.Form.Get("VolumePath"),
+		DeviceType: deviceType,
+		DeviceBus:  deviceBus,
+	}
+	if err := env.compute.VirtualMachineAttachVolume(params); err != nil {
 		env.error(rw, req, err, "cannot attach disk", http.StatusInternalServerError)
 		return
 	}
@@ -415,7 +450,7 @@ func (env *Environ) VirtualMachineAttachInterfaceFormProcess(rw http.ResponseWri
 		return
 	}
 	redirectUrl := env.url("virtual-machine-detail", "id", id)
-	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+	http.Redirect(rw, req, redirectUrl.Path+"?tab=interfaces", http.StatusFound)
 }
 
 func (env *Environ) VirtualMachineDetachInterfaceFormProcess(rw http.ResponseWriter, req *http.Request) {
@@ -429,7 +464,7 @@ func (env *Environ) VirtualMachineDetachInterfaceFormProcess(rw http.ResponseWri
 		return
 	}
 	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
-	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+	http.Redirect(rw, req, redirectUrl.Path+"?tab=interfaces", http.StatusFound)
 }
 
 func (env *Environ) VirtualMachineConsoleShow(rw http.ResponseWriter, req *http.Request) {

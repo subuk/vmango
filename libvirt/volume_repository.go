@@ -85,7 +85,7 @@ func (repo *VolumeRepository) fetchAttachedVm(conn *libvirt.Connect, volumes []*
 			for _, volume := range volumes {
 				if volume.Path == attachedVolume.Path {
 					volume.AttachedTo = domainConfig.Name
-					volume.AttachedAs = attachedVolume.Device
+					volume.AttachedAs = attachedVolume.DeviceType
 				}
 			}
 		}

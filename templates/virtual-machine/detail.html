@@ -17,7 +17,6 @@
                 <img src="{{ Static "vmango/img/linux-logo.png" }}" width="100" alt="linux">
                 <div class="media-body">
                   <p class="text-muted">
-                    {{ if .Vm.Config }}Configured<br>{{ end }}
                     Autostart {{ if .Vm.Autostart }}enabled{{ else }}disabled{{ end }}<br>
                     {{ if not .Vm.Graphic.Type.IsNone }}
                     {{ .Vm.Graphic.Type.String | Capitalize }} graphic {{ if .Vm.Graphic.Listen }}on {{ .Vm.Graphic.Listen }}{{ end }}<br>
@@ -57,123 +56,181 @@
 
           <div class="row">
             <div class="col-md-12">
-              <div class="card-group">
-                {{ range .AttachedVolumes }}
-                <div class="card card-block" style="padding: 10px; margin-right: 10px;border: 0px;">
-                  <div class="card-body">
-                    <h5 class="card-title">Volume {{ .Base }}</h5>
-                    <p class="card-text">
-                      Pool: {{ .Pool }}<br>
-                      Path: {{ .Path }}<br>
-                      Size: {{ .Size.Bytes | HumanizeBytes }}<br>
-                    </p>
-                    <form method="post" action="{{ Url "virtual-machine-detach-volume" "id" $.Vm.Id }}">
-                      {{ CSRFField $.Request }}
-                      <input type="hidden" name="Path" value="{{ .Path }}">
-                      <button {{ if $.Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
-                        class="btn btn-primary" type="submit">Detach</button>
-                    </form>
-                  </div>
+              <nav>
+                <div class="nav nav-tabs" id="nav-tab" role="tablist">
+                  <a class="nav-item nav-link {{ if or (eq .ActiveTab "volumes") (eq .ActiveTab "") }}active{{ end }}" id="nav-volumes-tab" data-toggle="tab" href="#nav-volumes" role="tab" aria-controls="nav-volumes" aria-selected="true">Volumes</a>
+                  <a class="nav-item nav-link {{ if eq .ActiveTab "interfaces" }}active{{ end }}" id="nav-interfaces-tab" data-toggle="tab" href="#nav-interfaces" role="tab" aria-controls="nav-interfaces" aria-selected="false">Interfaces</a>
+                  {{ if .Vm.Config }}
+                  <a class="nav-item nav-link {{ if eq .ActiveTab "keys" }}active{{ end }}" id="keys-tab" data-toggle="tab" href="#keys" role="tab" aria-controls="keys" aria-selected="false">Keys</a>
+                  {{ end }}
                 </div>
-                {{ end }}
-                <div class="card card-block" style="padding: 10px; margin-right: 10px;border: 0px;">
-                  <div class="card-body">
-                    <h5 class="card-title">Attach Volume</h5>
-                    <form method="post" action="{{ Url "virtual-machine-attach-disk" "id" .Vm.Id }}">
-                      {{ CSRFField .Request }}
-                      <select required="required" class="form-control" name="Path">
-                        {{ range .AvailableVolumes }}
-                        <option value="{{ .Path }}">{{ .Path }}</option>
+              </nav>
+              <div class="tab-content" id="nav-tabContent">
+                <div class="tab-pane {{ if or (eq .ActiveTab "volumes") (eq .ActiveTab "") }}active{{ end }}" id="nav-volumes" role="tabpanel" aria-labelledby="nav-volumes-tab">
+                  <div class="col-md-12">
+                    <table class="table table-borderless table-hover table-sm">
+                      <thead>
+                        <tr>
+                          <th>Media</th>
+                          <th>Device</th>
+                          <th>Bus</th>
+                          <th>Path</th>
+                          <th>Size</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {{ range .Vm.Volumes }}
+                        <tr>
+                          <td>{{ .DeviceType }}</td>
+                          <td>{{ .DeviceName }}</td>
+                          <td>{{ .DeviceBus }}</td>
+                          <td>{{ .Path }}</td>
+                          <td>{{ (index $.AttachedVolumes .Path).Size.Bytes | HumanizeBytes }}</td>
+                          <td>
+                            <form method="post" action="{{ Url "virtual-machine-detach-volume" "id" $.Vm.Id }}">{{ CSRFField $.Request }}
+                              <input type="hidden" name="Path" value="{{ .Path }}">
+                              <button {{ if $.Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
+                                class="btn btn-light btn-sm" type="submit">Detach</button>
+                            </form>
+                          </td>
+                          <td></td>
+                        </tr>
                         {{ end }}
-                      </select>
-                      <br>
-                      <button {{ if .Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
-                        class="btn btn-primary" type="submit">Attach</button>
-                    </form>
+                        <form method="post" action="{{ Url "virtual-machine-attach-disk" "id" $.Vm.Id }}">{{ CSRFField $.Request }}
+                          <tr>
+                            <td>
+                              <select required="required" class="form-control form-control-sm" name="DeviceType">
+                                {{ range .DeviceTypes }}
+                                <option value="{{ . }}">{{ . }}</option>
+                                {{ end }}
+                              </select>
+                            </td>
+                            <td>
+                              <input class="form-control form-control-sm" name="DeviceName" type="text" required>
+                            </td>
+                            <td>
+                              <select required="required" class="form-control form-control-sm" name="DeviceBus">
+                                {{ range .DeviceBuses }}
+                                <option value="{{ . }}">{{ . }}</option>
+                                {{ end }}
+                              </select>
+                            </td>
+                            <td>
+                              <select required="required" class="form-control form-control-sm" name="VolumePath">
+                                {{ range .AvailableVolumes }}
+                                <option value="{{ .Path }}">{{ .Path }}</option>
+                                {{ end }}
+                              </select>
+                            </td>
+                            <td></td>
+                            <td>
+                              <button {{ if .Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
+                                class="btn btn-primary btn-sm" type="submit">Attach</button>
+                            </td>
+                          </tr>
+                        </form>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="row">
-            <div class="col-md-12">
-              <div class="card-group">
-                {{ range .Vm.Interfaces }}
-                <div class="card card-block" style="padding: 10px; margin-right: 10px;border: 0px;">
-                  <div class="card-body">
-                    <h5 class="card-title">{{ .NetworkType.String | Capitalize }} interface {{ .Model }}</h5>
-                    <p class="card-text">
-                      Network: {{ .NetworkName }}<br>
-                      MAC: {{ .Mac }}<br>
-                      Model: {{ .Model }}<br>
-                      {{ if gt .AccessVlan 0 }}
-                      Vlan: {{ .AccessVlan }}<br>
-                      {{ end }}
-                      {{ if gt (len .IpAddressList) 0 }}
-                      IP: {{ .IpAddressList | Join "," }}
-                      {{ end }}
-                    </p>
-                    <form method="post" action="{{ Url "virtual-machine-detach-interface" "id" $.Vm.Id }}">
-                      {{ CSRFField $.Request }}
-                      <input type="hidden" name="Mac" value="{{ .Mac }}">
-                      <button {{ if $.Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
-                        class="btn btn-primary" type="submit">Detach</button>
-                    </form>
+                <div class="tab-pane {{ if eq .ActiveTab "interfaces" }}active{{ end }}" id="nav-interfaces" role="tabpanel" aria-labelledby="nav-interfaces-tab">
+                  <div class="col-md-12">
+                    <table class="table table-borderless table-hover table-sm">
+                      <thead>
+                        <tr>
+                          <th>Network</th>
+                          <th>MAC</th>
+                          <th>Model</th>
+                          <th>IPAddress</th>
+                          <th>VLAN</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {{ range .Vm.Interfaces }}
+                        <tr>
+                          <td>{{ .NetworkName }}</td>
+                          <td>{{ .Mac }}</td>
+                          <td>{{ .Model }}</td>
+                          <td>
+                            {{ range .IpAddressList }}
+                              {{ . }}
+                            {{ end }}
+                          </td>
+                          <td>
+                            {{ if gt .AccessVlan 0 }}
+                              {{ .AccessVlan }}
+                            {{ end }}
+                          </td>
+                          <td>
+                            <form method="post" action="{{ Url "virtual-machine-detach-interface" "id" $.Vm.Id }}">
+                              {{ CSRFField $.Request }}
+                              <input type="hidden" name="Mac" value="{{ .Mac }}">
+                              <button {{ if $.Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
+                                class="btn btn-light btn-sm" type="submit">Detach</button>
+                            </form>
+                          </td>
+                        </tr>
+                        {{ end }}
+                        <form method="post" action="{{ Url "virtual-machine-attach-interface" "id" .Vm.Id }}">{{ CSRFField $.Request }}
+                          <tr>
+                            <td>
+                              <select required="required" class="form-control form-control-sm" name="Network">
+                                {{ range .Networks }}
+                                <option value="{{ .Name }}">{{ .Name }}</option>
+                                {{ end }}
+                              </select>
+                            </td>
+                            <td>
+                              <input class="form-control form-control-sm" type="text" name="Mac" id="Mac" placeholder="00:00:00:00:00:00">
+                            </td>
+                            <td>
+                              <select required="required" class="form-control form-control-sm" name="Model">
+                                {{ range .InterfaceModels }}
+                                <option value="{{ . }}">{{ . }}</option>
+                                {{ end }}
+                              </select>
+                            </td>
+                            <td></td>
+                            <td>
+                              <input class="form-control form-control-sm" type="number" min="0" max="4096" name="AccessVlan" id="AccessVlan">
+                            </td>
+                            <td>
+                              <button {{ if .Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
+                                class="btn btn-primary btn-sm" type="submit">Attach</button>
+                            </td>
+                          </tr>
+                        </form>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                {{ if .Vm.Config }}
+                <div class="tab-pane {{ if eq .ActiveTab "keys" }}active{{ end }}" id="keys" role="tabpanel" aria-labelledby="keys-tab">
+                  <div class="col-md-12">
+                    <table class="table table-borderless table-hover table-sm">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Fingerprint</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {{ range .Vm.Config.Keys }}
+                        <tr>
+                          <td>{{ .Comment }}</td>
+                          <td>{{ .Fingerprint }}</td>
+                        </tr>
+                        {{ end }}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
                 {{ end }}
-                <div class="card card-block" style="padding: 10px; margin-right: 10px;border: 0px;">
-                  <div class="card-body">
-                    <h5 class="card-title">Attach Network Interface</h5>
-                    <form class="form-inline" method="post"
-                      action="{{ Url "virtual-machine-attach-interface" "id" .Vm.Id }}">{{ CSRFField .Request }}
-                      <div class="form-group mb-2">
-                        <label for="Network" class="sr-only">Network</label>
-                        <select id="Network" required="required" class="form-control" name="Network">
-                          {{ range .Networks }}
-                          <option value="{{ .Name }}">{{ .Name }} ({{ .Type }})</option>
-                          {{ end }}
-                        </select>
-                      </div>
-                      <div class="form-group mb-2">
-                        <label for="AccessVlan" class="sr-only">Vlan</label>
-                        <input class="form-control" type="number" min="0" name="AccessVlan" id="AccessVlan"
-                          placeholder="access vlan">
-                      </div>
-                      <div class="form-group mb-2">
-                        <label for="Mac" class="sr-only">Mac</label>
-                        <input class="form-control" type="text" name="Mac" id="Mac" placeholder="00:00:00:00:00:00">
-                      </div>
-                      <button {{ if .Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
-                        class="btn btn-primary mb-2" type="submit">Attach</button>
-                    </form>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
 
-
-          {{ if .Vm.Config }}
-
-          <div class="row">
-            <div class="col-md-12">
-              <div class="card-group">
-                {{ range .Vm.Config.Keys }}
-                <div class="card card-block" style="padding: 10px; margin-right: 10px;border: 0px;">
-                  <div class="card-body">
-                    <h5 class="card-title">Key {{ .Comment }}</h5>
-                    <p class="card-text">
-                      Fingerprint {{ .Fingerprint }}
-                    </p>
-                  </div>
-                </div>
-                {{ end }}
-              </div>
-            </div>
-          </div>
-          {{ end }}
         </div>
       </div>
     </div>

@@ -6,8 +6,8 @@ type VirtualMachineRepository interface {
 	Create(id string, arch Arch, vcpus int, memory Size, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface, config *VirtualMachineConfig) (*VirtualMachine, error)
 	Delete(id string) error
 	Update(id string, params VirtualMachineUpdateParams) error
-	AttachVolume(id, path string, typ VolumeType, format VolumeFormat, device DeviceType) (*VirtualMachineAttachedVolume, error)
-	DetachVolume(id, path string) error
+	AttachVolume(machineId string, attachedVolume *VirtualMachineAttachedVolume) error
+	DetachVolume(machineId, attachmentDeviceName string) error
 	AttachInterface(id string, iface *VirtualMachineAttachedInterface) error
 	DetachInterface(id, mac string) error
 	GetConsoleStream(id string) (VirtualMachineConsoleStream, error)
@@ -91,7 +91,7 @@ func (vm *VirtualMachine) IsRunning() bool {
 func (vm *VirtualMachine) Disks() []*VirtualMachineAttachedVolume {
 	disks := []*VirtualMachineAttachedVolume{}
 	for _, volume := range vm.Volumes {
-		if volume.Device == DeviceTypeDisk {
+		if volume.DeviceType == DeviceTypeDisk {
 			disks = append(disks, volume)
 		}
 	}
@@ -101,7 +101,7 @@ func (vm *VirtualMachine) Disks() []*VirtualMachineAttachedVolume {
 func (vm *VirtualMachine) Cdroms() []*VirtualMachineAttachedVolume {
 	cdroms := []*VirtualMachineAttachedVolume{}
 	for _, volume := range vm.Volumes {
-		if volume.Device == DeviceTypeCdrom {
+		if volume.DeviceType == DeviceTypeCdrom {
 			cdroms = append(cdroms, volume)
 		}
 	}
@@ -109,10 +109,12 @@ func (vm *VirtualMachine) Cdroms() []*VirtualMachineAttachedVolume {
 }
 
 type VirtualMachineAttachedVolume struct {
-	Type   VolumeType
-	Path   string
-	Format VolumeFormat
-	Device DeviceType
+	Path       string
+	DeviceName string
+	Type       VolumeType
+	Format     VolumeFormat
+	DeviceType DeviceType
+	DeviceBus  DeviceBus
 }
 
 type VirtualMachineAttachedInterface struct {

@@ -144,10 +144,12 @@ func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect,
 		return nil, fmt.Errorf("configdrive volume target element is blank")
 	}
 	attachedVolume := &compute.VirtualMachineAttachedVolume{
-		Type:   compute.VolumeTypeFile,
-		Format: compute.FormatIso,
-		Path:   virVolumeConfig.Target.Path,
-		Device: compute.DeviceTypeCdrom,
+		DeviceName: "hda",
+		DeviceBus:  compute.DeviceBusIde,
+		Type:       compute.VolumeTypeFile,
+		Format:     compute.FormatIso,
+		Path:       virVolumeConfig.Target.Path,
+		DeviceType: compute.DeviceTypeCdrom,
 	}
 	repo.configCacheMu.Lock()
 	repo.configCache[attachedVolume.Path] = nil
@@ -258,91 +260,31 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, domain *
 		}
 	}
 
-	noConfigDriveVolumes := []*compute.VirtualMachineAttachedVolume{}
 	for _, volume := range vm.Volumes {
-		if volume.Device != compute.DeviceTypeCdrom {
-			noConfigDriveVolumes = append(noConfigDriveVolumes, volume)
+		if volume.DeviceType != compute.DeviceTypeCdrom {
 			continue
 		}
 		if !strings.HasSuffix(volume.Path, repo.configDriveSuffix) {
-			noConfigDriveVolumes = append(noConfigDriveVolumes, volume)
 			continue
 		}
 		if config := repo.configCache[volume.Path]; config != nil {
 			vm.Config = config
-		} else {
-			config, err := repo.parseConfigDrive(conn, volume.Path)
-			if err != nil {
-				repo.logger.Warn().Err(err).Str("volume_path", volume.Path).Msg("cannot parse configdrive")
-				continue
-			}
-			vm.Config = config
-			repo.configCacheMu.Lock()
-			repo.configCache[volume.Path] = config
-			repo.configCacheMu.Unlock()
+			continue
 		}
+
+		config, err := repo.parseConfigDrive(conn, volume.Path)
+		if err != nil {
+			repo.logger.Warn().Err(err).Str("volume_path", volume.Path).Msg("cannot parse configdrive")
+			continue
+		}
+		vm.Config = config
+		repo.configCacheMu.Lock()
+		repo.configCache[volume.Path] = config
+		repo.configCacheMu.Unlock()
 	}
-	vm.Volumes = noConfigDriveVolumes
+	// vm.Volumes = noConfigDriveVolumes
 
 	return vm, nil
-}
-
-func (repo *VirtualMachineRepository) attachVolume(virDomainConfig *libvirtxml.Domain, volume *compute.VirtualMachineAttachedVolume) error {
-	disk := libvirtxml.DomainDisk{
-		Driver: &libvirtxml.DomainDiskDriver{Name: "qemu"},
-		Target: &libvirtxml.DomainDiskTarget{},
-	}
-	switch volume.Format {
-	default:
-		return fmt.Errorf("unsupported volume format '%s'", volume.Format)
-	case compute.FormatQcow2:
-		disk.Driver.Type = "qcow2"
-	case compute.FormatRaw:
-		disk.Driver.Type = "raw"
-	case compute.FormatIso:
-		disk.Driver.Type = "raw"
-	}
-	hdLetter := 'a'
-	vdLetter := 'c'
-	for _, disk := range virDomainConfig.Devices.Disks {
-		if disk.Target != nil {
-			if disk.Target.Dev == "" {
-				continue
-			}
-			if strings.HasPrefix(disk.Target.Dev, "hd") {
-				hdLetter++
-			} else {
-				vdLetter++
-			}
-		}
-	}
-	switch volume.Device {
-	default:
-		return fmt.Errorf("unsupported volume device type '%s'", volume.Device)
-	case compute.DeviceTypeCdrom:
-		disk.Device = "cdrom"
-		disk.ReadOnly = &libvirtxml.DomainDiskReadOnly{}
-		disk.Target.Bus = "ide"
-		disk.Target.Dev = "hd" + string(hdLetter)
-	case compute.DeviceTypeDisk:
-		disk.Device = "disk"
-		disk.Target.Bus = "virtio"
-		disk.Target.Dev = "vd" + string(vdLetter)
-	}
-	switch volume.Type {
-	default:
-		return fmt.Errorf("unknown volume type '%s'", volume.Type)
-	case compute.VolumeTypeFile:
-		disk.Source = &libvirtxml.DomainDiskSource{
-			File: &libvirtxml.DomainDiskSourceFile{File: volume.Path},
-		}
-	case compute.VolumeTypeBlock:
-		disk.Source = &libvirtxml.DomainDiskSource{
-			Block: &libvirtxml.DomainDiskSourceBlock{Dev: volume.Path},
-		}
-	}
-	virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, disk)
-	return nil
 }
 
 func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxml.Domain, attachedIface *compute.VirtualMachineAttachedInterface) error {
@@ -485,9 +427,8 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 	volumes = append(volumes, configVolume)
 
 	for _, volume := range volumes {
-		if err := repo.attachVolume(virDomainConfig, volume); err != nil {
-			return nil, util.NewError(err, "cannot attach volume")
-		}
+		diskConfig := DomainDiskConfigFromVirtualMachineAttachedVolume(volume)
+		virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, *diskConfig)
 	}
 	for _, attachedIface := range interfaces {
 		if err := repo.attachInterface(virDomainConfig, attachedIface); err != nil {
@@ -652,23 +593,6 @@ func (repo *VirtualMachineRepository) Delete(id string) error {
 	if err := virDomain.Undefine(); err != nil {
 		return util.NewError(err, "cannot undefine domain")
 	}
-	for _, diskConfig := range virDomainConfig.Devices.Disks {
-		volume := VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig)
-		if volume.Device != compute.DeviceTypeCdrom {
-			continue
-		}
-		if !strings.HasSuffix(volume.Path, repo.configDriveSuffix) {
-			continue
-		}
-		virVolume, err := conn.LookupStorageVolByPath(volume.Path)
-		if err != nil {
-			return util.NewError(err, "cannot lookup config volume")
-		}
-		if err := virVolume.Delete(libvirt.STORAGE_VOL_DELETE_NORMAL); err != nil {
-			return util.NewError(err, "cannot delete config volume")
-		}
-		return nil
-	}
 	return nil
 }
 
@@ -751,50 +675,45 @@ func (repo *VirtualMachineRepository) Start(id string) error {
 	return domain.Create()
 }
 
-func (repo *VirtualMachineRepository) AttachVolume(id, path string, typ compute.VolumeType, format compute.VolumeFormat, device compute.DeviceType) (*compute.VirtualMachineAttachedVolume, error) {
+func (repo *VirtualMachineRepository) AttachVolume(id string, attachedVolume *compute.VirtualMachineAttachedVolume) error {
 	conn, err := repo.pool.Acquire()
 	if err != nil {
-		return nil, util.NewError(err, "cannot acquire connection")
+		return util.NewError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(conn)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return nil, util.NewError(err, "domain lookup failed")
+		return util.NewError(err, "domain lookup failed")
 	}
 	running, err := virDomain.IsActive()
 	if err != nil {
-		return nil, util.NewError(err, "cannot check if domain is running")
+		return util.NewError(err, "cannot check if domain is running")
 	}
 	if running {
-		return nil, fmt.Errorf("domain must be stopped")
+		return fmt.Errorf("domain must be stopped")
 	}
 
 	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
 	if err != nil {
-		return nil, util.NewError(err, "cannot get domain xml")
+		return util.NewError(err, "cannot get domain xml")
 	}
 	virDomainConfig := &libvirtxml.Domain{}
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return nil, util.NewError(err, "cannot parse domain xml")
+		return util.NewError(err, "cannot parse domain xml")
 	}
-	attachedVolume := &compute.VirtualMachineAttachedVolume{
-		Type:   typ,
-		Path:   path,
-		Format: format,
-		Device: compute.DeviceTypeDisk,
-	}
-	if err := repo.attachVolume(virDomainConfig, attachedVolume); err != nil {
-		return nil, err
-	}
+
+	discConfig := DomainDiskConfigFromVirtualMachineAttachedVolume(attachedVolume)
+	virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, *discConfig)
+
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {
-		return nil, util.NewError(err, "cannot create domain xml")
+		return util.NewError(err, "cannot create domain xml")
 	}
 	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
-		return nil, util.NewError(err, "cannot update domain xml")
+		return util.NewError(err, "cannot update domain xml")
 	}
-	return attachedVolume, nil
+	return nil
 }
 
 func (repo *VirtualMachineRepository) DetachVolume(id, needlePath string) error {

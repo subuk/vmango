@@ -1,21 +1,68 @@
 package libvirt
 
 import (
+	"fmt"
 	"subuk/vmango/compute"
 
 	"github.com/libvirt/libvirt-go"
 	libvirtxml "github.com/libvirt/libvirt-go-xml"
 )
 
+func DomainDiskConfigFromVirtualMachineAttachedVolume(volume *compute.VirtualMachineAttachedVolume) *libvirtxml.DomainDisk {
+	diskConfig := &libvirtxml.DomainDisk{
+		Driver: &libvirtxml.DomainDiskDriver{Name: "qemu"},
+		Target: &libvirtxml.DomainDiskTarget{},
+	}
+	switch volume.Format {
+	default:
+		panic(fmt.Errorf("unsupported volume format '%s'", volume.Format))
+	case compute.FormatQcow2:
+		diskConfig.Driver.Type = "qcow2"
+	case compute.FormatRaw:
+		diskConfig.Driver.Type = "raw"
+	case compute.FormatIso:
+		diskConfig.Driver.Type = "raw"
+	}
+	switch volume.DeviceType {
+	default:
+		panic(fmt.Errorf("unsupported volume device type '%s'", volume.DeviceType))
+	case compute.DeviceTypeCdrom:
+		diskConfig.Device = "cdrom"
+		diskConfig.ReadOnly = &libvirtxml.DomainDiskReadOnly{}
+		diskConfig.Target.Bus = volume.DeviceBus.String()
+		diskConfig.Target.Dev = volume.DeviceName
+	case compute.DeviceTypeDisk:
+		diskConfig.Device = "disk"
+		diskConfig.Target.Bus = volume.DeviceBus.String()
+		diskConfig.Target.Dev = volume.DeviceName
+	}
+	switch volume.Type {
+	default:
+		panic(fmt.Errorf("unknown volume type '%s'", volume.Type))
+	case compute.VolumeTypeFile:
+		diskConfig.Source = &libvirtxml.DomainDiskSource{
+			File: &libvirtxml.DomainDiskSourceFile{File: volume.Path},
+		}
+	case compute.VolumeTypeBlock:
+		diskConfig.Source = &libvirtxml.DomainDiskSource{
+			Block: &libvirtxml.DomainDiskSourceBlock{Dev: volume.Path},
+		}
+	}
+	return diskConfig
+}
+
 func VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig libvirtxml.DomainDisk) *compute.VirtualMachineAttachedVolume {
 	volume := &compute.VirtualMachineAttachedVolume{}
+	volume.DeviceName = diskConfig.Target.Dev
+	volume.DeviceBus = compute.NewDeviceBus(diskConfig.Target.Bus)
+
 	switch diskConfig.Device {
 	default:
-		volume.Device = compute.DeviceTypeUnknown
+		volume.DeviceType = compute.DeviceTypeUnknown
 	case "disk":
-		volume.Device = compute.DeviceTypeDisk
+		volume.DeviceType = compute.DeviceTypeDisk
 	case "cdrom":
-		volume.Device = compute.DeviceTypeCdrom
+		volume.DeviceType = compute.DeviceTypeCdrom
 	}
 	if diskConfig.Driver != nil {
 		volume.Format = compute.NewVolumeFormat(diskConfig.Driver.Type)

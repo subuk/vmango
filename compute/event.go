@@ -28,7 +28,7 @@ func (e *EventVirtualMachineCreated) Plain() map[string]string {
 	for idx, volume := range e.vm.Volumes {
 		data[fmt.Sprintf("vm_volume_%d_path", idx)] = volume.Path
 		data[fmt.Sprintf("vm_volume_%d_format", idx)] = volume.Format.String()
-		data[fmt.Sprintf("vm_volume_%d_device", idx)] = volume.Device.String()
+		data[fmt.Sprintf("vm_volume_%d_device", idx)] = volume.DeviceType.String()
 		data[fmt.Sprintf("vm_volume_%d_type", idx)] = volume.Type.String()
 	}
 	for idx, iface := range e.vm.Interfaces {

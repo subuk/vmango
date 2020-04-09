@@ -46,12 +46,11 @@ type VirtualMachineCreateParamsConfig struct {
 }
 
 type VirtualMachineCreateParamsVolume struct {
-	CloneFrom  string
-	Name       string
-	Pool       string
-	Format     VolumeFormat
-	DeviceType string
-	Size       Size
+	CloneFrom string
+	Name      string
+	Pool      string
+	Format    VolumeFormat
+	Size      Size
 }
 
 type VirtualMachineCreateParamsInterface struct {
@@ -109,10 +108,12 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 			return nil, fmt.Errorf("volume %s already exists and attached to %s as %s", volume.Path, volume.AttachedTo, volume.AttachedAs)
 		}
 		volumes = append(volumes, &VirtualMachineAttachedVolume{
-			Type:   volume.Type,
-			Path:   volume.Path,
-			Format: volume.Format,
-			Device: NewDeviceType(volumeParams.DeviceType),
+			DeviceName: "vda",
+			Type:       volume.Type,
+			Path:       volume.Path,
+			Format:     volume.Format,
+			DeviceType: DeviceTypeDisk,
+			DeviceBus:  DeviceBusVirtio,
 		})
 	}
 
@@ -180,12 +181,28 @@ func (service *Service) VirtualMachineDelete(id string, deleteVolumes bool) erro
 	return nil
 }
 
-func (service *Service) VirtualMachineAttachVolume(id, path string, deviceType DeviceType) (*VirtualMachineAttachedVolume, error) {
-	vol, err := service.vol.Get(path)
+type VolumeAttachmentParams struct {
+	MachineId  string
+	DeviceName string
+	VolumePath string
+	DeviceType DeviceType
+	DeviceBus  DeviceBus
+}
+
+func (service *Service) VirtualMachineAttachVolume(params VolumeAttachmentParams) error {
+	vol, err := service.vol.Get(params.VolumePath)
 	if err != nil {
-		return nil, util.NewError(err, "cannot lookup volume")
+		return util.NewError(err, "cannot lookup volume")
 	}
-	return service.virt.AttachVolume(id, path, vol.Type, vol.Format, deviceType)
+	attachedVolume := &VirtualMachineAttachedVolume{
+		Path:       params.VolumePath,
+		Type:       vol.Type,
+		Format:     vol.Format,
+		DeviceName: params.DeviceName,
+		DeviceType: params.DeviceType,
+		DeviceBus:  params.DeviceBus,
+	}
+	return service.virt.AttachVolume(params.MachineId, attachedVolume)
 }
 
 func (service *Service) VirtualMachineDetachVolume(id, path string) error {
