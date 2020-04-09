@@ -398,6 +398,7 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 	virDomainConfig.OS = &libvirtxml.DomainOS{
 		Type: &libvirtxml.DomainOSType{Type: "hvm", Machine: domCapsConfig.Machine, Arch: libvirtArch},
 		BootDevices: []libvirtxml.DomainBootDevice{
+			{Dev: "cdrom"},
 			{Dev: "hd"},
 		},
 	}
