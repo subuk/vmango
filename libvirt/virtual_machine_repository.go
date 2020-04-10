@@ -2,7 +2,11 @@ package libvirt
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net"
+	"net/url"
+	"os/exec"
 	"strings"
 	"subuk/vmango/compute"
 	"subuk/vmango/configdrive"
@@ -353,6 +357,109 @@ func (repo *VirtualMachineRepository) GetConsoleStream(id string) (compute.Virtu
 		return nil, util.NewError(err, "cannot open domain console")
 	}
 	return &virStreamReadWriteCloser{stream}, nil
+}
+
+type cmdIoWrapper struct {
+	stdin  io.WriteCloser
+	stdout io.ReadCloser
+}
+
+func (w *cmdIoWrapper) Read(p []byte) (int, error) {
+	return w.stdout.Read(p)
+}
+
+func (w *cmdIoWrapper) Write(p []byte) (int, error) {
+	return w.stdin.Write(p)
+}
+
+func (w *cmdIoWrapper) Close() error {
+	w.stdin.Close()
+	return w.stdout.Close()
+
+}
+
+func (repo *VirtualMachineRepository) GetGraphicStream(id string) (compute.VirtualMachineGraphicStream, error) {
+	conn, err := repo.pool.Acquire()
+	if err != nil {
+		return nil, util.NewError(err, "cannot acquire libvirt connection")
+	}
+	defer repo.pool.Release(conn)
+
+	connUriRaw, err := conn.GetURI()
+	if err != nil {
+		return nil, util.NewError(err, "cannot get connection hostname")
+	}
+	connUri, err := url.Parse(connUriRaw)
+	if err != nil {
+		return nil, util.NewError(err, "cannot parse connection uri")
+	}
+	virDomain, err := conn.LookupDomainByName(id)
+	if err != nil {
+		return nil, util.NewError(err, "cannot get vm")
+	}
+	virDomainRunning, err := virDomain.IsActive()
+	if err != nil {
+		return nil, util.NewError(err, "cannot check if domain is running")
+	}
+	if !virDomainRunning {
+		return nil, fmt.Errorf("domain is not running")
+	}
+	virDomainXml, err := virDomain.GetXMLDesc(0)
+	if err != nil {
+		return nil, util.NewError(err, "cannot fetch domain xml")
+	}
+	virDomainConfig := &libvirtxml.Domain{}
+	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
+		return nil, util.NewError(err, "cannot parse domain xml")
+	}
+	graphicPort := 0
+	for _, graphic := range virDomainConfig.Devices.Graphics {
+		if graphic.VNC != nil {
+			graphicPort = graphic.VNC.Port
+		}
+	}
+	if graphicPort <= 0 {
+		return nil, fmt.Errorf("no graphic port found")
+	}
+
+	if strings.Contains(connUri.Scheme, "ssh") {
+		portStr := fmt.Sprintf("%d", graphicPort)
+		args := []string{
+			"ssh", "-l", connUri.User.Username(), connUri.Hostname(),
+			"if (command -v socat) >/dev/null 2>&1; then socat - TCP:localhost:" + portStr + "; else nc localhost " + portStr + "; fi",
+		}
+		cmd := exec.Command(args[0], args[1:]...)
+		repo.logger.Debug().Strs("args", cmd.Args).Msg("executing ssh forwarding command")
+
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return nil, util.NewError(err, "cannot initialize cmd stdout")
+		}
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			return nil, util.NewError(err, "cannot initialize cmd stdin")
+		}
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return nil, util.NewError(err, "cannot initialize cmd stdin")
+		}
+		if err := cmd.Start(); err != nil {
+			return nil, util.NewError(err, "cannot start ssh forwarding command")
+		}
+		repo.logger.Debug().Msg("ssh started successfully")
+		go func(cmd *exec.Cmd) {
+			if err := cmd.Wait(); err != nil {
+				errText, _ := ioutil.ReadAll(stderr)
+				repo.logger.Warn().Err(err).Str("text", string(errText)).Msg("graphics forwarding command failed")
+				return
+			}
+			repo.logger.Debug().Msg("graphics command finished successfully")
+		}(cmd)
+		return &cmdIoWrapper{stdin: stdin, stdout: stdout}, nil
+	}
+	addr := fmt.Sprintf("%s:%d", connUri.Hostname(), graphicPort)
+	repo.logger.Debug().Str("addr", addr).Msg("connecting directly to console")
+	return net.Dial("tcp", addr)
 }
 
 func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus int, memory compute.Size, volumes []*compute.VirtualMachineAttachedVolume, interfaces []*compute.VirtualMachineAttachedInterface, config *compute.VirtualMachineConfig) (*compute.VirtualMachine, error) {

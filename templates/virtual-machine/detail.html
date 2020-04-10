@@ -38,8 +38,11 @@
             <div class="col-md-5 text-right">
               <p>
                 {{ if .Vm.IsRunning }}
+                  {{ if .Vm.Graphic.Vnc }}
+                  <a class="btn btn-primary" target="popup" href=""
+                    onclick="window.open('{{ Url "virtual-machine-vnc-show" "id" .Vm.Id }}?autoconnect=1&resize=remote','popup','width=800,height=600'); return false;">VNC</a>
+                  {{ end }}
                 <a class="btn btn-primary" href="{{ Url "virtual-machine-console-show" "id" .Vm.Id }}">Console</a>
-                <button class="btn btn-primary" title="Stop machine before editing" disabled>Edit</button>
                 <a class="btn btn-primary"
                   href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "poweroff" }}">Power Off</a>
                 <a class="btn btn-primary"

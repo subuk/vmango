@@ -11,6 +11,7 @@ type VirtualMachineRepository interface {
 	AttachInterface(id string, iface *VirtualMachineAttachedInterface) error
 	DetachInterface(id, mac string) error
 	GetConsoleStream(id string) (VirtualMachineConsoleStream, error)
+	GetGraphicStream(id string) (VirtualMachineGraphicStream, error)
 	Poweroff(id string) error
 	Reboot(id string) error
 	Start(id string) error
@@ -21,6 +22,8 @@ type VirtualMachineConsoleStream interface {
 	Write(buf []byte) (int, error)
 	Close() error
 }
+
+type VirtualMachineGraphicStream VirtualMachineConsoleStream
 
 type VirtualMachineState int
 
@@ -50,6 +53,16 @@ type VirtualMachineConfig struct {
 	Hostname string
 	Keys     []*Key
 	Userdata []byte
+}
+
+type VirtualMachineGraphic struct {
+	Type   GraphicType
+	Listen string
+	Port   int
+}
+
+func (g VirtualMachineGraphic) Vnc() bool {
+	return g.Type == GraphicTypeVnc
 }
 
 type VirtualMachine struct {

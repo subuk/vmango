@@ -234,6 +234,10 @@ func (service *Service) VirtualMachineGetConsoleStream(id string) (VirtualMachin
 	return service.virt.GetConsoleStream(id)
 }
 
+func (service *Service) VirtualMachineGetGraphicStream(id string) (VirtualMachineGraphicStream, error) {
+	return service.virt.GetGraphicStream(id)
+}
+
 func (service *Service) VolumeList() ([]*Volume, error) {
 	return service.vol.List()
 }

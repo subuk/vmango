@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"subuk/vmango/compute"
@@ -526,5 +527,75 @@ func (env *Environ) VirtualMachineConsoleWS(rw http.ResponseWriter, req *http.Re
 			env.logger.Debug().Err(err).Msg("console write error")
 			return
 		}
+	}
+}
+
+func (env *Environ) VirtualMachineVncShow(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
+	if err != nil {
+		env.error(rw, req, err, "cannot get vm", http.StatusInternalServerError)
+		return
+	}
+	data := struct {
+		Title   string
+		Vm      *compute.VirtualMachine
+		User    *User
+		Request *http.Request
+	}{"Virtual Machine Serial Console", vm, env.Session(req).AuthUser(), req}
+	if err := env.render.HTML(rw, http.StatusOK, "virtual-machine/vnc", data); err != nil {
+		env.error(rw, req, err, "failed to render template", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (env *Environ) VirtualMachineVncWs(rw http.ResponseWriter, req *http.Request) {
+	urlvars := mux.Vars(req)
+	wsconn, err := env.ws.Upgrade(rw, req, nil)
+	if err != nil {
+		env.logger.Debug().Err(err).Msg("cannot upgrade websocket connection")
+		return
+	}
+	graphic, err := env.compute.VirtualMachineGetGraphicStream(urlvars["id"])
+	if err != nil {
+		http.Error(rw, "Cannot get vm graphic: "+err.Error(), http.StatusServiceUnavailable)
+		env.logger.Warn().Err(err).Msg("failed to establish tcp connection")
+		return
+	}
+
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := graphic.Read(buf)
+			if err != nil {
+				env.logger.Debug().Err(err).Msg("graphic read error")
+				return
+			}
+			if err := wsconn.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
+				env.logger.Debug().Err(err).Msg("wsconn write error")
+				return
+			}
+		}
+	}()
+	for {
+		t, buf, err := wsconn.ReadMessage()
+		if err != nil {
+			env.logger.Debug().Err(err).Msg("ws message error")
+			return
+		}
+		switch t {
+		case websocket.BinaryMessage:
+			if _, err := graphic.Write(buf); err != nil {
+				env.logger.Debug().Err(err).Msg("graphic write error")
+				return
+			}
+		case websocket.PingMessage:
+			if err := wsconn.WriteMessage(websocket.PongMessage, buf); err != nil {
+				log.Println(err)
+				return
+			}
+		default:
+		}
+
 	}
 }

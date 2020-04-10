@@ -128,7 +128,9 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service)
 
 	env.random = rand.New(rand.NewSource(time.Now().UnixNano()))
 	env.render = renderer
-	env.ws = &websocket.Upgrader{}
+	env.ws = &websocket.Upgrader{
+		Subprotocols: []string{"binary"},
+	}
 	env.logger = logger
 	env.router = router
 	env.compute = compute
@@ -164,6 +166,8 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service)
 	router.HandleFunc("/machines/{id}/attach-disk/", env.authenticated(env.VirtualMachineAttachDiskFormProcess)).Methods("POST").Name("virtual-machine-attach-disk")
 	router.HandleFunc("/machines/{id}/console/", env.authenticated(env.VirtualMachineConsoleShow)).Name("virtual-machine-console-show")
 	router.HandleFunc("/machines/{id}/console-ws/", env.authenticated(env.VirtualMachineConsoleWS)).Name("virtual-machine-console-ws")
+	router.HandleFunc("/machines/{id}/vnc/", env.authenticated(env.VirtualMachineVncShow)).Name("virtual-machine-vnc-show")
+	router.HandleFunc("/machines/{id}/vnc/ws/", env.authenticated(env.VirtualMachineVncWs)).Name("virtual-machine-vnc-ws")
 	router.HandleFunc("/machines/{id}/detach-volume/", env.authenticated(env.VirtualMachineDetachVolumeFormProcess)).Methods("POST").Name("virtual-machine-detach-volume")
 	router.HandleFunc("/machines/{id}/attach-interface/", env.authenticated(env.VirtualMachineAttachInterfaceFormProcess)).Methods("POST").Name("virtual-machine-attach-interface")
 	router.HandleFunc("/machines/{id}/detach-interface/", env.authenticated(env.VirtualMachineDetachInterfaceFormProcess)).Methods("POST").Name("virtual-machine-detach-interface")
