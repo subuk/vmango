@@ -83,7 +83,7 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 					NewPool:      volumeParams.Pool,
 					NewSize:      volumeParams.Size,
 				}
-				clonedVolume, err := service.VolumeClone(volumeCloneParams)
+				clonedVolume, err := service.vol.Clone(volumeCloneParams)
 				if err != nil {
 					return nil, err
 				}
@@ -96,7 +96,7 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 					Format: volumeParams.Format,
 					Size:   volumeParams.Size,
 				}
-				createdVolume, err := service.VolumeCreate(volumeCreateParams)
+				createdVolume, err := service.vol.Create(volumeCreateParams)
 				if err != nil {
 					return nil, err
 				}
@@ -233,14 +233,6 @@ func (service *Service) VirtualMachineGetGraphicStream(id, node string) (Virtual
 	return service.virt.GetGraphicStream(id, node)
 }
 
-func (service *Service) VolumeList(options VolumeListOptions) ([]*Volume, error) {
-	return service.vol.List(options)
-}
-
-type VolumeListOptions struct {
-	NodeId string
-}
-
 func (service *Service) ImageList(options VolumeListOptions) ([]*Volume, error) {
 	volumes, err := service.vol.List(options)
 	if err != nil {
@@ -265,43 +257,6 @@ func (service *Service) ImageList(options VolumeListOptions) ([]*Volume, error) 
 		return annotatedVolumes, nil
 	}
 	return detachedVolumes, nil
-}
-
-func (service *Service) VolumeGet(path, node string) (*Volume, error) {
-	return service.vol.Get(path, node)
-}
-
-type VolumeCloneParams struct {
-	NodeId       string
-	Format       VolumeFormat
-	OriginalPath string
-	NewName      string
-	NewPool      string
-	NewSize      Size
-}
-
-func (service *Service) VolumeClone(params VolumeCloneParams) (*Volume, error) {
-	return service.vol.Clone(params)
-}
-
-func (service *Service) VolumeResize(path, node string, size Size) error {
-	return service.vol.Resize(path, node, size)
-}
-
-type VolumeCreateParams struct {
-	NodeId string
-	Name   string
-	Pool   string
-	Format VolumeFormat
-	Size   Size
-}
-
-func (service *Service) VolumeCreate(params VolumeCreateParams) (*Volume, error) {
-	return service.vol.Create(params)
-}
-
-func (service *Service) VolumeDelete(path, node string) error {
-	return service.vol.Delete(path, node)
 }
 
 func (service *Service) VirtualMachineAction(id string, node, action string) error {

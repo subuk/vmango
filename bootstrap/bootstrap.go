@@ -78,8 +78,9 @@ func Web(configFilename string) {
 	keys := libcompute.NewKeyService(keyRepo)
 	volpools := libcompute.NewVolumePoolService(volpoolRepo)
 	nodes := libcompute.NewNodeService(nodeRepo)
+	volumes := libcompute.NewVolumeService(volumeRepo)
 
-	webenv := web.New(cfg, logger, compute, network, keys, volpools, nodes)
+	webenv := web.New(cfg, logger, compute, network, keys, volpools, nodes, volumes)
 	server := http.Server{
 		Addr:    cfg.Web.Listen,
 		Handler: webenv,

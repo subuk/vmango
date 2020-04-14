@@ -35,6 +35,7 @@ type Environ struct {
 	keys     *libcompute.KeyService
 	volpools *libcompute.VolumePoolService
 	nodes    *libcompute.NodeService
+	volumes  *libcompute.VolumeService
 	ws       *websocket.Upgrader
 	cfg      *config.WebConfig
 }
@@ -110,6 +111,7 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	keys *libcompute.KeyService,
 	volpools *libcompute.VolumePoolService,
 	nodes *libcompute.NodeService,
+	volumes *libcompute.VolumeService,
 ) http.Handler {
 
 	env := &Environ{cfg: &cfg.Web}
@@ -149,6 +151,7 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	env.keys = keys
 	env.volpools = volpools
 	env.nodes = nodes
+	env.volumes = volumes
 	env.sessions = sessionStore
 
 	router.HandleFunc("/static/{name:.*}", env.Static(cfg)).Name("static")

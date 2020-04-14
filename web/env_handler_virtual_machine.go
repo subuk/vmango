@@ -51,7 +51,7 @@ func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Reque
 		env.error(rw, req, err, "vm get failed", http.StatusInternalServerError)
 		return
 	}
-	volumes, err := env.compute.VolumeList(compute.VolumeListOptions{NodeId: vm.NodeId})
+	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeId: vm.NodeId})
 	if err != nil {
 		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
 		return

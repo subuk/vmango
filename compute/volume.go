@@ -26,13 +26,3 @@ type Volume struct {
 func (volume *Volume) Base() string {
 	return filepath.Base(volume.Path)
 }
-
-type VolumeRepository interface {
-	Get(path, node string) (*Volume, error)
-	GetByName(pool, name, node string) (*Volume, error)
-	Create(params VolumeCreateParams) (*Volume, error)
-	Clone(params VolumeCloneParams) (*Volume, error)
-	Resize(path, node string, newSize Size) error
-	Delete(path, node string) error
-	List(options VolumeListOptions) ([]*Volume, error)
-}
