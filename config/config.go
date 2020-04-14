@@ -88,8 +88,14 @@ func Parse(filename string) (*Config, error) {
 	if err := mergo.Merge(config, Default()); err != nil {
 		return nil, util.NewError(err, "cannot apply default configuration value")
 	}
+	libvirt_ids := map[string]struct{}{}
 	for index := range config.Libvirts {
 		libvirt := &config.Libvirts[index]
+		if _, exists := libvirt_ids[libvirt.Name]; exists {
+			return nil, fmt.Errorf("duplicate libvirt connection '%s'", libvirt.Name)
+		}
+		libvirt_ids[libvirt.Name] = struct{}{}
+
 		if libvirt.Uri == "" {
 			return nil, fmt.Errorf("no uri specified for libvirt connection '%s'", libvirt.Name)
 		}
