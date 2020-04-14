@@ -11,7 +11,7 @@ func (env *Environ) NodeList(rw http.ResponseWriter, req *http.Request) {
 		env.error(rw, req, err, "node list failed", http.StatusInternalServerError)
 		return
 	}
-	volumePools, err := env.compute.VolumePoolList(compute.VolumePoolListOptions{})
+	volumePools, err := env.volpools.List(compute.VolumePoolListOptions{})
 	if err != nil {
 		env.error(rw, req, err, "cannot fetch volume pools", http.StatusInternalServerError)
 		return

@@ -18,16 +18,15 @@ type EventPublisher interface {
 }
 
 type Service struct {
-	virt    VirtualMachineRepository
-	vol     VolumeRepository
-	volpool VolumePoolRepository
-	node    NodeRepository
-	epub    EventPublisher
-	key     KeyRepository
+	virt VirtualMachineRepository
+	vol  VolumeRepository
+	node NodeRepository
+	epub EventPublisher
+	key  KeyRepository
 }
 
-func New(epub EventPublisher, virt VirtualMachineRepository, vol VolumeRepository, volpool VolumePoolRepository, node NodeRepository, key KeyRepository) *Service {
-	return &Service{epub: epub, virt: virt, vol: vol, volpool: volpool, node: node, key: key}
+func New(epub EventPublisher, virt VirtualMachineRepository, vol VolumeRepository, node NodeRepository, key KeyRepository) *Service {
+	return &Service{epub: epub, virt: virt, vol: vol, node: node, key: key}
 }
 
 func (service *Service) VirtualMachineList() ([]*VirtualMachine, error) {
@@ -288,14 +287,6 @@ func (service *Service) VolumeClone(params VolumeCloneParams) (*Volume, error) {
 
 func (service *Service) VolumeResize(path, node string, size Size) error {
 	return service.vol.Resize(path, node, size)
-}
-
-type VolumePoolListOptions struct {
-	NodeId string
-}
-
-func (service *Service) VolumePoolList(options VolumePoolListOptions) ([]*VolumePool, error) {
-	return service.volpool.List(options)
 }
 
 type VolumeCreateParams struct {

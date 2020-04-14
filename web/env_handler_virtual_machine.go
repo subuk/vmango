@@ -177,7 +177,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 	}
 	data.Images = images
 
-	pools, err := env.compute.VolumePoolList(compute.VolumePoolListOptions{NodeId: selectedNode.Id})
+	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeId: selectedNode.Id})
 	if err != nil {
 		env.error(rw, req, err, "cannot list pools", http.StatusInternalServerError)
 		return

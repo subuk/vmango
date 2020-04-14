@@ -33,6 +33,7 @@ type Environ struct {
 	compute  *libcompute.Service
 	networks *libcompute.NetworkService
 	keys     *libcompute.KeyService
+	volpools *libcompute.VolumePoolService
 	ws       *websocket.Upgrader
 	cfg      *config.WebConfig
 }
@@ -102,7 +103,13 @@ func TemplateFuncs(env *Environ) []template.FuncMap {
 	}
 }
 
-func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service, networks *libcompute.NetworkService, keys *libcompute.KeyService) http.Handler {
+func New(cfg *config.Config, logger zerolog.Logger,
+	compute *libcompute.Service,
+	networks *libcompute.NetworkService,
+	keys *libcompute.KeyService,
+	volpools *libcompute.VolumePoolService,
+) http.Handler {
+
 	env := &Environ{cfg: &cfg.Web}
 	router := mux.NewRouter()
 	renderer := render.New(render.Options{
@@ -138,6 +145,7 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service,
 	env.compute = compute
 	env.networks = networks
 	env.keys = keys
+	env.volpools = volpools
 	env.sessions = sessionStore
 
 	router.HandleFunc("/static/{name:.*}", env.Static(cfg)).Name("static")

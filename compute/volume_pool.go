@@ -1,9 +1,5 @@
 package compute
 
-type VolumePoolRepository interface {
-	List(options VolumePoolListOptions) ([]*VolumePool, error)
-}
-
 type VolumePool struct {
 	Name string
 	Size Size

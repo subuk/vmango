@@ -69,15 +69,16 @@ func Web(configFilename string) {
 
 	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool, settings, logger.With().Str("component", "vm-repository").Logger())
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool, volumeMetadata)
-	volumePoolRepo := libvirt.NewVolumePoolRepository(connectionPool)
+	volpoolRepo := libvirt.NewVolumePoolRepository(connectionPool)
 	nodeRepo := libvirt.NewNodeRepository(connectionPool)
 	netRepo := libvirt.NewNetworkRepository(connectionPool)
 
-	compute := libcompute.New(epub, machineRepo, volumeRepo, volumePoolRepo, nodeRepo, keyRepo)
+	compute := libcompute.New(epub, machineRepo, volumeRepo, nodeRepo, keyRepo)
 	network := libcompute.NewNetworkService(netRepo)
 	keys := libcompute.NewKeyService(keyRepo)
+	volpools := libcompute.NewVolumePoolService(volpoolRepo)
 
-	webenv := web.New(cfg, logger, compute, network, keys)
+	webenv := web.New(cfg, logger, compute, network, keys, volpools)
 	server := http.Server{
 		Addr:    cfg.Web.Listen,
 		Handler: webenv,
