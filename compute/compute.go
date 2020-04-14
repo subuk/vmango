@@ -28,14 +28,6 @@ func New(epub EventPublisher, virt VirtualMachineRepository, vol VolumeRepositor
 	return &Service{epub: epub, virt: virt, vol: vol, key: key}
 }
 
-func (service *Service) VirtualMachineList() ([]*VirtualMachine, error) {
-	return service.virt.List()
-}
-
-func (service *Service) VirtualMachineDetail(id, node string) (*VirtualMachine, error) {
-	return service.virt.Get(id, node)
-}
-
 type VirtualMachineCreateParamsConfig struct {
 	Hostname        string
 	UserData        string
@@ -200,39 +192,6 @@ func (service *Service) VirtualMachineAttachVolume(params VolumeAttachmentParams
 	return service.virt.AttachVolume(params.MachineId, params.NodeId, attachedVolume)
 }
 
-func (service *Service) VirtualMachineDetachVolume(id, node, path string) error {
-	return service.virt.DetachVolume(id, node, path)
-}
-
-func (service *Service) VirtualMachineAttachInterface(id, node string, iface *VirtualMachineAttachedInterface) error {
-	return service.virt.AttachInterface(id, node, iface)
-}
-
-type VirtualMachineUpdateParams struct {
-	Vcpus         *int
-	Memory        *Size
-	Autostart     *bool
-	GuestAgent    *bool
-	GraphicType   *GraphicType
-	GraphicListen *string
-}
-
-func (service *Service) VirtualMachineUpdate(id, node string, params VirtualMachineUpdateParams) error {
-	return service.virt.Update(id, node, params)
-}
-
-func (service *Service) VirtualMachineDetachInterface(id, node, mac string) error {
-	return service.virt.DetachInterface(id, node, mac)
-}
-
-func (service *Service) VirtualMachineGetConsoleStream(id, node string) (VirtualMachineConsoleStream, error) {
-	return service.virt.GetConsoleStream(id, node)
-}
-
-func (service *Service) VirtualMachineGetGraphicStream(id, node string) (VirtualMachineGraphicStream, error) {
-	return service.virt.GetGraphicStream(id, node)
-}
-
 func (service *Service) ImageList(options VolumeListOptions) ([]*Volume, error) {
 	volumes, err := service.vol.List(options)
 	if err != nil {
@@ -257,17 +216,4 @@ func (service *Service) ImageList(options VolumeListOptions) ([]*Volume, error) 
 		return annotatedVolumes, nil
 	}
 	return detachedVolumes, nil
-}
-
-func (service *Service) VirtualMachineAction(id string, node, action string) error {
-	switch action {
-	default:
-		return fmt.Errorf("unknown action %s", action)
-	case "reboot":
-		return service.virt.Reboot(id, node)
-	case "poweroff":
-		return service.virt.Poweroff(id, node)
-	case "start":
-		return service.virt.Start(id, node)
-	}
 }

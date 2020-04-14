@@ -67,20 +67,21 @@ func Web(configFilename string) {
 	}
 	connectionPool := libvirt.NewConnectionPool(nodeUri, nodeOrder, logger.With().Str("component", "libvirt-connection-pool").Logger())
 
-	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool, settings, logger.With().Str("component", "vm-repository").Logger())
+	vmRepo := libvirt.NewVirtualMachineRepository(connectionPool, settings, logger.With().Str("component", "vm-repository").Logger())
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool, volumeMetadata)
 	volpoolRepo := libvirt.NewVolumePoolRepository(connectionPool)
 	nodeRepo := libvirt.NewNodeRepository(connectionPool)
 	netRepo := libvirt.NewNetworkRepository(connectionPool)
 
-	compute := libcompute.New(epub, machineRepo, volumeRepo, keyRepo)
+	compute := libcompute.New(epub, vmRepo, volumeRepo, keyRepo)
 	network := libcompute.NewNetworkService(netRepo)
 	keys := libcompute.NewKeyService(keyRepo)
 	volpools := libcompute.NewVolumePoolService(volpoolRepo)
 	nodes := libcompute.NewNodeService(nodeRepo)
 	volumes := libcompute.NewVolumeService(volumeRepo)
+	vms := libcompute.NewVirtualMachineService(vmRepo)
 
-	webenv := web.New(cfg, logger, compute, network, keys, volpools, nodes, volumes)
+	webenv := web.New(cfg, logger, compute, network, keys, volpools, nodes, volumes, vms)
 	server := http.Server{
 		Addr:    cfg.Web.Listen,
 		Handler: webenv,
