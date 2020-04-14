@@ -8,5 +8,4 @@ type NetworkRepository interface {
 type Network struct {
 	NodeId string
 	Name   string
-	Type   NetworkType
 }

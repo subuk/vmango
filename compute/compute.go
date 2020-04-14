@@ -121,12 +121,7 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 
 	interfaces := []*VirtualMachineAttachedInterface{}
 	for _, ifaceParams := range params.Interfaces {
-		network, err := service.net.Get(ifaceParams.Network, params.NodeId)
-		if err != nil {
-			return nil, util.NewError(err, "network get failed")
-		}
 		iface := &VirtualMachineAttachedInterface{
-			NetworkType: network.Type,
 			NetworkName: ifaceParams.Network,
 			Mac:         ifaceParams.Mac,
 			AccessVlan:  ifaceParams.AccessVlan,

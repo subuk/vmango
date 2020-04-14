@@ -132,7 +132,6 @@ type VirtualMachineAttachedVolume struct {
 }
 
 type VirtualMachineAttachedInterface struct {
-	NetworkType   NetworkType
 	NetworkName   string
 	Mac           string
 	Model         string

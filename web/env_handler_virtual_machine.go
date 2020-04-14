@@ -463,15 +463,8 @@ func (env *Environ) VirtualMachineAttachInterfaceFormProcess(rw http.ResponseWri
 		accessVlan = uint(parsed)
 	}
 
-	network, err := env.compute.NetworkGet(networkName, urlvars["node"])
-	if err != nil {
-		http.Error(rw, "cannot get network", http.StatusInternalServerError)
-		return
-	}
-
 	attachedIface := &compute.VirtualMachineAttachedInterface{
-		NetworkType: network.Type,
-		NetworkName: network.Name,
+		NetworkName: networkName,
 		Mac:         mac,
 		Model:       "virtio",
 		AccessVlan:  accessVlan,

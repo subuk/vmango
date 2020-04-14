@@ -34,7 +34,7 @@ func (e *EventVirtualMachineCreated) Plain() map[string]string {
 	for idx, iface := range e.vm.Interfaces {
 		data[fmt.Sprintf("vm_interface_%d_mac", idx)] = iface.Mac
 		data[fmt.Sprintf("vm_interface_%d_network", idx)] = iface.NetworkName
-		data[fmt.Sprintf("vm_interface_%d_type", idx)] = iface.NetworkType.String()
+		data[fmt.Sprintf("vm_interface_%d_type", idx)] = "libvirt" // BC
 	}
 	return data
 }

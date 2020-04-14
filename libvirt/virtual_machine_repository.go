@@ -302,17 +302,8 @@ func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxm
 	}
 	domainIface.Source = &libvirtxml.DomainInterfaceSource{}
 	domainIface.Model = &libvirtxml.DomainInterfaceModel{Type: attachedIface.Model}
-	switch attachedIface.NetworkType {
-	default:
-		return fmt.Errorf("unsupported interface type %s", attachedIface.NetworkType)
-	case compute.NetworkTypeLibvirt:
-		domainIface.Source.Network = &libvirtxml.DomainInterfaceSourceNetwork{
-			Network: attachedIface.NetworkName,
-		}
-	case compute.NetworkTypeBridge:
-		domainIface.Source.Bridge = &libvirtxml.DomainInterfaceSourceBridge{
-			Bridge: attachedIface.NetworkName,
-		}
+	domainIface.Source.Network = &libvirtxml.DomainInterfaceSourceNetwork{
+		Network: attachedIface.NetworkName,
 	}
 	if attachedIface.AccessVlan > 0 {
 		domainIface.VLan = &libvirtxml.DomainInterfaceVLan{

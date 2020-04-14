@@ -29,7 +29,6 @@ func (repo *NetworkRepository) virNetworkToNetwork(virNetwork *libvirt.Network, 
 	network := &compute.Network{
 		NodeId: nodeId,
 		Name:   virNetworkConfig.Name,
-		Type:   compute.NetworkTypeLibvirt,
 	}
 	return network, nil
 }
