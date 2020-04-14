@@ -287,7 +287,6 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId s
 		repo.configCache[volume.Path] = config
 		repo.configCacheMu.Unlock()
 	}
-	// vm.Volumes = noConfigDriveVolumes
 
 	return vm, nil
 }

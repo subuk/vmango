@@ -23,12 +23,11 @@ type Service struct {
 	volpool VolumePoolRepository
 	node    NodeRepository
 	key     KeyRepository
-	net     NetworkRepository
 	epub    EventPublisher
 }
 
-func New(epub EventPublisher, virt VirtualMachineRepository, vol VolumeRepository, volpool VolumePoolRepository, node NodeRepository, key KeyRepository, net NetworkRepository) *Service {
-	return &Service{epub: epub, virt: virt, vol: vol, volpool: volpool, node: node, key: key, net: net}
+func New(epub EventPublisher, virt VirtualMachineRepository, vol VolumeRepository, volpool VolumePoolRepository, node NodeRepository, key KeyRepository) *Service {
+	return &Service{epub: epub, virt: virt, vol: vol, volpool: volpool, node: node, key: key}
 }
 
 func (service *Service) VirtualMachineList() ([]*VirtualMachine, error) {
@@ -350,16 +349,4 @@ func (service *Service) KeyDelete(fingerprint string) error {
 
 func (service *Service) KeyAdd(input string) error {
 	return service.key.Add([]byte(input))
-}
-
-type NetworkListOptions struct {
-	NodeId string
-}
-
-func (service *Service) NetworkList(options NetworkListOptions) ([]*Network, error) {
-	return service.net.List(options)
-}
-
-func (service *Service) NetworkGet(id, node string) (*Network, error) {
-	return service.net.Get(id, node)
 }

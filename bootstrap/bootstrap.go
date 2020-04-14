@@ -73,9 +73,10 @@ func Web(configFilename string) {
 	nodeRepo := libvirt.NewNodeRepository(connectionPool)
 	netRepo := libvirt.NewNetworkRepository(connectionPool)
 
-	compute := libcompute.New(epub, machineRepo, volumeRepo, volumePoolRepo, nodeRepo, keyRepo, netRepo)
+	compute := libcompute.New(epub, machineRepo, volumeRepo, volumePoolRepo, nodeRepo, keyRepo)
+	network := libcompute.NewNetworkService(netRepo)
 
-	webenv := web.New(cfg, logger, compute)
+	webenv := web.New(cfg, logger, compute, network)
 	server := http.Server{
 		Addr:    cfg.Web.Listen,
 		Handler: webenv,

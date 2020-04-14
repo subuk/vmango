@@ -56,7 +56,7 @@ func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Reque
 		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
 		return
 	}
-	networks, err := env.compute.NetworkList(compute.NetworkListOptions{NodeId: vm.NodeId})
+	networks, err := env.networks.List(compute.NetworkListOptions{NodeId: vm.NodeId})
 	if err != nil {
 		env.error(rw, req, err, "cannot list networks", http.StatusInternalServerError)
 		return
@@ -191,7 +191,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 	}
 	data.Keys = keys
 
-	networks, err := env.compute.NetworkList(compute.NetworkListOptions{NodeId: selectedNode.Id})
+	networks, err := env.networks.List(compute.NetworkListOptions{NodeId: selectedNode.Id})
 	if err != nil {
 		env.error(rw, req, err, "cannot list networks", http.StatusInternalServerError)
 		return
