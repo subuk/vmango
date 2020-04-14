@@ -20,13 +20,12 @@ type EventPublisher interface {
 type Service struct {
 	virt VirtualMachineRepository
 	vol  VolumeRepository
-	node NodeRepository
 	epub EventPublisher
 	key  KeyRepository
 }
 
-func New(epub EventPublisher, virt VirtualMachineRepository, vol VolumeRepository, node NodeRepository, key KeyRepository) *Service {
-	return &Service{epub: epub, virt: virt, vol: vol, node: node, key: key}
+func New(epub EventPublisher, virt VirtualMachineRepository, vol VolumeRepository, key KeyRepository) *Service {
+	return &Service{epub: epub, virt: virt, vol: vol, key: key}
 }
 
 func (service *Service) VirtualMachineList() ([]*VirtualMachine, error) {
@@ -303,14 +302,6 @@ func (service *Service) VolumeCreate(params VolumeCreateParams) (*Volume, error)
 
 func (service *Service) VolumeDelete(path, node string) error {
 	return service.vol.Delete(path, node)
-}
-
-func (service *Service) NodeGet(node string) (*Node, error) {
-	return service.node.Get(node)
-}
-
-func (service *Service) NodeList() ([]*Node, error) {
-	return service.node.List()
 }
 
 func (service *Service) VirtualMachineAction(id string, node, action string) error {

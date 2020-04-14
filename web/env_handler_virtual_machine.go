@@ -150,7 +150,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		Arches:  []compute.Arch{compute.ArchAmd64},
 	}
 
-	nodes, err := env.compute.NodeList()
+	nodes, err := env.nodes.List()
 	if err != nil {
 		env.error(rw, req, err, "cannot list networks", http.StatusInternalServerError)
 		return

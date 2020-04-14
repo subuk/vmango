@@ -13,7 +13,7 @@ var UIVolumeFormats = []compute.VolumeFormat{compute.FormatQcow2, compute.Format
 
 func (env *Environ) VolumeList(rw http.ResponseWriter, req *http.Request) {
 	selectedNodeId := req.URL.Query().Get("node")
-	nodes, err := env.compute.NodeList()
+	nodes, err := env.nodes.List()
 	if err != nil {
 		env.error(rw, req, err, "nodes list failed", http.StatusInternalServerError)
 		return

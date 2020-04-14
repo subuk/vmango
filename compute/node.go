@@ -1,10 +1,5 @@
 package compute
 
-type NodeRepository interface {
-	Get(node string) (*Node, error)
-	List() ([]*Node, error)
-}
-
 type NodeNumaCore struct {
 	SocketId int
 	CpuIds   []int

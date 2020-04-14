@@ -6,7 +6,7 @@ import (
 )
 
 func (env *Environ) NodeList(rw http.ResponseWriter, req *http.Request) {
-	nodes, err := env.compute.NodeList()
+	nodes, err := env.nodes.List()
 	if err != nil {
 		env.error(rw, req, err, "node list failed", http.StatusInternalServerError)
 		return
