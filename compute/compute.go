@@ -164,29 +164,3 @@ func (service *Service) VirtualMachineDelete(id, node string, deleteVolumes bool
 	}
 	return nil
 }
-
-func (service *Service) ImageList(options VolumeListOptions) ([]*Volume, error) {
-	volumes, err := service.vol.List(options)
-	if err != nil {
-		return nil, util.NewError(err, "cannot list volume")
-	}
-	annotatedVolumes := []*Volume{}
-	detachedVolumes := []*Volume{}
-	for _, volume := range volumes {
-		if volume.Format == VolumeFormatIso {
-			continue
-		}
-		if volume.AttachedTo != "" {
-			continue
-		}
-		if volume.Metadata.OsName != "" {
-			annotatedVolumes = append(annotatedVolumes, volume)
-			continue
-		}
-		detachedVolumes = append(detachedVolumes, volume)
-	}
-	if len(annotatedVolumes) > 0 {
-		return annotatedVolumes, nil
-	}
-	return detachedVolumes, nil
-}

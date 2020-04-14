@@ -170,12 +170,31 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 	}
 	data.NodeId = selectedNode.Id
 
-	images, err := env.compute.ImageList(compute.VolumeListOptions{NodeId: selectedNode.Id})
+	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeId: selectedNode.Id})
 	if err != nil {
 		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
 		return
 	}
-	data.Images = images
+	annotatedVolumes := []*compute.Volume{}
+	detachedVolumes := []*compute.Volume{}
+	for _, volume := range volumes {
+		if volume.Format == compute.VolumeFormatIso {
+			continue
+		}
+		if volume.AttachedTo != "" {
+			continue
+		}
+		if volume.Metadata.OsName != "" {
+			annotatedVolumes = append(annotatedVolumes, volume)
+			continue
+		}
+		detachedVolumes = append(detachedVolumes, volume)
+	}
+	if len(annotatedVolumes) > 0 {
+		data.Images = annotatedVolumes
+	} else {
+		data.Images = detachedVolumes
+	}
 
 	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeId: selectedNode.Id})
 	if err != nil {
