@@ -8,7 +8,7 @@ import (
 )
 
 func (env *Environ) KeyList(rw http.ResponseWriter, req *http.Request) {
-	keys, err := env.compute.KeyList()
+	keys, err := env.keys.List()
 	if err != nil {
 		env.error(rw, req, err, "key list failed", http.StatusInternalServerError)
 		return
@@ -27,7 +27,7 @@ func (env *Environ) KeyList(rw http.ResponseWriter, req *http.Request) {
 
 func (env *Environ) KeyShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
-	key, err := env.compute.KeyDetail(urlvars["fingerprint"])
+	key, err := env.keys.Get(urlvars["fingerprint"])
 	if err != nil {
 		env.error(rw, req, err, "key get failed", http.StatusInternalServerError)
 		return
@@ -39,7 +39,7 @@ func (env *Environ) KeyShow(rw http.ResponseWriter, req *http.Request) {
 
 func (env *Environ) KeyDeleteFormShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
-	key, err := env.compute.KeyDetail(urlvars["fingerprint"])
+	key, err := env.keys.Get(urlvars["fingerprint"])
 	if err != nil {
 		env.error(rw, req, err, "key get failed", http.StatusInternalServerError)
 		return
@@ -58,7 +58,7 @@ func (env *Environ) KeyDeleteFormShow(rw http.ResponseWriter, req *http.Request)
 
 func (env *Environ) KeyDeleteFormProcess(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
-	if err := env.compute.KeyDelete(urlvars["fingerprint"]); err != nil {
+	if err := env.keys.Delete(urlvars["fingerprint"]); err != nil {
 		env.error(rw, req, err, "cannot delete key", http.StatusInternalServerError)
 		return
 	}
@@ -76,7 +76,7 @@ func (env *Environ) KeyAddFormProcess(rw http.ResponseWriter, req *http.Request)
 		http.Error(rw, "no key content specified", http.StatusBadRequest)
 		return
 	}
-	if err := env.compute.KeyAdd(key); err != nil {
+	if err := env.keys.Add(key); err != nil {
 		env.error(rw, req, err, "cannot add key", http.StatusInternalServerError)
 		return
 	}

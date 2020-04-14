@@ -32,6 +32,7 @@ type Environ struct {
 	random   *rand.Rand
 	compute  *libcompute.Service
 	networks *libcompute.NetworkService
+	keys     *libcompute.KeyService
 	ws       *websocket.Upgrader
 	cfg      *config.WebConfig
 }
@@ -101,7 +102,7 @@ func TemplateFuncs(env *Environ) []template.FuncMap {
 	}
 }
 
-func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service, networks *libcompute.NetworkService) http.Handler {
+func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service, networks *libcompute.NetworkService, keys *libcompute.KeyService) http.Handler {
 	env := &Environ{cfg: &cfg.Web}
 	router := mux.NewRouter()
 	renderer := render.New(render.Options{
@@ -136,6 +137,7 @@ func New(cfg *config.Config, logger zerolog.Logger, compute *libcompute.Service,
 	env.router = router
 	env.compute = compute
 	env.networks = networks
+	env.keys = keys
 	env.sessions = sessionStore
 
 	router.HandleFunc("/static/{name:.*}", env.Static(cfg)).Name("static")

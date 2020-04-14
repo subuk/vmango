@@ -22,8 +22,8 @@ type Service struct {
 	vol     VolumeRepository
 	volpool VolumePoolRepository
 	node    NodeRepository
-	key     KeyRepository
 	epub    EventPublisher
+	key     KeyRepository
 }
 
 func New(epub EventPublisher, virt VirtualMachineRepository, vol VolumeRepository, volpool VolumePoolRepository, node NodeRepository, key KeyRepository) *Service {
@@ -333,20 +333,4 @@ func (service *Service) VirtualMachineAction(id string, node, action string) err
 	case "start":
 		return service.virt.Start(id, node)
 	}
-}
-
-func (service *Service) KeyList() ([]*Key, error) {
-	return service.key.List()
-}
-
-func (service *Service) KeyDetail(fingerprint string) (*Key, error) {
-	return service.key.Get(fingerprint)
-}
-
-func (service *Service) KeyDelete(fingerprint string) error {
-	return service.key.Delete(fingerprint)
-}
-
-func (service *Service) KeyAdd(input string) error {
-	return service.key.Add([]byte(input))
 }

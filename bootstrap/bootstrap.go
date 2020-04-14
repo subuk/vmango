@@ -75,8 +75,9 @@ func Web(configFilename string) {
 
 	compute := libcompute.New(epub, machineRepo, volumeRepo, volumePoolRepo, nodeRepo, keyRepo)
 	network := libcompute.NewNetworkService(netRepo)
+	keys := libcompute.NewKeyService(keyRepo)
 
-	webenv := web.New(cfg, logger, compute, network)
+	webenv := web.New(cfg, logger, compute, network, keys)
 	server := http.Server{
 		Addr:    cfg.Web.Listen,
 		Handler: webenv,

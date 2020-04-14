@@ -84,8 +84,8 @@ func (repo *KeyRepository) Get(fingerprint string) (*compute.Key, error) {
 	return nil, compute.ErrKeyNotFound
 }
 
-func (repo *KeyRepository) Add(input []byte) error {
-	input = bytes.TrimSpace(input)
+func (repo *KeyRepository) Add(inputStr string) error {
+	input := bytes.TrimSpace([]byte(inputStr))
 
 	newKey, err := repo.parseKey(input)
 	if err != nil {

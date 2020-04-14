@@ -184,7 +184,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 	}
 	data.Pools = pools
 
-	keys, err := env.compute.KeyList()
+	keys, err := env.keys.List()
 	if err != nil {
 		env.error(rw, req, err, "cannot list keys", http.StatusInternalServerError)
 		return
