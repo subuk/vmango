@@ -17,7 +17,7 @@ type VirtualMachineRepository interface {
 	Create(id, node string, arch Arch, vcpus int, memory Size, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface, config *VirtualMachineConfig) (*VirtualMachine, error)
 	Delete(id, node string) error
 	Update(id, node string, params VirtualMachineUpdateParams) error
-	AttachVolume(machineId, node string, attachedVolume *VirtualMachineAttachedVolume) error
+	AttachVolume(id, nodeId string, attachedVolume *VirtualMachineAttachedVolume) error
 	DetachVolume(machineId, node, attachmentDeviceName string) error
 	AttachInterface(id, node string, iface *VirtualMachineAttachedInterface) error
 	DetachInterface(id, node, mac string) error

@@ -39,28 +39,20 @@ func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.Sto
 
 	volume := &compute.Volume{}
 	volume.NodeId = nodeId
-	volume.Type = compute.NewVolumeType(virVolumeConfig.Type)
 	volume.Path = virVolumeConfig.Target.Path
 	volume.Pool = poolConfig.Name
-	volume.Format = compute.FormatUnknown
 	volume.Metadata = repo.metadata[virVolumeConfig.Target.Path]
 	volume.Size = ComputeSizeFromLibvirtSize(virVolumeConfig.Capacity.Unit, virVolumeConfig.Capacity.Value)
 
-	switch poolConfig.Type {
-	case "logical":
-		volume.Format = compute.FormatRaw
+	switch getVolTargetFormatType(virVolumeConfig) {
+	case "raw":
+		volume.Format = compute.VolumeFormatRaw
+	case "iso":
+		volume.Format = compute.VolumeFormatIso
+	case "qcow2":
+		volume.Format = compute.VolumeFormatQcow2
 	}
 
-	if virVolumeConfig.Target != nil && virVolumeConfig.Target.Format != nil {
-		switch virVolumeConfig.Target.Format.Type {
-		case "iso":
-			volume.Format = compute.FormatIso
-		case "qcow2":
-			volume.Format = compute.FormatQcow2
-		case "raw":
-			volume.Format = compute.FormatRaw
-		}
-	}
 	return volume, nil
 }
 
@@ -209,7 +201,7 @@ func (repo *VolumeRepository) Create(params compute.VolumeCreateParams) (*comput
 		Unit:  ComputeSizeUnitToLibvirtUnit(params.Size.Unit),
 		Value: params.Size.Value,
 	}
-	if params.Format == compute.FormatQcow2 {
+	if params.Format == compute.VolumeFormatQcow2 {
 		virVolumeConfig.Target = &libvirtxml.StorageVolumeTarget{
 			Format: &libvirtxml.StorageVolumeTargetFormat{
 				Type: "qcow2",
@@ -222,7 +214,7 @@ func (repo *VolumeRepository) Create(params compute.VolumeCreateParams) (*comput
 		return nil, util.NewError(err, "cannot marshal libvirt volume config")
 	}
 	virVolCreateFlags := libvirt.StorageVolCreateFlags(0)
-	if params.Format == compute.FormatQcow2 {
+	if params.Format == compute.VolumeFormatQcow2 {
 		virVolCreateFlags |= libvirt.STORAGE_VOL_CREATE_PREALLOC_METADATA
 	}
 
@@ -263,10 +255,6 @@ func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (*compute.
 		return nil, util.NewError(err, "cannot parse pool xml")
 	}
 
-	if virPoolConfig.Type == "logical" {
-		params.Format = compute.FormatRaw
-	}
-
 	virVolumeConfig := &libvirtxml.StorageVolume{}
 	virVolumeConfig.Capacity = &libvirtxml.StorageVolumeSize{
 		Unit:  ComputeSizeUnitToLibvirtUnit(params.NewSize.Unit),
@@ -275,13 +263,13 @@ func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (*compute.
 
 	virVolumeConfig.Name = params.NewName
 	switch params.Format {
-	case compute.FormatRaw:
+	case compute.VolumeFormatRaw:
 		virVolumeConfig.Target = &libvirtxml.StorageVolumeTarget{
 			Format: &libvirtxml.StorageVolumeTargetFormat{
 				Type: "raw",
 			},
 		}
-	case compute.FormatQcow2:
+	case compute.VolumeFormatQcow2:
 		virVolumeConfig.Target = &libvirtxml.StorageVolumeTarget{
 			Format: &libvirtxml.StorageVolumeTargetFormat{
 				Type: "qcow2",
@@ -295,7 +283,7 @@ func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (*compute.
 	}
 
 	virVolCreateFlags := libvirt.StorageVolCreateFlags(0)
-	if params.Format == compute.FormatQcow2 {
+	if params.Format == compute.VolumeFormatQcow2 {
 		virVolCreateFlags |= libvirt.STORAGE_VOL_CREATE_PREALLOC_METADATA
 	}
 
@@ -304,7 +292,7 @@ func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (*compute.
 		return nil, util.NewError(err, "cannot clone volume")
 	}
 
-	if params.Format == compute.FormatQcow2 && originalVirVolumeInfo.Capacity < params.NewSize.Bytes() {
+	if params.Format == compute.VolumeFormatQcow2 && originalVirVolumeInfo.Capacity < params.NewSize.Bytes() {
 		if err := virVolume.Resize(params.NewSize.Bytes(), 0); err != nil {
 			return nil, util.NewError(err, "cannot resize qcow2 image after clone")
 		}

@@ -5,6 +5,10 @@ import (
 	"strconv"
 	"strings"
 	"subuk/vmango/compute"
+	"subuk/vmango/util"
+
+	libvirt "github.com/libvirt/libvirt-go"
+	libvirtxml "github.com/libvirt/libvirt-go-xml"
 )
 
 func ComputeSizeUnitToLibvirtUnit(input compute.SizeUnit) string {
@@ -70,4 +74,27 @@ func ParseCpuAffinity(input string) []uint {
 
 	}
 	return cpus
+}
+
+func getVolumeConfigByPath(conn *libvirt.Connect, path string) (*libvirtxml.StorageVolume, error) {
+	virVolume, err := conn.LookupStorageVolByPath(path)
+	if err != nil {
+		return nil, util.NewError(err, "cannot lookup volume")
+	}
+	virVolumeXml, err := virVolume.GetXMLDesc(0)
+	if err != nil {
+		return nil, util.NewError(err, "cannot get volume xml")
+	}
+	virVolumeConfig := &libvirtxml.StorageVolume{}
+	if err := virVolumeConfig.Unmarshal(virVolumeXml); err != nil {
+		return nil, util.NewError(err, "cannot unmarshal volume config")
+	}
+	return virVolumeConfig, nil
+}
+
+func getVolTargetFormatType(vol *libvirtxml.StorageVolume) string {
+	if vol.Target != nil && vol.Target.Format != nil {
+		return vol.Target.Format.Type
+	}
+	return "raw"
 }

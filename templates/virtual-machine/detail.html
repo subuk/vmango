@@ -76,6 +76,7 @@
                       <thead>
                         <tr>
                           <th>Media</th>
+                          <th>Format</th>
                           <th>Device</th>
                           <th>Bus</th>
                           <th>Path</th>
@@ -86,6 +87,7 @@
                         {{ range .Vm.Volumes }}
                         <tr>
                           <td>{{ .DeviceType }}</td>
+                          <td>{{ (index $.AttachedVolumes .Path).Format }}</td>
                           <td>{{ .DeviceName }}</td>
                           <td>{{ .DeviceBus }}</td>
                           <td>{{ .Path }}</td>

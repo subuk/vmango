@@ -412,15 +412,13 @@ func (env *Environ) VirtualMachineAttachDiskFormProcess(rw http.ResponseWriter, 
 		http.Error(rw, "unknown device bus", http.StatusBadRequest)
 		return
 	}
-	params := compute.VolumeAttachmentParams{
-		MachineId:  urlvars["id"],
-		NodeId:     urlvars["node"],
+	attachedVolume := &compute.VirtualMachineAttachedVolume{
+		Path:       req.Form.Get("VolumePath"),
 		DeviceName: req.Form.Get("DeviceName"),
-		VolumePath: req.Form.Get("VolumePath"),
 		DeviceType: deviceType,
 		DeviceBus:  deviceBus,
 	}
-	if err := env.compute.VirtualMachineAttachVolume(params); err != nil {
+	if err := env.vms.AttachVolume(urlvars["id"], urlvars["node"], attachedVolume); err != nil {
 		env.error(rw, req, err, "cannot attach disk", http.StatusInternalServerError)
 		return
 	}

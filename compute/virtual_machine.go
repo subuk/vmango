@@ -88,8 +88,6 @@ func (vm *VirtualMachine) IsRunning() bool {
 type VirtualMachineAttachedVolume struct {
 	Path       string
 	DeviceName string
-	Type       VolumeType
-	Format     VolumeFormat
 	DeviceType DeviceType
 	DeviceBus  DeviceBus
 }

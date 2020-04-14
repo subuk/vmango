@@ -149,8 +149,6 @@ func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect,
 	attachedVolume := &compute.VirtualMachineAttachedVolume{
 		DeviceName: "hda",
 		DeviceBus:  compute.DeviceBusIde,
-		Type:       compute.VolumeTypeFile,
-		Format:     compute.FormatIso,
 		Path:       virVolumeConfig.Target.Path,
 		DeviceType: compute.DeviceTypeCdrom,
 	}
@@ -453,7 +451,7 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compu
 	return net.Dial("tcp", addr)
 }
 
-func (repo *VirtualMachineRepository) Create(id, nodeId string, arch compute.Arch, vcpus int, memory compute.Size, volumes []*compute.VirtualMachineAttachedVolume, interfaces []*compute.VirtualMachineAttachedInterface, config *compute.VirtualMachineConfig) (*compute.VirtualMachine, error) {
+func (repo *VirtualMachineRepository) Create(id, nodeId string, arch compute.Arch, vcpus int, memory compute.Size, attachedVolumes []*compute.VirtualMachineAttachedVolume, interfaces []*compute.VirtualMachineAttachedInterface, config *compute.VirtualMachineConfig) (*compute.VirtualMachine, error) {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire libvirt connection")
@@ -524,10 +522,18 @@ func (repo *VirtualMachineRepository) Create(id, nodeId string, arch compute.Arc
 	if err != nil {
 		return nil, util.NewError(err, "cannot generate config drive")
 	}
-	volumes = append(volumes, configVolume)
+	attachedVolumes = append(attachedVolumes, configVolume)
 
-	for _, volume := range volumes {
-		diskConfig := DomainDiskConfigFromVirtualMachineAttachedVolume(volume)
+	for _, attachedVolume := range attachedVolumes {
+		virVolumeConfig, err := getVolumeConfigByPath(conn, attachedVolume.Path)
+		if err != nil {
+			return nil, util.NewError(err, "cannot get volume config")
+		}
+		diskConfig := DomainDiskConfigFromVirtualMachineAttachedVolume(
+			attachedVolume,
+			getVolTargetFormatType(virVolumeConfig),
+			virVolumeConfig.Type,
+		)
 		virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, *diskConfig)
 	}
 	for _, attachedIface := range interfaces {
@@ -806,15 +812,25 @@ func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVo
 		return util.NewError(err, "cannot parse domain xml")
 	}
 
-	discConfig := DomainDiskConfigFromVirtualMachineAttachedVolume(attachedVolume)
-	virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, *discConfig)
+	virVolumeConfig, err := getVolumeConfigByPath(conn, attachedVolume.Path)
+	if err != nil {
+		return util.NewError(err, "cannot get volume config")
+	}
+
+	diskConfig := DomainDiskConfigFromVirtualMachineAttachedVolume(
+		attachedVolume,
+		getVolTargetFormatType(virVolumeConfig),
+		virVolumeConfig.Type,
+	)
+	virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, *diskConfig)
 
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {
 		return util.NewError(err, "cannot create domain xml")
 	}
 	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
-		return util.NewError(err, "cannot update domain xml")
+		fmt.Println(virDomainXml)
+		return util.NewError(err, "cannot update domain")
 	}
 	return nil
 }

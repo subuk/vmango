@@ -8,20 +8,15 @@ import (
 	libvirtxml "github.com/libvirt/libvirt-go-xml"
 )
 
-func DomainDiskConfigFromVirtualMachineAttachedVolume(volume *compute.VirtualMachineAttachedVolume) *libvirtxml.DomainDisk {
-	diskConfig := &libvirtxml.DomainDisk{
-		Driver: &libvirtxml.DomainDiskDriver{Name: "qemu"},
-		Target: &libvirtxml.DomainDiskTarget{},
+func DomainDiskConfigFromVirtualMachineAttachedVolume(volume *compute.VirtualMachineAttachedVolume, volTargetFormatType, volumeType string) *libvirtxml.DomainDisk {
+	diskDriverType := "raw"
+	if volTargetFormatType == "qcow2" {
+		diskDriverType = "qcow2"
 	}
-	switch volume.Format {
-	default:
-		panic(fmt.Errorf("unsupported volume format '%s'", volume.Format))
-	case compute.FormatQcow2:
-		diskConfig.Driver.Type = "qcow2"
-	case compute.FormatRaw:
-		diskConfig.Driver.Type = "raw"
-	case compute.FormatIso:
-		diskConfig.Driver.Type = "raw"
+
+	diskConfig := &libvirtxml.DomainDisk{
+		Driver: &libvirtxml.DomainDiskDriver{Name: "qemu", Type: diskDriverType},
+		Target: &libvirtxml.DomainDiskTarget{},
 	}
 	switch volume.DeviceType {
 	default:
@@ -36,18 +31,19 @@ func DomainDiskConfigFromVirtualMachineAttachedVolume(volume *compute.VirtualMac
 		diskConfig.Target.Bus = volume.DeviceBus.String()
 		diskConfig.Target.Dev = volume.DeviceName
 	}
-	switch volume.Type {
+	switch volumeType {
 	default:
-		panic(fmt.Errorf("unknown volume type '%s'", volume.Type))
-	case compute.VolumeTypeFile:
+		panic(fmt.Errorf("unknown volume type '%s'", volumeType))
+	case "file":
 		diskConfig.Source = &libvirtxml.DomainDiskSource{
 			File: &libvirtxml.DomainDiskSourceFile{File: volume.Path},
 		}
-	case compute.VolumeTypeBlock:
+	case "block":
 		diskConfig.Source = &libvirtxml.DomainDiskSource{
 			Block: &libvirtxml.DomainDiskSourceBlock{Dev: volume.Path},
 		}
 	}
+
 	return diskConfig
 }
 
@@ -64,17 +60,12 @@ func VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig libvirtxml.Doma
 	case "cdrom":
 		volume.DeviceType = compute.DeviceTypeCdrom
 	}
-	if diskConfig.Driver != nil {
-		volume.Format = compute.NewVolumeFormat(diskConfig.Driver.Type)
-	}
-	volume.Type = compute.VolumeTypeUnknown
+
 	if diskConfig.Source != nil {
 		if diskConfig.Source.File != nil {
-			volume.Type = compute.VolumeTypeFile
 			volume.Path = diskConfig.Source.File.File
 		}
 		if diskConfig.Source.Block != nil {
-			volume.Type = compute.VolumeTypeBlock
 			volume.Path = diskConfig.Source.Block.Dev
 		}
 	}

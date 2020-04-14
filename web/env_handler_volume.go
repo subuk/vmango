@@ -9,7 +9,10 @@ import (
 	"github.com/gorilla/mux"
 )
 
-var UIVolumeFormats = []compute.VolumeFormat{compute.FormatQcow2, compute.FormatRaw}
+var UIVolumeFormats = []compute.VolumeFormat{
+	compute.VolumeFormatQcow2,
+	compute.VolumeFormatRaw,
+}
 
 func (env *Environ) VolumeList(rw http.ResponseWriter, req *http.Request) {
 	selectedNodeId := req.URL.Query().Get("node")

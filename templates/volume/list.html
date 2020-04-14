@@ -40,7 +40,7 @@
               </div>
               <div class="col-md-2">
                 <div class="input-group">
-                  <input required="required" class="form-control" name="SizeValue" min="1" id="Size" type="number">
+                  <input required="required" class="form-control" name="SizeValue" min="1" id="Size" value="10" type="number">
                   <div class="input-group-append">
                     <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="SizeUnit" class="form-control">
                       <option value="B">B</option>
@@ -74,7 +74,6 @@
                   <tr>
                     <th>Path</th>
                     <th>Node</th>
-                    <th>Type</th>
                     <th>Format</th>
                     <th>Size</th>
                     <th>Pool</th>
@@ -87,7 +86,6 @@
                   <tr>
                     <td>{{ .Path }}</td>
                     <td>{{ .NodeId }}</td>
-                    <td>{{ .Type }}</td>
                     <td>{{ .Format }}</td>
                     <td>{{ .Size.Bytes | HumanizeBytes }}</td>
                     <td>{{ .Pool }}</td>

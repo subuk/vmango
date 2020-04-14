@@ -3,21 +3,21 @@ package compute
 type VolumeFormat int
 
 const (
-	FormatUnknown = VolumeFormat(0)
-	FormatRaw     = VolumeFormat(1)
-	FormatQcow2   = VolumeFormat(2)
-	FormatIso     = VolumeFormat(3)
+	VolumeFormatUnknown = VolumeFormat(0)
+	VolumeFormatRaw     = VolumeFormat(1)
+	VolumeFormatQcow2   = VolumeFormat(2)
+	VolumeFormatIso     = VolumeFormat(3)
 )
 
 func (format VolumeFormat) String() string {
 	switch format {
 	default:
 		return "unknown"
-	case FormatRaw:
+	case VolumeFormatRaw:
 		return "raw"
-	case FormatQcow2:
+	case VolumeFormatQcow2:
 		return "qcow2"
-	case FormatIso:
+	case VolumeFormatIso:
 		return "iso"
 	}
 }
@@ -25,12 +25,12 @@ func (format VolumeFormat) String() string {
 func NewVolumeFormat(input string) VolumeFormat {
 	switch input {
 	default:
-		return FormatUnknown
+		return VolumeFormatUnknown
 	case "raw":
-		return FormatRaw
+		return VolumeFormatRaw
 	case "qcow2":
-		return FormatQcow2
+		return VolumeFormatQcow2
 	case "iso":
-		return FormatIso
+		return VolumeFormatIso
 	}
 }

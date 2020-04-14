@@ -100,9 +100,7 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 		}
 		volumes = append(volumes, &VirtualMachineAttachedVolume{
 			DeviceName: "vda",
-			Type:       volume.Type,
 			Path:       volume.Path,
-			Format:     volume.Format,
 			DeviceType: DeviceTypeDisk,
 			DeviceBus:  DeviceBusVirtio,
 		})
@@ -167,31 +165,6 @@ func (service *Service) VirtualMachineDelete(id, node string, deleteVolumes bool
 	return nil
 }
 
-type VolumeAttachmentParams struct {
-	MachineId  string
-	NodeId     string
-	DeviceName string
-	VolumePath string
-	DeviceType DeviceType
-	DeviceBus  DeviceBus
-}
-
-func (service *Service) VirtualMachineAttachVolume(params VolumeAttachmentParams) error {
-	vol, err := service.vol.Get(params.VolumePath, params.NodeId)
-	if err != nil {
-		return util.NewError(err, "cannot lookup volume")
-	}
-	attachedVolume := &VirtualMachineAttachedVolume{
-		Path:       params.VolumePath,
-		Type:       vol.Type,
-		Format:     vol.Format,
-		DeviceName: params.DeviceName,
-		DeviceType: params.DeviceType,
-		DeviceBus:  params.DeviceBus,
-	}
-	return service.virt.AttachVolume(params.MachineId, params.NodeId, attachedVolume)
-}
-
 func (service *Service) ImageList(options VolumeListOptions) ([]*Volume, error) {
 	volumes, err := service.vol.List(options)
 	if err != nil {
@@ -200,7 +173,7 @@ func (service *Service) ImageList(options VolumeListOptions) ([]*Volume, error) 
 	annotatedVolumes := []*Volume{}
 	detachedVolumes := []*Volume{}
 	for _, volume := range volumes {
-		if volume.Format == FormatIso {
+		if volume.Format == VolumeFormatIso {
 			continue
 		}
 		if volume.AttachedTo != "" {
