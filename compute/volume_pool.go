@@ -1,7 +1,7 @@
 package compute
 
 type VolumePoolRepository interface {
-	List() ([]*VolumePool, error)
+	List(options VolumePoolListOptions) ([]*VolumePool, error)
 }
 
 type VolumePool struct {

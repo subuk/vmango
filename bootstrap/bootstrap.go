@@ -33,32 +33,47 @@ func Web(configFilename string) {
 		}
 	}
 
-	libvirtConfigDriveWriteFormat := configdrive.NewFormat(cfg.LibvirtConfigDriveWriteFormat)
-	if libvirtConfigDriveWriteFormat == configdrive.FormatUnknown {
-		logger.Error().
-			Str("format", cfg.LibvirtConfigDriveWriteFormat).
-			Strs("allowed", configdrive.AllFormatsStrings()).
-			Msg("unknown libvirt configdrive write format")
-		os.Exit(1)
-	}
-
-	connectionPool := libvirt.NewConnectionPool(cfg.LibvirtUri, logger.With().Str("component", "libvirt-connection-pool").Logger())
-	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool, cfg.LibvirtConfigDrivePool, cfg.LibvirtConfigDriveSuffix, libvirtConfigDriveWriteFormat, logger.With().Str("component", "vm-repository").Logger())
-	volumeRepo := libvirt.NewVolumeRepository(connectionPool, volumeMetadata)
-	volumePoolRepo := libvirt.NewVolumePoolRepository(connectionPool)
-	hostInfoRepo := libvirt.NewHostInfoRepository(connectionPool)
 	keyRepo, err := filesystem.NewKeyRepository(util.ExpandHomeDir(cfg.KeyFile), logger.With().Str("component", "key-repository").Logger())
 	if err != nil {
 		logger.Error().Err(err).Msg("cannot initialize key storage")
 		os.Exit(1)
 	}
-	netRepo := libvirt.NewNetworkRepository(connectionPool, cfg.Bridges)
 
 	epub := filesystem.NewScriptedComputeEventBroker(logger.With().Str("component", "compute-event-broker").Logger())
 	for _, sub := range cfg.Subscribes {
 		epub.Subscribe(sub.Event, sub.Script, sub.Mandatory)
 	}
-	compute := libcompute.New(epub, machineRepo, volumeRepo, volumePoolRepo, hostInfoRepo, keyRepo, netRepo)
+
+	nodeUri := map[string]string{}
+	nodeOrder := []string{}
+	settings := map[string]*libvirt.VirtualMachineRepositoryNodeSettings{}
+	for _, c := range cfg.Libvirts {
+		nodeUri[c.Name] = c.Uri
+		nodeOrder = append(nodeOrder, c.Name)
+		configDriveWriteFormat := configdrive.NewFormat(c.ConfigDriveWriteFormat)
+		if configDriveWriteFormat == configdrive.FormatUnknown {
+			logger.Error().
+				Str("format", c.ConfigDriveWriteFormat).
+				Strs("allowed", configdrive.AllFormatsStrings()).
+				Msg("unknown libvirt configdrive write format")
+			os.Exit(1)
+		}
+		settings[c.Name] = &libvirt.VirtualMachineRepositoryNodeSettings{
+			ConfigDriveVolumePool:  c.ConfigDrivePool,
+			ConfigDriveSuffix:      c.ConfigDriveSuffix,
+			ConfigDriveWriteFormat: configDriveWriteFormat,
+		}
+
+	}
+	connectionPool := libvirt.NewConnectionPool(nodeUri, nodeOrder, logger.With().Str("component", "libvirt-connection-pool").Logger())
+
+	machineRepo := libvirt.NewVirtualMachineRepository(connectionPool, settings, logger.With().Str("component", "vm-repository").Logger())
+	volumeRepo := libvirt.NewVolumeRepository(connectionPool, volumeMetadata)
+	volumePoolRepo := libvirt.NewVolumePoolRepository(connectionPool)
+	nodeRepo := libvirt.NewNodeRepository(connectionPool)
+	netRepo := libvirt.NewNetworkRepository(connectionPool)
+
+	compute := libcompute.New(epub, machineRepo, volumeRepo, volumePoolRepo, nodeRepo, keyRepo, netRepo)
 
 	webenv := web.New(cfg, logger, compute)
 	server := http.Server{

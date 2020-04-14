@@ -53,7 +53,7 @@
     <!-- this is included as a normal file in order to catch script-loading errors as well -->
     <script src="{{ Static "noVNC-1.1.0/app/error-handler.js" }}"></script>
     <script>
-      window.VMANGO_NOVNC_path = "{{ Url "virtual-machine-vnc-ws" "id" .Vm.Id }}";
+      window.VMANGO_NOVNC_path = "{{ Url "virtual-machine-vnc-ws" "id" .Vm.Id "node" .Vm.NodeId }}";
       window.VMANGO_NOVNC_APP_LOCALE = "/static/noVNC-1.1.0/app/locale/";
 
     </script>
@@ -242,7 +242,7 @@
                                     </li>
                                     <li>
                                         <label for="noVNC_setting_path">Path:</label>
-                                        <input id="noVNC_setting_path" type="text" value="{{ Url "virtual-machine-vnc-ws" "id" .Vm.Id }}">
+                                        <input id="noVNC_setting_path" type="text" value="{{ Url "virtual-machine-vnc-ws" "id" .Vm.Id "node" .Vm.NodeId }}">
                                     </li>
                                 </ul></div>
                             </li>

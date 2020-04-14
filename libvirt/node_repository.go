@@ -1,26 +1,48 @@
 package libvirt
 
 import (
+	"encoding/xml"
 	"subuk/vmango/compute"
 	"subuk/vmango/util"
 
 	libvirtxml "github.com/libvirt/libvirt-go-xml"
 )
 
-type HostInfoRepository struct {
+type NodeRepository struct {
 	pool *ConnectionPool
 }
 
-func NewHostInfoRepository(pool *ConnectionPool) *HostInfoRepository {
-	return &HostInfoRepository{pool: pool}
+func NewNodeRepository(pool *ConnectionPool) *NodeRepository {
+	return &NodeRepository{pool: pool}
 }
 
-func (repo *HostInfoRepository) Get() (*compute.HostInfo, error) {
-	conn, err := repo.pool.Acquire()
+func (repo *NodeRepository) List() ([]*compute.Node, error) {
+	nodes := []*compute.Node{}
+	for _, node := range repo.pool.Nodes() {
+		node, err := repo.Get(node)
+		if err != nil {
+			return nil, util.NewError(err, "cannot get node")
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes, nil
+}
+
+func (repo *NodeRepository) Get(nodeId string) (*compute.Node, error) {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire libvirt connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
+
+	sysinfoXml, err := conn.GetSysinfo(0)
+	if err != nil {
+		return nil, util.NewError(err, "cannot get sysinfo")
+	}
+	sysinfoConfig := &libvirtxml.DomainSysInfo{}
+	if err := xml.Unmarshal([]byte(sysinfoXml), sysinfoConfig); err != nil {
+		return nil, util.NewError(err, "cannot parse sysinfo")
+	}
 
 	capsXml, err := conn.GetCapabilities()
 	if err != nil {
@@ -34,30 +56,38 @@ func (repo *HostInfoRepository) Get() (*compute.HostInfo, error) {
 	if err != nil {
 		return nil, util.NewError(err, "cannot get hostname")
 	}
-	hostInfo := &compute.HostInfo{
+	node := &compute.Node{
+		Id:       nodeId,
 		Hostname: hostname,
-		Numas:    map[int]compute.HostInfoNuma{},
+		Numas:    map[int]compute.NodeNuma{},
+	}
+	if len(sysinfoConfig.Processor) > 0 {
+		for _, entry := range sysinfoConfig.Processor[0].Entry {
+			if entry.Name == "version" {
+				node.CpuInfo = entry.Value
+			}
+		}
 	}
 	if capsConfig.Host.IOMMU != nil {
-		hostInfo.Iommu = capsConfig.Host.IOMMU.Support == "yes"
+		node.Iommu = capsConfig.Host.IOMMU.Support == "yes"
 	}
 	if capsConfig.Host.CPU != nil {
-		hostInfo.CpuVendor = capsConfig.Host.CPU.Vendor
-		hostInfo.CpuModel = capsConfig.Host.CPU.Model
+		node.CpuVendor = capsConfig.Host.CPU.Vendor
+		node.CpuModel = capsConfig.Host.CPU.Model
 	}
 	switch capsConfig.Host.CPU.Arch {
 	default:
-		hostInfo.CpuArch = compute.ArchUnknown
+		node.CpuArch = compute.ArchUnknown
 	case "x86_64":
-		hostInfo.CpuArch = compute.ArchAmd64
+		node.CpuArch = compute.ArchAmd64
 	}
 	if capsConfig.Host.NUMA != nil && capsConfig.Host.NUMA.Cells != nil {
 		for _, numaInfo := range capsConfig.Host.NUMA.Cells.Cells {
-			var numa compute.HostInfoNuma
-			if existingNuma, exists := hostInfo.Numas[numaInfo.ID]; exists {
+			var numa compute.NodeNuma
+			if existingNuma, exists := node.Numas[numaInfo.ID]; exists {
 				numa = existingNuma
 			} else {
-				numa = compute.HostInfoNuma{Cores: map[int]compute.HostInfoNumaCore{}}
+				numa = compute.NodeNuma{Cores: map[int]compute.NodeNumaCore{}}
 			}
 			if numaInfo.Memory != nil {
 				numa.Memory = ComputeSizeFromLibvirtSize(numaInfo.Memory.Unit, numaInfo.Memory.Size)
@@ -84,8 +114,8 @@ func (repo *HostInfoRepository) Get() (*compute.HostInfo, error) {
 					}
 				}
 			}
-			hostInfo.Numas[numaInfo.ID] = numa
+			node.Numas[numaInfo.ID] = numa
 		}
 	}
-	return hostInfo, nil
+	return node, nil
 }

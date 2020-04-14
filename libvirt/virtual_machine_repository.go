@@ -23,38 +23,37 @@ import (
 
 const ConfigDriveMaxSize = 5 * 1024 * 1024
 
+type VirtualMachineRepositoryNodeSettings struct {
+	ConfigDriveVolumePool  string
+	ConfigDriveSuffix      string
+	ConfigDriveWriteFormat configdrive.Format
+}
+
 type VirtualMachineRepository struct {
-	pool                   *ConnectionPool
-	logger                 zerolog.Logger
-	configDriveVolumePool  string
-	configDriveSuffix      string
-	configDriveWriteFormat configdrive.Format
-	configCache            map[string]*compute.VirtualMachineConfig
-	configCacheMu          *sync.Mutex
+	pool          *ConnectionPool
+	logger        zerolog.Logger
+	settings      map[string]*VirtualMachineRepositoryNodeSettings
+	configCache   map[string]*compute.VirtualMachineConfig
+	configCacheMu *sync.Mutex
 }
 
-func NewVirtualMachineRepository(pool *ConnectionPool, configDriveVolumePool, configDriveSuffix string, configDriveWriteFormat configdrive.Format, logger zerolog.Logger) *VirtualMachineRepository {
-	if configDriveSuffix == "" {
-		panic("No config drive suffix specified")
-	}
+func NewVirtualMachineRepository(pool *ConnectionPool, settings map[string]*VirtualMachineRepositoryNodeSettings, logger zerolog.Logger) *VirtualMachineRepository {
 	return &VirtualMachineRepository{
-		pool:                   pool,
-		logger:                 logger,
-		configDriveVolumePool:  configDriveVolumePool,
-		configDriveSuffix:      configDriveSuffix,
-		configDriveWriteFormat: configDriveWriteFormat,
-		configCache:            map[string]*compute.VirtualMachineConfig{},
-		configCacheMu:          &sync.Mutex{},
+		pool:          pool,
+		settings:      settings,
+		logger:        logger,
+		configCache:   map[string]*compute.VirtualMachineConfig{},
+		configCacheMu: &sync.Mutex{},
 	}
 }
 
-func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect, domainConfig *libvirtxml.Domain, config *compute.VirtualMachineConfig) (*compute.VirtualMachineAttachedVolume, error) {
-	virPool, err := conn.LookupStoragePoolByName(repo.configDriveVolumePool)
+func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect, poolName string, domainConfig *libvirtxml.Domain, config *compute.VirtualMachineConfig, suffix string, format configdrive.Format) (*compute.VirtualMachineAttachedVolume, error) {
+	virPool, err := conn.LookupStoragePoolByName(poolName)
 	if err != nil {
 		return nil, util.NewError(err, "cannot lookup configdrive storage pool")
 	}
 
-	configVolumeName := strings.Replace(domainConfig.Name, "-", "_", -1) + repo.configDriveSuffix
+	configVolumeName := strings.Replace(domainConfig.Name, "-", "_", -1) + suffix
 	if existingVolume, err := virPool.LookupStorageVolByName(configVolumeName); err == nil && existingVolume != nil {
 		existingVolumeInfo, err := existingVolume.GetInfo()
 		if err == nil && existingVolumeInfo.Capacity <= 2*1024*1024 {
@@ -65,9 +64,9 @@ func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect,
 	}
 
 	var data configdrive.Data
-	switch repo.configDriveWriteFormat {
+	switch format {
 	default:
-		panic(fmt.Errorf("unknown configdrive write format '%s'", repo.configDriveWriteFormat))
+		panic(fmt.Errorf("unknown configdrive write format '%s'", format))
 	case configdrive.FormatOpenstack:
 		osData := &configdrive.Openstack{
 			Userdata: config.Userdata,
@@ -206,7 +205,7 @@ func (repo *VirtualMachineRepository) parseConfigDrive(conn *libvirt.Connect, vo
 	return config, nil
 }
 
-func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, domain *libvirt.Domain) (*compute.VirtualMachine, error) {
+func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId string, domain *libvirt.Domain, cdSuffix string) (*compute.VirtualMachine, error) {
 	domainXml, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
 	if err != nil {
 		return nil, util.NewError(err, "cannot get domain xml")
@@ -229,6 +228,8 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, domain *
 		return nil, util.NewError(err, "cannot get domain autostart value")
 	}
 	vm.Autostart = autostart
+
+	vm.NodeId = nodeId
 
 	if vm.IsRunning() && len(vm.Interfaces) > 0 {
 		virDomainIfaces := []libvirt.DomainInterface{}
@@ -268,7 +269,7 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, domain *
 		if volume.DeviceType != compute.DeviceTypeCdrom {
 			continue
 		}
-		if !strings.HasSuffix(volume.Path, repo.configDriveSuffix) {
+		if !strings.HasSuffix(volume.Path, cdSuffix) {
 			continue
 		}
 		if config := repo.configCache[volume.Path]; config != nil {
@@ -338,12 +339,12 @@ func (r *virStreamReadWriteCloser) Close() error {
 	return r.Stream.Finish()
 }
 
-func (repo *VirtualMachineRepository) GetConsoleStream(id string) (compute.VirtualMachineConsoleStream, error) {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) GetConsoleStream(id, nodeId string) (compute.VirtualMachineConsoleStream, error) {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire libvirt connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
@@ -378,12 +379,12 @@ func (w *cmdIoWrapper) Close() error {
 
 }
 
-func (repo *VirtualMachineRepository) GetGraphicStream(id string) (compute.VirtualMachineGraphicStream, error) {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compute.VirtualMachineGraphicStream, error) {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire libvirt connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	connUriRaw, err := conn.GetURI()
 	if err != nil {
@@ -462,12 +463,12 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id string) (compute.Virtu
 	return net.Dial("tcp", addr)
 }
 
-func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus int, memory compute.Size, volumes []*compute.VirtualMachineAttachedVolume, interfaces []*compute.VirtualMachineAttachedInterface, config *compute.VirtualMachineConfig) (*compute.VirtualMachine, error) {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) Create(id, nodeId string, arch compute.Arch, vcpus int, memory compute.Size, volumes []*compute.VirtualMachineAttachedVolume, interfaces []*compute.VirtualMachineAttachedInterface, config *compute.VirtualMachineConfig) (*compute.VirtualMachine, error) {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire libvirt connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	libvirtArch := ""
 	switch arch {
@@ -528,7 +529,8 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 		Protocol: &libvirtxml.DomainChardevProtocol{Type: "unix"},
 		Target:   &libvirtxml.DomainChannelTarget{VirtIO: &libvirtxml.DomainChannelTargetVirtIO{Name: "org.qemu.guest_agent.0"}},
 	})
-	configVolume, err := repo.generateConfigDrive(conn, virDomainConfig, config)
+	settings := repo.settings[nodeId]
+	configVolume, err := repo.generateConfigDrive(conn, settings.ConfigDriveVolumePool, virDomainConfig, config, settings.ConfigDriveSuffix, settings.ConfigDriveWriteFormat)
 	if err != nil {
 		return nil, util.NewError(err, "cannot generate config drive")
 	}
@@ -552,19 +554,19 @@ func (repo *VirtualMachineRepository) Create(id string, arch compute.Arch, vcpus
 		fmt.Println(virDomainXml)
 		return nil, util.NewError(err, "cannot define new domain")
 	}
-	vm, err := repo.domainToVm(conn, virDomain)
+	vm, err := repo.domainToVm(conn, nodeId, virDomain, settings.ConfigDriveSuffix)
 	if err != nil {
 		return nil, util.NewError(err, "cannot parse domain to vm")
 	}
 	return vm, nil
 }
 
-func (repo *VirtualMachineRepository) Update(id string, params compute.VirtualMachineUpdateParams) error {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) Update(id, nodeId string, params compute.VirtualMachineUpdateParams) error {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return util.NewError(err, "cannot acquire libvirt connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
@@ -670,12 +672,12 @@ func (repo *VirtualMachineRepository) Update(id string, params compute.VirtualMa
 	return nil
 }
 
-func (repo *VirtualMachineRepository) Delete(id string) error {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) Delete(id, nodeId string) error {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return util.NewError(err, "cannot acquire libvirt connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
@@ -705,48 +707,51 @@ func (repo *VirtualMachineRepository) Delete(id string) error {
 }
 
 func (repo *VirtualMachineRepository) List() ([]*compute.VirtualMachine, error) {
-	conn, err := repo.pool.Acquire()
-	if err != nil {
-		return nil, util.NewError(err, "cannot acquire libvirt connection")
-	}
-	defer repo.pool.Release(conn)
-
 	vms := []*compute.VirtualMachine{}
-	domains, err := conn.ListAllDomains(0)
-	for _, domain := range domains {
-		vm, err := repo.domainToVm(conn, &domain)
+	for _, nodeId := range repo.pool.Nodes() {
+		conn, err := repo.pool.Acquire(nodeId)
 		if err != nil {
-			return nil, util.NewError(err, "cannot convert libvirt domain to vm")
+			return nil, util.NewError(err, "cannot acquire libvirt connection")
 		}
-		vms = append(vms, vm)
+		defer repo.pool.Release(nodeId)
+		settings := repo.settings[nodeId]
+		domains, err := conn.ListAllDomains(0)
+		for _, domain := range domains {
+			vm, err := repo.domainToVm(conn, nodeId, &domain, settings.ConfigDriveSuffix)
+			if err != nil {
+				return nil, util.NewError(err, "cannot convert libvirt domain to vm")
+			}
+			vms = append(vms, vm)
+		}
 	}
 	return vms, nil
 }
 
-func (repo *VirtualMachineRepository) Get(id string) (*compute.VirtualMachine, error) {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) Get(id, nodeId string) (*compute.VirtualMachine, error) {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
+	settings := repo.settings[nodeId]
 	domain, err := conn.LookupDomainByName(id)
 	if err != nil {
 		return nil, util.NewError(err, "failed to lookup vm")
 	}
-	vm, err := repo.domainToVm(conn, domain)
+	vm, err := repo.domainToVm(conn, nodeId, domain, settings.ConfigDriveSuffix)
 	if err != nil {
 		return nil, util.NewError(err, "cannot convert libvirt domain to vm")
 	}
 	return vm, nil
 }
 
-func (repo *VirtualMachineRepository) Poweroff(id string) error {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) Poweroff(id, nodeId string) error {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	domain, err := conn.LookupDomainByName(id)
 	if err != nil {
@@ -755,12 +760,12 @@ func (repo *VirtualMachineRepository) Poweroff(id string) error {
 	return domain.Destroy()
 }
 
-func (repo *VirtualMachineRepository) Reboot(id string) error {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) Reboot(id, nodeId string) error {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	domain, err := conn.LookupDomainByName(id)
 	if err != nil {
@@ -769,12 +774,12 @@ func (repo *VirtualMachineRepository) Reboot(id string) error {
 	return domain.Reboot(libvirt.DOMAIN_REBOOT_DEFAULT)
 }
 
-func (repo *VirtualMachineRepository) Start(id string) error {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) Start(id, nodeId string) error {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	domain, err := conn.LookupDomainByName(id)
 	if err != nil {
@@ -783,12 +788,12 @@ func (repo *VirtualMachineRepository) Start(id string) error {
 	return domain.Create()
 }
 
-func (repo *VirtualMachineRepository) AttachVolume(id string, attachedVolume *compute.VirtualMachineAttachedVolume) error {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVolume *compute.VirtualMachineAttachedVolume) error {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
@@ -824,12 +829,12 @@ func (repo *VirtualMachineRepository) AttachVolume(id string, attachedVolume *co
 	return nil
 }
 
-func (repo *VirtualMachineRepository) DetachVolume(id, needlePath string) error {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) DetachVolume(id, nodeId, needlePath string) error {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
@@ -878,12 +883,12 @@ func (repo *VirtualMachineRepository) DetachVolume(id, needlePath string) error 
 	return nil
 }
 
-func (repo *VirtualMachineRepository) AttachInterface(id string, attachedIface *compute.VirtualMachineAttachedInterface) error {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) AttachInterface(id, nodeId string, attachedIface *compute.VirtualMachineAttachedInterface) error {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
@@ -917,12 +922,12 @@ func (repo *VirtualMachineRepository) AttachInterface(id string, attachedIface *
 	return nil
 }
 
-func (repo *VirtualMachineRepository) DetachInterface(id, needleMac string) error {
-	conn, err := repo.pool.Acquire()
+func (repo *VirtualMachineRepository) DetachInterface(id, nodeId, needleMac string) error {
+	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {

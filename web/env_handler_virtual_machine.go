@@ -46,17 +46,17 @@ var InterfaceModels = []string{
 
 func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
-	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
+	vm, err := env.compute.VirtualMachineDetail(urlvars["id"], urlvars["node"])
 	if err != nil {
 		env.error(rw, req, err, "vm get failed", http.StatusInternalServerError)
 		return
 	}
-	volumes, err := env.compute.VolumeList()
+	volumes, err := env.compute.VolumeList(compute.VolumeListOptions{NodeId: vm.NodeId})
 	if err != nil {
 		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
 		return
 	}
-	networks, err := env.compute.NetworkList()
+	networks, err := env.compute.NetworkList(compute.NetworkListOptions{NodeId: vm.NodeId})
 	if err != nil {
 		env.error(rw, req, err, "cannot list networks", http.StatusInternalServerError)
 		return
@@ -96,7 +96,7 @@ func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Reque
 func (env *Environ) VirtualMachineStateSetFormShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	action := urlvars["action"]
-	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
+	vm, err := env.compute.VirtualMachineDetail(urlvars["id"], urlvars["node"])
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
@@ -115,12 +115,18 @@ func (env *Environ) VirtualMachineStateSetFormShow(rw http.ResponseWriter, req *
 }
 
 func (env *Environ) VirtualMachineStateSetFormProcess(rw http.ResponseWriter, req *http.Request) {
+	env.logger.Debug().
+		Str("method", req.Method).
+		Msg("Requesting state change")
 	urlvars := mux.Vars(req)
-	if err := env.compute.VirtualMachineAction(urlvars["id"], urlvars["action"]); err != nil {
+	if err := env.compute.VirtualMachineAction(urlvars["id"], urlvars["node"], urlvars["action"]); err != nil {
 		http.Error(rw, fmt.Sprintf("failed to %s machine: %s", urlvars["action"], err), http.StatusInternalServerError)
 		return
 	}
-	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
+	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"], "node", urlvars["node"])
+	env.logger.Debug().
+		Str("url", redirectUrl.Path).
+		Msg("Redirecting to new url after action")
 	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
 }
 
@@ -129,6 +135,8 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		Title    string
 		User     *User
 		Request  *http.Request
+		NodeId   string
+		Nodes    []*compute.Node
 		Volumes  []*compute.Volume
 		Images   []*compute.Volume
 		Pools    []*compute.VolumePool
@@ -142,14 +150,34 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		Arches:  []compute.Arch{compute.ArchAmd64},
 	}
 
-	images, err := env.compute.ImageList()
+	nodes, err := env.compute.NodeList()
+	if err != nil {
+		env.error(rw, req, err, "cannot list networks", http.StatusInternalServerError)
+		return
+	}
+	data.Nodes = nodes
+
+	var selectedNode *compute.Node
+	selectedNodeId := req.URL.Query().Get("node")
+	for _, node := range nodes {
+		if node.Id == selectedNodeId {
+			selectedNode = node
+			break
+		}
+	}
+	if selectedNode == nil {
+		selectedNode = nodes[0]
+	}
+	data.NodeId = selectedNode.Id
+
+	images, err := env.compute.ImageList(compute.VolumeListOptions{NodeId: selectedNode.Id})
 	if err != nil {
 		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
 		return
 	}
 	data.Images = images
 
-	pools, err := env.compute.VolumePoolList()
+	pools, err := env.compute.VolumePoolList(compute.VolumePoolListOptions{NodeId: selectedNode.Id})
 	if err != nil {
 		env.error(rw, req, err, "cannot list pools", http.StatusInternalServerError)
 		return
@@ -163,7 +191,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 	}
 	data.Keys = keys
 
-	networks, err := env.compute.NetworkList()
+	networks, err := env.compute.NetworkList(compute.NetworkListOptions{NodeId: selectedNode.Id})
 	if err != nil {
 		env.error(rw, req, err, "cannot list networks", http.StatusInternalServerError)
 		return
@@ -231,6 +259,7 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 	}
 	params := compute.VirtualMachineCreateParams{
 		Id:         req.Form.Get("Name"),
+		NodeId:     req.Form.Get("NodeId"),
 		VCpus:      int(vcpus),
 		Arch:       req.Form.Get("Arch"),
 		Memory:     compute.NewSize(memoryValue, memoryUnit),
@@ -245,22 +274,22 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 	}
 	vm, err := env.compute.VirtualMachineCreate(params)
 	if err != nil {
-		env.error(rw, req, err, "cannot fetch create vm", http.StatusInternalServerError)
+		env.error(rw, req, err, "cannot create vm", http.StatusInternalServerError)
 		return
 	}
 
 	redirectPath := ""
 	if params.Start {
-		redirectPath = env.url("virtual-machine-console-show", "id", vm.Id).Path
+		redirectPath = env.url("virtual-machine-console-show", "id", vm.Id, "node", vm.NodeId).Path
 	} else {
-		redirectPath = env.url("virtual-machine-detail", "id", vm.Id).Path
+		redirectPath = env.url("virtual-machine-detail", "id", vm.Id, "node", vm.NodeId).Path
 	}
 	http.Redirect(rw, req, redirectPath, http.StatusFound)
 }
 
 func (env *Environ) VirtualMachineDeleteFormShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
-	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
+	vm, err := env.compute.VirtualMachineDetail(urlvars["id"], urlvars["node"])
 	if err != nil {
 		env.error(rw, req, err, "virtual-machine get failed", http.StatusInternalServerError)
 		return
@@ -280,7 +309,7 @@ func (env *Environ) VirtualMachineDeleteFormShow(rw http.ResponseWriter, req *ht
 func (env *Environ) VirtualMachineDeleteFormProcess(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	deleteVolumes := req.FormValue("DeleteVolumes") == "true"
-	if err := env.compute.VirtualMachineDelete(urlvars["id"], deleteVolumes); err != nil {
+	if err := env.compute.VirtualMachineDelete(urlvars["id"], urlvars["node"], deleteVolumes); err != nil {
 		env.error(rw, req, err, "cannot delete virtual machine", http.StatusInternalServerError)
 		return
 	}
@@ -296,7 +325,7 @@ var GraphicTypes = []compute.GraphicType{
 
 func (env *Environ) VirtualMachineUpdateFormShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
-	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
+	vm, err := env.compute.VirtualMachineDetail(urlvars["id"], urlvars["node"])
 	if err != nil {
 		env.error(rw, req, err, "virtual-machine detail failed", http.StatusInternalServerError)
 		return
@@ -359,11 +388,11 @@ func (env *Environ) VirtualMachineUpdateFormProcess(rw http.ResponseWriter, req 
 	graphicListen := req.Form.Get("GraphicListen")
 	params.GraphicListen = &graphicListen
 
-	if err := env.compute.VirtualMachineUpdate(urlvars["id"], params); err != nil {
+	if err := env.compute.VirtualMachineUpdate(urlvars["id"], urlvars["node"], params); err != nil {
 		env.error(rw, req, err, "cannot update virtual machine", http.StatusInternalServerError)
 		return
 	}
-	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
+	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"], "node", urlvars["node"])
 	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
 }
 
@@ -385,6 +414,7 @@ func (env *Environ) VirtualMachineAttachDiskFormProcess(rw http.ResponseWriter, 
 	}
 	params := compute.VolumeAttachmentParams{
 		MachineId:  urlvars["id"],
+		NodeId:     urlvars["node"],
 		DeviceName: req.Form.Get("DeviceName"),
 		VolumePath: req.Form.Get("VolumePath"),
 		DeviceType: deviceType,
@@ -394,7 +424,7 @@ func (env *Environ) VirtualMachineAttachDiskFormProcess(rw http.ResponseWriter, 
 		env.error(rw, req, err, "cannot attach disk", http.StatusInternalServerError)
 		return
 	}
-	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
+	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"], "node", urlvars["node"])
 	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
 }
 
@@ -404,11 +434,11 @@ func (env *Environ) VirtualMachineDetachVolumeFormProcess(rw http.ResponseWriter
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := env.compute.VirtualMachineDetachVolume(urlvars["id"], req.Form.Get("Path")); err != nil {
+	if err := env.compute.VirtualMachineDetachVolume(urlvars["id"], urlvars["node"], req.Form.Get("Path")); err != nil {
 		env.error(rw, req, err, "cannot detach disk", http.StatusInternalServerError)
 		return
 	}
-	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
+	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"], "node", urlvars["node"])
 	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
 }
 
@@ -433,7 +463,7 @@ func (env *Environ) VirtualMachineAttachInterfaceFormProcess(rw http.ResponseWri
 		accessVlan = uint(parsed)
 	}
 
-	network, err := env.compute.NetworkGet(networkName)
+	network, err := env.compute.NetworkGet(networkName, urlvars["node"])
 	if err != nil {
 		http.Error(rw, "cannot get network", http.StatusInternalServerError)
 		return
@@ -446,11 +476,11 @@ func (env *Environ) VirtualMachineAttachInterfaceFormProcess(rw http.ResponseWri
 		Model:       "virtio",
 		AccessVlan:  accessVlan,
 	}
-	if err := env.compute.VirtualMachineAttachInterface(id, attachedIface); err != nil {
+	if err := env.compute.VirtualMachineAttachInterface(id, urlvars["node"], attachedIface); err != nil {
 		env.error(rw, req, err, "cannot attach interface", http.StatusInternalServerError)
 		return
 	}
-	redirectUrl := env.url("virtual-machine-detail", "id", id)
+	redirectUrl := env.url("virtual-machine-detail", "id", id, "node", urlvars["node"])
 	http.Redirect(rw, req, redirectUrl.Path+"?tab=interfaces", http.StatusFound)
 }
 
@@ -460,17 +490,17 @@ func (env *Environ) VirtualMachineDetachInterfaceFormProcess(rw http.ResponseWri
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := env.compute.VirtualMachineDetachInterface(urlvars["id"], req.Form.Get("Mac")); err != nil {
+	if err := env.compute.VirtualMachineDetachInterface(urlvars["id"], urlvars["node"], req.Form.Get("Mac")); err != nil {
 		env.error(rw, req, err, "cannot detach interface", http.StatusInternalServerError)
 		return
 	}
-	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"])
+	redirectUrl := env.url("virtual-machine-detail", "id", urlvars["id"], "node", urlvars["node"])
 	http.Redirect(rw, req, redirectUrl.Path+"?tab=interfaces", http.StatusFound)
 }
 
 func (env *Environ) VirtualMachineConsoleShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
-	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
+	vm, err := env.compute.VirtualMachineDetail(urlvars["id"], urlvars["node"])
 	if err != nil {
 		env.error(rw, req, err, "cannot get vm", http.StatusInternalServerError)
 		return
@@ -496,7 +526,7 @@ func (env *Environ) VirtualMachineConsoleWS(rw http.ResponseWriter, req *http.Re
 		return
 	}
 
-	console, err := env.compute.VirtualMachineGetConsoleStream(urlvars["id"])
+	console, err := env.compute.VirtualMachineGetConsoleStream(urlvars["id"], urlvars["node"])
 	if err != nil {
 		env.error(rw, req, err, "cannot get vm console", http.StatusInternalServerError)
 		return
@@ -532,7 +562,7 @@ func (env *Environ) VirtualMachineConsoleWS(rw http.ResponseWriter, req *http.Re
 
 func (env *Environ) VirtualMachineVncShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
-	vm, err := env.compute.VirtualMachineDetail(urlvars["id"])
+	vm, err := env.compute.VirtualMachineDetail(urlvars["id"], urlvars["node"])
 	if err != nil {
 		env.error(rw, req, err, "cannot get vm", http.StatusInternalServerError)
 		return
@@ -556,7 +586,7 @@ func (env *Environ) VirtualMachineVncWs(rw http.ResponseWriter, req *http.Reques
 		env.logger.Debug().Err(err).Msg("cannot upgrade websocket connection")
 		return
 	}
-	graphic, err := env.compute.VirtualMachineGetGraphicStream(urlvars["id"])
+	graphic, err := env.compute.VirtualMachineGetGraphicStream(urlvars["id"], urlvars["node"])
 	if err != nil {
 		http.Error(rw, "Cannot get vm graphic: "+err.Error(), http.StatusServiceUnavailable)
 		env.logger.Warn().Err(err).Msg("failed to establish tcp connection")

@@ -2,19 +2,19 @@ package compute
 
 type VirtualMachineRepository interface {
 	List() ([]*VirtualMachine, error)
-	Get(id string) (*VirtualMachine, error)
-	Create(id string, arch Arch, vcpus int, memory Size, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface, config *VirtualMachineConfig) (*VirtualMachine, error)
-	Delete(id string) error
-	Update(id string, params VirtualMachineUpdateParams) error
-	AttachVolume(machineId string, attachedVolume *VirtualMachineAttachedVolume) error
-	DetachVolume(machineId, attachmentDeviceName string) error
-	AttachInterface(id string, iface *VirtualMachineAttachedInterface) error
-	DetachInterface(id, mac string) error
-	GetConsoleStream(id string) (VirtualMachineConsoleStream, error)
-	GetGraphicStream(id string) (VirtualMachineGraphicStream, error)
-	Poweroff(id string) error
-	Reboot(id string) error
-	Start(id string) error
+	Get(id, node string) (*VirtualMachine, error)
+	Create(id, node string, arch Arch, vcpus int, memory Size, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface, config *VirtualMachineConfig) (*VirtualMachine, error)
+	Delete(id, node string) error
+	Update(id, node string, params VirtualMachineUpdateParams) error
+	AttachVolume(machineId, node string, attachedVolume *VirtualMachineAttachedVolume) error
+	DetachVolume(machineId, node, attachmentDeviceName string) error
+	AttachInterface(id, node string, iface *VirtualMachineAttachedInterface) error
+	DetachInterface(id, node, mac string) error
+	GetConsoleStream(id, node string) (VirtualMachineConsoleStream, error)
+	GetGraphicStream(id, node string) (VirtualMachineGraphicStream, error)
+	Poweroff(id, node string) error
+	Reboot(id, node string) error
+	Start(id, node string) error
 }
 
 type VirtualMachineConsoleStream interface {
@@ -67,6 +67,7 @@ func (g VirtualMachineGraphic) Vnc() bool {
 
 type VirtualMachine struct {
 	Id         string
+	NodeId     string
 	VCpus      int
 	Arch       Arch
 	State      VirtualMachineState

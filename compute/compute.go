@@ -21,22 +21,22 @@ type Service struct {
 	virt    VirtualMachineRepository
 	vol     VolumeRepository
 	volpool VolumePoolRepository
-	host    HostInfoRepository
+	node    NodeRepository
 	key     KeyRepository
 	net     NetworkRepository
 	epub    EventPublisher
 }
 
-func New(epub EventPublisher, virt VirtualMachineRepository, vol VolumeRepository, volpool VolumePoolRepository, host HostInfoRepository, key KeyRepository, net NetworkRepository) *Service {
-	return &Service{epub: epub, virt: virt, vol: vol, volpool: volpool, host: host, key: key, net: net}
+func New(epub EventPublisher, virt VirtualMachineRepository, vol VolumeRepository, volpool VolumePoolRepository, node NodeRepository, key KeyRepository, net NetworkRepository) *Service {
+	return &Service{epub: epub, virt: virt, vol: vol, volpool: volpool, node: node, key: key, net: net}
 }
 
 func (service *Service) VirtualMachineList() ([]*VirtualMachine, error) {
 	return service.virt.List()
 }
 
-func (service *Service) VirtualMachineDetail(id string) (*VirtualMachine, error) {
-	return service.virt.Get(id)
+func (service *Service) VirtualMachineDetail(id, node string) (*VirtualMachine, error) {
+	return service.virt.Get(id, node)
 }
 
 type VirtualMachineCreateParamsConfig struct {
@@ -62,6 +62,7 @@ type VirtualMachineCreateParamsInterface struct {
 
 type VirtualMachineCreateParams struct {
 	Id         string
+	NodeId     string
 	VCpus      int
 	Arch       string
 	Memory     Size
@@ -74,11 +75,11 @@ type VirtualMachineCreateParams struct {
 func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) (*VirtualMachine, error) {
 	volumes := []*VirtualMachineAttachedVolume{}
 	for _, volumeParams := range params.Volumes {
-		volume, _ := service.vol.GetByName(volumeParams.Pool, volumeParams.Name)
+		volume, _ := service.vol.GetByName(volumeParams.Pool, volumeParams.Name, params.NodeId)
 		if volume == nil {
 			if volumeParams.CloneFrom != "" {
 				volumeCloneParams := VolumeCloneParams{
-					// volumeParams.CloneFrom, volumeParams.Name, volumeParams.Pool, volumeParams.Format, volumeParams.Size
+					NodeId:       params.NodeId,
 					Format:       volumeParams.Format,
 					OriginalPath: volumeParams.CloneFrom,
 					NewName:      volumeParams.Name,
@@ -92,6 +93,7 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 				volume = clonedVolume
 			} else {
 				volumeCreateParams := VolumeCreateParams{
+					NodeId: params.NodeId,
 					Name:   volumeParams.Name,
 					Pool:   volumeParams.Pool,
 					Format: volumeParams.Format,
@@ -119,7 +121,7 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 
 	interfaces := []*VirtualMachineAttachedInterface{}
 	for _, ifaceParams := range params.Interfaces {
-		network, err := service.net.Get(ifaceParams.Network)
+		network, err := service.net.Get(ifaceParams.Network, params.NodeId)
 		if err != nil {
 			return nil, util.NewError(err, "network get failed")
 		}
@@ -143,26 +145,26 @@ func (service *Service) VirtualMachineCreate(params VirtualMachineCreateParams) 
 		config.Keys = append(config.Keys, key)
 	}
 
-	vm, err := service.virt.Create(params.Id, NewArch(params.Arch), params.VCpus, params.Memory, volumes, interfaces, config)
+	vm, err := service.virt.Create(params.Id, params.NodeId, NewArch(params.Arch), params.VCpus, params.Memory, volumes, interfaces, config)
 	if err != nil {
 		return nil, util.NewError(err, "cannot create virtual machine")
 	}
 	if err := service.epub.Publish(NewEventVirtualMachineCreated(vm)); err != nil {
-		service.virt.Delete(vm.Id) // Ignore error
+		service.virt.Delete(vm.Id, params.NodeId) // Ignore error
 		return nil, util.NewError(err, "cannot publish event virtual machine created")
 	}
 	if params.Start {
-		if err := service.virt.Start(vm.Id); err != nil {
+		if err := service.virt.Start(vm.Id, params.NodeId); err != nil {
 			return nil, util.NewError(err, "cannot start vm")
 		}
 	}
 	return vm, nil
 }
 
-func (service *Service) VirtualMachineDelete(id string, deleteVolumes bool) error {
+func (service *Service) VirtualMachineDelete(id, node string, deleteVolumes bool) error {
 	volumesToDelete := []*VirtualMachineAttachedVolume{}
 	if deleteVolumes {
-		vm, err := service.virt.Get(id)
+		vm, err := service.virt.Get(id, node)
 		if err != nil {
 			return util.NewError(err, "cannot fetch vm info")
 		}
@@ -170,11 +172,11 @@ func (service *Service) VirtualMachineDelete(id string, deleteVolumes bool) erro
 			volumesToDelete = append(volumesToDelete, volume)
 		}
 	}
-	if err := service.virt.Delete(id); err != nil {
+	if err := service.virt.Delete(id, node); err != nil {
 		return util.NewError(err, "cannot delete vm")
 	}
 	for _, volume := range volumesToDelete {
-		if err := service.vol.Delete(volume.Path); err != nil {
+		if err := service.vol.Delete(volume.Path, node); err != nil {
 			return util.NewError(err, "cannot delete volume")
 		}
 	}
@@ -183,6 +185,7 @@ func (service *Service) VirtualMachineDelete(id string, deleteVolumes bool) erro
 
 type VolumeAttachmentParams struct {
 	MachineId  string
+	NodeId     string
 	DeviceName string
 	VolumePath string
 	DeviceType DeviceType
@@ -190,7 +193,7 @@ type VolumeAttachmentParams struct {
 }
 
 func (service *Service) VirtualMachineAttachVolume(params VolumeAttachmentParams) error {
-	vol, err := service.vol.Get(params.VolumePath)
+	vol, err := service.vol.Get(params.VolumePath, params.NodeId)
 	if err != nil {
 		return util.NewError(err, "cannot lookup volume")
 	}
@@ -202,15 +205,15 @@ func (service *Service) VirtualMachineAttachVolume(params VolumeAttachmentParams
 		DeviceType: params.DeviceType,
 		DeviceBus:  params.DeviceBus,
 	}
-	return service.virt.AttachVolume(params.MachineId, attachedVolume)
+	return service.virt.AttachVolume(params.MachineId, params.NodeId, attachedVolume)
 }
 
-func (service *Service) VirtualMachineDetachVolume(id, path string) error {
-	return service.virt.DetachVolume(id, path)
+func (service *Service) VirtualMachineDetachVolume(id, node, path string) error {
+	return service.virt.DetachVolume(id, node, path)
 }
 
-func (service *Service) VirtualMachineAttachInterface(id string, iface *VirtualMachineAttachedInterface) error {
-	return service.virt.AttachInterface(id, iface)
+func (service *Service) VirtualMachineAttachInterface(id, node string, iface *VirtualMachineAttachedInterface) error {
+	return service.virt.AttachInterface(id, node, iface)
 }
 
 type VirtualMachineUpdateParams struct {
@@ -222,28 +225,32 @@ type VirtualMachineUpdateParams struct {
 	GraphicListen *string
 }
 
-func (service *Service) VirtualMachineUpdate(id string, params VirtualMachineUpdateParams) error {
-	return service.virt.Update(id, params)
+func (service *Service) VirtualMachineUpdate(id, node string, params VirtualMachineUpdateParams) error {
+	return service.virt.Update(id, node, params)
 }
 
-func (service *Service) VirtualMachineDetachInterface(id, mac string) error {
-	return service.virt.DetachInterface(id, mac)
+func (service *Service) VirtualMachineDetachInterface(id, node, mac string) error {
+	return service.virt.DetachInterface(id, node, mac)
 }
 
-func (service *Service) VirtualMachineGetConsoleStream(id string) (VirtualMachineConsoleStream, error) {
-	return service.virt.GetConsoleStream(id)
+func (service *Service) VirtualMachineGetConsoleStream(id, node string) (VirtualMachineConsoleStream, error) {
+	return service.virt.GetConsoleStream(id, node)
 }
 
-func (service *Service) VirtualMachineGetGraphicStream(id string) (VirtualMachineGraphicStream, error) {
-	return service.virt.GetGraphicStream(id)
+func (service *Service) VirtualMachineGetGraphicStream(id, node string) (VirtualMachineGraphicStream, error) {
+	return service.virt.GetGraphicStream(id, node)
 }
 
-func (service *Service) VolumeList() ([]*Volume, error) {
-	return service.vol.List()
+func (service *Service) VolumeList(options VolumeListOptions) ([]*Volume, error) {
+	return service.vol.List(options)
 }
 
-func (service *Service) ImageList() ([]*Volume, error) {
-	volumes, err := service.vol.List()
+type VolumeListOptions struct {
+	NodeId string
+}
+
+func (service *Service) ImageList(options VolumeListOptions) ([]*Volume, error) {
+	volumes, err := service.vol.List(options)
 	if err != nil {
 		return nil, util.NewError(err, "cannot list volume")
 	}
@@ -268,11 +275,12 @@ func (service *Service) ImageList() ([]*Volume, error) {
 	return detachedVolumes, nil
 }
 
-func (service *Service) VolumeGet(path string) (*Volume, error) {
-	return service.vol.Get(path)
+func (service *Service) VolumeGet(path, node string) (*Volume, error) {
+	return service.vol.Get(path, node)
 }
 
 type VolumeCloneParams struct {
+	NodeId       string
 	Format       VolumeFormat
 	OriginalPath string
 	NewName      string
@@ -284,15 +292,20 @@ func (service *Service) VolumeClone(params VolumeCloneParams) (*Volume, error) {
 	return service.vol.Clone(params)
 }
 
-func (service *Service) VolumeResize(path string, size Size) error {
-	return service.vol.Resize(path, size)
+func (service *Service) VolumeResize(path, node string, size Size) error {
+	return service.vol.Resize(path, node, size)
 }
 
-func (service *Service) VolumePoolList() ([]*VolumePool, error) {
-	return service.volpool.List()
+type VolumePoolListOptions struct {
+	NodeId string
+}
+
+func (service *Service) VolumePoolList(options VolumePoolListOptions) ([]*VolumePool, error) {
+	return service.volpool.List(options)
 }
 
 type VolumeCreateParams struct {
+	NodeId string
 	Name   string
 	Pool   string
 	Format VolumeFormat
@@ -303,24 +316,28 @@ func (service *Service) VolumeCreate(params VolumeCreateParams) (*Volume, error)
 	return service.vol.Create(params)
 }
 
-func (service *Service) VolumeDelete(path string) error {
-	return service.vol.Delete(path)
+func (service *Service) VolumeDelete(path, node string) error {
+	return service.vol.Delete(path, node)
 }
 
-func (service *Service) HostInfo() (*HostInfo, error) {
-	return service.host.Get()
+func (service *Service) NodeGet(node string) (*Node, error) {
+	return service.node.Get(node)
 }
 
-func (service *Service) VirtualMachineAction(id string, action string) error {
+func (service *Service) NodeList() ([]*Node, error) {
+	return service.node.List()
+}
+
+func (service *Service) VirtualMachineAction(id string, node, action string) error {
 	switch action {
 	default:
 		return fmt.Errorf("unknown action %s", action)
 	case "reboot":
-		return service.virt.Reboot(id)
+		return service.virt.Reboot(id, node)
 	case "poweroff":
-		return service.virt.Poweroff(id)
+		return service.virt.Poweroff(id, node)
 	case "start":
-		return service.virt.Start(id)
+		return service.virt.Start(id, node)
 	}
 }
 
@@ -340,10 +357,14 @@ func (service *Service) KeyAdd(input string) error {
 	return service.key.Add([]byte(input))
 }
 
-func (service *Service) NetworkList() ([]*Network, error) {
-	return service.net.List()
+type NetworkListOptions struct {
+	NodeId string
 }
 
-func (service *Service) NetworkGet(id string) (*Network, error) {
-	return service.net.Get(id)
+func (service *Service) NetworkList(options NetworkListOptions) ([]*Network, error) {
+	return service.net.List(options)
+}
+
+func (service *Service) NetworkGet(id, node string) (*Network, error) {
+	return service.net.Get(id, node)
 }

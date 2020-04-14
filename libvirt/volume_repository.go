@@ -19,7 +19,7 @@ func NewVolumeRepository(pool *ConnectionPool, metadata map[string]compute.Volum
 	return &VolumeRepository{pool: pool, metadata: metadata}
 }
 
-func (repo *VolumeRepository) virVolumeToVolume(pool *libvirt.StoragePool, virVolume *libvirt.StorageVol) (*compute.Volume, error) {
+func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.StoragePool, virVolume *libvirt.StorageVol) (*compute.Volume, error) {
 	virVolumeXml, err := virVolume.GetXMLDesc(0)
 	if err != nil {
 		return nil, util.NewError(err, "cannot get volume info")
@@ -38,6 +38,7 @@ func (repo *VolumeRepository) virVolumeToVolume(pool *libvirt.StoragePool, virVo
 	}
 
 	volume := &compute.Volume{}
+	volume.NodeId = nodeId
 	volume.Type = compute.NewVolumeType(virVolumeConfig.Type)
 	volume.Path = virVolumeConfig.Target.Path
 	volume.Pool = poolConfig.Name
@@ -93,12 +94,12 @@ func (repo *VolumeRepository) fetchAttachedVm(conn *libvirt.Connect, volumes []*
 	return nil
 }
 
-func (repo *VolumeRepository) GetByName(pool, name string) (*compute.Volume, error) {
-	conn, err := repo.pool.Acquire()
+func (repo *VolumeRepository) GetByName(pool, name, node string) (*compute.Volume, error) {
+	conn, err := repo.pool.Acquire(node)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(node)
 
 	virStoragePool, err := conn.LookupStoragePoolByName(pool)
 	if err != nil {
@@ -108,7 +109,7 @@ func (repo *VolumeRepository) GetByName(pool, name string) (*compute.Volume, err
 	if err != nil {
 		return nil, util.NewError(err, "cannot lookup volume")
 	}
-	volume, err := repo.virVolumeToVolume(virStoragePool, virVolume)
+	volume, err := repo.virVolumeToVolume(node, virStoragePool, virVolume)
 	if err != nil {
 		return nil, util.NewError(err, "cannot parse volume")
 	}
@@ -118,12 +119,12 @@ func (repo *VolumeRepository) GetByName(pool, name string) (*compute.Volume, err
 	return volume, nil
 }
 
-func (repo *VolumeRepository) Get(path string) (*compute.Volume, error) {
-	conn, err := repo.pool.Acquire()
+func (repo *VolumeRepository) Get(path, node string) (*compute.Volume, error) {
+	conn, err := repo.pool.Acquire(node)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(node)
 
 	virVolume, err := conn.LookupStorageVolByPath(path)
 	if err != nil {
@@ -133,7 +134,7 @@ func (repo *VolumeRepository) Get(path string) (*compute.Volume, error) {
 	if err != nil {
 		return nil, util.NewError(err, "cannot lookup pool for volume")
 	}
-	volume, err := repo.virVolumeToVolume(pool, virVolume)
+	volume, err := repo.virVolumeToVolume(node, pool, virVolume)
 	if err != nil {
 		return nil, util.NewError(err, "cannot parse volume")
 	}
@@ -143,51 +144,59 @@ func (repo *VolumeRepository) Get(path string) (*compute.Volume, error) {
 	return volume, nil
 }
 
-func (repo *VolumeRepository) List() ([]*compute.Volume, error) {
-	conn, err := repo.pool.Acquire()
-	if err != nil {
-		return nil, util.NewError(err, "cannot acquire connection")
-	}
-	defer repo.pool.Release(conn)
-
-	pools, err := conn.ListAllStoragePools(0)
-	if err != nil {
-		return nil, util.NewError(err, "cannot list storage pools")
-	}
-
+func (repo *VolumeRepository) List(options compute.VolumeListOptions) ([]*compute.Volume, error) {
 	volumes := []*compute.Volume{}
-	for _, pool := range pools {
-		active, err := pool.IsActive()
-		if err != nil {
-			return nil, util.NewError(err, "cannot check if pool is active")
-		}
-		if !active {
+	for _, nodeId := range repo.pool.Nodes() {
+		if options.NodeId != "" && nodeId != options.NodeId {
 			continue
 		}
-		virVolumes, err := pool.ListAllStorageVolumes(0)
+		conn, err := repo.pool.Acquire(nodeId)
 		if err != nil {
-			return nil, util.NewError(err, "cannot list storage volumes")
+			return nil, util.NewError(err, "cannot acquire connection")
 		}
-		for _, virVolume := range virVolumes {
-			volume, err := repo.virVolumeToVolume(&pool, &virVolume)
+		defer repo.pool.Release(nodeId)
+
+		nodeVolumes := []*compute.Volume{}
+
+		pools, err := conn.ListAllStoragePools(0)
+		if err != nil {
+			return nil, util.NewError(err, "cannot list storage pools")
+		}
+
+		for _, pool := range pools {
+			active, err := pool.IsActive()
 			if err != nil {
-				return nil, util.NewError(err, "cannot parse libvirt volume")
+				return nil, util.NewError(err, "cannot check if pool is active")
 			}
-			volumes = append(volumes, volume)
+			if !active {
+				continue
+			}
+			virVolumes, err := pool.ListAllStorageVolumes(0)
+			if err != nil {
+				return nil, util.NewError(err, "cannot list storage volumes")
+			}
+			for _, virVolume := range virVolumes {
+				volume, err := repo.virVolumeToVolume(nodeId, &pool, &virVolume)
+				if err != nil {
+					return nil, util.NewError(err, "cannot parse libvirt volume")
+				}
+				nodeVolumes = append(nodeVolumes, volume)
+			}
 		}
-	}
-	if err := repo.fetchAttachedVm(conn, volumes); err != nil {
-		return nil, util.NewError(err, "cannot fetch attached vm")
+		if err := repo.fetchAttachedVm(conn, nodeVolumes); err != nil {
+			return nil, util.NewError(err, "cannot fetch attached vm")
+		}
+		volumes = append(volumes, nodeVolumes...)
 	}
 	return volumes, nil
 }
 
 func (repo *VolumeRepository) Create(params compute.VolumeCreateParams) (*compute.Volume, error) {
-	conn, err := repo.pool.Acquire()
+	conn, err := repo.pool.Acquire(params.NodeId)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(params.NodeId)
 
 	virPool, err := conn.LookupStoragePoolByName(params.Pool)
 	if err != nil {
@@ -221,15 +230,15 @@ func (repo *VolumeRepository) Create(params compute.VolumeCreateParams) (*comput
 	if err != nil {
 		return nil, util.NewError(err, "cannot create volume")
 	}
-	return repo.virVolumeToVolume(virPool, virVolume)
+	return repo.virVolumeToVolume(params.NodeId, virPool, virVolume)
 }
 
 func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (*compute.Volume, error) {
-	conn, err := repo.pool.Acquire()
+	conn, err := repo.pool.Acquire(params.NodeId)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(params.NodeId)
 
 	originalVirVolume, err := conn.LookupStorageVolByPath(params.OriginalPath)
 	if err != nil {
@@ -300,15 +309,15 @@ func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (*compute.
 			return nil, util.NewError(err, "cannot resize qcow2 image after clone")
 		}
 	}
-	return repo.virVolumeToVolume(virPool, virVolume)
+	return repo.virVolumeToVolume(params.NodeId, virPool, virVolume)
 }
 
-func (repo *VolumeRepository) Resize(path string, newSize compute.Size) error {
-	conn, err := repo.pool.Acquire()
+func (repo *VolumeRepository) Resize(path, node string, newSize compute.Size) error {
+	conn, err := repo.pool.Acquire(node)
 	if err != nil {
 		return util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(node)
 
 	virVolume, err := conn.LookupStorageVolByPath(path)
 	if err != nil {
@@ -321,12 +330,12 @@ func (repo *VolumeRepository) Resize(path string, newSize compute.Size) error {
 	return nil
 }
 
-func (repo *VolumeRepository) Delete(path string) error {
-	conn, err := repo.pool.Acquire()
+func (repo *VolumeRepository) Delete(path, node string) error {
+	conn, err := repo.pool.Acquire(node)
 	if err != nil {
 		return util.NewError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(conn)
+	defer repo.pool.Release(node)
 
 	virVolume, err := conn.LookupStorageVolByPath(path)
 	if err != nil {

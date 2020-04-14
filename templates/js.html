@@ -24,5 +24,13 @@
     $('.JS-ReactiveForm').each(function (idx, el) {
       Vmango.ReactiveForm(el);
     });
+    $(".JS-VmCreatePageNodeSelector").on('change', function(event){
+      var destUrl = '{{ Url "virtual-machine-add" }}';
+      window.location.href = destUrl + "?node=" + $(event.target).val();
+    })
+    $(".JS-VolumeListNodeSelector").on('change', function(event){
+      var destUrl = '{{ Url "volume-list" }}';
+      window.location.href = destUrl + "?node=" + $(event.target).val();
+    })
   });
 </script>

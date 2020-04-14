@@ -2,11 +2,44 @@
 
 <!-- Breadcrumb -->
 <ol class="breadcrumb">
-  <li class="breadcrumb-item active">Home</li>
+  <li class="breadcrumb-item"><a>Home</a></li>
+  <li class="breadcrumb-item active">Nodes</li>
 </ol>
 
 <div class="container">
-  <div class="row">
+  <div class="card">
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-12">
+          <h3 class="card-title">Nodes</h3>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Id</th>
+                <th>Hostname</th>
+                <th>Cpu</th>
+                <th>Memory</th>
+                <th>IOMMU</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{ range .Nodes }}
+              <tr>
+                <td>{{ .Id }}</td>
+                <td>{{ .Hostname }}</td>
+                <td>{{ .CpuInfo }}</td>
+                <td>{{ .Memory.Bytes | HumanizeBytes }}</td>
+                <td>{{ .Iommu }}</td>
+              </tr>
+              {{ end }}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {{/*
+  <!-- <div class="row">
     <div class="col-md-12">
       <div class="card">
         <div class="card-body">
@@ -73,7 +106,8 @@
         </div>
       </div>
     </div>
-  </div>
+  </div> -->
+  */}}
 </div>
 
 {{template "footer" .}}

@@ -12,24 +12,35 @@ import (
 var UIVolumeFormats = []compute.VolumeFormat{compute.FormatQcow2, compute.FormatRaw}
 
 func (env *Environ) VolumeList(rw http.ResponseWriter, req *http.Request) {
-	volumes, err := env.compute.VolumeList()
+	selectedNodeId := req.URL.Query().Get("node")
+	nodes, err := env.compute.NodeList()
+	if err != nil {
+		env.error(rw, req, err, "nodes list failed", http.StatusInternalServerError)
+		return
+	}
+	if selectedNodeId == "" {
+		selectedNodeId = nodes[0].Id
+	}
+	volumes, err := env.compute.VolumeList(compute.VolumeListOptions{})
 	if err != nil {
 		env.error(rw, req, err, "volume list failed", http.StatusInternalServerError)
 		return
 	}
-	pools, err := env.compute.VolumePoolList()
+	pools, err := env.compute.VolumePoolList(compute.VolumePoolListOptions{NodeId: selectedNodeId})
 	if err != nil {
 		env.error(rw, req, err, "pool list failed", http.StatusInternalServerError)
 		return
 	}
 	data := struct {
 		Title         string
+		NodeId        string
 		Volumes       []*compute.Volume
+		Nodes         []*compute.Node
 		Pools         []*compute.VolumePool
 		VolumeFormats []compute.VolumeFormat
 		User          *User
 		Request       *http.Request
-	}{"Volumes", volumes, pools, UIVolumeFormats, env.Session(req).AuthUser(), req}
+	}{"Volumes", selectedNodeId, volumes, nodes, pools, UIVolumeFormats, env.Session(req).AuthUser(), req}
 	if err := env.render.HTML(rw, http.StatusOK, "volume/list", data); err != nil {
 		env.error(rw, req, err, "failed to render template", http.StatusInternalServerError)
 		return
@@ -39,7 +50,7 @@ func (env *Environ) VolumeList(rw http.ResponseWriter, req *http.Request) {
 func (env *Environ) VolumeDeleteFormShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	path := strings.Replace(urlvars["path"], "%2F", "/", -1)
-	volume, err := env.compute.VolumeGet(path)
+	volume, err := env.compute.VolumeGet(path, urlvars["node"])
 	if err != nil {
 		env.error(rw, req, err, "volume get failed", http.StatusInternalServerError)
 		return
@@ -59,12 +70,12 @@ func (env *Environ) VolumeDeleteFormShow(rw http.ResponseWriter, req *http.Reque
 func (env *Environ) VolumeCloneFormShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	path := strings.Replace(urlvars["path"], "%2F", "/", -1)
-	volume, err := env.compute.VolumeGet(path)
+	volume, err := env.compute.VolumeGet(path, urlvars["node"])
 	if err != nil {
 		env.error(rw, req, err, "volume get failed", http.StatusInternalServerError)
 		return
 	}
-	pools, err := env.compute.VolumePoolList()
+	pools, err := env.compute.VolumePoolList(compute.VolumePoolListOptions{NodeId: volume.NodeId})
 	if err != nil {
 		env.error(rw, req, err, "pool list failed", http.StatusInternalServerError)
 		return
@@ -102,6 +113,7 @@ func (env *Environ) VolumeCloneFormProcess(rw http.ResponseWriter, req *http.Req
 	}
 	params := compute.VolumeCloneParams{
 		Format:       compute.NewVolumeFormat(req.Form.Get("Format")),
+		NodeId:       urlvars["node"],
 		OriginalPath: path,
 		NewName:      req.Form.Get("Name"),
 		NewPool:      req.Form.Get("Pool"),
@@ -118,7 +130,7 @@ func (env *Environ) VolumeCloneFormProcess(rw http.ResponseWriter, req *http.Req
 func (env *Environ) VolumeResizeFormShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	path := strings.Replace(urlvars["path"], "%2F", "/", -1)
-	volume, err := env.compute.VolumeGet(path)
+	volume, err := env.compute.VolumeGet(path, urlvars["node"])
 	if err != nil {
 		env.error(rw, req, err, "volume get failed", http.StatusInternalServerError)
 		return
@@ -153,7 +165,7 @@ func (env *Environ) VolumeResizeFormProcess(rw http.ResponseWriter, req *http.Re
 		http.Error(rw, "unknown size unit: "+req.Form.Get("SizeUnit"), http.StatusBadRequest)
 		return
 	}
-	if err := env.compute.VolumeResize(path, compute.NewSize(newSizeValue, newSizeUnit)); err != nil {
+	if err := env.compute.VolumeResize(path, urlvars["node"], compute.NewSize(newSizeValue, newSizeUnit)); err != nil {
 		env.error(rw, req, err, "volume clone failed", http.StatusInternalServerError)
 		return
 	}
@@ -164,7 +176,7 @@ func (env *Environ) VolumeResizeFormProcess(rw http.ResponseWriter, req *http.Re
 func (env *Environ) VolumeDeleteFormProcess(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	path := strings.Replace(urlvars["path"], "%2F", "/", -1)
-	if err := env.compute.VolumeDelete(path); err != nil {
+	if err := env.compute.VolumeDelete(path, urlvars["node"]); err != nil {
 		env.error(rw, req, err, "cannot delete volume", http.StatusInternalServerError)
 		return
 	}
@@ -188,6 +200,7 @@ func (env *Environ) VolumeAddFormProcess(rw http.ResponseWriter, req *http.Reque
 		return
 	}
 	params := compute.VolumeCreateParams{
+		NodeId: req.Form.Get("NodeId"),
 		Name:   req.Form.Get("Name"),
 		Pool:   req.Form.Get("Pool"),
 		Format: compute.NewVolumeFormat(req.Form.Get("Format")),

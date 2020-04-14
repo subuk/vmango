@@ -22,14 +22,14 @@
                 <thead class="thead-light">
                   <tr>
                     <th>Name</th>
-                    <th>Type</th>
+                    <th>Node</th>
                   </tr>
                 </thead>
                 <tbody>
                   {{ range .Networks }}
                   <tr>
                     <td>{{ .Name }}</td>
-                    <td>{{ .Type }}</td>
+                    <td>{{ .NodeId }}</td>
                   </tr>
                   {{ end }}
                 </tbody>

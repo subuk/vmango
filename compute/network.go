@@ -1,11 +1,12 @@
 package compute
 
 type NetworkRepository interface {
-	List() ([]*Network, error)
-	Get(name string) (*Network, error)
+	List(options NetworkListOptions) ([]*Network, error)
+	Get(name, node string) (*Network, error)
 }
 
 type Network struct {
-	Name string
-	Type NetworkType
+	NodeId string
+	Name   string
+	Type   NetworkType
 }

@@ -3,6 +3,7 @@
 <!-- Breadcrumb -->
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a>{{ .Volume.NodeId }}</a></li>
   <li class="breadcrumb-item"><a href="{{ Url "volume-list" }}">Volumes</a></li>
   <li class="breadcrumb-item active">{{ .Volume.Path }}</li>
 </ol>

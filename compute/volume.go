@@ -12,6 +12,7 @@ type VolumeMetadata struct {
 }
 
 type Volume struct {
+	NodeId     string
 	Type       VolumeType
 	Path       string
 	Size       Size
@@ -27,11 +28,11 @@ func (volume *Volume) Base() string {
 }
 
 type VolumeRepository interface {
-	Get(path string) (*Volume, error)
-	GetByName(pool, name string) (*Volume, error)
+	Get(path, node string) (*Volume, error)
+	GetByName(pool, name, node string) (*Volume, error)
 	Create(params VolumeCreateParams) (*Volume, error)
 	Clone(params VolumeCloneParams) (*Volume, error)
-	Resize(path string, newSize Size) error
-	Delete(path string) error
-	List() ([]*Volume, error)
+	Resize(path, node string, newSize Size) error
+	Delete(path, node string) error
+	List(options VolumeListOptions) ([]*Volume, error)
 }

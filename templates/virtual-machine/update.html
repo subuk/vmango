@@ -4,7 +4,7 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}">Virtual Machines</a></li>
-  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-detail" "id" .Vm.Id }}">{{ .Vm.Id }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-detail" "id" .Vm.Id "node" .Vm.NodeId }}">{{ .Vm.Id }}</a></li>
   <li class="breadcrumb-item active">Update</li>
 </ol>
 

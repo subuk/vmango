@@ -16,9 +16,17 @@
           <br>
           <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
             <div class="form-group row">
-              <div class="col-md-6">
+              <div class="col-md-3">
                 <label>Name</label>
                 <input required="required" class="form-control" name="Name" id="Name">
+              </div>
+              <div class="col-md-3">
+                <label>Node</label>
+                <select name="NodeId" id="NodeId" class="form-control JS-VmCreatePageNodeSelector">
+                  {{ range .Nodes }}
+                  <option {{ if eq $.NodeId .Id }}selected{{ end }} value="{{ .Id }}">{{ .Id }}</option>
+                  {{ end }}
+                </select>
               </div>
               <div class="col-md-2">
                 <label>Cpu Count</label>
@@ -106,7 +114,7 @@
                 <label>Network</label>
                 <select required="required" class="form-control" name="Network">
                   {{ range .Networks }}
-                  <option value="{{ .Name }}">{{ .Name }} ({{ .Type }})</option>
+                  <option value="{{ .Name }}">{{ .Name }}</option>
                   {{ end }}
                 </select>
               </div>

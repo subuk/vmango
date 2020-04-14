@@ -20,6 +20,7 @@
                 <thead class="thead-light">
                   <tr>
                     <th>Name</th>
+                    <th>Node</th>
                     <th>State</th>
                     <th>CPU</th>
                     <th>Memory</th>
@@ -29,7 +30,8 @@
                 <tbody>
                   {{ range .Vms }}
                   <tr>
-                    <td><a href="{{ Url "virtual-machine-detail" "id" .Id }}">{{ .Id }}</a></td>
+                    <td><a href="{{ Url "virtual-machine-detail" "id" .Id "node" .NodeId }}">{{ .Id }}</a></td>
+                    <td>{{ .NodeId }}</td>
                     <td>{{ .State }}</td>
                     <td>{{ .VCpus }}</td>
                     <td>{{ .Memory.Bytes | HumanizeBytes }}</td>

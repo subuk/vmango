@@ -4,7 +4,7 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}">Virtual Machines</a></li>
-  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-detail" "id" .Vm.Id }}">{{ .Vm.Id }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-detail" "id" .Vm.Id "node" .Vm.NodeId }}">{{ .Vm.NodeId }}::{{ .Vm.Id }}</a></li>
   <li class="breadcrumb-item active">Console</li>
 </ol>
 
@@ -13,7 +13,7 @@
     <div class="col-md-12">
       <div class="card">
         <div class="card-body">
-          <div class="JS-WSConsole" data-JSConsole-WSUrl="{{ Url "virtual-machine-console-ws" "id" .Vm.Id }}">
+          <div class="JS-WSConsole" data-JSConsole-WSUrl="{{ Url "virtual-machine-console-ws" "id" .Vm.Id "node" .Vm.NodeId }}">
             <div class="JS-WSConsole-Window" style="width: 100%; height: 600px;"></div>
             <pre class="text-muted">
 export TERM=xterm COLUMNS=117 LINES=35

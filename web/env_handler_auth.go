@@ -36,7 +36,7 @@ func (env *Environ) PasswordLoginFormProcess(rw http.ResponseWriter, req *http.R
 	}
 	redirectUrl := req.URL.Query().Get("next")
 	if redirectUrl == "" {
-		redirectUrl = env.url("index").Path
+		redirectUrl = env.url("node-list").Path
 	}
 	http.Redirect(rw, req, redirectUrl, http.StatusFound)
 }

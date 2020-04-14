@@ -18,9 +18,25 @@
           <br>
           <form method="post" action="{{ Url "volume-add-form" }}">{{ CSRFField .Request }}
             <div class="form-group row">
-              <div class="col-md-3">
+              <div class="col-md-2">
                 <input required="required" class="form-control" name="Name" id="Name" aria-describedby="nameHelp">
                 <small id="nameHelp" class="form-text text-muted">Volume name</small>
+              </div>
+              <div class="col-md-2">
+                <select required="required" class="JS-VolumeListNodeSelector form-control" name="NodeId">
+                  {{ range .Nodes }}
+                  <option {{ if eq $.NodeId .Id }}selected{{ end }} value="{{ .Id }}">{{ .Id }}</option>
+                  {{ end }}
+                </select>
+                <small id="nameHelp" class="form-text text-muted">Node</small>
+              </div>
+              <div class="col-md-2">
+                <select required="required" class="form-control" name="Pool">
+                  {{ range .Pools }}
+                  <option value="{{ .Name }}">{{ .Name }} ({{ .Free.Bytes | HumanizeBytes }} free {{ .UsagePercent }}% used)</option>
+                  {{ end }}
+                </select>
+                <small id="nameHelp" class="form-text text-muted">Pool</small>
               </div>
               <div class="col-md-2">
                 <div class="input-group">
@@ -44,15 +60,6 @@
                 </select>
                 <small id="nameHelp" class="form-text text-muted">Format</small>
               </div>
-              <div class="col-md-3">
-                <select required="required" class="form-control" name="Pool">
-                  {{ range .Pools }}
-                  <option value="{{ .Name }}">{{ .Name }} ({{ .Free.Bytes | HumanizeBytes }} free {{ .UsagePercent }}% used)
-                  </option>
-                  {{ end }}
-                </select>
-                <small id="nameHelp" class="form-text text-muted">Pool</small>
-              </div>
               <div class="col-md-2">
                 <button class="btn btn-block btn-primary"
                   data-loading="<i class='icon-refresh icons'></i> Creating machine..." type="submit">Add Volume</button>
@@ -66,6 +73,7 @@
                 <thead class="thead-light">
                   <tr>
                     <th>Path</th>
+                    <th>Node</th>
                     <th>Type</th>
                     <th>Format</th>
                     <th>Size</th>
@@ -78,20 +86,21 @@
                   {{ range .Volumes }}
                   <tr>
                     <td>{{ .Path }}</td>
+                    <td>{{ .NodeId }}</td>
                     <td>{{ .Type }}</td>
                     <td>{{ .Format }}</td>
                     <td>{{ .Size.Bytes | HumanizeBytes }}</td>
                     <td>{{ .Pool }}</td>
                     <td>
                       {{ if .AttachedTo }}
-                      {{ .AttachedTo }} as {{ .AttachedAs }}
+                      <a href="{{ Url "virtual-machine-detail" "id" .AttachedTo "node" .NodeId }}">{{ .AttachedTo }}</a>
                       {{ end }}
                     </td>
                     <td>
-                      <a title="Clone" href="{{ Url "volume-clone-form" "path" .Path }}">C</a>
-                      | <a title="Resize" href="{{ Url "volume-resize-form" "path" .Path }}">R</a>
+                      <a title="Clone" href="{{ Url "volume-clone-form" "path" .Path "node" .NodeId }}">C</a>
+                      | <a title="Resize" href="{{ Url "volume-resize-form" "path" .Path "node" .NodeId }}">R</a>
                       {{ if not .Metadata.Protected }}
-                      | <a title="Delete" style="color: red;" href="{{ Url "volume-delete-form" "path" .Path }}">D</a>
+                      | <a title="Delete" style="color: red;" href="{{ Url "volume-delete-form" "path" .Path "node" .NodeId }}">D</a>
                       {{ end }}
                     </td>
                   </tr>

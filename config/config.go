@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"io/ioutil"
 	"subuk/vmango/configdrive"
 	"subuk/vmango/util"
@@ -42,25 +43,30 @@ type SubscribeConfig struct {
 	Mandatory bool   `hcl:"mandatory"`
 }
 
+type LibvirtConfig struct {
+	Name                   string `hcl:",key"`
+	Uri                    string `hcl:"uri"`
+	ConfigDriveSuffix      string `hcl:"config_drive_suffix"`
+	ConfigDrivePool        string `hcl:"config_drive_pool"`
+	ConfigDriveWriteFormat string `hcl:"config_drive_write_format"`
+}
+
 type Config struct {
-	LibvirtUri                    string            `hcl:"libvirt_uri"`
-	LibvirtConfigDriveSuffix      string            `hcl:"libvirt_config_drive_suffix"`
-	LibvirtConfigDrivePool        string            `hcl:"libvirt_config_drive_pool"`
-	LibvirtConfigDriveWriteFormat string            `hcl:"libvirt_config_drive_write_format"`
-	Images                        []ImageConfig     `hcl:"image"`
-	Bridges                       []string          `hcl:"bridges"`
-	KeyFile                       string            `hcl:"key_file"`
-	Web                           WebConfig         `hcl:"web"`
-	Subscribes                    []SubscribeConfig `hcl:"subscribe"`
+	Images     []ImageConfig     `hcl:"image"`
+	Bridges    []string          `hcl:"bridges"`
+	Libvirts   []LibvirtConfig   `hcl:"libvirt"`
+	KeyFile    string            `hcl:"key_file"`
+	Web        WebConfig         `hcl:"web"`
+	Subscribes []SubscribeConfig `hcl:"subscribe"`
 }
 
 func Default() *Config {
 	return &Config{
-		LibvirtUri:                    "qemu:///system",
-		LibvirtConfigDrivePool:        "default",
-		LibvirtConfigDriveSuffix:      "_config.iso",
-		LibvirtConfigDriveWriteFormat: configdrive.FormatNoCloud.String(),
-		KeyFile:                       "~/.vmango/authorized_keys",
+		// LibvirtUri:                    "qemu:///system",
+		// LibvirtConfigDrivePool:        "default",
+		// LibvirtConfigDriveSuffix:      "_config.iso",
+		// LibvirtConfigDriveWriteFormat: configdrive.FormatNoCloud.String(),
+		KeyFile: "~/.vmango/authorized_keys",
 		Web: WebConfig{
 			Listen:         ":8080",
 			Debug:          false,
@@ -81,6 +87,21 @@ func Parse(filename string) (*Config, error) {
 	}
 	if err := mergo.Merge(config, Default()); err != nil {
 		return nil, util.NewError(err, "cannot apply default configuration value")
+	}
+	for index := range config.Libvirts {
+		libvirt := &config.Libvirts[index]
+		if libvirt.Uri == "" {
+			return nil, fmt.Errorf("no uri specified for libvirt connection '%s'", libvirt.Name)
+		}
+		if libvirt.ConfigDriveWriteFormat == "" {
+			libvirt.ConfigDriveWriteFormat = configdrive.FormatNoCloud.String()
+		}
+		if libvirt.ConfigDriveSuffix == "" {
+			libvirt.ConfigDriveSuffix = "_config.iso"
+		}
+		if libvirt.ConfigDrivePool == "" {
+			libvirt.ConfigDrivePool = "default"
+		}
 	}
 	return config, nil
 }

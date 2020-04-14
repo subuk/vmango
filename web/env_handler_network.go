@@ -6,7 +6,7 @@ import (
 )
 
 func (env *Environ) NetworkList(rw http.ResponseWriter, req *http.Request) {
-	networks, err := env.compute.NetworkList()
+	networks, err := env.compute.NetworkList(compute.NetworkListOptions{})
 	if err != nil {
 		env.error(rw, req, err, "network list failed", http.StatusInternalServerError)
 		return

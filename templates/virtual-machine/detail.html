@@ -2,7 +2,7 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}">Virtual Machines</a></li>
-  <li class="breadcrumb-item active">{{ .Vm.Id }}</li>
+  <li class="breadcrumb-item active">{{ .Vm.NodeId }}::{{ .Vm.Id }}</li>
 </ol>
 
 <div class="container">
@@ -17,6 +17,7 @@
                 <img src="{{ Static "vmango/img/linux-logo.png" }}" width="100" alt="linux">
                 <div class="media-body">
                   <p class="text-muted">
+                    Node {{ .Vm.NodeId }}<br>
                     Autostart {{ if .Vm.Autostart }}enabled{{ else }}disabled{{ end }}<br>
                     {{ if not .Vm.Graphic.Type.IsNone }}
                     {{ .Vm.Graphic.Type.String | Capitalize }} graphic {{ if .Vm.Graphic.Listen }}on {{ .Vm.Graphic.Listen }}{{ end }}<br>
@@ -40,19 +41,19 @@
                 {{ if .Vm.IsRunning }}
                   {{ if .Vm.Graphic.Vnc }}
                   <a class="btn btn-primary" target="popup" href=""
-                    onclick="window.open('{{ Url "virtual-machine-vnc-show" "id" .Vm.Id }}?autoconnect=1&resize=remote','popup','width=800,height=600'); return false;">VNC</a>
+                    onclick="window.open('{{ Url "virtual-machine-vnc-show" "id" .Vm.Id "node" .Vm.NodeId }}?autoconnect=1&resize=remote','popup','width=800,height=600'); return false;">VNC</a>
                   {{ end }}
-                <a class="btn btn-primary" href="{{ Url "virtual-machine-console-show" "id" .Vm.Id }}">Console</a>
+                <a class="btn btn-primary" href="{{ Url "virtual-machine-console-show" "id" .Vm.Id "node" .Vm.NodeId }}">Console</a>
                 <a class="btn btn-primary"
-                  href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "poweroff" }}">Power Off</a>
+                  href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "node" .Vm.NodeId "action" "poweroff" }}">Power Off</a>
                 <a class="btn btn-primary"
-                  href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "reboot" }}">Reboot</a>
+                  href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "node" .Vm.NodeId "action" "reboot" }}">Reboot</a>
                 {{ else }}
-                <a class="btn btn-primary" href="{{ Url "virtual-machine-update" "id" .Vm.Id }}">Edit</a>
-                <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "action" "start" }}">Power
+                <a class="btn btn-primary" href="{{ Url "virtual-machine-update" "id" .Vm.Id "node" .Vm.NodeId }}">Edit</a>
+                <a class="btn btn-primary" href="{{ Url "virtual-machine-state-form" "id" .Vm.Id "node" .Vm.NodeId "action" "start" }}">Power
                   On</a>
                 {{ end }}
-                <a class="btn btn-danger" href="{{ Url "virtual-machine-delete" "id" .Vm.Id }}">Remove</a>
+                <a class="btn btn-danger" href="{{ Url "virtual-machine-delete" "id" .Vm.Id "node" .Vm.NodeId }}">Remove</a>
               </p>
             </div>
           </div>
@@ -90,7 +91,7 @@
                           <td>{{ .Path }}</td>
                           <td>{{ (index $.AttachedVolumes .Path).Size.Bytes | HumanizeBytes }}</td>
                           <td>
-                            <form method="post" action="{{ Url "virtual-machine-detach-volume" "id" $.Vm.Id }}">{{ CSRFField $.Request }}
+                            <form method="post" action="{{ Url "virtual-machine-detach-volume" "id" $.Vm.Id "node" $.Vm.NodeId }}">{{ CSRFField $.Request }}
                               <input type="hidden" name="Path" value="{{ .Path }}">
                               <button {{ if $.Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
                                 class="btn btn-light btn-sm" type="submit">Detach</button>
@@ -99,7 +100,7 @@
                           <td></td>
                         </tr>
                         {{ end }}
-                        <form method="post" action="{{ Url "virtual-machine-attach-disk" "id" $.Vm.Id }}">{{ CSRFField $.Request }}
+                        <form method="post" action="{{ Url "virtual-machine-attach-disk" "id" .Vm.Id "node" .Vm.NodeId }}">{{ CSRFField $.Request }}
                           <tr>
                             <td>
                               <select required="required" class="form-control form-control-sm" name="DeviceType">
@@ -166,7 +167,7 @@
                             {{ end }}
                           </td>
                           <td>
-                            <form method="post" action="{{ Url "virtual-machine-detach-interface" "id" $.Vm.Id }}">
+                            <form method="post" action="{{ Url "virtual-machine-detach-interface" "id" $.Vm.Id "node" $.Vm.NodeId }}">
                               {{ CSRFField $.Request }}
                               <input type="hidden" name="Mac" value="{{ .Mac }}">
                               <button {{ if $.Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
@@ -175,7 +176,7 @@
                           </td>
                         </tr>
                         {{ end }}
-                        <form method="post" action="{{ Url "virtual-machine-attach-interface" "id" .Vm.Id }}">{{ CSRFField $.Request }}
+                        <form method="post" action="{{ Url "virtual-machine-attach-interface" "id" .Vm.Id "node" .Vm.NodeId }}">{{ CSRFField $.Request }}
                           <tr>
                             <td>
                               <select required="required" class="form-control form-control-sm" name="Network">
