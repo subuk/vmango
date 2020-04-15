@@ -49,6 +49,7 @@ type LibvirtConfig struct {
 	ConfigDriveSuffix      string `hcl:"config_drive_suffix"`
 	ConfigDrivePool        string `hcl:"config_drive_pool"`
 	ConfigDriveWriteFormat string `hcl:"config_drive_write_format"`
+	Cache                  bool   `hcl:"cache"`
 }
 
 type Config struct {

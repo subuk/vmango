@@ -11,6 +11,11 @@ import (
 	libvirtxml "github.com/libvirt/libvirt-go-xml"
 )
 
+type NodeSettings struct {
+	CdSuffix string
+	Cache    bool
+}
+
 func ComputeSizeUnitToLibvirtUnit(input compute.SizeUnit) string {
 	switch input {
 	default:

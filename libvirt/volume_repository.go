@@ -2,6 +2,7 @@ package libvirt
 
 import (
 	"fmt"
+	"io"
 	"subuk/vmango/compute"
 	"subuk/vmango/util"
 
@@ -334,6 +335,41 @@ func (repo *VolumeRepository) Delete(path, node string) error {
 	}
 	if err := virVolume.Delete(libvirt.STORAGE_VOL_DELETE_NORMAL); err != nil {
 		return util.NewError(err, "cannot delete volume")
+	}
+	return nil
+}
+
+type virStreamWrapper struct {
+	steam *libvirt.Stream
+}
+
+func (w *virStreamWrapper) Write(p []byte) (int, error) {
+	return w.steam.Send(p)
+}
+
+func (repo *VolumeRepository) Upload(path, nodeId string, content io.Reader, size uint64) error {
+	conn, err := repo.pool.Acquire(nodeId)
+	if err != nil {
+		return util.NewError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(nodeId)
+	virVolume, err := conn.LookupStorageVolByPath(path)
+	if err != nil {
+		return util.NewError(err, "cannot lookup storage volume")
+	}
+
+	stream, err := conn.NewStream(0)
+	if err != nil {
+		return util.NewError(err, "cannot initialize upload stream")
+	}
+	if err := virVolume.Upload(stream, 0, size, 0); err != nil {
+		return util.NewError(err, "cannot start upload")
+	}
+	if _, err := io.Copy(&virStreamWrapper{stream}, content); err != nil {
+		return util.NewError(err, "upload failed")
+	}
+	if err := stream.Finish(); err != nil {
+		return util.NewError(err, "cannot finalize upload")
 	}
 	return nil
 }

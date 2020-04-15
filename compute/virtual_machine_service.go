@@ -2,21 +2,11 @@ package compute
 
 import "fmt"
 
-type VirtualMachineUpdateParams struct {
-	Vcpus         *int
-	Memory        *Size
-	Autostart     *bool
-	GuestAgent    *bool
-	GraphicType   *GraphicType
-	GraphicListen *string
-}
-
 type VirtualMachineRepository interface {
 	List() ([]*VirtualMachine, error)
 	Get(id, node string) (*VirtualMachine, error)
-	Create(id, node string, arch Arch, vcpus int, memory Size, volumes []*VirtualMachineAttachedVolume, interfaces []*VirtualMachineAttachedInterface, config *VirtualMachineConfig) (*VirtualMachine, error)
+	Save(vm *VirtualMachine) error
 	Delete(id, node string) error
-	Update(id, node string, params VirtualMachineUpdateParams) error
 	AttachVolume(id, nodeId string, attachedVolume *VirtualMachineAttachedVolume) error
 	DetachVolume(machineId, node, attachmentDeviceName string) error
 	AttachInterface(id, node string, iface *VirtualMachineAttachedInterface) error

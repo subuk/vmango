@@ -30,13 +30,13 @@ type Environ struct {
 	router   *mux.Router
 	sessions sessions.Store
 	random   *rand.Rand
-	compute  *libcompute.Service
 	networks *libcompute.NetworkService
 	keys     *libcompute.KeyService
 	volpools *libcompute.VolumePoolService
 	nodes    *libcompute.NodeService
 	volumes  *libcompute.VolumeService
 	vms      *libcompute.VirtualMachineService
+	vmanager *libcompute.VirtualMachineManager
 	ws       *websocket.Upgrader
 	cfg      *config.WebConfig
 }
@@ -106,14 +106,15 @@ func TemplateFuncs(env *Environ) []template.FuncMap {
 	}
 }
 
-func New(cfg *config.Config, logger zerolog.Logger,
-	compute *libcompute.Service,
+func New(
+	cfg *config.Config, logger zerolog.Logger,
 	networks *libcompute.NetworkService,
 	keys *libcompute.KeyService,
 	volpools *libcompute.VolumePoolService,
 	nodes *libcompute.NodeService,
 	volumes *libcompute.VolumeService,
 	vms *libcompute.VirtualMachineService,
+	vmanager *libcompute.VirtualMachineManager,
 ) http.Handler {
 
 	env := &Environ{cfg: &cfg.Web}
@@ -148,13 +149,13 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	}
 	env.logger = logger
 	env.router = router
-	env.compute = compute
 	env.networks = networks
 	env.keys = keys
 	env.volpools = volpools
 	env.nodes = nodes
 	env.volumes = volumes
 	env.vms = vms
+	env.vmanager = vmanager
 	env.sessions = sessionStore
 
 	router.HandleFunc("/static/{name:.*}", env.Static(cfg)).Name("static")

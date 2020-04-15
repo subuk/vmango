@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"subuk/vmango/compute"
 	libcompute "subuk/vmango/compute"
 	"subuk/vmango/config"
 	"subuk/vmango/configdrive"
@@ -42,11 +43,17 @@ func Web(configFilename string) {
 	epub := filesystem.NewScriptedComputeEventBroker(logger.With().Str("component", "compute-event-broker").Logger())
 	for _, sub := range cfg.Subscribes {
 		epub.Subscribe(sub.Event, sub.Script, sub.Mandatory)
+		logger.Info().
+			Str("event", sub.Event).
+			Str("script", sub.Script).
+			Bool("mandatory", sub.Mandatory).
+			Msg("new script subscription created")
 	}
 
 	nodeUri := map[string]string{}
 	nodeOrder := []string{}
-	settings := map[string]*libvirt.VirtualMachineRepositoryNodeSettings{}
+	vmRepSettings := map[string]libvirt.NodeSettings{}
+	vmManSettings := map[string]compute.VirtualMachineManagerNodeSettings{}
 	for _, c := range cfg.Libvirts {
 		nodeUri[c.Name] = c.Uri
 		nodeOrder = append(nodeOrder, c.Name)
@@ -58,22 +65,25 @@ func Web(configFilename string) {
 				Msg("unknown libvirt configdrive write format")
 			os.Exit(1)
 		}
-		settings[c.Name] = &libvirt.VirtualMachineRepositoryNodeSettings{
-			ConfigDriveVolumePool:  c.ConfigDrivePool,
-			ConfigDriveSuffix:      c.ConfigDriveSuffix,
-			ConfigDriveWriteFormat: configDriveWriteFormat,
+		vmRepSettings[c.Name] = libvirt.NodeSettings{
+			CdSuffix: c.ConfigDriveSuffix,
+			Cache:    c.Cache,
+		}
+		vmManSettings[c.Name] = compute.VirtualMachineManagerNodeSettings{
+			CdPool:   c.ConfigDrivePool,
+			CdSuffix: c.ConfigDriveSuffix,
+			CdFormat: configDriveWriteFormat,
 		}
 
 	}
 	connectionPool := libvirt.NewConnectionPool(nodeUri, nodeOrder, logger.With().Str("component", "libvirt-connection-pool").Logger())
 
-	vmRepo := libvirt.NewVirtualMachineRepository(connectionPool, settings, logger.With().Str("component", "vm-repository").Logger())
+	vmRepo := libvirt.NewVirtualMachineRepository(connectionPool, vmRepSettings, logger.With().Str("component", "vm-repository").Logger())
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool, volumeMetadata)
 	volpoolRepo := libvirt.NewVolumePoolRepository(connectionPool)
 	nodeRepo := libvirt.NewNodeRepository(connectionPool)
 	netRepo := libvirt.NewNetworkRepository(connectionPool)
 
-	compute := libcompute.New(epub, vmRepo, volumeRepo, keyRepo)
 	network := libcompute.NewNetworkService(netRepo)
 	keys := libcompute.NewKeyService(keyRepo)
 	volpools := libcompute.NewVolumePoolService(volpoolRepo)
@@ -81,7 +91,9 @@ func Web(configFilename string) {
 	volumes := libcompute.NewVolumeService(volumeRepo)
 	vms := libcompute.NewVirtualMachineService(vmRepo)
 
-	webenv := web.New(cfg, logger, compute, network, keys, volpools, nodes, volumes, vms)
+	vmanager := libcompute.NewVirtualMachineManager(vms, volumes, epub, vmManSettings)
+
+	webenv := web.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager)
 	server := http.Server{
 		Addr:    cfg.Web.Listen,
 		Handler: webenv,

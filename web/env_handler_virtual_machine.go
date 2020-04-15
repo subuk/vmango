@@ -228,6 +228,11 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
+	vm := &compute.VirtualMachine{
+		Id:     req.Form.Get("Name"),
+		NodeId: req.Form.Get("NodeId"),
+	}
+
 	vcpus, err := strconv.ParseInt(req.Form.Get("Vcpus"), 10, 16)
 	if err != nil {
 		http.Error(rw, "invalid vcpus value: "+err.Error(), http.StatusBadRequest)
@@ -264,41 +269,49 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		}
 		accessVlan = uint(parsed)
 	}
-	rootVolumeParams := compute.VirtualMachineCreateParamsVolume{
-		Name:      req.Form.Get("RootVolumeName"),
-		Pool:      req.Form.Get("RootVolumePool"),
-		CloneFrom: req.Form.Get("RootVolumeSource"),
-		Format:    compute.NewVolumeFormat(req.Form.Get("RootVolumeFormat")),
-		Size:      compute.NewSize(rootVolumeSizeValue, rootVolumeSizeUnit),
+
+	vm.VCpus = int(vcpus)
+	vm.Memory = compute.NewSize(memoryValue, memoryUnit)
+	vm.GuestAgent = true
+	vm.Graphic = compute.VirtualMachineGraphic{
+		Type: compute.GraphicTypeNone,
 	}
-	mainInterface := compute.VirtualMachineCreateParamsInterface{
-		Network:    req.Form.Get("Network"),
-		Mac:        req.Form.Get("Mac"),
-		AccessVlan: accessVlan,
+	vm.Config = &compute.VirtualMachineConfig{
+		Hostname: req.Form.Get("Name"),
+		Userdata: []byte(req.Form.Get("Userdata")),
 	}
-	params := compute.VirtualMachineCreateParams{
-		Id:         req.Form.Get("Name"),
-		NodeId:     req.Form.Get("NodeId"),
-		VCpus:      int(vcpus),
-		Arch:       req.Form.Get("Arch"),
-		Memory:     compute.NewSize(memoryValue, memoryUnit),
-		Start:      req.Form.Get("Start") == "true",
-		Volumes:    []compute.VirtualMachineCreateParamsVolume{rootVolumeParams},
-		Interfaces: []compute.VirtualMachineCreateParamsInterface{mainInterface},
-		Config: compute.VirtualMachineCreateParamsConfig{
-			Hostname:        req.Form.Get("Name"),
-			KeyFingerprints: req.Form["Keys"],
-			UserData:        req.Form.Get("Userdata"),
-		},
+	for _, fp := range req.Form["Keys"] {
+		key, err := env.keys.Get(fp)
+		if err != nil {
+			http.Error(rw, "cannot fetch key: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		vm.Config.Keys = append(vm.Config.Keys, key)
 	}
-	vm, err := env.compute.VirtualMachineCreate(params)
-	if err != nil {
+	vm.Interfaces = append(vm.Interfaces, &compute.VirtualMachineAttachedInterface{
+		NetworkName: req.Form.Get("Network"),
+		Mac:         req.Form.Get("Mac"),
+		Model:       "virtio",
+		AccessVlan:  accessVlan,
+	})
+	cloneVols := []compute.VolumeCloneParams{compute.VolumeCloneParams{
+		NodeId:       vm.NodeId,
+		Format:       compute.NewVolumeFormat(req.Form.Get("RootVolumeFormat")),
+		OriginalPath: req.Form.Get("RootVolumeSource"),
+		NewName:      req.Form.Get("RootVolumeName"),
+		NewPool:      req.Form.Get("RootVolumePool"),
+		NewSize:      compute.NewSize(rootVolumeSizeValue, rootVolumeSizeUnit),
+	}}
+	newVols := []compute.VolumeCreateParams{}
+	start := req.Form.Get("Start") == "true"
+
+	if err := env.vmanager.Create(vm, cloneVols, newVols, start); err != nil {
 		env.error(rw, req, err, "cannot create vm", http.StatusInternalServerError)
 		return
 	}
 
 	redirectPath := ""
-	if params.Start {
+	if start {
 		redirectPath = env.url("virtual-machine-console-show", "id", vm.Id, "node", vm.NodeId).Path
 	} else {
 		redirectPath = env.url("virtual-machine-detail", "id", vm.Id, "node", vm.NodeId).Path
@@ -328,7 +341,7 @@ func (env *Environ) VirtualMachineDeleteFormShow(rw http.ResponseWriter, req *ht
 func (env *Environ) VirtualMachineDeleteFormProcess(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	deleteVolumes := req.FormValue("DeleteVolumes") == "true"
-	if err := env.compute.VirtualMachineDelete(urlvars["id"], urlvars["node"], deleteVolumes); err != nil {
+	if err := env.vmanager.Delete(urlvars["id"], urlvars["node"], deleteVolumes); err != nil {
 		env.error(rw, req, err, "cannot delete virtual machine", http.StatusInternalServerError)
 		return
 	}
@@ -368,15 +381,23 @@ func (env *Environ) VirtualMachineUpdateFormProcess(rw http.ResponseWriter, req 
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
-	params := compute.VirtualMachineUpdateParams{}
+	vm := &compute.VirtualMachine{
+		Id:         urlvars["id"],
+		NodeId:     urlvars["node"],
+		Autostart:  req.Form.Get("Autostart") == "true",
+		GuestAgent: req.Form.Get("GuestAgent") == "true",
+		Graphic: compute.VirtualMachineGraphic{
+			Type:   compute.NewGraphicType(req.Form.Get("GraphicType")),
+			Listen: req.Form.Get("GraphicListen"),
+		},
+	}
 
 	vcpus, err := strconv.ParseInt(req.Form.Get("Vcpus"), 10, 16)
 	if err != nil {
 		http.Error(rw, "invalid vcpus value: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	vcpusInt := int(vcpus)
-	params.Vcpus = &vcpusInt
+	vm.VCpus = int(vcpus)
 
 	memoryValue, err := strconv.ParseUint(req.Form.Get("MemoryValue"), 10, 32)
 	if err != nil {
@@ -388,26 +409,9 @@ func (env *Environ) VirtualMachineUpdateFormProcess(rw http.ResponseWriter, req 
 		http.Error(rw, "unknown memory unit: "+req.Form.Get("MemoryUnit"), http.StatusBadRequest)
 		return
 	}
-	memory := compute.NewSize(memoryValue, memoryUnit)
-	params.Memory = &memory
+	vm.Memory = compute.NewSize(memoryValue, memoryUnit)
 
-	autostart := req.Form.Get("Autostart") == "true"
-	params.Autostart = &autostart
-
-	guestagent := req.Form.Get("GuestAgent") == "true"
-	params.GuestAgent = &guestagent
-
-	graphicType := compute.NewGraphicType(req.Form.Get("GraphicType"))
-	if graphicType == compute.GraphicTypeUnknown {
-		http.Error(rw, "unknown graphic type: "+req.Form.Get("GraphicType"), http.StatusBadRequest)
-		return
-	}
-	params.GraphicType = &graphicType
-
-	graphicListen := req.Form.Get("GraphicListen")
-	params.GraphicListen = &graphicListen
-
-	if err := env.vms.Update(urlvars["id"], urlvars["node"], params); err != nil {
+	if err := env.vms.Save(vm); err != nil {
 		env.error(rw, req, err, "cannot update virtual machine", http.StatusInternalServerError)
 		return
 	}

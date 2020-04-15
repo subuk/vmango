@@ -23,21 +23,15 @@ import (
 
 const ConfigDriveMaxSize = 5 * 1024 * 1024
 
-type VirtualMachineRepositoryNodeSettings struct {
-	ConfigDriveVolumePool  string
-	ConfigDriveSuffix      string
-	ConfigDriveWriteFormat configdrive.Format
-}
-
 type VirtualMachineRepository struct {
 	pool          *ConnectionPool
 	logger        zerolog.Logger
-	settings      map[string]*VirtualMachineRepositoryNodeSettings
+	settings      map[string]NodeSettings
 	configCache   map[string]*compute.VirtualMachineConfig
 	configCacheMu *sync.Mutex
 }
 
-func NewVirtualMachineRepository(pool *ConnectionPool, settings map[string]*VirtualMachineRepositoryNodeSettings, logger zerolog.Logger) *VirtualMachineRepository {
+func NewVirtualMachineRepository(pool *ConnectionPool, settings map[string]NodeSettings, logger zerolog.Logger) *VirtualMachineRepository {
 	return &VirtualMachineRepository{
 		pool:          pool,
 		settings:      settings,
@@ -45,117 +39,6 @@ func NewVirtualMachineRepository(pool *ConnectionPool, settings map[string]*Virt
 		configCache:   map[string]*compute.VirtualMachineConfig{},
 		configCacheMu: &sync.Mutex{},
 	}
-}
-
-func (repo *VirtualMachineRepository) generateConfigDrive(conn *libvirt.Connect, poolName string, domainConfig *libvirtxml.Domain, config *compute.VirtualMachineConfig, suffix string, format configdrive.Format) (*compute.VirtualMachineAttachedVolume, error) {
-	virPool, err := conn.LookupStoragePoolByName(poolName)
-	if err != nil {
-		return nil, util.NewError(err, "cannot lookup configdrive storage pool")
-	}
-
-	configVolumeName := strings.Replace(domainConfig.Name, "-", "_", -1) + suffix
-	if existingVolume, err := virPool.LookupStorageVolByName(configVolumeName); err == nil && existingVolume != nil {
-		existingVolumeInfo, err := existingVolume.GetInfo()
-		if err == nil && existingVolumeInfo.Capacity <= 2*1024*1024 {
-			if err := existingVolume.Delete(libvirt.STORAGE_VOL_DELETE_NORMAL); err != nil {
-				return nil, util.NewError(err, "cannot delete existing configdrive volume")
-			}
-		}
-	}
-
-	var data configdrive.Data
-	switch format {
-	default:
-		panic(fmt.Errorf("unknown configdrive write format '%s'", format))
-	case configdrive.FormatOpenstack:
-		osData := &configdrive.Openstack{
-			Userdata: config.Userdata,
-			Metadata: configdrive.OpenstackMetadata{
-				Az:          "none",
-				Files:       []struct{}{},
-				Hostname:    config.Hostname,
-				LaunchIndex: 0,
-				Name:        config.Hostname,
-				Meta:        map[string]string{},
-				PublicKeys:  map[string]string{},
-				UUID:        domainConfig.UUID,
-			},
-		}
-		for _, key := range config.Keys {
-			osData.Metadata.PublicKeys[key.Comment] = string(key.Value)
-		}
-		data = osData
-	case configdrive.FormatNoCloud:
-		nocloudData := &configdrive.NoCloud{
-			Userdata: config.Userdata,
-			Metadata: configdrive.NoCloudMetadata{
-				InstanceId:    domainConfig.UUID,
-				Hostname:      config.Hostname,
-				LocalHostname: config.Hostname,
-			},
-		}
-		for _, key := range config.Keys {
-			nocloudData.Metadata.PublicKeys = append(nocloudData.Metadata.PublicKeys, string(key.Value))
-		}
-		data = nocloudData
-	}
-
-	localConfigDriveFile, err := configdrive.GenerateIso(data)
-	if err != nil {
-		return nil, util.NewError(err, "cannot generate iso")
-	}
-	configdriveContent, err := ioutil.ReadAll(localConfigDriveFile)
-	if err != nil {
-		return nil, util.NewError(err, "cannot read local configdrive file")
-	}
-
-	virVolumeConfig := &libvirtxml.StorageVolume{}
-	virVolumeConfig.Name = configVolumeName
-	virVolumeConfig.Target = &libvirtxml.StorageVolumeTarget{Format: &libvirtxml.StorageVolumeTargetFormat{Type: "raw"}}
-	virVolumeConfig.Capacity = &libvirtxml.StorageVolumeSize{Unit: "bytes", Value: uint64(len(configdriveContent))}
-	virVolumeXml, err := virVolumeConfig.Marshal()
-	if err != nil {
-		return nil, util.NewError(err, "cannot marshal configdrive volume to xml")
-	}
-	virVolume, err := virPool.StorageVolCreateXML(virVolumeXml, 0)
-	if err != nil {
-		return nil, util.NewError(err, "cannot create configdrive storage volume")
-	}
-	stream, err := conn.NewStream(0)
-	if err != nil {
-		return nil, util.NewError(err, "cannot initialize configdrive upload stream")
-	}
-	if err := virVolume.Upload(stream, 0, uint64(len(configdriveContent)), 0); err != nil {
-		return nil, util.NewError(err, "cannot start configdrive upload")
-	}
-	if _, err := stream.Send(configdriveContent); err != nil {
-		return nil, util.NewError(err, "configdrive upload failed")
-	}
-	if err := stream.Finish(); err != nil {
-		return nil, util.NewError(err, "cannot finalize configdrive upload")
-	}
-
-	virVolumeXml, err = virVolume.GetXMLDesc(0)
-	if err != nil {
-		return nil, util.NewError(err, "cannot get volume info")
-	}
-	virVolumeConfig = &libvirtxml.StorageVolume{}
-	if err := virVolumeConfig.Unmarshal(virVolumeXml); err != nil {
-		return nil, util.NewError(err, "cannot unmarshal volume xml")
-	}
-	if virVolumeConfig.Target == nil {
-		return nil, fmt.Errorf("configdrive volume target element is blank")
-	}
-	attachedVolume := &compute.VirtualMachineAttachedVolume{
-		DeviceName: "hda",
-		DeviceBus:  compute.DeviceBusIde,
-		Path:       virVolumeConfig.Target.Path,
-		DeviceType: compute.DeviceTypeCdrom,
-	}
-	repo.configCacheMu.Lock()
-	repo.configCache[attachedVolume.Path] = nil
-	repo.configCacheMu.Unlock()
-	return attachedVolume, nil
 }
 
 type virStreamReader struct {
@@ -203,7 +86,7 @@ func (repo *VirtualMachineRepository) parseConfigDrive(conn *libvirt.Connect, vo
 	return config, nil
 }
 
-func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId string, domain *libvirt.Domain, cdSuffix string) (*compute.VirtualMachine, error) {
+func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId string, domain *libvirt.Domain, settings NodeSettings) (*compute.VirtualMachine, error) {
 	domainXml, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
 	if err != nil {
 		return nil, util.NewError(err, "cannot get domain xml")
@@ -267,7 +150,7 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId s
 		if volume.DeviceType != compute.DeviceTypeCdrom {
 			continue
 		}
-		if !strings.HasSuffix(volume.Path, cdSuffix) {
+		if !strings.HasSuffix(volume.Path, settings.CdSuffix) {
 			continue
 		}
 		if config := repo.configCache[volume.Path]; config != nil {
@@ -451,22 +334,8 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compu
 	return net.Dial("tcp", addr)
 }
 
-func (repo *VirtualMachineRepository) Create(id, nodeId string, arch compute.Arch, vcpus int, memory compute.Size, attachedVolumes []*compute.VirtualMachineAttachedVolume, interfaces []*compute.VirtualMachineAttachedInterface, config *compute.VirtualMachineConfig) (*compute.VirtualMachine, error) {
-	conn, err := repo.pool.Acquire(nodeId)
-	if err != nil {
-		return nil, util.NewError(err, "cannot acquire libvirt connection")
-	}
-	defer repo.pool.Release(nodeId)
-
-	libvirtArch := ""
-	switch arch {
-	default:
-		return nil, compute.ErrArchNotsupported
-	case compute.ArchAmd64:
-		libvirtArch = "x86_64"
-	}
-
-	domCapsXml, err := conn.GetDomainCapabilities("", libvirtArch, "", "", 0)
+func (repo *VirtualMachineRepository) generateNewDomainConfig(conn *libvirt.Connect, vm *compute.VirtualMachine) (*libvirtxml.Domain, error) {
+	domCapsXml, err := conn.GetDomainCapabilities("", "", "", "", 0)
 	if err != nil {
 		return nil, util.NewError(err, "cannot fetch domain capabilities")
 	}
@@ -475,24 +344,12 @@ func (repo *VirtualMachineRepository) Create(id, nodeId string, arch compute.Arc
 		return nil, util.NewError(err, "cannot parse domain capabilities")
 	}
 
-	features := map[string]bool{}
-	for _, mode := range domCapsConfig.CPU.Modes {
-		if mode.Name == "host-passthrough" && mode.Supported == "yes" {
-			features["host-cpu-passthrough"] = true
-		}
-	}
-	if !features["host-cpu-passthrough"] {
-		return nil, fmt.Errorf("host cpu passthrough is not supported")
-	}
-
 	virDomainConfig := &libvirtxml.Domain{}
 	virDomainConfig.UUID = uuid.New().String()
 	virDomainConfig.Type = domCapsConfig.Domain
-	virDomainConfig.Name = id
-	virDomainConfig.VCPU = &libvirtxml.DomainVCPU{Placement: "static", Value: vcpus}
-	virDomainConfig.Memory = &libvirtxml.DomainMemory{Unit: "bytes", Value: uint(memory.Bytes())}
+	virDomainConfig.Name = vm.Id
 	virDomainConfig.OS = &libvirtxml.DomainOS{
-		Type: &libvirtxml.DomainOSType{Type: "hvm", Machine: domCapsConfig.Machine, Arch: libvirtArch},
+		Type: &libvirtxml.DomainOSType{Type: "hvm", Machine: domCapsConfig.Machine, Arch: domCapsConfig.Arch},
 		BootDevices: []libvirtxml.DomainBootDevice{
 			{Dev: "cdrom"},
 			{Dev: "hd"},
@@ -503,167 +360,122 @@ func (repo *VirtualMachineRepository) Create(id, nodeId string, arch compute.Arc
 		APIC: &libvirtxml.DomainFeatureAPIC{},
 	}
 	virDomainConfig.CPU = &libvirtxml.DomainCPU{}
-	if features["host-cpu-passthrough"] {
-		virDomainConfig.CPU.Mode = "host-passthrough"
-	}
+	virDomainConfig.CPU.Mode = "host-passthrough"
 	virDomainConfig.Clock = &libvirtxml.DomainClock{Offset: "utc"}
 	virDomainConfig.OnPoweroff = "destroy"
 	virDomainConfig.OnReboot = "restart"
 	virDomainConfig.OnCrash = "destroy"
-
 	virDomainConfig.Devices = &libvirtxml.DomainDeviceList{Emulator: domCapsConfig.Path}
 	virDomainConfig.Devices.Consoles = append(virDomainConfig.Devices.Consoles, libvirtxml.DomainConsole{})
-	virDomainConfig.Devices.Channels = append(virDomainConfig.Devices.Channels, libvirtxml.DomainChannel{
-		Protocol: &libvirtxml.DomainChardevProtocol{Type: "unix"},
-		Target:   &libvirtxml.DomainChannelTarget{VirtIO: &libvirtxml.DomainChannelTargetVirtIO{Name: "org.qemu.guest_agent.0"}},
-	})
-	settings := repo.settings[nodeId]
-	configVolume, err := repo.generateConfigDrive(conn, settings.ConfigDriveVolumePool, virDomainConfig, config, settings.ConfigDriveSuffix, settings.ConfigDriveWriteFormat)
-	if err != nil {
-		return nil, util.NewError(err, "cannot generate config drive")
-	}
-	attachedVolumes = append(attachedVolumes, configVolume)
 
-	for _, attachedVolume := range attachedVolumes {
-		virVolumeConfig, err := getVolumeConfigByPath(conn, attachedVolume.Path)
-		if err != nil {
-			return nil, util.NewError(err, "cannot get volume config")
-		}
-		diskConfig := DomainDiskConfigFromVirtualMachineAttachedVolume(
-			attachedVolume,
-			getVolTargetFormatType(virVolumeConfig),
-			virVolumeConfig.Type,
-		)
-		virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, *diskConfig)
+	return virDomainConfig, nil
+}
+
+func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
+	conn, err := repo.pool.Acquire(vm.NodeId)
+	if err != nil {
+		return util.NewError(err, "cannot acquire libvirt connection")
 	}
-	for _, attachedIface := range interfaces {
-		if err := repo.attachInterface(virDomainConfig, attachedIface); err != nil {
-			return nil, util.NewError(err, "cannot attach interface")
+	defer repo.pool.Release(vm.NodeId)
+
+	var isNewVm bool
+	var virDomainConfig *libvirtxml.Domain
+
+	existingVirDomain, err := conn.LookupDomainByName(vm.Id)
+	if err != nil {
+		if lErr, ok := err.(*libvirt.Error); ok {
+			if lErr.Code != libvirt.ERR_NO_DOMAIN {
+				return util.NewError(err, "cannot lookup domain")
+			}
+		}
+		isNewVm = true
+	}
+
+	if isNewVm {
+		newVirDomainConfig, err := repo.generateNewDomainConfig(conn, vm)
+		if err != nil {
+			return util.NewError(err, "cannot generate new domain config")
+		}
+		virDomainConfig = newVirDomainConfig
+	} else {
+		virDomainXml, err := existingVirDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+		if err != nil {
+			return util.NewError(err, "cannot fetch xml")
+		}
+		virDomainConfig = &libvirtxml.Domain{}
+		if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
+			return util.NewError(err, "cannot parse domain xml")
+		}
+	}
+
+	virDomainConfig.VCPU = &libvirtxml.DomainVCPU{Placement: "static", Value: vm.VCpus}
+	virDomainConfig.Memory = &libvirtxml.DomainMemory{Unit: "bytes", Value: uint(vm.Memory.Bytes())}
+
+	if vm.GuestAgent {
+		hasGuestAgent := false
+		for _, channel := range virDomainConfig.Devices.Channels {
+			if channel.Target != nil && channel.Target.VirtIO != nil && channel.Target.VirtIO.Name == "org.qemu.guest_agent.0" {
+				hasGuestAgent = true
+				break
+			}
+		}
+		if !hasGuestAgent {
+			virDomainConfig.Devices.Channels = append(virDomainConfig.Devices.Channels, libvirtxml.DomainChannel{
+				Protocol: &libvirtxml.DomainChardevProtocol{Type: "unix"},
+				Target:   &libvirtxml.DomainChannelTarget{VirtIO: &libvirtxml.DomainChannelTargetVirtIO{Name: "org.qemu.guest_agent.0"}},
+				Source:   &libvirtxml.DomainChardevSource{UNIX: &libvirtxml.DomainChardevSourceUNIX{}},
+			})
+		}
+	} else {
+		newChannels := []libvirtxml.DomainChannel{}
+		for _, channel := range virDomainConfig.Devices.Channels {
+			if channel.Target != nil && channel.Target.VirtIO != nil && channel.Target.VirtIO.Name == "org.qemu.guest_agent.0" {
+				continue
+			}
+			newChannels = append(newChannels, channel)
+		}
+		virDomainConfig.Devices.Channels = newChannels
+	}
+
+	switch vm.Graphic.Type {
+	default:
+		panic("unknown graphic type")
+	case compute.GraphicTypeNone:
+		virDomainConfig.Devices.Graphics = nil
+		virDomainConfig.Devices.Videos = nil
+	case compute.GraphicTypeVnc:
+		vncGraphic := &libvirtxml.DomainGraphicVNC{Port: -1, AutoPort: "yes", Listen: vm.Graphic.Listen}
+		virDomainConfig.Devices.Graphics = []libvirtxml.DomainGraphic{
+			libvirtxml.DomainGraphic{
+				VNC: vncGraphic,
+			},
+		}
+	case compute.GraphicTypeSpice:
+		spiceGraphic := &libvirtxml.DomainGraphicSpice{Port: -1, AutoPort: "yes", Listen: vm.Graphic.Listen}
+		virDomainConfig.Devices.Graphics = []libvirtxml.DomainGraphic{
+			libvirtxml.DomainGraphic{
+				Spice: spiceGraphic,
+			},
+		}
+	}
+	if isNewVm {
+		for _, attachedVolume := range vm.Volumes {
+			if err := repo.attachVolume(conn, virDomainConfig, attachedVolume); err != nil {
+				return util.NewError(err, "cannot attach volume")
+			}
+		}
+		for _, attachedIface := range vm.Interfaces {
+			if err := repo.attachInterface(virDomainConfig, attachedIface); err != nil {
+				return util.NewError(err, "cannot attach interface")
+			}
 		}
 	}
 	virDomainXml, err := virDomainConfig.Marshal()
 	if err != nil {
-		return nil, util.NewError(err, "cannot marshal domain xml")
+		return util.NewError(err, "cannot marshal domain xml")
 	}
-	virDomain, err := conn.DomainDefineXML(virDomainXml)
-	if err != nil {
-		fmt.Println(virDomainXml)
-		return nil, util.NewError(err, "cannot define new domain")
-	}
-	vm, err := repo.domainToVm(conn, nodeId, virDomain, settings.ConfigDriveSuffix)
-	if err != nil {
-		return nil, util.NewError(err, "cannot parse domain to vm")
-	}
-	return vm, nil
-}
-
-func (repo *VirtualMachineRepository) Update(id, nodeId string, params compute.VirtualMachineUpdateParams) error {
-	conn, err := repo.pool.Acquire(nodeId)
-	if err != nil {
-		return util.NewError(err, "cannot acquire libvirt connection")
-	}
-	defer repo.pool.Release(nodeId)
-
-	virDomain, err := conn.LookupDomainByName(id)
-	if err != nil {
-		return util.NewError(err, "lookup domain failed")
-	}
-	virDomainRunning, err := virDomain.IsActive()
-	if err != nil {
-		return util.NewError(err, "cannot check if domain is running")
-	}
-	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
-	if err != nil {
-		return util.NewError(err, "cannot fetch domain xml")
-	}
-	virDomainConfig := &libvirtxml.Domain{}
-	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return util.NewError(err, "cannot unmarshal domain xml")
-	}
-	if params.Autostart != nil {
-		if err := virDomain.SetAutostart(*params.Autostart); err != nil {
-			return util.NewError(err, "cannot set autostart to %t", *params.Autostart)
-		}
-	}
-	if params.Vcpus != nil {
-		virDomainConfig.VCPU.Value = *params.Vcpus
-	}
-	if params.Memory != nil {
-		virDomainConfig.Memory.Value = uint((*params.Memory).Bytes())
-		virDomainConfig.Memory.Unit = "bytes"
-		virDomainConfig.CurrentMemory = nil
-	}
-	if params.GuestAgent != nil {
-		if virDomainRunning {
-			return util.NewError(err, "domain must be stopped to change guest agent integration state")
-		}
-		if *params.GuestAgent {
-			hasGuestAgent := false
-			for _, channel := range virDomainConfig.Devices.Channels {
-				if channel.Target != nil && channel.Target.VirtIO != nil && channel.Target.VirtIO.Name == "org.qemu.guest_agent.0" {
-					hasGuestAgent = true
-					break
-				}
-			}
-			if !hasGuestAgent {
-				virDomainConfig.Devices.Channels = append(virDomainConfig.Devices.Channels, libvirtxml.DomainChannel{
-					Protocol: &libvirtxml.DomainChardevProtocol{Type: "unix"},
-					Target:   &libvirtxml.DomainChannelTarget{VirtIO: &libvirtxml.DomainChannelTargetVirtIO{Name: "org.qemu.guest_agent.0"}},
-					Source:   &libvirtxml.DomainChardevSource{UNIX: &libvirtxml.DomainChardevSourceUNIX{}},
-				})
-			}
-		} else {
-			newChannels := []libvirtxml.DomainChannel{}
-			for _, channel := range virDomainConfig.Devices.Channels {
-				if channel.Target != nil && channel.Target.VirtIO != nil && channel.Target.VirtIO.Name == "org.qemu.guest_agent.0" {
-					continue
-				}
-				newChannels = append(newChannels, channel)
-			}
-			virDomainConfig.Devices.Channels = newChannels
-		}
-	}
-
-	if params.GraphicType != nil {
-		if virDomainRunning {
-			return util.NewError(err, "domain must be stopped to change graphic")
-		}
-		switch *params.GraphicType {
-		default:
-			panic("unknown graphic type")
-		case compute.GraphicTypeNone:
-			virDomainConfig.Devices.Graphics = nil
-			virDomainConfig.Devices.Videos = nil
-		case compute.GraphicTypeVnc:
-			vncGraphic := &libvirtxml.DomainGraphicVNC{Port: -1, AutoPort: "yes"}
-			virDomainConfig.Devices.Graphics = []libvirtxml.DomainGraphic{
-				libvirtxml.DomainGraphic{
-					VNC: vncGraphic,
-				},
-			}
-			if params.GraphicListen != nil {
-				vncGraphic.Listen = *params.GraphicListen
-			}
-		case compute.GraphicTypeSpice:
-			spiceGraphic := &libvirtxml.DomainGraphicSpice{Port: -1, AutoPort: "yes"}
-			virDomainConfig.Devices.Graphics = []libvirtxml.DomainGraphic{
-				libvirtxml.DomainGraphic{
-					Spice: spiceGraphic,
-				},
-			}
-			if params.GraphicListen != nil {
-				spiceGraphic.Listen = *params.GraphicListen
-			}
-
-		}
-
-	}
-	virDomainXmlUpdated, err := virDomainConfig.Marshal()
-	if err != nil {
-		return util.NewError(err, "cannot marshal updated domain xml")
-	}
-	if _, err := conn.DomainDefineXML(virDomainXmlUpdated); err != nil {
-		return util.NewError(err, "cannot update domain xml")
+	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
+		return util.NewError(err, "cannot define new domain")
 	}
 	return nil
 }
@@ -713,7 +525,7 @@ func (repo *VirtualMachineRepository) List() ([]*compute.VirtualMachine, error) 
 		settings := repo.settings[nodeId]
 		domains, err := conn.ListAllDomains(0)
 		for _, domain := range domains {
-			vm, err := repo.domainToVm(conn, nodeId, &domain, settings.ConfigDriveSuffix)
+			vm, err := repo.domainToVm(conn, nodeId, &domain, settings)
 			if err != nil {
 				return nil, util.NewError(err, "cannot convert libvirt domain to vm")
 			}
@@ -735,7 +547,7 @@ func (repo *VirtualMachineRepository) Get(id, nodeId string) (*compute.VirtualMa
 	if err != nil {
 		return nil, util.NewError(err, "failed to lookup vm")
 	}
-	vm, err := repo.domainToVm(conn, nodeId, domain, settings.ConfigDriveSuffix)
+	vm, err := repo.domainToVm(conn, nodeId, domain, settings)
 	if err != nil {
 		return nil, util.NewError(err, "cannot convert libvirt domain to vm")
 	}
@@ -784,6 +596,20 @@ func (repo *VirtualMachineRepository) Start(id, nodeId string) error {
 	return domain.Create()
 }
 
+func (repo *VirtualMachineRepository) attachVolume(conn *libvirt.Connect, virDomainConfig *libvirtxml.Domain, attachedVolume *compute.VirtualMachineAttachedVolume) error {
+	virVolumeConfig, err := getVolumeConfigByPath(conn, attachedVolume.Path)
+	if err != nil {
+		return util.NewError(err, "cannot get volume config")
+	}
+	diskConfig := DomainDiskConfigFromVirtualMachineAttachedVolume(
+		attachedVolume,
+		getVolTargetFormatType(virVolumeConfig),
+		virVolumeConfig.Type,
+	)
+	virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, *diskConfig)
+	return nil
+}
+
 func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVolume *compute.VirtualMachineAttachedVolume) error {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
@@ -811,18 +637,9 @@ func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVo
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
 		return util.NewError(err, "cannot parse domain xml")
 	}
-
-	virVolumeConfig, err := getVolumeConfigByPath(conn, attachedVolume.Path)
-	if err != nil {
-		return util.NewError(err, "cannot get volume config")
+	if err := repo.attachVolume(conn, virDomainConfig, attachedVolume); err != nil {
+		return util.NewError(err, "cannot add volume xml config")
 	}
-
-	diskConfig := DomainDiskConfigFromVirtualMachineAttachedVolume(
-		attachedVolume,
-		getVolTargetFormatType(virVolumeConfig),
-		virVolumeConfig.Type,
-	)
-	virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, *diskConfig)
 
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {

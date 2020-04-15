@@ -1,5 +1,7 @@
 package compute
 
+import "io"
+
 type VolumeCloneParams struct {
 	NodeId       string
 	Format       VolumeFormat
@@ -28,6 +30,7 @@ type VolumeRepository interface {
 	Clone(params VolumeCloneParams) (*Volume, error)
 	Resize(path, node string, newSize Size) error
 	Delete(path, node string) error
+	Upload(path, nodeId string, content io.Reader, size uint64) error
 	List(options VolumeListOptions) ([]*Volume, error)
 }
 

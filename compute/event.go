@@ -4,6 +4,15 @@ import (
 	"fmt"
 )
 
+type Event interface {
+	Name() string
+	Plain() map[string]string
+}
+
+type EventPublisher interface {
+	Publish(event Event) error
+}
+
 type EventVirtualMachineCreated struct {
 	vm *VirtualMachine
 }
