@@ -1,7 +1,7 @@
 package compute
 
 type NetworkListOptions struct {
-	NodeId string
+	NodeIds []string
 }
 
 type NetworkRepository interface {

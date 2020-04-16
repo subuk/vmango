@@ -13,7 +13,7 @@ import (
 )
 
 func (env *Environ) VirtualMachineList(rw http.ResponseWriter, req *http.Request) {
-	vms, err := env.vms.List()
+	vms, err := env.vms.List(compute.VirtualMachineListOptions{})
 	if err != nil {
 		env.error(rw, req, err, "vm list failed", http.StatusInternalServerError)
 		return
@@ -51,12 +51,12 @@ func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Reque
 		env.error(rw, req, err, "vm get failed", http.StatusInternalServerError)
 		return
 	}
-	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeId: vm.NodeId})
+	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeIds: []string{vm.NodeId}})
 	if err != nil {
 		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
 		return
 	}
-	networks, err := env.networks.List(compute.NetworkListOptions{NodeId: vm.NodeId})
+	networks, err := env.networks.List(compute.NetworkListOptions{NodeIds: []string{vm.NodeId}})
 	if err != nil {
 		env.error(rw, req, err, "cannot list networks", http.StatusInternalServerError)
 		return
@@ -170,7 +170,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 	}
 	data.NodeId = selectedNode.Id
 
-	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeId: selectedNode.Id})
+	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeIds: []string{selectedNode.Id}})
 	if err != nil {
 		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
 		return
@@ -196,7 +196,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		data.Images = detachedVolumes
 	}
 
-	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeId: selectedNode.Id})
+	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeIds: []string{selectedNode.Id}})
 	if err != nil {
 		env.error(rw, req, err, "cannot list pools", http.StatusInternalServerError)
 		return
@@ -210,7 +210,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 	}
 	data.Keys = keys
 
-	networks, err := env.networks.List(compute.NetworkListOptions{NodeId: selectedNode.Id})
+	networks, err := env.networks.List(compute.NetworkListOptions{NodeIds: []string{selectedNode.Id}})
 	if err != nil {
 		env.error(rw, req, err, "cannot list networks", http.StatusInternalServerError)
 		return

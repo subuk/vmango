@@ -19,6 +19,7 @@ type ConnectionPool struct {
 	nodeOrder []string
 	logger    zerolog.Logger
 	cache     map[string]*connection
+	cacheMu   *sync.RWMutex
 }
 
 func NewConnectionPool(nodeUri map[string]string, nodeOrder []string, logger zerolog.Logger) *ConnectionPool {
@@ -26,20 +27,44 @@ func NewConnectionPool(nodeUri map[string]string, nodeOrder []string, logger zer
 		nodeUri:   nodeUri,
 		nodeOrder: nodeOrder,
 		cache:     map[string]*connection{},
+		cacheMu:   &sync.RWMutex{},
 		logger:    logger,
 	}
 }
-func (p *ConnectionPool) Nodes() []string {
-	return p.nodeOrder
+
+func (p *ConnectionPool) Nodes(only []string) []string {
+	result := []string{}
+	for _, node := range p.nodeOrder {
+		if _, ok := p.nodeUri[node]; !ok {
+			continue
+		}
+		if len(only) == 0 {
+			result = append(result, node)
+			continue
+		}
+		for _, needle := range only {
+			if needle != node {
+				continue
+			}
+			result = append(result, node)
+		}
+
+	}
+	return result
 }
+
 func (p *ConnectionPool) Acquire(node string) (*libvirt.Connect, error) {
 	if node == "" {
 		panic("empty node id")
 	}
+	p.cacheMu.Lock()
 	uri := p.nodeUri[node]
 	if p.cache[uri] == nil {
 		p.cache[uri] = &connection{Mu: &sync.Mutex{}}
 	}
+	p.cacheMu.Unlock()
+	p.cacheMu.RLock()
+	defer p.cacheMu.RUnlock()
 
 	p.cache[uri].Mu.Lock()
 	if p.cache[uri].Conn == nil {

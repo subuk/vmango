@@ -5,16 +5,18 @@ import (
 	"subuk/vmango/util"
 
 	"github.com/libvirt/libvirt-go"
+	"github.com/rs/zerolog"
 
 	libvirtxml "github.com/libvirt/libvirt-go-xml"
 )
 
 type NetworkRepository struct {
-	pool *ConnectionPool
+	pool   *ConnectionPool
+	logger zerolog.Logger
 }
 
-func NewNetworkRepository(pool *ConnectionPool) *NetworkRepository {
-	return &NetworkRepository{pool: pool}
+func NewNetworkRepository(pool *ConnectionPool, logger zerolog.Logger) *NetworkRepository {
+	return &NetworkRepository{pool: pool, logger: logger}
 }
 
 func (repo *NetworkRepository) virNetworkToNetwork(virNetwork *libvirt.Network, nodeId string) (*compute.Network, error) {
@@ -53,19 +55,18 @@ func (repo *NetworkRepository) Get(name, nodeId string) (*compute.Network, error
 
 func (repo *NetworkRepository) List(options compute.NetworkListOptions) ([]*compute.Network, error) {
 	networks := []*compute.Network{}
-	for _, nodeId := range repo.pool.Nodes() {
-		if options.NodeId != "" && options.NodeId != nodeId {
-			continue
-		}
+	for _, nodeId := range repo.pool.Nodes(options.NodeIds) {
 		conn, err := repo.pool.Acquire(nodeId)
 		if err != nil {
-			return nil, util.NewError(err, "cannot acquire connection")
+			repo.logger.Warn().Err(err).Str("node", nodeId).Msg("cannot list networks")
+			continue
 		}
 		defer repo.pool.Release(nodeId)
 
 		virNetworks, err := conn.ListAllNetworks(0)
 		if err != nil {
-			return nil, util.NewError(err, "list networks failed")
+			repo.logger.Warn().Err(err).Str("node", nodeId).Msg("cannot list networks")
+			continue
 		}
 		for _, virNetwork := range virNetworks {
 			network, err := repo.virNetworkToNetwork(&virNetwork, nodeId)

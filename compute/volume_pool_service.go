@@ -1,7 +1,7 @@
 package compute
 
 type VolumePoolListOptions struct {
-	NodeId string
+	NodeIds []string
 }
 
 type VolumePoolRepository interface {

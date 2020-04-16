@@ -2,8 +2,10 @@ package compute
 
 import "fmt"
 
+type VirtualMachineListOptions struct{}
+
 type VirtualMachineRepository interface {
-	List() ([]*VirtualMachine, error)
+	List(options VirtualMachineListOptions) ([]*VirtualMachine, error)
 	Get(id, node string) (*VirtualMachine, error)
 	Save(vm *VirtualMachine) error
 	Delete(id, node string) error

@@ -29,7 +29,7 @@ func (env *Environ) VolumeList(rw http.ResponseWriter, req *http.Request) {
 		env.error(rw, req, err, "volume list failed", http.StatusInternalServerError)
 		return
 	}
-	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeId: selectedNodeId})
+	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeIds: []string{selectedNodeId}})
 	if err != nil {
 		env.error(rw, req, err, "pool list failed", http.StatusInternalServerError)
 		return
@@ -78,7 +78,7 @@ func (env *Environ) VolumeCloneFormShow(rw http.ResponseWriter, req *http.Reques
 		env.error(rw, req, err, "volume get failed", http.StatusInternalServerError)
 		return
 	}
-	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeId: volume.NodeId})
+	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeIds: []string{volume.NodeId}})
 	if err != nil {
 		env.error(rw, req, err, "pool list failed", http.StatusInternalServerError)
 		return

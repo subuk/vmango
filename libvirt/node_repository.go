@@ -6,22 +6,25 @@ import (
 	"subuk/vmango/util"
 
 	libvirtxml "github.com/libvirt/libvirt-go-xml"
+	"github.com/rs/zerolog"
 )
 
 type NodeRepository struct {
-	pool *ConnectionPool
+	pool   *ConnectionPool
+	logger zerolog.Logger
 }
 
-func NewNodeRepository(pool *ConnectionPool) *NodeRepository {
-	return &NodeRepository{pool: pool}
+func NewNodeRepository(pool *ConnectionPool, logger zerolog.Logger) *NodeRepository {
+	return &NodeRepository{pool: pool, logger: logger}
 }
 
 func (repo *NodeRepository) List() ([]*compute.Node, error) {
 	nodes := []*compute.Node{}
-	for _, node := range repo.pool.Nodes() {
-		node, err := repo.Get(node)
+	for _, nodeId := range repo.pool.Nodes(nil) {
+		node, err := repo.Get(nodeId)
 		if err != nil {
-			return nil, util.NewError(err, "cannot get node")
+			repo.logger.Warn().Err(err).Str("node", nodeId).Msg("cannot get node")
+			continue
 		}
 		nodes = append(nodes, node)
 	}

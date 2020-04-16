@@ -17,6 +17,8 @@ import (
 )
 
 func Web(configFilename string) {
+	zerolog.DurationFieldInteger = true
+
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
 	logger.Info().Str("filename", configFilename).Msg("using configuration file")
 	cfg, err := config.Parse(configFilename)
@@ -79,10 +81,10 @@ func Web(configFilename string) {
 	connectionPool := libvirt.NewConnectionPool(nodeUri, nodeOrder, logger.With().Str("component", "libvirt-connection-pool").Logger())
 
 	vmRepo := libvirt.NewVirtualMachineRepository(connectionPool, vmRepSettings, logger.With().Str("component", "vm-repository").Logger())
-	volumeRepo := libvirt.NewVolumeRepository(connectionPool, volumeMetadata)
-	volpoolRepo := libvirt.NewVolumePoolRepository(connectionPool)
-	nodeRepo := libvirt.NewNodeRepository(connectionPool)
-	netRepo := libvirt.NewNetworkRepository(connectionPool)
+	volumeRepo := libvirt.NewVolumeRepository(connectionPool, volumeMetadata, logger.With().Str("component", "volume-repository").Logger())
+	volpoolRepo := libvirt.NewVolumePoolRepository(connectionPool, logger.With().Str("component", "vol-pool-repository").Logger())
+	nodeRepo := libvirt.NewNodeRepository(connectionPool, logger.With().Str("component", "node-repository").Logger())
+	netRepo := libvirt.NewNetworkRepository(connectionPool, logger.With().Str("component", "net-repository").Logger())
 
 	network := libcompute.NewNetworkService(netRepo)
 	keys := libcompute.NewKeyService(keyRepo)

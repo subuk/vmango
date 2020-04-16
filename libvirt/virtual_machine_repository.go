@@ -12,6 +12,7 @@ import (
 	"subuk/vmango/configdrive"
 	"subuk/vmango/util"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
@@ -514,24 +515,51 @@ func (repo *VirtualMachineRepository) Delete(id, nodeId string) error {
 	return nil
 }
 
-func (repo *VirtualMachineRepository) List() ([]*compute.VirtualMachine, error) {
-	vms := []*compute.VirtualMachine{}
-	for _, nodeId := range repo.pool.Nodes() {
-		conn, err := repo.pool.Acquire(nodeId)
-		if err != nil {
-			return nil, util.NewError(err, "cannot acquire libvirt connection")
-		}
-		defer repo.pool.Release(nodeId)
-		settings := repo.settings[nodeId]
-		domains, err := conn.ListAllDomains(0)
-		for _, domain := range domains {
-			vm, err := repo.domainToVm(conn, nodeId, &domain, settings)
-			if err != nil {
-				return nil, util.NewError(err, "cannot convert libvirt domain to vm")
-			}
-			vms = append(vms, vm)
-		}
+func (repo *VirtualMachineRepository) nodeList(nodeId string) ([]*compute.VirtualMachine, error) {
+	conn, err := repo.pool.Acquire(nodeId)
+	if err != nil {
+		return nil, util.NewError(err, "cannot acquire libvirt connection")
 	}
+	defer repo.pool.Release(nodeId)
+	vms := []*compute.VirtualMachine{}
+	settings := repo.settings[nodeId]
+	domains, err := conn.ListAllDomains(0)
+	for _, domain := range domains {
+		vm, err := repo.domainToVm(conn, nodeId, &domain, settings)
+		if err != nil {
+			return nil, util.NewError(err, "cannot convert libvirt domain to vm")
+		}
+		vms = append(vms, vm)
+	}
+	return vms, nil
+}
+
+func (repo *VirtualMachineRepository) List(options compute.VirtualMachineListOptions) ([]*compute.VirtualMachine, error) {
+	vms := []*compute.VirtualMachine{}
+	nodeVms := map[string][]*compute.VirtualMachine{}
+	nodes := repo.pool.Nodes(nil)
+	wg := &sync.WaitGroup{}
+	wg.Add(len(nodes))
+	start := time.Now()
+	for _, nodeId := range nodes {
+		nodeVms[nodeId] = nil
+		go func(nodeId string) {
+			defer wg.Done()
+			nodeStart := time.Now()
+			vms, err := repo.nodeList(nodeId)
+			if err != nil {
+				repo.logger.Warn().Err(err).Str("node", nodeId).Msg("cannot list vms")
+				return
+			}
+			repo.logger.Debug().Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("node vm list done")
+			nodeVms[nodeId] = vms
+		}(nodeId)
+	}
+	wg.Wait()
+	for _, nodeId := range nodes {
+		vms = append(vms, nodeVms[nodeId]...)
+	}
+	repo.logger.Debug().TimeDiff("took", time.Now(), start).Msg("full vm list done")
 	return vms, nil
 }
 
