@@ -75,11 +75,11 @@
                     <table class="table table-borderless table-hover table-sm">
                       <thead>
                         <tr>
-                          <th>Media</th>
-                          <th>Format</th>
+                          <th>Type</th>
+                          <th>Name</th>
                           <th>Device</th>
+                          <th>Format</th>
                           <th>Bus</th>
-                          <th>Path</th>
                           <th>Size</th>
                         </tr>
                       </thead>
@@ -87,10 +87,11 @@
                         {{ range .Vm.Volumes }}
                         <tr>
                           <td>{{ .DeviceType }}</td>
-                          <td>{{ (index $.AttachedVolumes .Path).Format }}</td>
+                          <td>{{ (index $.AttachedVolumes .Path).Pool }} / {{ (index $.AttachedVolumes .Path).Name }}</td>
+                          <!-- <td>{{ (index $.AttachedVolumes .Path).Name }}</td> -->
                           <td>{{ .DeviceName }}</td>
+                          <td>{{ (index $.AttachedVolumes .Path).Format }}</td>
                           <td>{{ .DeviceBus }}</td>
-                          <td>{{ .Path }}</td>
                           <td>{{ (index $.AttachedVolumes .Path).Size.Bytes | HumanizeBytes }}</td>
                           <td>
                             <form method="post" action="{{ Url "virtual-machine-detach-volume" "id" $.Vm.Id "node" $.Vm.NodeId }}">{{ CSRFField $.Request }}
@@ -111,25 +112,23 @@
                                 {{ end }}
                               </select>
                             </td>
-                            <td></td>
+                            <td>
+                              <select required="required" class="form-control form-control-sm" name="VolumePath">
+                                {{ range .AvailableVolumes }}
+                                <option value="{{ .Path }}">{{ .Pool }} / {{ .Name }}</option>
+                                {{ end }}
+                              </select>
+                            </td>
                             <td>
                               <input class="form-control form-control-sm" name="DeviceName" type="text" required>
                             </td>
-                            <td>
+                            <td colspan="3">
                               <select required="required" class="form-control form-control-sm" name="DeviceBus">
                                 {{ range .DeviceBuses }}
                                 <option value="{{ . }}">{{ . }}</option>
                                 {{ end }}
                               </select>
                             </td>
-                            <td>
-                              <select required="required" class="form-control form-control-sm" name="VolumePath">
-                                {{ range .AvailableVolumes }}
-                                <option value="{{ .Path }}">{{ .Path }}</option>
-                                {{ end }}
-                              </select>
-                            </td>
-                            <td></td>
                             <td>
                               <button {{ if .Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
                                 class="btn btn-primary btn-sm" type="submit">Attach</button>

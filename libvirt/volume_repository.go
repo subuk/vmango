@@ -46,6 +46,7 @@ func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.Sto
 	volume := &compute.Volume{}
 	volume.NodeId = nodeId
 	volume.Path = virVolumeConfig.Target.Path
+	volume.Name = virVolumeConfig.Name
 	volume.Pool = poolConfig.Name
 	volume.Metadata = repo.metadata[virVolumeConfig.Target.Path]
 	volume.Size = ComputeSizeFromLibvirtSize(virVolumeConfig.Capacity.Unit, virVolumeConfig.Capacity.Value)
@@ -90,31 +91,6 @@ func (repo *VolumeRepository) fetchAttachedVm(conn *libvirt.Connect, volumes []*
 		}
 	}
 	return nil
-}
-
-func (repo *VolumeRepository) GetByName(pool, name, node string) (*compute.Volume, error) {
-	conn, err := repo.pool.Acquire(node)
-	if err != nil {
-		return nil, util.NewError(err, "cannot acquire connection")
-	}
-	defer repo.pool.Release(node)
-
-	virStoragePool, err := conn.LookupStoragePoolByName(pool)
-	if err != nil {
-		return nil, util.NewError(err, "cannot lookup storage pool")
-	}
-	virVolume, err := virStoragePool.LookupStorageVolByName(name)
-	if err != nil {
-		return nil, util.NewError(err, "cannot lookup volume")
-	}
-	volume, err := repo.virVolumeToVolume(node, virStoragePool, virVolume)
-	if err != nil {
-		return nil, util.NewError(err, "cannot parse volume")
-	}
-	if err := repo.fetchAttachedVm(conn, []*compute.Volume{volume}); err != nil {
-		return nil, util.NewError(err, "cannot fetch attached vm")
-	}
-	return volume, nil
 }
 
 func (repo *VolumeRepository) Get(path, node string) (*compute.Volume, error) {

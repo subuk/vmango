@@ -72,7 +72,7 @@
               <table class="table">
                 <thead class="thead-light">
                   <tr>
-                    <th>Path</th>
+                    <th>Name</th>
                     <th>Node</th>
                     <th>Format</th>
                     <th>Size</th>
@@ -84,7 +84,7 @@
                 <tbody>
                   {{ range .Volumes }}
                   <tr>
-                    <td>{{ .Path }}</td>
+                    <td>{{ .Name }}</td>
                     <td>{{ .NodeId }}</td>
                     <td>{{ .Format }}</td>
                     <td>{{ .Size.Bytes | HumanizeBytes }}</td>

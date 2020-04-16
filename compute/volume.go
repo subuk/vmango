@@ -14,6 +14,7 @@ type VolumeMetadata struct {
 type Volume struct {
 	NodeId     string
 	Path       string
+	Name       string
 	Size       Size
 	Pool       string
 	Format     VolumeFormat
