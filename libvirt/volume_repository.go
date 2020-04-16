@@ -159,14 +159,13 @@ func (repo *VolumeRepository) listNode(nodeId string) ([]*compute.Volume, error)
 }
 
 func (repo *VolumeRepository) List(options compute.VolumeListOptions) ([]*compute.Volume, error) {
-	volumes := []*compute.Volume{}
-	nodeVolumes := map[string][]*compute.Volume{}
+	result := []*compute.Volume{}
 	nodes := repo.pool.Nodes(options.NodeIds)
 	wg := &sync.WaitGroup{}
+	mu := &sync.Mutex{}
 	wg.Add(len(nodes))
 	start := time.Now()
 	for _, nodeId := range nodes {
-		nodeVolumes[nodeId] = nil
 		go func(nodeId string) {
 			defer wg.Done()
 			nodeStart := time.Now()
@@ -176,15 +175,14 @@ func (repo *VolumeRepository) List(options compute.VolumeListOptions) ([]*comput
 				return
 			}
 			repo.logger.Debug().Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("node volume list done")
-			nodeVolumes[nodeId] = vols
+			mu.Lock()
+			result = append(result, vols...)
+			mu.Unlock()
 		}(nodeId)
 	}
 	wg.Wait()
-	for _, nodeId := range nodes {
-		volumes = append(volumes, nodeVolumes[nodeId]...)
-	}
 	repo.logger.Debug().TimeDiff("took", time.Now(), start).Msg("full volume list done")
-	return volumes, nil
+	return result, nil
 }
 
 func (repo *VolumeRepository) Create(params compute.VolumeCreateParams) (*compute.Volume, error) {

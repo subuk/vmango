@@ -535,14 +535,13 @@ func (repo *VirtualMachineRepository) nodeList(nodeId string) ([]*compute.Virtua
 }
 
 func (repo *VirtualMachineRepository) List(options compute.VirtualMachineListOptions) ([]*compute.VirtualMachine, error) {
-	vms := []*compute.VirtualMachine{}
-	nodeVms := map[string][]*compute.VirtualMachine{}
+	result := []*compute.VirtualMachine{}
 	nodes := repo.pool.Nodes(nil)
 	wg := &sync.WaitGroup{}
+	mu := &sync.Mutex{}
 	wg.Add(len(nodes))
 	start := time.Now()
 	for _, nodeId := range nodes {
-		nodeVms[nodeId] = nil
 		go func(nodeId string) {
 			defer wg.Done()
 			nodeStart := time.Now()
@@ -552,15 +551,14 @@ func (repo *VirtualMachineRepository) List(options compute.VirtualMachineListOpt
 				return
 			}
 			repo.logger.Debug().Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("node vm list done")
-			nodeVms[nodeId] = vms
+			mu.Lock()
+			result = append(result, vms...)
+			mu.Unlock()
 		}(nodeId)
 	}
 	wg.Wait()
-	for _, nodeId := range nodes {
-		vms = append(vms, nodeVms[nodeId]...)
-	}
 	repo.logger.Debug().TimeDiff("took", time.Now(), start).Msg("full vm list done")
-	return vms, nil
+	return result, nil
 }
 
 func (repo *VirtualMachineRepository) Get(id, nodeId string) (*compute.VirtualMachine, error) {

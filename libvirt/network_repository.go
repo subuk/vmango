@@ -78,7 +78,7 @@ func (repo *NetworkRepository) listNode(nodeId string) ([]*compute.Network, erro
 }
 
 func (repo *NetworkRepository) List(options compute.NetworkListOptions) ([]*compute.Network, error) {
-	networks := []*compute.Network{}
+	result := []*compute.Network{}
 	mu := &sync.Mutex{}
 	nodes := repo.pool.Nodes(options.NodeIds)
 	wg := &sync.WaitGroup{}
@@ -94,12 +94,12 @@ func (repo *NetworkRepository) List(options compute.NetworkListOptions) ([]*comp
 				return
 			}
 			mu.Lock()
-			networks = append(networks, nets...)
+			result = append(result, nets...)
 			mu.Unlock()
 			repo.logger.Debug().Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("node network list done")
 		}(nodeId)
 	}
 	wg.Wait()
 	repo.logger.Debug().TimeDiff("took", time.Now(), start).Msg("full network list done")
-	return networks, nil
+	return result, nil
 }
