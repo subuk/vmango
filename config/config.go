@@ -60,6 +60,11 @@ type Config struct {
 	KeyFile    string            `hcl:"key_file"`
 	Web        WebConfig         `hcl:"web"`
 	Subscribes []SubscribeConfig `hcl:"subscribe"`
+
+	LegacyLibvirtUri                    string `hcl:"libvirt_uri"`
+	LegacyLibvirtConfigDriveSuffix      string `hcl:"libvirt_config_drive_suffix"`
+	LegacyLibvirtConfigDrivePool        string `hcl:"libvirt_config_drive_pool"`
+	LegacyLibvirtConfigDriveWriteFormat string `hcl:"libvirt_config_drive_write_format"`
 }
 
 func Default() *Config {
@@ -87,6 +92,16 @@ func Parse(filename string) (*Config, error) {
 	if err := mergo.Merge(config, Default()); err != nil {
 		return nil, util.NewError(err, "cannot apply default configuration value")
 	}
+	if config.LegacyLibvirtUri != "" && len(config.Libvirts) == 0 {
+		config.Libvirts = append(config.Libvirts, LibvirtConfig{
+			Name:                   "__legacy_config_format__",
+			Uri:                    config.LegacyLibvirtUri,
+			ConfigDriveSuffix:      config.LegacyLibvirtConfigDriveSuffix,
+			ConfigDrivePool:        config.LegacyLibvirtConfigDrivePool,
+			ConfigDriveWriteFormat: config.LegacyLibvirtConfigDriveWriteFormat,
+		})
+	}
+
 	libvirt_ids := map[string]struct{}{}
 	for index := range config.Libvirts {
 		libvirt := &config.Libvirts[index]
