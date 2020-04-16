@@ -3,6 +3,8 @@ package libvirt
 import (
 	"subuk/vmango/compute"
 	"subuk/vmango/util"
+	"sync"
+	"time"
 
 	"github.com/libvirt/libvirt-go"
 	"github.com/rs/zerolog"
@@ -53,28 +55,51 @@ func (repo *NetworkRepository) Get(name, nodeId string) (*compute.Network, error
 	return network, nil
 }
 
+func (repo *NetworkRepository) listNode(nodeId string) ([]*compute.Network, error) {
+	conn, err := repo.pool.Acquire(nodeId)
+	if err != nil {
+		return nil, util.NewError(err, "cannot aquire connection")
+	}
+	defer repo.pool.Release(nodeId)
+
+	virNetworks, err := conn.ListAllNetworks(0)
+	if err != nil {
+		return nil, util.NewError(err, "ListAllNetworks failed")
+	}
+	networks := []*compute.Network{}
+	for _, virNetwork := range virNetworks {
+		network, err := repo.virNetworkToNetwork(&virNetwork, nodeId)
+		if err != nil {
+			return nil, err
+		}
+		networks = append(networks, network)
+	}
+	return networks, nil
+}
+
 func (repo *NetworkRepository) List(options compute.NetworkListOptions) ([]*compute.Network, error) {
 	networks := []*compute.Network{}
-	for _, nodeId := range repo.pool.Nodes(options.NodeIds) {
-		conn, err := repo.pool.Acquire(nodeId)
-		if err != nil {
-			repo.logger.Warn().Err(err).Str("node", nodeId).Msg("cannot list networks")
-			continue
-		}
-		defer repo.pool.Release(nodeId)
-
-		virNetworks, err := conn.ListAllNetworks(0)
-		if err != nil {
-			repo.logger.Warn().Err(err).Str("node", nodeId).Msg("cannot list networks")
-			continue
-		}
-		for _, virNetwork := range virNetworks {
-			network, err := repo.virNetworkToNetwork(&virNetwork, nodeId)
+	mu := &sync.Mutex{}
+	nodes := repo.pool.Nodes(options.NodeIds)
+	wg := &sync.WaitGroup{}
+	wg.Add(len(nodes))
+	start := time.Now()
+	for _, nodeId := range nodes {
+		go func(nodeId string) {
+			defer wg.Done()
+			nodeStart := time.Now()
+			nets, err := repo.listNode(nodeId)
 			if err != nil {
-				return nil, err
+				repo.logger.Warn().Int("count", len(nets)).Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("cannot list networks")
+				return
 			}
-			networks = append(networks, network)
-		}
+			mu.Lock()
+			networks = append(networks, nets...)
+			mu.Unlock()
+			repo.logger.Debug().Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("node network list done")
+		}(nodeId)
 	}
+	wg.Wait()
+	repo.logger.Debug().TimeDiff("took", time.Now(), start).Msg("full network list done")
 	return networks, nil
 }
