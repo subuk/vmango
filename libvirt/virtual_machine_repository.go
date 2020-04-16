@@ -88,7 +88,7 @@ func (repo *VirtualMachineRepository) parseConfigDrive(conn *libvirt.Connect, vo
 }
 
 func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId string, domain *libvirt.Domain, settings NodeSettings) (*compute.VirtualMachine, error) {
-	domainXml, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	domainXml, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
 		return nil, util.NewError(err, "cannot get domain xml")
 	}
@@ -399,7 +399,7 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 		}
 		virDomainConfig = newVirDomainConfig
 	} else {
-		virDomainXml, err := existingVirDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+		virDomainXml, err := existingVirDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 		if err != nil {
 			return util.NewError(err, "cannot fetch xml")
 		}
@@ -496,7 +496,7 @@ func (repo *VirtualMachineRepository) Delete(id, nodeId string) error {
 	if err != nil {
 		return util.NewError(err, "cannot check if domain is running")
 	}
-	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
 		return util.NewError(err, "cannot fetch domain xml")
 	}
@@ -657,7 +657,7 @@ func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVo
 		return fmt.Errorf("domain must be stopped")
 	}
 
-	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
 		return util.NewError(err, "cannot get domain xml")
 	}
@@ -699,7 +699,7 @@ func (repo *VirtualMachineRepository) DetachVolume(id, nodeId, needlePath string
 		return fmt.Errorf("domain must be stopped")
 	}
 
-	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
 		return util.NewError(err, "cannot get domain xml")
 	}
@@ -752,7 +752,7 @@ func (repo *VirtualMachineRepository) AttachInterface(id, nodeId string, attache
 	if running {
 		return fmt.Errorf("domain must be stopped")
 	}
-	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
 		return util.NewError(err, "cannot get domain xml")
 	}
@@ -792,7 +792,7 @@ func (repo *VirtualMachineRepository) DetachInterface(id, nodeId, needleMac stri
 		return fmt.Errorf("domain must be stopped")
 	}
 
-	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
 		return util.NewError(err, "cannot get domain xml")
 	}

@@ -68,7 +68,7 @@ func (repo *VolumeRepository) fetchAttachedVm(conn *libvirt.Connect, volumes []*
 		return util.NewError(err, "cannot list domains")
 	}
 	for _, domain := range domains {
-		domainXml, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE)
+		domainXml, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 		if err != nil {
 			return util.NewError(err, "cannot get domain xml description")
 		}
