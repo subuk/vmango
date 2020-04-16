@@ -13,7 +13,12 @@ import (
 )
 
 func (env *Environ) VirtualMachineList(rw http.ResponseWriter, req *http.Request) {
-	vms, err := env.vms.List(compute.VirtualMachineListOptions{})
+	options := compute.VirtualMachineListOptions{}
+	selectedNodeIds := req.URL.Query()["node"]
+	if len(selectedNodeIds) > 0 {
+		options.NodeIds = selectedNodeIds
+	}
+	vms, err := env.vms.List(options)
 	if err != nil {
 		env.error(rw, req, err, "vm list failed", http.StatusInternalServerError)
 		return

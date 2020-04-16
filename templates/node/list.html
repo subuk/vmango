@@ -20,6 +20,7 @@
                 <th>Cpu</th>
                 <th>Memory</th>
                 <th>IOMMU</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -30,6 +31,10 @@
                 <td>{{ .CpuInfo }}</td>
                 <td>{{ .Memory.Bytes | HumanizeBytes }}</td>
                 <td>{{ .Iommu }}</td>
+                <th>
+                  <a title="Volumes" href="{{ Url "volume-list" }}?node={{ .Id }}">V</a> |
+                  <a title="Virtual Machines" href="{{ Url "virtual-machine-list" }}?node={{ .Id }}">M</a>
+                </th>
               </tr>
               {{ end }}
             </tbody>

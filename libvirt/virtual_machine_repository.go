@@ -536,7 +536,7 @@ func (repo *VirtualMachineRepository) nodeList(nodeId string) ([]*compute.Virtua
 
 func (repo *VirtualMachineRepository) List(options compute.VirtualMachineListOptions) ([]*compute.VirtualMachine, error) {
 	result := []*compute.VirtualMachine{}
-	nodes := repo.pool.Nodes(nil)
+	nodes := repo.pool.Nodes(options.NodeIds)
 	wg := &sync.WaitGroup{}
 	mu := &sync.Mutex{}
 	wg.Add(len(nodes))

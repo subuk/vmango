@@ -23,7 +23,8 @@
                 <small id="nameHelp" class="form-text text-muted">Volume name</small>
               </div>
               <div class="col-md-2">
-                <select required="required" class="JS-VolumeListNodeSelector form-control" name="NodeId">
+                <select required="required" class="JS-VolumeListNodeSelector custom-select" name="NodeId">
+                  <option value="">- - -</option>
                   {{ range .Nodes }}
                   <option {{ if eq $.NodeId .Id }}selected{{ end }} value="{{ .Id }}">{{ .Id }}</option>
                   {{ end }}
@@ -31,7 +32,8 @@
                 <small id="nameHelp" class="form-text text-muted">Node</small>
               </div>
               <div class="col-md-2">
-                <select required="required" class="form-control" name="Pool">
+                <select required="required" class="custom-select" name="Pool">
+                  <option value="">- - -</option>
                   {{ range .Pools }}
                   <option value="{{ .Name }}">{{ .Name }} ({{ .Free.Bytes | HumanizeBytes }} free {{ .UsagePercent }}% used)</option>
                   {{ end }}
@@ -73,10 +75,10 @@
                 <thead class="thead-light">
                   <tr>
                     <th>Name</th>
+                    <th>Pool</th>
                     <th>Node</th>
                     <th>Format</th>
                     <th>Size</th>
-                    <th>Pool</th>
                     <th>AttachedTo</th>
                     <th>Actions</th>
                   </tr>
@@ -85,10 +87,10 @@
                   {{ range .Volumes }}
                   <tr>
                     <td>{{ .Name }}</td>
+                    <td>{{ .Pool }}</td>
                     <td>{{ .NodeId }}</td>
                     <td>{{ .Format }}</td>
                     <td>{{ .Size.Bytes | HumanizeBytes }}</td>
-                    <td>{{ .Pool }}</td>
                     <td>
                       {{ if .AttachedTo }}
                       <a href="{{ Url "virtual-machine-detail" "id" .AttachedTo "node" .NodeId }}">{{ .AttachedTo }}</a>

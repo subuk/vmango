@@ -17,22 +17,27 @@ var UIVolumeFormats = []compute.VolumeFormat{
 func (env *Environ) VolumeList(rw http.ResponseWriter, req *http.Request) {
 	selectedNodeId := req.URL.Query().Get("node")
 	nodes, err := env.nodes.List()
+	var filterNodeIds []string
+	if selectedNodeId != "" {
+		filterNodeIds = append(filterNodeIds, selectedNodeId)
+	}
 	if err != nil {
 		env.error(rw, req, err, "nodes list failed", http.StatusInternalServerError)
 		return
 	}
-	if selectedNodeId == "" {
-		selectedNodeId = nodes[0].Id
-	}
-	volumes, err := env.volumes.List(compute.VolumeListOptions{})
+	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeIds: filterNodeIds})
 	if err != nil {
 		env.error(rw, req, err, "volume list failed", http.StatusInternalServerError)
 		return
 	}
-	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeIds: []string{selectedNodeId}})
-	if err != nil {
-		env.error(rw, req, err, "pool list failed", http.StatusInternalServerError)
-		return
+	var pools []*compute.VolumePool
+	if selectedNodeId != "" {
+		nodePools, err := env.volpools.List(compute.VolumePoolListOptions{NodeIds: filterNodeIds})
+		if err != nil {
+			env.error(rw, req, err, "pool list failed", http.StatusInternalServerError)
+			return
+		}
+		pools = nodePools
 	}
 	data := struct {
 		Title         string

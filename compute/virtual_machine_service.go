@@ -2,7 +2,9 @@ package compute
 
 import "fmt"
 
-type VirtualMachineListOptions struct{}
+type VirtualMachineListOptions struct {
+	NodeIds []string
+}
 
 type VirtualMachineRepository interface {
 	List(options VirtualMachineListOptions) ([]*VirtualMachine, error)
