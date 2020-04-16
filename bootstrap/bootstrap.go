@@ -18,14 +18,30 @@ import (
 
 func Web(configFilename string) {
 	zerolog.DurationFieldInteger = true
+	fmt.Fprintf(os.Stderr, "Using configuration file '%s'\n", configFilename)
 
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
-	logger.Info().Str("filename", configFilename).Msg("using configuration file")
 	cfg, err := config.Parse(configFilename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Configuration error: %s\n", err)
 		os.Exit(1)
 	}
+	switch cfg.LogLevel {
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown log level %s, available levels: debug, info, warning, error\n", cfg.LogLevel)
+		os.Exit(1)
+	case "debug":
+		logger = logger.Level(zerolog.DebugLevel)
+	case "info":
+		logger = logger.Level(zerolog.InfoLevel)
+	case "warning":
+		logger = logger.Level(zerolog.WarnLevel)
+	case "error":
+		logger = logger.Level(zerolog.ErrorLevel)
+	}
+
+	logger.Info().Str("filename", configFilename).Msg("using configuration file")
+
 	volumeMetadata := map[string]libcompute.VolumeMetadata{}
 	for _, image := range cfg.Images {
 		volumeMetadata[image.Path] = libcompute.VolumeMetadata{

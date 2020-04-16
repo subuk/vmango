@@ -53,6 +53,7 @@ type LibvirtConfig struct {
 }
 
 type Config struct {
+	LogLevel   string            `hcl:"log_level"`
 	Images     []ImageConfig     `hcl:"image"`
 	Bridges    []string          `hcl:"bridges"`
 	Libvirts   []LibvirtConfig   `hcl:"libvirt"`
@@ -63,11 +64,8 @@ type Config struct {
 
 func Default() *Config {
 	return &Config{
-		// LibvirtUri:                    "qemu:///system",
-		// LibvirtConfigDrivePool:        "default",
-		// LibvirtConfigDriveSuffix:      "_config.iso",
-		// LibvirtConfigDriveWriteFormat: configdrive.FormatNoCloud.String(),
-		KeyFile: "~/.vmango/authorized_keys",
+		LogLevel: "info",
+		KeyFile:  "~/.vmango/authorized_keys",
 		Web: WebConfig{
 			Listen:         ":8080",
 			Debug:          false,
