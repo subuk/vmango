@@ -82,7 +82,11 @@ func VirtualMachineAttachedInterfaceFromInterfaceConfig(ifaceConfig libvirtxml.D
 		if ifaceConfig.Source.Network != nil {
 			iface.NetworkName = ifaceConfig.Source.Network.Network
 		}
+		if ifaceConfig.Source.Bridge != nil {
+			iface.NetworkName = ifaceConfig.Source.Bridge.Bridge
+		}
 	}
+
 	if ifaceConfig.VLan != nil {
 		if len(ifaceConfig.VLan.Tags) == 1 && ifaceConfig.VLan.Trunk == "" {
 			iface.AccessVlan = ifaceConfig.VLan.Tags[0].ID

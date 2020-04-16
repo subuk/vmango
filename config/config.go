@@ -61,10 +61,11 @@ type Config struct {
 	Web        WebConfig         `hcl:"web"`
 	Subscribes []SubscribeConfig `hcl:"subscribe"`
 
-	LegacyLibvirtUri                    string `hcl:"libvirt_uri"`
-	LegacyLibvirtConfigDriveSuffix      string `hcl:"libvirt_config_drive_suffix"`
-	LegacyLibvirtConfigDrivePool        string `hcl:"libvirt_config_drive_pool"`
-	LegacyLibvirtConfigDriveWriteFormat string `hcl:"libvirt_config_drive_write_format"`
+	LegacyLibvirtUri                    string   `hcl:"libvirt_uri"`
+	LegacyLibvirtConfigDriveSuffix      string   `hcl:"libvirt_config_drive_suffix"`
+	LegacyLibvirtConfigDrivePool        string   `hcl:"libvirt_config_drive_pool"`
+	LegacyLibvirtConfigDriveWriteFormat string   `hcl:"libvirt_config_drive_write_format"`
+	LegacyBridges                       []string `hcl:"bridges"`
 }
 
 func Default() *Config {
@@ -79,6 +80,18 @@ func Default() *Config {
 		},
 	}
 }
+
+const OLD_BRIDGES_WARNING = `=======
+
+Please remove 'bridges' option from configuration file and create libvirt networks like this:
+
+<network>
+  <name>br0</name>
+  <forward mode='bridge'/>
+  <bridge name='br0'/>
+</network>
+
+=======`
 
 func Parse(filename string) (*Config, error) {
 	content, err := ioutil.ReadFile(filename)
@@ -100,6 +113,9 @@ func Parse(filename string) (*Config, error) {
 			ConfigDrivePool:        config.LegacyLibvirtConfigDrivePool,
 			ConfigDriveWriteFormat: config.LegacyLibvirtConfigDriveWriteFormat,
 		})
+	}
+	if len(config.LegacyBridges) > 0 {
+		fmt.Println(OLD_BRIDGES_WARNING)
 	}
 
 	libvirt_ids := map[string]struct{}{}
