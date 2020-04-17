@@ -16,7 +16,14 @@ var UIVolumeFormats = []compute.VolumeFormat{
 
 func (env *Environ) VolumeList(rw http.ResponseWriter, req *http.Request) {
 	selectedNodeId := req.URL.Query().Get("node")
+	selectedPool := req.URL.Query().Get("pool")
 	nodes, err := env.nodes.List()
+
+	var filterPoolNames []string
+	if selectedPool != "" {
+		filterPoolNames = append(filterPoolNames, selectedPool)
+	}
+
 	var filterNodeIds []string
 	if selectedNodeId != "" {
 		filterNodeIds = append(filterNodeIds, selectedNodeId)
@@ -25,30 +32,29 @@ func (env *Environ) VolumeList(rw http.ResponseWriter, req *http.Request) {
 		env.error(rw, req, err, "nodes list failed", http.StatusInternalServerError)
 		return
 	}
-	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeIds: filterNodeIds})
+	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeIds: filterNodeIds, PoolNames: filterPoolNames})
 	if err != nil {
 		env.error(rw, req, err, "volume list failed", http.StatusInternalServerError)
 		return
 	}
 	var pools []*compute.VolumePool
-	if selectedNodeId != "" {
-		nodePools, err := env.volpools.List(compute.VolumePoolListOptions{NodeIds: filterNodeIds})
-		if err != nil {
-			env.error(rw, req, err, "pool list failed", http.StatusInternalServerError)
-			return
-		}
-		pools = nodePools
+	nodePools, err := env.volpools.List(compute.VolumePoolListOptions{NodeIds: filterNodeIds})
+	if err != nil {
+		env.error(rw, req, err, "pool list failed", http.StatusInternalServerError)
+		return
 	}
+	pools = nodePools
 	data := struct {
 		Title         string
 		NodeId        string
+		Pool          string
 		Volumes       []*compute.Volume
 		Nodes         []*compute.Node
 		Pools         []*compute.VolumePool
 		VolumeFormats []compute.VolumeFormat
 		User          *User
 		Request       *http.Request
-	}{"Volumes", selectedNodeId, volumes, nodes, pools, UIVolumeFormats, env.Session(req).AuthUser(), req}
+	}{"Volumes", selectedNodeId, selectedPool, volumes, nodes, pools, UIVolumeFormats, env.Session(req).AuthUser(), req}
 	if err := env.render.HTML(rw, http.StatusOK, "volume/list", data); err != nil {
 		env.error(rw, req, err, "failed to render template", http.StatusInternalServerError)
 		return
@@ -218,6 +224,9 @@ func (env *Environ) VolumeAddFormProcess(rw http.ResponseWriter, req *http.Reque
 		env.error(rw, req, err, "cannot add key", http.StatusInternalServerError)
 		return
 	}
-	redirectUrl := env.url("volume-list")
-	http.Redirect(rw, req, redirectUrl.Path, http.StatusFound)
+	redirectUrl := req.URL.Query().Get("next")
+	if redirectUrl == "" {
+		redirectUrl = env.url("volume-list").Path
+	}
+	http.Redirect(rw, req, redirectUrl, http.StatusFound)
 }

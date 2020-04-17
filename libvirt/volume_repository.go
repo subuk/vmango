@@ -118,7 +118,7 @@ func (repo *VolumeRepository) Get(path, node string) (*compute.Volume, error) {
 	return volume, nil
 }
 
-func (repo *VolumeRepository) listNode(nodeId string) ([]*compute.Volume, error) {
+func (repo *VolumeRepository) listNode(nodeId string, onlyPools []string) ([]*compute.Volume, error) {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire connection")
@@ -133,6 +133,13 @@ func (repo *VolumeRepository) listNode(nodeId string) ([]*compute.Volume, error)
 	}
 
 	for _, pool := range pools {
+		poolName, err := pool.GetName()
+		if err != nil {
+			return nil, util.NewError(err, "cannot get volume pool name")
+		}
+		if onlyPools != nil && !util.ArrayContainsString(onlyPools, poolName) {
+			continue
+		}
 		active, err := pool.IsActive()
 		if err != nil {
 			return nil, util.NewError(err, "cannot check if pool is active")
@@ -169,7 +176,7 @@ func (repo *VolumeRepository) List(options compute.VolumeListOptions) ([]*comput
 		go func(nodeId string) {
 			defer wg.Done()
 			nodeStart := time.Now()
-			vols, err := repo.listNode(nodeId)
+			vols, err := repo.listNode(nodeId, options.PoolNames)
 			if err != nil {
 				repo.logger.Warn().Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("cannot list volumes")
 				return

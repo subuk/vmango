@@ -20,7 +20,8 @@ type VolumeCreateParams struct {
 }
 
 type VolumeListOptions struct {
-	NodeIds []string
+	NodeIds   []string
+	PoolNames []string
 }
 
 type VolumeRepository interface {

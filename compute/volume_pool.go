@@ -1,10 +1,11 @@
 package compute
 
 type VolumePool struct {
-	Name string
-	Size Size
-	Used Size
-	Free Size
+	NodeId string
+	Name   string
+	Size   Size
+	Used   Size
+	Free   Size
 }
 
 func (pool *VolumePool) UsagePercent() int {

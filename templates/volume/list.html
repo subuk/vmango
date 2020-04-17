@@ -23,7 +23,7 @@
                 <small id="nameHelp" class="form-text text-muted">Volume name</small>
               </div>
               <div class="col-md-2">
-                <select required="required" class="JS-VolumeListNodeSelector custom-select" name="NodeId">
+                <select required="required" class="JS-QueryStringSelector custom-select" name="NodeId" data-exclusive="true" data-paramname="node" data-url="{{ Url "volume-list" }}">
                   <option value="">- - -</option>
                   {{ range .Nodes }}
                   <option {{ if eq $.NodeId .Id }}selected{{ end }} value="{{ .Id }}">{{ .Id }}</option>
@@ -32,10 +32,10 @@
                 <small id="nameHelp" class="form-text text-muted">Node</small>
               </div>
               <div class="col-md-2">
-                <select required="required" class="custom-select" name="Pool">
+                <select required="required" class="JS-QueryStringSelector custom-select" name="Pool" data-paramname="pool" data-url="{{ Url "volume-list" }}">
                   <option value="">- - -</option>
                   {{ range .Pools }}
-                  <option value="{{ .Name }}">{{ .Name }} ({{ .Free.Bytes | HumanizeBytes }} free {{ .UsagePercent }}% used)</option>
+                  <option {{ if eq $.Pool .Name }}selected{{ end }} value="{{ .Name }}">{{ if not $.NodeId }}{{ .NodeId }}::{{ end }}{{ .Name }} ({{ .Free.Bytes | HumanizeBytes }} free {{ .UsagePercent }}% used)</option>
                   {{ end }}
                 </select>
                 <small id="nameHelp" class="form-text text-muted">Pool</small>

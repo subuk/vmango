@@ -47,7 +47,8 @@ func (repo *VolumePoolRepository) listNode(nodeId string) ([]*compute.VolumePool
 			continue
 		}
 		volumePool := &compute.VolumePool{
-			Name: virPoolConfig.Name,
+			Name:   virPoolConfig.Name,
+			NodeId: nodeId,
 		}
 		if virPoolConfig.Capacity != nil {
 			volumePool.Size = ComputeSizeFromLibvirtSize(virPoolConfig.Capacity.Unit, virPoolConfig.Capacity.Value)
