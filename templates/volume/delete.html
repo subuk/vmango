@@ -18,7 +18,7 @@
             <div class="col-md-12">
               <p class="alert alert-danger">
                 This volume attached to Vm <a
-                  href="{{ Url "virtual-machine-detail" "id" .Volume.AttachedTo }}">{{ .Volume.AttachedTo }}</a>, please
+                  href="{{ Url "virtual-machine-detail" "id" .Volume.AttachedTo "node" .Volume.NodeId }}">{{ .Volume.AttachedTo }}</a>, please
                 detach before.
               </p>
             </div>
