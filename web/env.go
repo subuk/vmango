@@ -7,6 +7,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"strings"
+	"subuk/vmango/compute"
 	libcompute "subuk/vmango/compute"
 	"subuk/vmango/config"
 	"subuk/vmango/util"
@@ -23,6 +24,26 @@ import (
 )
 
 var AppVersion string
+
+var UIVolumeFormats = []compute.VolumeFormat{
+	compute.VolumeFormatQcow2,
+	compute.VolumeFormatRaw,
+}
+
+var DeviceTypes = []compute.DeviceType{
+	compute.DeviceTypeDisk,
+	compute.DeviceTypeCdrom,
+}
+
+var DeviceBuses = []compute.DeviceBus{
+	compute.DeviceBusVirtio,
+	compute.DeviceBusScsi,
+	compute.DeviceBusIde,
+}
+
+var InterfaceModels = []string{
+	"virtio",
+}
 
 type Environ struct {
 	render   *render.Render

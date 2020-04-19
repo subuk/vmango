@@ -1,0 +1,309 @@
+{{ template "header" . }}
+
+<!-- Breadcrumb -->
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}">Virtual Machines</a></li>
+  <li class="breadcrumb-item active">Create</li>
+</ol>
+
+<div class="container">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-body">
+          <h4>Create Virtual Machine</h4>
+          <br>
+          <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
+            <div class="form-group row">
+              <div class="col-md-3">
+                <label>Node</label>
+                <select name="NodeId" id="NodeId" class="JS-QueryStringSelector form-control" name="NodeId" data-paramname="node" data-url="{{ Url "virtual-machine-add" }}">
+                  {{ range .Nodes }}
+                  <option {{ if eq $.NodeId .Id }}selected{{ end }} value="{{ .Id }}">{{ .Id }}</option>
+                  {{ end }}
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label for="Name">Name</label>
+                <input required="required" class="form-control" name="Name" id="Name">
+              </div>
+              <div class="col-md-2">
+                <label for="GraphicType">Graphic Type</label>
+                <select required="required" class="form-control" name="GraphicType" id="GraphicType">
+                  {{ range .GraphicTypes }}
+                  <option value="{{ .String }}">{{ .String | Capitalize }}</option>
+                  {{ end }}
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label>Cpu Count</label>
+                <input required="required" value="2" type="number" min="1" class="form-control" name="Vcpus" id="Vcpus">
+              </div>
+              <div class="col-md-2">
+                <label>Memory</label>
+                <div class="input-group">
+                  <input required="required" class="form-control" name="MemoryValue" min="1" id="MemoryValue" type="number" value="2048">
+                  <div class="input-group-append">
+                    <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="MemoryUnit" class="custom-select">
+                      <option value="B">B</option>
+                      <option value="K">K</option>
+                      <option selected value="M">M</option>
+                      <option value="G">G</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <div class="col-md-12">
+                <table data-init-count="1" data-init-tpl="CloneImageTemplate" class="JS-DynamicItemList table table-borderless table-sm">
+                  <tbody class="JS-DynamicItemListContainer">
+                    <tr style="display: none;" id="CreateVolumeTemplate" class="JS-DynamicItemListTemplate JS-DynamicItemListItem">
+                      <td>
+                        <input class="form-control" name="CreateVolumeName" type="text" placeholder="Volume Name" required>
+                      </td>
+                      <td colspan="2">
+                        <select required="required" class="form-control" name="CreateVolumePool">
+                          <option value="">- Volume Pool -</option>
+                          {{ range .Pools }}
+                          <option value="{{ .Name }}">{{ if not $.NodeId }}{{ .NodeId }}::{{ end }}{{ .Name }} ({{ .Free.Bytes | HumanizeBytes }} free {{ .UsagePercent }}% used)</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td style="max-width: 150px;">
+                        <div class="input-group">
+                          <input required="required" class="form-control" name="CreateVolumeSizeValue" min="1" value="10" type="number">
+                          <div class="input-group-append">
+                            <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="CreateVolumeSizeUnit" class="custom-select">
+                              <option value="B">B</option>
+                              <option value="K">K</option>
+                              <option value="M">M</option>
+                              <option selected value="G">G</option>
+                            </select>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <select required="required" class="form-control" name="CreateVolumeDeviceType">
+                          {{ range .DeviceTypes }}
+                          <option value="{{ . }}">{{ . }}</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td>
+                        <select required="required" class="form-control" name="CreateVolumeFormat">
+                          {{ range .VolumeFormats }}
+                          <option value="{{ . }}">{{ . }}</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td>
+                        <select required="required" class="form-control" name="CreateVolumeDeviceBus">
+                          {{ range .DeviceBuses }}
+                          <option value="{{ . }}">{{ . }}</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td>
+                        <button class="JS-DynamicItemListRemove btn" type="button">❌</button>
+                      </td>
+                    </tr>
+                    <tr style="display: none;" id="CloneImageTemplate" class="JS-DynamicItemListTemplate JS-DynamicItemListItem">
+                      <td>
+                        <input class="form-control" name="CloneVolumeNewName" type="text" placeholder="New Volume Name" required>
+                      </td>
+                      <td>
+                        <select required="required" class="form-control" name="CloneVolumeNewPool">
+                          <option value="">- New Volume Pool -</option>
+                          {{ range .Pools }}
+                          <option value="{{ .Name }}">{{ if not $.NodeId }}{{ .NodeId }}::{{ end }}{{ .Name }} ({{ .Free.Bytes | HumanizeBytes }} free {{ .UsagePercent }}% used)</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td>
+                        <select required="required" class="form-control" name="CloneVolumeOriginalPath">
+                          <option value="">- Source Image -</option>
+                          {{ range .Images }}
+                          {{ if eq .Metadata.OsName "" }}
+                          <option value="{{ .Path }}">{{ .Path }}</option>
+                          {{ else }}
+                          <option value="{{ .Path }}">{{ .Metadata.OsName }} {{ .Metadata.OsVersion }} ({{ .Metadata.OsArch }})
+                          </option>
+                          {{ end }}
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td style="max-width: 150px;">
+                        <div class="input-group">
+                          <input class="form-control" name="CloneVolumeNewSizeValue" min="1" value="" type="number">
+                          <div class="input-group-append">
+                            <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="CloneVolumeNewSizeUnit" class="custom-select">
+                              <option value="B">B</option>
+                              <option value="K">K</option>
+                              <option value="M">M</option>
+                              <option selected value="G">G</option>
+                            </select>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <select required="required" class="form-control" name="CloneVolumeDeviceType">
+                          {{ range .DeviceTypes }}
+                          <option value="{{ . }}">{{ . }}</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td>
+                        <select required="required" class="form-control" name="CloneVolumeNewFormat">
+                          {{ range .VolumeFormats }}
+                          <option value="{{ . }}">{{ . }}</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td>
+                        <select required="required" class="form-control" name="CloneVolumeDeviceBus">
+                          {{ range .DeviceBuses }}
+                          <option value="{{ . }}">{{ . }}</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td>
+                        <button class="JS-DynamicItemListRemove btn" type="button">❌</button>
+                      </td>
+                    </tr>
+
+                    <tr style="display: none;" id="AttachExistingTemplate" class="JS-DynamicItemListTemplate JS-DynamicItemListItem">
+                      <td colspan="4">
+                        <select required="required" class="form-control" name="AttachVolumePath">
+                          {{ range .AvailableVolumes }}
+                          <option value="{{ .Path }}">{{ .Pool }} / {{ .Name }}</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td colspan="2">
+                        <select required="required" class="form-control" name="AttachVolumeDeviceType">
+                          {{ range .DeviceTypes }}
+                          <option value="{{ . }}">{{ . }}</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td>
+                        <select required="required" class="form-control" name="AttachVolumeDeviceBus">
+                          {{ range .DeviceBuses }}
+                          <option value="{{ . }}">{{ . }}</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td>
+                        <button class="JS-DynamicItemListRemove btn" type="button">❌</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td colspan="8">
+                        <div class="dropdown">
+                          <button class="btn btn-light dropdown-toggle" id="AddNewVolumeBtn" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Add Volume</button>
+                          <div class="dropdown-menu" aria-labelledby="AddNewVolumeBtn">
+                            <a data-template-id="CreateVolumeTemplate" class="JS-DynamicItemListAdd dropdown-item" href="#">Empty</a>
+                            <a data-template-id="CloneImageTemplate" class="JS-DynamicItemListAdd dropdown-item" href="#">Clone Image</a>
+                            <a data-template-id="AttachExistingTemplate" class="JS-DynamicItemListAdd dropdown-item" href="#">Attach Existing</a>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <div class="col-md-12">
+                <table data-init-count="1" class="JS-DynamicItemList table table-borderless table-sm">
+                  <tbody class="JS-DynamicItemListContainer">
+                    <tr style="display: none;" id="InterfaceTemplate" class="JS-DynamicItemListTemplate JS-DynamicItemListItem">
+                      <td>
+                        <select required="required" class="form-control" name="InterfaceNetwork">
+                          {{ range .Networks }}
+                          <option value="{{ .Name }}">{{ .Name }}</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td>
+                        <select required="required" class="form-control" name="InterfaceModel">
+                          {{ range .InterfaceModels }}
+                          <option value="{{ . }}">{{ . }}</option>
+                          {{ end }}
+                        </select>
+                      </td>
+                      <td>
+                        <input class="form-control" name="InterfaceMac" id="Mac" placeholder="00:00:00:00:00:00">
+                      </td>
+                      <td>
+                        <input type="number" min="0" class="form-control" name="InterfaceAccessVlan" id="AccessVlan" placeholder="Access Vlan">
+                      </td>
+                      <td>
+                        <button class="JS-DynamicItemListRemove btn" type="button">❌</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <button class="JS-DynamicItemListAdd btn btn-light" type="button" data-template-id="InterfaceTemplate">
+                          Add Interface
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <div class="col-md-12">
+                <label>Keys</label>
+                <select multiple class="form-control" name="Keys">
+                  {{ range .Keys }}
+                  <option value="{{ .Fingerprint }}">{{ .Comment }}</option>
+                  {{ end }}
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <div class="col-md-12">
+                <label>Userdata</label>
+                <textarea class="form-control" name="Userdata"></textarea>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <div class="col-md-12">
+                <div class="custom-control custom-checkbox">
+                  <input id="GuestAgent" name="GuestAgent" value="true" class="custom-control-input" type="checkbox" checked />
+                  <label class="custom-control-label" for="GuestAgent">Guest Agent</label>
+                </div>
+                <div class="custom-control custom-checkbox">
+                  <input id="start" name="Start" value="true" class="custom-control-input" type="checkbox" checked />
+                  <label class="custom-control-label" for="start">Start immediately after creation</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group row">
+              <div class="col-md-12">
+                <button class="btn btn-primary"
+                  data-loading="<i class='icon-refresh icons'></i> Creating Virtual Machine..." type="submit">Create Virtual
+                  Machine</button>
+                  <a class="btn btn-link" href="?mode=simple">Simple Mode</a>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+
+{{ template "footer" . }}

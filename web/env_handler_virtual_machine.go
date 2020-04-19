@@ -34,21 +34,6 @@ func (env *Environ) VirtualMachineList(rw http.ResponseWriter, req *http.Request
 	}
 }
 
-var DeviceTypes = []compute.DeviceType{
-	compute.DeviceTypeDisk,
-	compute.DeviceTypeCdrom,
-}
-
-var DeviceBuses = []compute.DeviceBus{
-	compute.DeviceBusVirtio,
-	compute.DeviceBusScsi,
-	compute.DeviceBusIde,
-}
-
-var InterfaceModels = []string{
-	"virtio",
-}
-
 func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	vm, err := env.vms.Get(urlvars["id"], urlvars["node"])
@@ -137,22 +122,32 @@ func (env *Environ) VirtualMachineStateSetFormProcess(rw http.ResponseWriter, re
 
 func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.Request) {
 	data := struct {
-		Title    string
-		User     *User
-		Request  *http.Request
-		NodeId   string
-		Nodes    []*compute.Node
-		Volumes  []*compute.Volume
-		Images   []*compute.Volume
-		Pools    []*compute.VolumePool
-		Networks []*compute.Network
-		Keys     []*compute.Key
-		Arches   []compute.Arch
+		Title            string
+		User             *User
+		Request          *http.Request
+		InterfaceModels  []string
+		GraphicTypes     []compute.GraphicType
+		DeviceTypes      []compute.DeviceType
+		DeviceBuses      []compute.DeviceBus
+		VolumeFormats    []compute.VolumeFormat
+		NodeId           string
+		Nodes            []*compute.Node
+		AvailableVolumes []*compute.Volume
+		Images           []*compute.Volume
+		Pools            []*compute.VolumePool
+		Networks         []*compute.Network
+		Keys             []*compute.Key
+		Arches           []compute.Arch
 	}{
-		Title:   "Create Virtual Machine",
-		Request: req,
-		User:    env.Session(req).AuthUser(),
-		Arches:  []compute.Arch{compute.ArchAmd64},
+		Title:           "Create Virtual Machine",
+		Request:         req,
+		User:            env.Session(req).AuthUser(),
+		Arches:          []compute.Arch{compute.ArchAmd64},
+		DeviceTypes:     DeviceTypes,
+		DeviceBuses:     DeviceBuses,
+		InterfaceModels: InterfaceModels,
+		GraphicTypes:    GraphicTypes,
+		VolumeFormats:   UIVolumeFormats,
 	}
 
 	nodes, err := env.nodes.List()
@@ -180,25 +175,15 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
 		return
 	}
-	annotatedVolumes := []*compute.Volume{}
-	detachedVolumes := []*compute.Volume{}
 	for _, volume := range volumes {
-		if volume.Format == compute.VolumeFormatIso {
-			continue
-		}
 		if volume.AttachedTo != "" {
 			continue
 		}
 		if volume.Metadata.OsName != "" {
-			annotatedVolumes = append(annotatedVolumes, volume)
+			data.Images = append(data.Images, volume)
 			continue
 		}
-		detachedVolumes = append(detachedVolumes, volume)
-	}
-	if len(annotatedVolumes) > 0 {
-		data.Images = annotatedVolumes
-	} else {
-		data.Images = detachedVolumes
+		data.AvailableVolumes = append(data.AvailableVolumes, volume)
 	}
 
 	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeIds: []string{selectedNode.Id}})
@@ -222,7 +207,11 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 	}
 	data.Networks = networks
 
-	if err := env.render.HTML(rw, http.StatusOK, "virtual-machine/add", data); err != nil {
+	templateName := "virtual-machine/add"
+	if req.URL.Query().Get("mode") == "advanced" {
+		templateName = "virtual-machine/add-advanced"
+	}
+	if err := env.render.HTML(rw, http.StatusOK, templateName, data); err != nil {
 		env.error(rw, req, err, "failed to render template", http.StatusInternalServerError)
 		return
 	}
@@ -253,33 +242,92 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		http.Error(rw, "unknown memory size unit: "+req.Form.Get("MemoryUnit"), http.StatusBadRequest)
 		return
 	}
+	graphicType := compute.NewGraphicType(req.Form.Get("GraphicType"))
+	if graphicType == compute.GraphicTypeUnknown {
+		http.Error(rw, "unknown graphic type: "+req.Form.Get("GraphicType"), http.StatusBadRequest)
+		return
+	}
 
-	rootVolumeSizeValue, err := strconv.ParseUint(req.Form.Get("RootVolumeSizeValue"), 10, 64)
-	if err != nil {
-		http.Error(rw, "invalid root volume size: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	rootVolumeSizeUnit := compute.NewSizeUnit(req.Form.Get("RootVolumeSizeUnit"))
-	if rootVolumeSizeUnit == compute.SizeUnitUnknown {
-		http.Error(rw, "unknown root volume size unit: "+req.Form.Get("RootVolumeSizeUnit"), http.StatusBadRequest)
-		return
-	}
-	var accessVlan uint
-	accessVlanRaw := req.Form.Get("AccessVlan")
-	if accessVlanRaw != "" {
-		parsed, err := strconv.ParseUint(accessVlanRaw, 10, 16)
+	newVols := []compute.VirtualMachineManagerCreatedVolumeParams{}
+	newVolsCount := len(req.Form["CreateVolumeName"])
+	for idx := 0; idx < newVolsCount; idx++ {
+		sizeV, err := strconv.ParseUint(req.Form["CreateVolumeSizeValue"][idx], 10, 64)
 		if err != nil {
-			http.Error(rw, "invalid vlan: "+err.Error(), http.StatusBadRequest)
+			msg := "invalid new volume " + req.Form["CreateVolumeName"][idx] + "size value"
+			http.Error(rw, msg, http.StatusBadRequest)
 			return
 		}
-		accessVlan = uint(parsed)
+		volume := compute.VirtualMachineManagerCreatedVolumeParams{
+			Name:       req.Form["CreateVolumeName"][idx],
+			Pool:       req.Form["CreateVolumePool"][idx],
+			Format:     compute.NewVolumeFormat(req.Form["CreateVolumeFormat"][idx]),
+			Size:       compute.NewSize(sizeV, compute.NewSizeUnit(req.Form["CreateVolumeSizeUnit"][idx])),
+			DeviceType: compute.NewDeviceType(req.Form["CreateVolumeDeviceType"][idx]),
+			DeviceBus:  compute.NewDeviceBus(req.Form["CreateVolumeDeviceBus"][idx]),
+		}
+		newVols = append(newVols, volume)
+	}
+	cloneVols := []compute.VirtualMachineManagerClonedVolumeParams{}
+	cloneVolsCount := len(req.Form["CloneVolumeOriginalPath"])
+	for idx := 0; idx < cloneVolsCount; idx++ {
+		var sizeValue uint64
+		if req.Form["CloneVolumeNewSizeValue"][idx] != "" {
+			size, err := strconv.ParseUint(req.Form["CloneVolumeNewSizeValue"][idx], 10, 64)
+			if err != nil {
+				msg := "invalid size specified for cloned volume: " + req.Form["CloneVolumeNewSizeValue"][idx]
+				http.Error(rw, msg, http.StatusBadRequest)
+				return
+			}
+			sizeValue = size
+		}
+		newName := req.Form["CloneVolumeNewName"][idx]
+		if newName == "__magic_root_suffix__" {
+			newName = fmt.Sprintf("%s_root", vm.Id)
+		}
+		volume := compute.VirtualMachineManagerClonedVolumeParams{
+			OriginalPath: req.Form["CloneVolumeOriginalPath"][idx],
+			NewName:      newName,
+			NewPool:      req.Form["CloneVolumeNewPool"][idx],
+			NewFormat:    compute.NewVolumeFormat(req.Form["CloneVolumeNewFormat"][idx]),
+			NewSize:      compute.NewSize(sizeValue, compute.NewSizeUnit(req.Form["CloneVolumeNewSizeUnit"][idx])),
+			DeviceType:   compute.NewDeviceType(req.Form["CloneVolumeDeviceType"][idx]),
+			DeviceBus:    compute.NewDeviceBus(req.Form["CloneVolumeDeviceBus"][idx]),
+		}
+		cloneVols = append(cloneVols, volume)
+	}
+	attachedVols := len(req.Form["AttachVolumePath"])
+	for idx := 0; idx < attachedVols; idx++ {
+		vm.Volumes = append(vm.Volumes, &compute.VirtualMachineAttachedVolume{
+			Path:       req.Form["AttachVolumePath"][idx],
+			DeviceType: compute.NewDeviceType(req.Form["AttachVolumeDeviceType"][idx]),
+			DeviceBus:  compute.NewDeviceBus(req.Form["AttachVolumeDeviceBus"][idx]),
+		})
+	}
+
+	for idx := 0; idx < len(req.Form["InterfaceNetwork"]); idx++ {
+		var accessVlan uint
+		accessVlanRaw := req.Form["InterfaceAccessVlan"][idx]
+		if accessVlanRaw != "" {
+			parsed, err := strconv.ParseUint(accessVlanRaw, 10, 16)
+			if err != nil {
+				http.Error(rw, "invalid vlan: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			accessVlan = uint(parsed)
+		}
+		vm.Interfaces = append(vm.Interfaces, &compute.VirtualMachineAttachedInterface{
+			NetworkName: req.Form["InterfaceNetwork"][idx],
+			Mac:         req.Form["InterfaceMac"][idx],
+			Model:       req.Form["InterfaceModel"][idx],
+			AccessVlan:  accessVlan,
+		})
 	}
 
 	vm.VCpus = int(vcpus)
 	vm.Memory = compute.NewSize(memoryValue, memoryUnit)
-	vm.GuestAgent = true
+	vm.GuestAgent = req.Form.Get("GuestAgent") == "true"
 	vm.Graphic = compute.VirtualMachineGraphic{
-		Type: compute.GraphicTypeNone,
+		Type: graphicType,
 	}
 	vm.Config = &compute.VirtualMachineConfig{
 		Hostname: req.Form.Get("Name"),
@@ -293,24 +341,11 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		}
 		vm.Config.Keys = append(vm.Config.Keys, key)
 	}
-	vm.Interfaces = append(vm.Interfaces, &compute.VirtualMachineAttachedInterface{
-		NetworkName: req.Form.Get("Network"),
-		Mac:         req.Form.Get("Mac"),
-		Model:       "virtio",
-		AccessVlan:  accessVlan,
-	})
-	cloneVols := []compute.VolumeCloneParams{compute.VolumeCloneParams{
-		NodeId:       vm.NodeId,
-		Format:       compute.NewVolumeFormat(req.Form.Get("RootVolumeFormat")),
-		OriginalPath: req.Form.Get("RootVolumeSource"),
-		NewName:      req.Form.Get("RootVolumeName"),
-		NewPool:      req.Form.Get("RootVolumePool"),
-		NewSize:      compute.NewSize(rootVolumeSizeValue, rootVolumeSizeUnit),
-	}}
-	newVols := []compute.VolumeCreateParams{}
 	start := req.Form.Get("Start") == "true"
+	vm.Autostart = start
 
 	if err := env.vmanager.Create(vm, cloneVols, newVols, start); err != nil {
+		env.logger.Debug().Interface("vm", vm).Interface("cloneVols", cloneVols).Interface("newVols", newVols).Msg("vm create data")
 		env.error(rw, req, err, "cannot create vm", http.StatusInternalServerError)
 		return
 	}

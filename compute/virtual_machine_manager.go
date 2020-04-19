@@ -16,6 +16,25 @@ type VirtualMachineManagerNodeSettings struct {
 	CdPool   string
 }
 
+type VirtualMachineManagerClonedVolumeParams struct {
+	OriginalPath string
+	NewName      string
+	NewPool      string
+	NewSize      Size
+	NewFormat    VolumeFormat
+	DeviceType   DeviceType
+	DeviceBus    DeviceBus
+}
+
+type VirtualMachineManagerCreatedVolumeParams struct {
+	Name       string
+	Pool       string
+	Format     VolumeFormat
+	Size       Size
+	DeviceType DeviceType
+	DeviceBus  DeviceBus
+}
+
 type VirtualMachineManagerCreateParams struct {
 	Vm            *VirtualMachine
 	CloneVolumes  []VolumeCloneParams
@@ -39,30 +58,73 @@ func NewVirtualMachineManager(vms *VirtualMachineService, volumes *VolumeService
 	}
 }
 
-func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []VolumeCloneParams, newVols []VolumeCreateParams, start bool) error {
+type deviceNamer struct {
+	state map[DeviceBus]int
+}
+
+func newDeviceNamer() *deviceNamer {
+	return &deviceNamer{
+		state: map[DeviceBus]int{},
+	}
+}
+
+func (n *deviceNamer) Next(bus DeviceBus) string {
+	name := ""
+	switch bus {
+	case DeviceBusIde:
+		name = "hd" + string('a'+n.state[bus])
+	case DeviceBusScsi:
+		name = "sd" + string('a'+n.state[bus])
+	case DeviceBusVirtio:
+		name = "vd" + string('a'+n.state[bus])
+	}
+	n.state[bus] += 1
+	return name
+}
+
+func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool) error {
+	deviceNamer := newDeviceNamer()
 	for _, p := range newVols {
-		volume, err := manager.volumes.Create(p)
+		params := VolumeCreateParams{
+			NodeId: vm.NodeId,
+			Name:   p.Name,
+			Pool:   p.Pool,
+			Format: p.Format,
+			Size:   p.Size,
+		}
+		volume, err := manager.volumes.Create(params)
 		if err != nil {
 			return util.NewError(err, "cannot create volume")
 		}
 		vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{
 			Path:       volume.Path,
-			DeviceName: "vda",
-			DeviceType: DeviceTypeDisk,
-			DeviceBus:  DeviceBusVirtio,
+			DeviceName: deviceNamer.Next(p.DeviceBus),
+			DeviceType: p.DeviceType,
+			DeviceBus:  p.DeviceBus,
 		})
 	}
 	for _, p := range cloneVols {
-		volume, err := manager.volumes.Clone(p)
+		params := VolumeCloneParams{
+			NodeId:       vm.NodeId,
+			Format:       p.NewFormat,
+			OriginalPath: p.OriginalPath,
+			NewName:      p.NewName,
+			NewPool:      p.NewPool,
+			NewSize:      p.NewSize,
+		}
+		volume, err := manager.volumes.Clone(params)
 		if err != nil {
 			return util.NewError(err, "cannot clone volume")
 		}
 		vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{
 			Path:       volume.Path,
-			DeviceName: "vda",
-			DeviceType: DeviceTypeDisk,
-			DeviceBus:  DeviceBusVirtio,
+			DeviceName: deviceNamer.Next(p.DeviceBus),
+			DeviceType: p.DeviceType,
+			DeviceBus:  p.DeviceBus,
 		})
+	}
+	for _, v := range vm.Volumes {
+		v.DeviceName = deviceNamer.Next(v.DeviceBus)
 	}
 	if err := manager.vms.Save(vm); err != nil {
 		return err
@@ -96,7 +158,7 @@ func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []Vol
 		}
 		attachedVolume := &VirtualMachineAttachedVolume{
 			Path:       cdVolume.Path,
-			DeviceName: "hda",
+			DeviceName: deviceNamer.Next(DeviceBusIde),
 			DeviceType: DeviceTypeCdrom,
 			DeviceBus:  DeviceBusIde,
 		}

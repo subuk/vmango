@@ -1,5 +1,6 @@
 <script src="{{ Static "coreui/js/jquery.min.js" }}"></script>
 <script src="{{ Static "coreui/js/tether.min.js" }}"></script>
+<script src="{{ Static "coreui/js/popper.min.js" }}"></script>
 <script src="{{ Static "coreui/js/bootstrap.min.js" }}"></script>
 <script src="{{ Static "coreui/js/pace.min.js" }}"></script>
 
@@ -9,6 +10,8 @@
 <script src="{{ Static "vmango/vmango.CheckboxCard.js" }}"></script>
 <script src="{{ Static "vmango/vmango.ReactiveForm.js" }}"></script>
 <script src="{{ Static "vmango/vmango.WSConsole.js" }}"></script>
+<script src="{{ Static "vmango/vmango.QueryStringSelector.js" }}"></script>
+<script src="{{ Static "vmango/vmango.DynamicItemList.js" }}"></script>
 <script>
   (function (exports) {
     Terminal.applyAddon(fit);
@@ -24,29 +27,11 @@
     $('.JS-ReactiveForm').each(function (idx, el) {
       Vmango.ReactiveForm(el);
     });
-    $(".JS-VmCreatePageNodeSelector").on('change', function(event){
-      var destUrl = '{{ Url "virtual-machine-add" }}';
-      window.location.href = destUrl + "?node=" + $(event.target).val();
-    })
-    $(".JS-VolumeListNodeSelector").on('change', function(event){
-      var destUrl = '{{ Url "volume-list" }}';
-      window.location.href = destUrl + "?node=" + $(event.target).val();
-    })
-    $(".JS-QueryStringSelector").on('change', function(event){
-      var destUrl = $(event.target).data('url'),
-          name = $(event.target).data('paramname'),
-          exclusive = $(event.target).data('exclusive'),
-          value = $(event.target).children("option:selected").val(),
-          urlParams;
-
-      if (exclusive) {
-        urlParams = new URLSearchParams("");
-      } else {
-        urlParams = new URLSearchParams(window.location.search);
-      }
-      urlParams.set(name, value);
-
-      window.location.href = destUrl + "?" + urlParams.toString();
-    })
+    $('.JS-QueryStringSelector').each(function (idx, el) {
+      Vmango.QueryStringSelector(el);
+    });
+    $('.JS-DynamicItemList').each(function (idx, el) {
+      Vmango.DynamicItemList(el);
+    });
   });
 </script>

@@ -15,18 +15,20 @@
           <h4>Create Virtual Machine</h4>
           <br>
           <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
+            <input type="hidden" name="GraphicType" value="none">
+            <input type="hidden" name="GuestAgent" value="true">
             <div class="form-group row">
               <div class="col-md-3">
-                <label>Name</label>
-                <input required="required" class="form-control" name="Name" id="Name">
-              </div>
-              <div class="col-md-3">
                 <label>Node</label>
-                <select name="NodeId" id="NodeId" class="form-control JS-VmCreatePageNodeSelector">
+                <select name="NodeId" id="NodeId" class="JS-QueryStringSelector custom-select" name="NodeId" data-paramname="node" data-url="{{ Url "virtual-machine-add" }}">
                   {{ range .Nodes }}
                   <option {{ if eq $.NodeId .Id }}selected{{ end }} value="{{ .Id }}">{{ .Id }}</option>
                   {{ end }}
                 </select>
+              </div>
+              <div class="col-md-5">
+                <label>Name</label>
+                <input required="required" class="form-control" name="Name" id="Name">
               </div>
               <div class="col-md-2">
                 <label>Cpu Count</label>
@@ -37,7 +39,7 @@
                 <div class="input-group">
                   <input required="required" class="form-control" name="MemoryValue" min="1" id="MemoryValue" type="number" value="2048">
                   <div class="input-group-append">
-                    <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="MemoryUnit" class="form-control">
+                    <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="MemoryUnit" class="custom-select">
                       <option value="B">B</option>
                       <option value="K">K</option>
                       <option selected value="M">M</option>
@@ -46,43 +48,38 @@
                   </div>
                 </div>
               </div>
-              <div class="col-md-2">
-                <label>Arch</label>
-                <select required="required" class="form-control" name="Arch">
-                  {{ range .Arches }}
-                  <option value="{{ . }}">{{ . }}</option>
-                  {{ end }}
-                </select>
-              </div>
             </div>
 
             <div class="form-group row">
-              <div class="col-md-8">
-                <label>Volume Name</label>
-                <input required="required" class="form-control" name="RootVolumeName" id="RootVolumeName">
-              </div>
+              <input type="hidden" name="CloneVolumeDeviceType" value="disk">
+              <input type="hidden" name="CloneVolumeDeviceBus" value="virtio">
+              <input type="hidden" name="CloneVolumeNewName" value="__magic_root_suffix__">
               <div class="col-md-4">
-                <label>Volume Pool</label>
-                <select required="required" class="form-control" name="RootVolumePool">
+                <label>Root Volume Pool</label>
+                <select required="required" class="custom-select" name="CloneVolumeNewPool">
                   {{ range .Pools }}
                   <option value="{{ .Name }}">{{ .Name }} ({{ .Free.Bytes | HumanizeBytes }} free {{ .UsagePercent }}% used)
                   </option>
                   {{ end }}
                 </select>
               </div>
-            </div>
-
-            <div class="form-group row">
-              <div class="col-md-3">
-                <label>Format</label>
-                <select required="required" class="form-control" name="RootVolumeFormat">
-                  <option selected value="qcow2">qcow2</option>
-                  <option value="raw">raw</option>
-                </select>
+              <div class="col-md-2">
+                <label>Size</label>
+                <div class="input-group">
+                  <input required="required" class="form-control" name="CloneVolumeNewSizeValue" min="1" id="RootVolumeSize" type="number" value="10">
+                  <div class="input-group-append">
+                    <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="CloneVolumeNewSizeUnit" class="custom-select">
+                      <option value="B">B</option>
+                      <option value="K">K</option>
+                      <option value="M">M</option>
+                      <option selected value="G">G</option>
+                    </select>
+                  </div>
+                </div>
               </div>
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label>Source Image</label>
-                <select required="required" class="form-control" name="RootVolumeSource">
+                <select required="required" class="custom-select" name="CloneVolumeOriginalPath">
                   {{ range .Images }}
                   {{ if eq .Metadata.OsName "" }}
                   <option value="{{ .Path }}">{{ .Path }}</option>
@@ -93,26 +90,22 @@
                   {{ end }}
                 </select>
               </div>
-              <div class="col-md-3">
-                <label>Size</label>
-                <div class="input-group">
-                  <input required="required" class="form-control" name="RootVolumeSizeValue" min="1" id="RootVolumeSize" type="number" value="10">
-                  <div class="input-group-append">
-                    <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="RootVolumeSizeUnit" class="form-control">
-                      <option value="B">B</option>
-                      <option value="K">K</option>
-                      <option value="M">M</option>
-                      <option selected value="G">G</option>
-                    </select>
-                  </div>
-                </div>
+              <div class="col-md-2">
+                <label>Format</label>
+                <select required="required" class="custom-select" name="CloneVolumeNewFormat">
+                  <option selected value="qcow2">qcow2</option>
+                  <option value="raw">raw</option>
+                </select>
               </div>
             </div>
 
             <div class="form-group row">
+              <input type="hidden" name="InterfaceModel" value="virtio">
+              <input type="hidden" name="InterfaceAccessVlan" value="">
+
               <div class="col-md-4">
                 <label>Network</label>
-                <select required="required" class="form-control" name="Network">
+                <select required="required" class="custom-select" name="InterfaceNetwork">
                   {{ range .Networks }}
                   <option value="{{ .Name }}">{{ .Name }}</option>
                   {{ end }}
@@ -120,46 +113,33 @@
               </div>
               <div class="col-md-4">
                 <label>MAC Address</label>
-                <input class="form-control" name="Mac" id="Mac" placeholder="00:00:00:00:00:00">
-              </div>
-              <div class="col-md-4">
-                <label for="AccessVlan">Vlan</label>
-                <input type="number" min="0" class="form-control" name="AccessVlan" id="AccessVlan">
+                <input class="form-control" name="InterfaceMac" id="Mac" placeholder="00:00:00:00:00:00">
               </div>
             </div>
 
             <div class="form-group row">
-              <div class="col-md-12">
+              <div class="col-md-6">
                 <label>Keys</label>
-                <select multiple class="form-control" name="Keys">
+                <select style="height: 100px;" multiple class="custom-select" name="Keys">
                   {{ range .Keys }}
                   <option value="{{ .Fingerprint }}">{{ .Comment }}</option>
                   {{ end }}
                 </select>
               </div>
-            </div>
-
-            <div class="form-group row">
-              <div class="col-md-12">
+              <div class="col-md-6">
                 <label>Userdata</label>
-                <textarea class="form-control" name="Userdata"></textarea>
+                <textarea style="height: 100px;" class="form-control" name="Userdata"></textarea>
               </div>
             </div>
 
-            <div class="form-group row">
-              <div class="col-md-12">
-                <div class="custom-control custom-checkbox">
-                  <input id="start" name="Start" value="true" class="custom-control-input" type="checkbox" checked />
-                  <label class="custom-control-label" for="start">Start immediately after creation</label>
-                </div>
-              </div>
-            </div>
+            <input name="Start" value="true" type="hidden" />
 
             <div class="form-group row">
               <div class="col-md-12">
                 <button class="btn btn-primary"
                   data-loading="<i class='icon-refresh icons'></i> Creating Virtual Machine..." type="submit">Create Virtual
                   Machine</button>
+                  <a class="btn btn-link" href="?mode=advanced">Advanced Mode</a>
               </div>
             </div>
           </form>
