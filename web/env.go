@@ -65,6 +65,20 @@ type Environ struct {
 func TemplateFuncs(env *Environ) []template.FuncMap {
 	return []template.FuncMap{
 		template.FuncMap{
+			"ConfigLinksTitle": func() string {
+				if env.cfg.LinksTitle != "" {
+					return env.cfg.LinksTitle
+				}
+				for _, link := range env.cfg.Links {
+					if link.Active {
+						return link.Title
+					}
+				}
+				return "_no_active_link_"
+			},
+			"ConfigLinks": func() []config.WebConfigLink {
+				return env.cfg.Links
+			},
 			"CSRFField": func(req *http.Request) template.HTML {
 				return csrf.TemplateField(req)
 			},

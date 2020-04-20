@@ -19,6 +19,18 @@
       <img class="navbar-brand-full" src="{{ Static "vmango/img/logo.png" }}" width="89" height="25" alt="CoreUI Logo">
     </a>
     <ul class="nav navbar-nav d-md-down-none">
+      {{ if ConfigLinks }}
+      <li class="nav-item dropdown">
+        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          {{ ConfigLinksTitle }}
+        </a>
+        <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+          {{ range ConfigLinks }}
+          <a class="dropdown-item dropdown-item-sm {{ if .Active }}active{{ end }}" {{ if not .Active }}href="{{ .Url }}"{{ end }}>{{ .Title }}</a>
+          {{ end }}
+        </div>
+      </li>
+      {{ end }}
       <li class="nav-item px-3">
         <a class="nav-link" href="{{ Url "node-list" }}">Nodes</a>
       </li>

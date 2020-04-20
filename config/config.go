@@ -17,6 +17,12 @@ type UserWebConfig struct {
 	HashedPassword string `hcl:"hashed_password"`
 }
 
+type WebConfigLink struct {
+	Title  string `hcl:",key"`
+	Active bool   `hcl:"active"`
+	Url    string `hcl:"url"`
+}
+
 type WebConfig struct {
 	Listen         string          `hcl:"listen"`
 	Debug          bool            `hcl:"debug"`
@@ -27,6 +33,8 @@ type WebConfig struct {
 	SessionMaxAge  int             `hcl:"session_max_age"`
 	MediaUploadTmp string          `hcl:"media_upload_tmp"`
 	Users          []UserWebConfig `hcl:"user"`
+	Links          []WebConfigLink `hcl:"link"`
+	LinksTitle     string          `hcl:"links_title"`
 }
 
 type ImageConfig struct {
