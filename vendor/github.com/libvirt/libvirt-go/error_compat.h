@@ -207,4 +207,16 @@
 #define VIR_FROM_TPM 70
 #endif
 
+/* 5.10.0 */
+
+#ifndef VIR_FROM_BPF
+#define VIR_FROM_BPF 71
+#endif
+
+/* 6.1.0 */
+#ifndef VIR_ERR_NO_HOSTNAME
+#define VIR_ERR_NO_HOSTNAME 108
+#endif
+
+
 #endif /* LIBVIRT_GO_ERROR_COMPAT_H__ */

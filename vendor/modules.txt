@@ -29,7 +29,7 @@ github.com/hashicorp/hcl/json/scanner
 github.com/hashicorp/hcl/json/token
 # github.com/imdario/mergo v0.3.7
 github.com/imdario/mergo
-# github.com/libvirt/libvirt-go v5.6.1+incompatible
+# github.com/libvirt/libvirt-go v6.1.0+incompatible
 github.com/libvirt/libvirt-go
 # github.com/libvirt/libvirt-go-xml v5.6.0+incompatible
 github.com/libvirt/libvirt-go-xml

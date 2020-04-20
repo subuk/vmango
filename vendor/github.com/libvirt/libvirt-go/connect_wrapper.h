@@ -731,4 +731,11 @@ virConnectGetStoragePoolCapabilitiesWrapper(virConnectPtr conn,
                                             unsigned int flags,
                                             virErrorPtr err);
 
+int
+virConnectSetIdentityWrapper(virConnectPtr conn,
+			     virTypedParameterPtr params,
+			     int nparams,
+			     unsigned int flags,
+			     virErrorPtr err);
+
 #endif /* LIBVIRT_GO_CONNECT_WRAPPER_H__ */

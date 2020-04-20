@@ -495,6 +495,90 @@ func closeCallback(conn C.virConnectPtr, reason ConnectCloseReason, goCallbackId
 	callback(&Connect{ptr: conn}, reason)
 }
 
+type ConnectIdentity struct {
+	UserNameSet              bool
+	UserName                 string
+	UNIXUserIDSet            bool
+	UNIXUserID               uint64
+	GroupNameSet             bool
+	GroupName                string
+	UNIXGroupIDSet           bool
+	UNIXGroupID              uint64
+	ProcessIDSet             bool
+	ProcessID                int64
+	ProcessTimeSet           bool
+	ProcessTime              uint64
+	SASLUserNameSet          bool
+	SASLUserName             string
+	X509DistinguishedNameSet bool
+	X509DistinguishedName    string
+	SELinuxContextSet        bool
+	SELinuxContext           string
+}
+
+func getConnectIdentityFieldInfo(params *ConnectIdentity) map[string]typedParamsFieldInfo {
+	return map[string]typedParamsFieldInfo{
+		C.VIR_CONNECT_IDENTITY_USER_NAME: typedParamsFieldInfo{
+			set: &params.UserNameSet,
+			s:   &params.UserName,
+		},
+		C.VIR_CONNECT_IDENTITY_UNIX_USER_ID: typedParamsFieldInfo{
+			set: &params.UNIXUserIDSet,
+			ul:  &params.UNIXUserID,
+		},
+		C.VIR_CONNECT_IDENTITY_GROUP_NAME: typedParamsFieldInfo{
+			set: &params.GroupNameSet,
+			s:   &params.GroupName,
+		},
+		C.VIR_CONNECT_IDENTITY_UNIX_GROUP_ID: typedParamsFieldInfo{
+			set: &params.UNIXGroupIDSet,
+			ul:  &params.UNIXGroupID,
+		},
+		C.VIR_CONNECT_IDENTITY_PROCESS_ID: typedParamsFieldInfo{
+			set: &params.ProcessIDSet,
+			l:   &params.ProcessID,
+		},
+		C.VIR_CONNECT_IDENTITY_PROCESS_TIME: typedParamsFieldInfo{
+			set: &params.ProcessTimeSet,
+			ul:  &params.ProcessTime,
+		},
+		C.VIR_CONNECT_IDENTITY_SASL_USER_NAME: typedParamsFieldInfo{
+			set: &params.SASLUserNameSet,
+			s:   &params.SASLUserName,
+		},
+		C.VIR_CONNECT_IDENTITY_X509_DISTINGUISHED_NAME: typedParamsFieldInfo{
+			set: &params.X509DistinguishedNameSet,
+			s:   &params.X509DistinguishedName,
+		},
+		C.VIR_CONNECT_IDENTITY_SELINUX_CONTEXT: typedParamsFieldInfo{
+			set: &params.SELinuxContextSet,
+			s:   &params.SELinuxContext,
+		},
+	}
+}
+
+func (c *Connect) SetIdentity(ident *ConnectIdentity, flags uint) error {
+	if C.LIBVIR_VERSION_NUMBER < 5008000 {
+		return makeNotImplementedError("virConnectSetIdentity")
+	}
+	info := getConnectIdentityFieldInfo(ident)
+
+	cparams, cnparams, gerr := typedParamsPackNew(info)
+	if gerr != nil {
+		return gerr
+	}
+
+	defer C.virTypedParamsFree(cparams, cnparams)
+
+	var err C.virError
+	ret := C.virConnectSetIdentityWrapper(c.ptr, cparams, cnparams, C.uint(flags), &err)
+	if ret == -1 {
+		return makeError(&err)
+	}
+
+	return nil
+}
+
 // See also https://libvirt.org/html/libvirt-libvirt-host.html#virConnectGetCapabilities
 func (c *Connect) GetCapabilities() (string, error) {
 	var err C.virError
@@ -1825,8 +1909,8 @@ func (c *Connect) GetFreePages(pageSizes []uint64, startCell int, maxCells uint,
 	}
 
 	var err C.virError
-	ret := C.virNodeGetFreePagesWrapper(c.ptr, C.uint(len(pageSizes)), (*C.uint)(unsafe.Pointer(&cpageSizes)), C.int(startCell),
-		C.uint(maxCells), (*C.ulonglong)(unsafe.Pointer(&ccounts)), C.uint(flags), &err)
+	ret := C.virNodeGetFreePagesWrapper(c.ptr, C.uint(len(pageSizes)), (*C.uint)(unsafe.Pointer(&cpageSizes[0])), C.int(startCell),
+		C.uint(maxCells), (*C.ulonglong)(unsafe.Pointer(&ccounts[0])), C.uint(flags), &err)
 	if ret == -1 {
 		return []uint64{}, makeError(&err)
 	}
@@ -2722,6 +2806,71 @@ func getDomainStatsPerfFieldInfo(params *DomainStatsPerf) map[string]typedParams
 	}
 }
 
+type DomainStatsMemory struct {
+	BandwidthMonitor []DomainStatsMemoryBandwidthMonitor
+}
+
+type DomainStatsMemoryBandwidthMonitor struct {
+	NameSet  bool
+	Name     string
+	VCPUsSet bool
+	VCPUs    string
+	Nodes    []DomainStatsMemoryBandwidthMonitorNode
+}
+
+func getDomainStatsMemoryBandwidthMonitorFieldInfo(idx int, params *DomainStatsMemoryBandwidthMonitor) map[string]typedParamsFieldInfo {
+	return map[string]typedParamsFieldInfo{
+		fmt.Sprintf("memory.bandwidth.monitor.%d.name", idx): typedParamsFieldInfo{
+			set: &params.NameSet,
+			s:   &params.Name,
+		},
+		fmt.Sprintf("memory.bandwidth.monitor.%d.vcpus", idx): typedParamsFieldInfo{
+			set: &params.VCPUsSet,
+			s:   &params.VCPUs,
+		},
+	}
+}
+
+type domainStatsMemoryBandwidthMonitorLengths struct {
+	NodeCountSet bool
+	NodeCount    uint
+}
+
+func getDomainStatsMemoryBandwidthMonitorLengthsFieldInfo(idx int, params *domainStatsMemoryBandwidthMonitorLengths) map[string]typedParamsFieldInfo {
+	return map[string]typedParamsFieldInfo{
+		fmt.Sprintf("memory.bandwidth.monitor.%d.node.count", idx): typedParamsFieldInfo{
+			set: &params.NodeCountSet,
+			ui:  &params.NodeCount,
+		},
+	}
+}
+
+type DomainStatsMemoryBandwidthMonitorNode struct {
+	IDSet         bool
+	ID            uint
+	BytesLocalSet bool
+	BytesLocal    uint64
+	BytesTotalSet bool
+	BytesTotal    uint64
+}
+
+func getDomainStatsMemoryBandwidthMonitorNodeFieldInfo(idx1, idx2 int, params *DomainStatsMemoryBandwidthMonitorNode) map[string]typedParamsFieldInfo {
+	return map[string]typedParamsFieldInfo{
+		fmt.Sprintf("memory.bandwidth.monitor.%d.node.%d.id", idx1, idx2): typedParamsFieldInfo{
+			set: &params.IDSet,
+			ui:  &params.ID,
+		},
+		fmt.Sprintf("memory.bandwidth.monitor.%d.node.%d.bytes.local", idx1, idx2): typedParamsFieldInfo{
+			set: &params.BytesLocalSet,
+			ul:  &params.BytesLocal,
+		},
+		fmt.Sprintf("memory.bandwidth.monitor.%d.node.%d.bytes.total", idx1, idx2): typedParamsFieldInfo{
+			set: &params.BytesTotalSet,
+			ul:  &params.BytesTotal,
+		},
+	}
+}
+
 type DomainStats struct {
 	Domain  *Domain
 	State   *DomainStatsState
@@ -2731,17 +2880,20 @@ type DomainStats struct {
 	Net     []DomainStatsNet
 	Block   []DomainStatsBlock
 	Perf    *DomainStatsPerf
+	Memory  *DomainStatsMemory
 }
 
 type domainStatsLengths struct {
-	VcpuCurrentSet bool
-	VcpuCurrent    uint
-	VcpuMaximumSet bool
-	VcpuMaximum    uint
-	NetCountSet    bool
-	NetCount       uint
-	BlockCountSet  bool
-	BlockCount     uint
+	VcpuCurrentSet    bool
+	VcpuCurrent       uint
+	VcpuMaximumSet    bool
+	VcpuMaximum       uint
+	NetCountSet       bool
+	NetCount          uint
+	BlockCountSet     bool
+	BlockCount        uint
+	BandwidthCountSet bool
+	BandwidthCount    uint
 }
 
 func getDomainStatsLengthsFieldInfo(params *domainStatsLengths) map[string]typedParamsFieldInfo {
@@ -2761,6 +2913,10 @@ func getDomainStatsLengthsFieldInfo(params *domainStatsLengths) map[string]typed
 		"block.count": typedParamsFieldInfo{
 			set: &params.BlockCountSet,
 			ui:  &params.BlockCount,
+		},
+		"memory.bandwidth.monitor.count": typedParamsFieldInfo{
+			set: &params.BandwidthCountSet,
+			ui:  &params.BandwidthCount,
 		},
 	}
 }
@@ -2901,6 +3057,50 @@ func (c *Connect) GetAllDomainStats(doms []*Domain, statsTypes DomainStatsTypes,
 				if count != 0 {
 					domstats.Net[j] = net
 				}
+			}
+		}
+
+		if lengths.BandwidthCountSet && lengths.BandwidthCount > 0 {
+			domstats.Memory = &DomainStatsMemory{
+				BandwidthMonitor: make([]DomainStatsMemoryBandwidthMonitor, lengths.BandwidthCount),
+			}
+
+			for j := 0; j < int(lengths.BandwidthCount); j++ {
+				bwmon := DomainStatsMemoryBandwidthMonitor{}
+
+				bwmonInfo := getDomainStatsMemoryBandwidthMonitorFieldInfo(j, &bwmon)
+
+				_, gerr = typedParamsUnpack(cdomstats.params, cdomstats.nparams, bwmonInfo)
+				if gerr != nil {
+					return []DomainStats{}, gerr
+				}
+
+				bwmonlen := domainStatsMemoryBandwidthMonitorLengths{}
+
+				bwmonlenInfo := getDomainStatsMemoryBandwidthMonitorLengthsFieldInfo(j, &bwmonlen)
+
+				_, gerr = typedParamsUnpack(cdomstats.params, cdomstats.nparams, bwmonlenInfo)
+				if gerr != nil {
+					return []DomainStats{}, gerr
+				}
+
+				if bwmonlen.NodeCountSet && bwmonlen.NodeCount > 0 {
+					bwmon.Nodes = make([]DomainStatsMemoryBandwidthMonitorNode, bwmonlen.NodeCount)
+					for k := 0; k < int(bwmonlen.NodeCount); k++ {
+						bwmonnode := DomainStatsMemoryBandwidthMonitorNode{}
+
+						bwmonnodeInfo := getDomainStatsMemoryBandwidthMonitorNodeFieldInfo(j, k, &bwmonnode)
+
+						_, gerr = typedParamsUnpack(cdomstats.params, cdomstats.nparams, bwmonnodeInfo)
+						if gerr != nil {
+							return []DomainStats{}, gerr
+						}
+
+						bwmon.Nodes[k] = bwmonnode
+					}
+				}
+
+				domstats.Memory.BandwidthMonitor[j] = bwmon
 			}
 		}
 

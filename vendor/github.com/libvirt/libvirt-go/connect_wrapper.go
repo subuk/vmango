@@ -1777,6 +1777,23 @@ virConnectGetStoragePoolCapabilitiesWrapper(virConnectPtr conn,
 #endif
 }
 
+int
+virConnectSetIdentityWrapper(virConnectPtr conn,
+			     virTypedParameterPtr params,
+			     int nparams,
+			     unsigned int flags,
+			     virErrorPtr err)
+{
+#if LIBVIR_VERSION_NUMBER < 5008000
+    assert(0); // Caller should have checked version
+#else
+    int ret = virConnectSetIdentity(conn, params, nparams, flags);
+    if (!ret) {
+        virCopyLastError(err);
+    }
+    return ret;
+#endif
+}
 
 ////////////////////////////////////////////////
 */

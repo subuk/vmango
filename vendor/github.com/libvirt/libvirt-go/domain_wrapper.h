@@ -1009,4 +1009,31 @@ virDomainCheckpointLookupByNameWrapper(virDomainPtr domain,
 				       unsigned int flags,
 				       virErrorPtr err);
 
+int
+virDomainGetGuestInfoWrapper(virDomainPtr domain,
+			     unsigned int types,
+			     virTypedParameterPtr *params,
+			     int *nparams,
+			     unsigned int flags,
+                             virErrorPtr err);
+
+int
+virDomainAgentSetResponseTimeoutWrapper(virDomainPtr domain,
+                                        int timeout,
+                                        unsigned int flags,
+                                        virErrorPtr err);
+
+int
+virDomainBackupBeginWrapper(virDomainPtr domain,
+			    const char *backupXML,
+			    const char *checkpointXML,
+			    unsigned int flags,
+			    virErrorPtr err);
+
+char *
+virDomainBackupGetXMLDescWrapper(virDomainPtr domain,
+				 unsigned int flags,
+				 virErrorPtr err);
+
+
 #endif /* LIBVIRT_GO_DOMAIN_WRAPPER_H__ */
