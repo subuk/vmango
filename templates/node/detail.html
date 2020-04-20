@@ -1,0 +1,98 @@
+{{template "header" .}}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "node-list" }}">Nodes</a></li>
+  <li class="breadcrumb-item active">{{ .Node.Id }}</li>
+</ol>
+
+<div class="container">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-12">
+              <h1 class="mb-3">{{ .Node.Id }}</h1>
+              <ul class="mb-5">
+                <li>Threads per core: {{ .Node.ThreadsPerCore }}</li>
+              </ul>
+              <table class="mb-5 table">
+                <thead>
+                  <th style="width: 40px;">#</th>
+                  <th style="width: 40px;">Total Memory</th>
+                  <th>Pages 4k</th>
+                  {{ if .Node.Has2mPages }}<th>Pages 2M</th>{{ end }}
+                  {{ if .Node.Has1gPages }}<th>Pages 1G</th>{{ end }}
+                </thead>
+                <tbody>
+                  {{ range $numaId, $numa := .Node.Numas }}
+                  <tr>
+                    <td>{{ $numaId }}</td>
+                    <td>{{ $numa.Memory.Bytes | HumanizeBytes }}</td>
+                    <td>
+                      <div class="progress">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: {{ $numa.Pages4kUsedPercent }}%" aria-valuenow="{{ $numa.Pages4kUsedPercent }}" aria-valuemin="0" aria-valuemax="100">
+                          {{ $numa.Pages4kUsedSize.Bytes | HumanizeBytes }} / {{ $numa.Pages4kSize.Bytes | HumanizeBytes }}
+                        </div>
+                      </div>
+                    </td>
+                    {{ if $.Node.Has2mPages }}
+                    <td>
+                      <div class="progress">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: {{ $numa.Pages2mUsedPercent }}%" aria-valuenow="{{ $numa.Pages2mUsedPercent }}" aria-valuemin="0" aria-valuemax="100">
+                          {{ $numa.Pages2mUsedSize.Bytes | HumanizeBytes }} / {{ $numa.Pages2mSize.Bytes | HumanizeBytes }}
+                        </div>
+                      </div>
+                    </td>
+                    {{ end }}
+                    {{ if $.Node.Has1gPages }}
+                    <td>
+                      <div class="progress">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: {{ $numa.Pages1gUsedPercent }}%" aria-valuenow="{{ $numa.Pages1gUsedPercent }}" aria-valuemin="0" aria-valuemax="100">
+                          {{ $numa.Pages1gUsedSize.Bytes | HumanizeBytes }} / {{ $numa.Pages1gSize.Bytes | HumanizeBytes }}
+                        </div>
+                      </div>
+                    </td>
+                    {{ end }}
+                  </tr>
+                  {{ end }}
+                </tbody>
+              </table>
+
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 40px;">Cpu</th>
+                    <th style="width: 40px;">Numa</th>
+                    <th style="width: 40px;">Socket</th>
+                    <th style="width: 40px;">Core</th>
+                    <th>Pins</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{ range $cpuId, $cpu := .Node.Cpus }}{{ if gt $cpu.NumaId -1 }}
+                  <tr>
+                    <td>{{ $cpuId }}</td>
+                    <td>{{ $cpu.NumaId }}</td>
+                    <td>{{ $cpu.SocketId }}</td>
+                    <td>{{ $cpu.CoreId }}</td>
+                    <td>
+                      <ul>
+                        {{ range $cpu.Pins }}
+                        <li><a href="{{ Url "virtual-machine-detail" "id" .VmId "node" $.Node.Id }}">{{ .VmId }}</a>::{{ .Desc }}</li>
+                        {{ end }}
+                      </ul>
+                    </td>
+                  </tr>
+                  {{ end }}{{ end }}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{template "footer" .}}

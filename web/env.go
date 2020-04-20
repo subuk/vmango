@@ -221,6 +221,7 @@ func New(
 	router.HandleFunc("/machines/{node}/{id}/update/", env.authenticated(env.VirtualMachineUpdateFormProcess)).Name("virtual-machine-update").Methods("POST")
 	router.HandleFunc("/machines/{node}/{id}/update/", env.authenticated(env.VirtualMachineUpdateFormShow)).Name("virtual-machine-update")
 
+	router.HandleFunc("/nodes/{id}/", env.authenticated(env.NodeDetail)).Name("node-detail")
 	router.HandleFunc("/", env.authenticated(env.NodeList)).Name("node-list")
 
 	return csrfProtect(env)

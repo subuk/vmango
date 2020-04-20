@@ -26,7 +26,7 @@
             <tbody>
               {{ range .Nodes }}
               <tr>
-                <td>{{ .Id }}</td>
+                <td><a href="{{ Url "node-detail" "id" .Id }}">{{ .Id }}</a></td>
                 <td>{{ .Hostname }}</td>
                 <td>{{ .CpuInfo }}</td>
                 <td>{{ .Memory.Bytes | HumanizeBytes }}</td>

@@ -150,7 +150,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		VolumeFormats:   UIVolumeFormats,
 	}
 
-	nodes, err := env.nodes.List()
+	nodes, err := env.nodes.List(compute.NodeListOptions{NoPins: true})
 	if err != nil {
 		env.error(rw, req, err, "cannot list networks", http.StatusInternalServerError)
 		return

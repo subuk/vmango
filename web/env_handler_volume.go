@@ -12,7 +12,7 @@ import (
 func (env *Environ) VolumeList(rw http.ResponseWriter, req *http.Request) {
 	selectedNodeId := req.URL.Query().Get("node")
 	selectedPool := req.URL.Query().Get("pool")
-	nodes, err := env.nodes.List()
+	nodes, err := env.nodes.List(compute.NodeListOptions{NoPins: true})
 
 	var filterPoolNames []string
 	if selectedPool != "" {
