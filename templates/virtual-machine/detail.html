@@ -2,7 +2,8 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}">Virtual Machines</a></li>
-  <li class="breadcrumb-item active">{{ .Vm.NodeId }}::{{ .Vm.Id }}</li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}?node={{ .Vm.NodeId }}">{{ .Vm.NodeId }}</a></li>
+  <li class="breadcrumb-item active">{{ .Vm.Id }}</li>
 </ol>
 
 <div class="container">

@@ -3,9 +3,11 @@
 <!-- Breadcrumb -->
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a>{{ .Volume.NodeId }}</a></li>
   <li class="breadcrumb-item"><a href="{{ Url "volume-list" }}">Volumes</a></li>
-  <li class="breadcrumb-item active">{{ .Volume.Path }}</li>
+  <li class="breadcrumb-item"><a href="{{ Url "volume-list" }}?node={{ .Volume.NodeId }}">{{ .Volume.NodeId }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "volume-list" }}?node={{ .Volume.NodeId }}&pool={{ .Volume.Pool }}">{{ .Volume.Pool }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "volume-list" }}?node={{ .Volume.NodeId }}&pool={{ .Volume.Pool }}#{{ .Volume.Name }}">{{ .Volume.Name }}</a></li>
+  <li class="breadcrumb-item active">Delete</li>
 </ol>
 
 <div class="container">
