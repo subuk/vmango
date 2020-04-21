@@ -1,5 +1,11 @@
 package compute
 
+import (
+	"errors"
+)
+
+var ErrUnknownNode = errors.New("unknown node")
+
 type NodeGetOptions struct {
 	CpuNumaIdFilter bool
 	CpuNumaId       int

@@ -1,6 +1,7 @@
 package libvirt
 
 import (
+	"subuk/vmango/compute"
 	"subuk/vmango/util"
 	"sync"
 
@@ -58,7 +59,11 @@ func (p *ConnectionPool) Acquire(node string) (*libvirt.Connect, error) {
 		panic("empty node id")
 	}
 	p.cacheMu.Lock()
-	uri := p.nodeUri[node]
+	uri, nodeExists := p.nodeUri[node]
+	if !nodeExists {
+		p.cacheMu.Unlock()
+		return nil, compute.ErrUnknownNode
+	}
 	if p.cache[uri] == nil {
 		p.cache[uri] = &connection{Mu: &sync.Mutex{}}
 	}
