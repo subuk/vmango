@@ -41,11 +41,19 @@
             </div>
 
             <div class="form-group row">
-              <div class="col-md-4">
+              <div class="col-md-2">
                 <label for="GraphicType">Graphic Type</label>
                 <select required="required" class="form-control" name="GraphicType" id="GraphicType">
                   {{ range .GraphicTypes }}
                   <option {{ if eq $.Vm.Graphic.Type . }}selected{{ end }} value="{{ .String }}">{{ .String | Capitalize }}</option>
+                  {{ end }}
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label for="VideoModel">Video Model</label>
+                <select required="required" class="form-control" name="VideoModel" id="VideoModel">
+                  {{ range .VideoModels }}
+                  <option {{ if eq $.Vm.VideoModel . }}selected{{ end }}  value="{{ .String }}">{{ .String | Capitalize }}</option>
                   {{ end }}
                 </select>
               </div>

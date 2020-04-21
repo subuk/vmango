@@ -130,6 +130,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		DeviceTypes      []compute.DeviceType
 		DeviceBuses      []compute.DeviceBus
 		VolumeFormats    []compute.VolumeFormat
+		VideoModels      []compute.VideoModel
 		NodeId           string
 		Nodes            []*compute.Node
 		AvailableVolumes []*compute.Volume
@@ -148,6 +149,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		InterfaceModels: InterfaceModels,
 		GraphicTypes:    GraphicTypes,
 		VolumeFormats:   UIVolumeFormats,
+		VideoModels:     VideoModels,
 	}
 
 	nodes, err := env.nodes.List(compute.NodeListOptions{NoPins: true})
@@ -247,6 +249,11 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		http.Error(rw, "unknown graphic type: "+req.Form.Get("GraphicType"), http.StatusBadRequest)
 		return
 	}
+	videoModel := compute.NewVideoModel(req.Form.Get("VideoModel"))
+	if videoModel == compute.VideoModelUnknown {
+		http.Error(rw, "unknown video model: "+req.Form.Get("VideoModel"), http.StatusBadRequest)
+		return
+	}
 
 	newVols := []compute.VirtualMachineManagerCreatedVolumeParams{}
 	newVolsCount := len(req.Form["CreateVolumeName"])
@@ -329,6 +336,7 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 	vm.Graphic = compute.VirtualMachineGraphic{
 		Type: graphicType,
 	}
+	vm.VideoModel = videoModel
 	vm.Config = &compute.VirtualMachineConfig{
 		Hostname: req.Form.Get("Name"),
 		Userdata: []byte(req.Form.Get("Userdata")),
@@ -395,6 +403,12 @@ var GraphicTypes = []compute.GraphicType{
 	compute.GraphicTypeSpice,
 }
 
+var VideoModels = []compute.VideoModel{
+	compute.VideoModelNone,
+	compute.VideoModelCirrus,
+	compute.VideoModelQxl,
+}
+
 func (env *Environ) VirtualMachineUpdateFormShow(rw http.ResponseWriter, req *http.Request) {
 	urlvars := mux.Vars(req)
 	vm, err := env.vms.Get(urlvars["id"], urlvars["node"])
@@ -406,9 +420,10 @@ func (env *Environ) VirtualMachineUpdateFormShow(rw http.ResponseWriter, req *ht
 		Title        string
 		Vm           *compute.VirtualMachine
 		GraphicTypes []compute.GraphicType
+		VideoModels  []compute.VideoModel
 		User         *User
 		Request      *http.Request
-	}{"Update VirtualMachine", vm, GraphicTypes, env.Session(req).AuthUser(), req}
+	}{"Update VirtualMachine", vm, GraphicTypes, VideoModels, env.Session(req).AuthUser(), req}
 	if err := env.render.HTML(rw, http.StatusOK, "virtual-machine/update", data); err != nil {
 		env.error(rw, req, err, "failed to render template", http.StatusInternalServerError)
 		return
@@ -426,6 +441,7 @@ func (env *Environ) VirtualMachineUpdateFormProcess(rw http.ResponseWriter, req 
 		NodeId:     urlvars["node"],
 		Autostart:  req.Form.Get("Autostart") == "true",
 		GuestAgent: req.Form.Get("GuestAgent") == "true",
+		VideoModel: compute.NewVideoModel(req.Form.Get("VideoModel")),
 		Graphic: compute.VirtualMachineGraphic{
 			Type:   compute.NewGraphicType(req.Form.Get("GraphicType")),
 			Listen: req.Form.Get("GraphicListen"),

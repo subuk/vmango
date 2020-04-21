@@ -24,17 +24,9 @@
                   {{ end }}
                 </select>
               </div>
-              <div class="col-md-3">
+              <div class="col-md-5">
                 <label for="Name">Name</label>
                 <input required="required" class="form-control" name="Name" id="Name">
-              </div>
-              <div class="col-md-2">
-                <label for="GraphicType">Graphic Type</label>
-                <select required="required" class="form-control" name="GraphicType" id="GraphicType">
-                  {{ range .GraphicTypes }}
-                  <option value="{{ .String }}">{{ .String | Capitalize }}</option>
-                  {{ end }}
-                </select>
               </div>
               <div class="col-md-2">
                 <label>Cpu Count</label>
@@ -54,6 +46,26 @@
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div class="form-group row">
+              <div class="col-md-4">
+                <label for="GraphicType">Graphic Type</label>
+                <select required="required" class="form-control" name="GraphicType" id="GraphicType">
+                  {{ range .GraphicTypes }}
+                  <option value="{{ .String }}">{{ .String | Capitalize }}</option>
+                  {{ end }}
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label for="VideoModel">Video Model</label>
+                <select required="required" class="form-control" name="VideoModel" id="VideoModel">
+                  {{ range .VideoModels }}
+                  <option value="{{ .String }}">{{ .String | Capitalize }}</option>
+                  {{ end }}
+                </select>
+              </div>
+
             </div>
 
             <div class="form-group row">

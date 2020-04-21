@@ -62,6 +62,7 @@ type VirtualMachine struct {
 	GuestAgent bool
 	Autostart  bool
 	Graphic    VirtualMachineGraphic
+	VideoModel VideoModel
 }
 
 func (vm *VirtualMachine) AttachmentInfo(path string) *VirtualMachineAttachedVolume {

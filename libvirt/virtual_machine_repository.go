@@ -443,7 +443,6 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 		panic("unknown graphic type")
 	case compute.GraphicTypeNone:
 		virDomainConfig.Devices.Graphics = nil
-		virDomainConfig.Devices.Videos = nil
 	case compute.GraphicTypeVnc:
 		vncGraphic := &libvirtxml.DomainGraphicVNC{Port: -1, AutoPort: "yes", Listen: vm.Graphic.Listen}
 		virDomainConfig.Devices.Graphics = []libvirtxml.DomainGraphic{
@@ -459,6 +458,22 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 			},
 		}
 	}
+
+	switch vm.VideoModel {
+	default:
+		panic("unknown video model")
+	case compute.VideoModelQxl:
+		virDomainConfig.Devices.Videos = []libvirtxml.DomainVideo{
+			libvirtxml.DomainVideo{Model: libvirtxml.DomainVideoModel{Type: "qxl"}},
+		}
+	case compute.VideoModelCirrus:
+		virDomainConfig.Devices.Videos = []libvirtxml.DomainVideo{
+			libvirtxml.DomainVideo{Model: libvirtxml.DomainVideoModel{Type: "cirrus"}},
+		}
+	case compute.VideoModelNone:
+		virDomainConfig.Devices.Videos = nil
+	}
+
 	if isNewVm {
 		for _, attachedVolume := range vm.Volumes {
 			if err := repo.attachVolume(conn, virDomainConfig, attachedVolume); err != nil {

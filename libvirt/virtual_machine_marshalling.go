@@ -173,5 +173,17 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 		vm.Graphic.Type = compute.GraphicTypeNone
 	}
 
+	for _, video := range domainConfig.Devices.Videos {
+		switch video.Model.Type {
+		case "qxl":
+			vm.VideoModel = compute.VideoModelQxl
+		case "cirrus":
+			vm.VideoModel = compute.VideoModelCirrus
+		}
+	}
+	if vm.VideoModel == compute.VideoModelUnknown {
+		vm.VideoModel = compute.VideoModelNone
+	}
+
 	return vm, nil
 }
