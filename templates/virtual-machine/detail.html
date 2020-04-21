@@ -85,14 +85,14 @@
                       </thead>
                       <tbody>
                         {{ range .Vm.Volumes }}
+                        {{ $volumeInfo := (index $.AttachedVolumes .Path) }}
                         <tr>
                           <td>{{ .DeviceType }}</td>
-                          <td>{{ (index $.AttachedVolumes .Path).Pool }} / {{ (index $.AttachedVolumes .Path).Name }}</td>
-                          <!-- <td>{{ (index $.AttachedVolumes .Path).Name }}</td> -->
+                          <td>{{ if $volumeInfo }}{{ $volumeInfo.Pool }} / {{ $volumeInfo.Name }}{{ else }}{{ .Path }}{{ end }}</td>
                           <td>{{ .DeviceName }}</td>
-                          <td>{{ (index $.AttachedVolumes .Path).Format }}</td>
+                          <td>{{ if $volumeInfo }}{{ $volumeInfo.Format }}{{ end }}</td>
                           <td>{{ .DeviceBus }}</td>
-                          <td>{{ (index $.AttachedVolumes .Path).Size.Bytes | HumanizeBytes }}</td>
+                          <td>{{ if $volumeInfo }}{{ $volumeInfo.Size.Bytes | HumanizeBytes }}{{ end }}</td>
                           <td>
                             <form method="post" action="{{ Url "virtual-machine-detach-volume" "id" $.Vm.Id "node" $.Vm.NodeId }}">{{ CSRFField $.Request }}
                               <input type="hidden" name="Path" value="{{ .Path }}">
