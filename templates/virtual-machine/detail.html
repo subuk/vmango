@@ -17,7 +17,7 @@
                 <img src="{{ Static "vmango/img/linux-logo.png" }}" width="100" alt="linux">
                 <div class="media-body">
                   <p class="text-muted">
-                    Node {{ .Vm.NodeId }}<br>
+                    Node <a href="{{ Url "node-detail" "id" .Vm.NodeId }}">{{ .Vm.NodeId }}</a><br>
                     Autostart {{ if .Vm.Autostart }}enabled{{ else }}disabled{{ end }}<br>
                     {{ if not .Vm.Graphic.Type.IsNone }}
                     {{ .Vm.Graphic.Type.String | Capitalize }} graphic {{ if .Vm.Graphic.Listen }}on {{ .Vm.Graphic.Listen }}{{ end }}<br>
