@@ -493,7 +493,7 @@ func (env *Environ) VirtualMachineAttachDiskFormProcess(rw http.ResponseWriter, 
 	}
 	attachedVolume := &compute.VirtualMachineAttachedVolume{
 		Path:       req.Form.Get("VolumePath"),
-		DeviceName: req.Form.Get("DeviceName"),
+		Alias:      req.Form.Get("Alias"),
 		DeviceType: deviceType,
 		DeviceBus:  deviceBus,
 	}

@@ -2,13 +2,14 @@ package libvirt
 
 import (
 	"fmt"
+	"strings"
 	"subuk/vmango/compute"
 
 	"github.com/libvirt/libvirt-go"
 	libvirtxml "github.com/libvirt/libvirt-go-xml"
 )
 
-func DomainDiskConfigFromVirtualMachineAttachedVolume(volume *compute.VirtualMachineAttachedVolume, volTargetFormatType, volumeType string) *libvirtxml.DomainDisk {
+func DomainDiskConfigFromVirtualMachineAttachedVolume(volume *compute.VirtualMachineAttachedVolume, volTargetFormatType, volumeType string, namer *DeviceNamer) *libvirtxml.DomainDisk {
 	diskDriverType := "raw"
 	if volTargetFormatType == "qcow2" {
 		diskDriverType = "qcow2"
@@ -18,6 +19,9 @@ func DomainDiskConfigFromVirtualMachineAttachedVolume(volume *compute.VirtualMac
 		Driver: &libvirtxml.DomainDiskDriver{Name: "qemu", Type: diskDriverType},
 		Target: &libvirtxml.DomainDiskTarget{},
 	}
+	if volume.Alias != "" {
+		diskConfig.Alias = &libvirtxml.DomainAlias{Name: "ua-" + volume.Alias}
+	}
 	switch volume.DeviceType {
 	default:
 		panic(fmt.Errorf("unsupported volume device type '%s'", volume.DeviceType))
@@ -25,11 +29,11 @@ func DomainDiskConfigFromVirtualMachineAttachedVolume(volume *compute.VirtualMac
 		diskConfig.Device = "cdrom"
 		diskConfig.ReadOnly = &libvirtxml.DomainDiskReadOnly{}
 		diskConfig.Target.Bus = volume.DeviceBus.String()
-		diskConfig.Target.Dev = volume.DeviceName
+		diskConfig.Target.Dev = namer.Next(volume.DeviceBus)
 	case compute.DeviceTypeDisk:
 		diskConfig.Device = "disk"
 		diskConfig.Target.Bus = volume.DeviceBus.String()
-		diskConfig.Target.Dev = volume.DeviceName
+		diskConfig.Target.Dev = namer.Next(volume.DeviceBus)
 	}
 	switch volumeType {
 	default:
@@ -49,8 +53,13 @@ func DomainDiskConfigFromVirtualMachineAttachedVolume(volume *compute.VirtualMac
 
 func VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig libvirtxml.DomainDisk) *compute.VirtualMachineAttachedVolume {
 	volume := &compute.VirtualMachineAttachedVolume{}
-	volume.DeviceName = diskConfig.Target.Dev
 	volume.DeviceBus = compute.NewDeviceBus(diskConfig.Target.Bus)
+	if diskConfig.Alias != nil {
+		alias := diskConfig.Alias.Name
+		if strings.HasPrefix(alias, "ua-") {
+			volume.Alias = alias[3:]
+		}
+	}
 
 	switch diskConfig.Device {
 	default:
