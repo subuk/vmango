@@ -30,7 +30,7 @@
                 <div class="input-group">
                   <input required="required" class="form-control" name="MemoryValue" min="1" id="MemoryValue" type="number" value="{{ .Vm.Memory.M }}">
                   <div class="input-group-append">
-                    <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="MemoryUnit" class="form-control">
+                    <select style="border-top-left-radius: 0; border-bottom-left-radius: 0;" name="MemoryUnit" class="custom-select">
                       <option value="B">B</option>
                       <option value="K">K</option>
                       <option value="M" selected>M</option>
@@ -44,7 +44,7 @@
             <div class="form-group row">
               <div class="col-md-2">
                 <label for="GraphicType">Graphic Type</label>
-                <select required="required" class="form-control" name="GraphicType" id="GraphicType">
+                <select required="required" class="custom-select" name="GraphicType" id="GraphicType">
                   {{ range .GraphicTypes }}
                   <option {{ if eq $.Vm.Graphic.Type . }}selected{{ end }} value="{{ .String }}">{{ .String | Capitalize }}</option>
                   {{ end }}
@@ -52,7 +52,7 @@
               </div>
               <div class="col-md-2">
                 <label for="VideoModel">Video Model</label>
-                <select required="required" class="form-control" name="VideoModel" id="VideoModel">
+                <select required="required" class="custom-select" name="VideoModel" id="VideoModel">
                   {{ range .VideoModels }}
                   <option {{ if eq $.Vm.VideoModel . }}selected{{ end }}  value="{{ .String }}">{{ .String | Capitalize }}</option>
                   {{ end }}
