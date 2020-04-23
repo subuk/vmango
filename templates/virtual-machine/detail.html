@@ -78,7 +78,6 @@
                         <tr>
                           <th>Type</th>
                           <th>Name</th>
-                          <th>Device</th>
                           <th>Format</th>
                           <th>Bus</th>
                           <th>Size</th>
@@ -89,8 +88,13 @@
                         {{ $volumeInfo := (index $.AttachedVolumes .Path) }}
                         <tr>
                           <td>{{ .DeviceType }}</td>
-                          <td>{{ if $volumeInfo }}{{ $volumeInfo.Pool }} / {{ $volumeInfo.Name }}{{ else }}{{ .Path }}{{ end }}</td>
-                          <td>{{ .DeviceName }}</td>
+                          <td>
+                            {{ if $volumeInfo }}
+                              {{ $volumeInfo.Pool }} / {{ $volumeInfo.Name }} {{ if .Alias }}<span class="text-muted">({{ .Alias }})</span>{{ end }}
+                            {{ else }}
+                              {{ .Path }} {{ if .Alias }}<span class="text-muted">({{ .Alias }})</span>{{ end }}
+                            {{ end }}
+                          </td>
                           <td>{{ if $volumeInfo }}{{ $volumeInfo.Format }}{{ end }}</td>
                           <td>{{ .DeviceBus }}</td>
                           <td>{{ if $volumeInfo }}{{ $volumeInfo.Size.Bytes | HumanizeBytes }}{{ end }}</td>
@@ -119,9 +123,6 @@
                                 <option value="{{ .Path }}">{{ .Pool }} / {{ .Name }}</option>
                                 {{ end }}
                               </select>
-                            </td>
-                            <td>
-                              <input class="form-control form-control-sm" name="DeviceName" type="text" required>
                             </td>
                             <td colspan="3">
                               <select required="required" class="form-control form-control-sm" name="DeviceBus">

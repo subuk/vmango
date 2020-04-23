@@ -475,8 +475,9 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 	}
 
 	if isNewVm {
+		namer := NewDeviceNamer()
 		for _, attachedVolume := range vm.Volumes {
-			if err := repo.attachVolume(conn, virDomainConfig, attachedVolume); err != nil {
+			if err := repo.attachVolume(conn, virDomainConfig, attachedVolume, namer); err != nil {
 				return util.NewError(err, "cannot attach volume")
 			}
 		}
@@ -637,7 +638,7 @@ func (repo *VirtualMachineRepository) Start(id, nodeId string) error {
 	return domain.Create()
 }
 
-func (repo *VirtualMachineRepository) attachVolume(conn *libvirt.Connect, virDomainConfig *libvirtxml.Domain, attachedVolume *compute.VirtualMachineAttachedVolume) error {
+func (repo *VirtualMachineRepository) attachVolume(conn *libvirt.Connect, virDomainConfig *libvirtxml.Domain, attachedVolume *compute.VirtualMachineAttachedVolume, namer *DeviceNamer) error {
 	virVolumeConfig, err := getVolumeConfigByPath(conn, attachedVolume.Path)
 	if err != nil {
 		return util.NewError(err, "cannot get volume config")
@@ -646,6 +647,7 @@ func (repo *VirtualMachineRepository) attachVolume(conn *libvirt.Connect, virDom
 		attachedVolume,
 		getVolTargetFormatType(virVolumeConfig),
 		virVolumeConfig.Type,
+		namer,
 	)
 	virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, *diskConfig)
 	return nil
@@ -678,7 +680,8 @@ func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVo
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
 		return util.NewError(err, "cannot parse domain xml")
 	}
-	if err := repo.attachVolume(conn, virDomainConfig, attachedVolume); err != nil {
+	namer := NewDeviceNamerFromDisks(virDomainConfig.Devices.Disks)
+	if err := repo.attachVolume(conn, virDomainConfig, attachedVolume, namer); err != nil {
 		return util.NewError(err, "cannot add volume xml config")
 	}
 
