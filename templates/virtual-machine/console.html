@@ -4,9 +4,9 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}">Virtual Machines</a></li>
-  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}?node={{ .Vm.NodeId }}">Virtual Machines</a></li>
-  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-detail" "id" .Vm.Id "node" .Vm.NodeId }}">{{ .Vm.NodeId }}::{{ .Vm.Id }}</a></li>
-  <li class="breadcrumb-item active">Console</li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-list" }}?node={{ .Vm.NodeId }}">{{ .Vm.NodeId }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ Url "virtual-machine-detail" "id" .Vm.Id "node" .Vm.NodeId }}">{{ .Vm.Id }}</a></li>
+  <li class="breadcrumb-item active">console</li>
 </ol>
 
 <div class="container">
