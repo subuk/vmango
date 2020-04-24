@@ -26,12 +26,6 @@ func NewKeyRepository(filename string, logger zerolog.Logger) (*KeyRepository, e
 	if err := os.MkdirAll(dirname, 0755); err != nil {
 		return nil, util.NewError(err, "cannot create base directory")
 	}
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, util.NewError(err, "cannot open key file for writing")
-	}
-	defer file.Close()
-
 	repo := &KeyRepository{filename: filename, logger: logger}
 	return repo, nil
 }
