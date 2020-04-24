@@ -112,6 +112,9 @@ func (repo *VolumeRepository) Get(path, node string) (*compute.Volume, error) {
 	if err != nil {
 		return nil, util.NewError(err, "cannot parse volume")
 	}
+	if volume.Metadata.Hidden {
+		return nil, compute.ErrVolumeNotFound
+	}
 	if err := repo.fetchAttachedVm(conn, []*compute.Volume{volume}); err != nil {
 		return nil, util.NewError(err, "cannot fetch attached vm")
 	}
@@ -155,6 +158,9 @@ func (repo *VolumeRepository) listNode(nodeId string, onlyPools []string) ([]*co
 			volume, err := repo.virVolumeToVolume(nodeId, &pool, &virVolume)
 			if err != nil {
 				return nil, util.NewError(err, "cannot parse libvirt volume")
+			}
+			if volume.Metadata.Hidden {
+				continue
 			}
 			volumes = append(volumes, volume)
 		}

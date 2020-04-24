@@ -43,6 +43,7 @@ type ImageConfig struct {
 	OsVersion string `hcl:"os_version"`
 	OsArch    string `hcl:"os_arch"`
 	Protected bool   `hcl:"protected"`
+	Hidden    bool   `hcl:"hidden"`
 }
 
 type SubscribeConfig struct {

@@ -1,6 +1,11 @@
 package compute
 
-import "io"
+import (
+	"errors"
+	"io"
+)
+
+var ErrVolumeNotFound = errors.New("volume not found")
 
 type VolumeCloneParams struct {
 	NodeId       string

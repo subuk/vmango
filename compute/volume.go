@@ -9,6 +9,7 @@ type VolumeMetadata struct {
 	OsVersion string
 	OsArch    Arch
 	Protected bool
+	Hidden    bool
 }
 
 type Volume struct {
