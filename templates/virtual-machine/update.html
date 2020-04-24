@@ -76,6 +76,11 @@
                     {{ if .Vm.GuestAgent }}checked{{ end }} />
                   <label class="custom-control-label" for="guestagent">Guest Agent</label>
                 </div>
+                <div class="custom-control custom-checkbox">
+                  <input id="Hugepages" name="Hugepages" value="true" class="custom-control-input" type="checkbox"
+                    {{ if .Vm.Hugepages }}checked{{ end }} />
+                  <label class="custom-control-label" for="Hugepages">Hugepages</label>
+                </div>
               </div>
             </div>
 

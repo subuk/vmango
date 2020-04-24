@@ -63,6 +63,7 @@ type VirtualMachine struct {
 	Autostart  bool
 	Graphic    VirtualMachineGraphic
 	VideoModel VideoModel
+	Hugepages  bool
 }
 
 func (vm *VirtualMachine) AttachmentInfo(path string) *VirtualMachineAttachedVolume {

@@ -333,6 +333,7 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 	vm.VCpus = int(vcpus)
 	vm.Memory = compute.NewSize(memoryValue, memoryUnit)
 	vm.GuestAgent = req.Form.Get("GuestAgent") == "true"
+	vm.Hugepages = req.Form.Get("Hugepages") == "true"
 	vm.Graphic = compute.VirtualMachineGraphic{
 		Type: graphicType,
 	}
@@ -442,6 +443,7 @@ func (env *Environ) VirtualMachineUpdateFormProcess(rw http.ResponseWriter, req 
 		Autostart:  req.Form.Get("Autostart") == "true",
 		GuestAgent: req.Form.Get("GuestAgent") == "true",
 		VideoModel: compute.NewVideoModel(req.Form.Get("VideoModel")),
+		Hugepages:  req.Form.Get("Hugepages") == "true",
 		Graphic: compute.VirtualMachineGraphic{
 			Type:   compute.NewGraphicType(req.Form.Get("GraphicType")),
 			Listen: req.Form.Get("GraphicListen"),

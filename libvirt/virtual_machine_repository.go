@@ -412,6 +412,16 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 	virDomainConfig.VCPU = &libvirtxml.DomainVCPU{Placement: "static", Value: vm.VCpus}
 	virDomainConfig.Memory = &libvirtxml.DomainMemory{Unit: "bytes", Value: uint(vm.Memory.Bytes())}
 
+	if vm.Hugepages {
+		virDomainConfig.MemoryBacking = &libvirtxml.DomainMemoryBacking{
+			MemoryHugePages: &libvirtxml.DomainMemoryHugepages{},
+		}
+	} else {
+		if virDomainConfig.MemoryBacking != nil && virDomainConfig.MemoryBacking.MemoryHugePages != nil {
+			virDomainConfig.MemoryBacking.MemoryHugePages = nil
+		}
+	}
+
 	if vm.GuestAgent {
 		hasGuestAgent := false
 		for _, channel := range virDomainConfig.Devices.Channels {

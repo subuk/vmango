@@ -166,6 +166,10 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 		}
 	}
 
+	if domainConfig.MemoryBacking != nil && domainConfig.MemoryBacking.MemoryHugePages != nil {
+		vm.Hugepages = true
+	}
+
 	for _, graphic := range domainConfig.Devices.Graphics {
 		if graphic.VNC != nil {
 			vm.Graphic.Type = compute.GraphicTypeVnc
