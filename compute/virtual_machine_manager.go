@@ -61,25 +61,6 @@ func NewVirtualMachineManager(vms *VirtualMachineService, volumes *VolumeService
 }
 
 func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool) error {
-	for _, p := range newVols {
-		params := VolumeCreateParams{
-			NodeId: vm.NodeId,
-			Name:   p.Name,
-			Pool:   p.Pool,
-			Format: p.Format,
-			Size:   p.Size,
-		}
-		volume, err := manager.volumes.Create(params)
-		if err != nil {
-			return util.NewError(err, "cannot create volume")
-		}
-		vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{
-			Path:       volume.Path,
-			Alias:      p.Alias,
-			DeviceType: p.DeviceType,
-			DeviceBus:  p.DeviceBus,
-		})
-	}
 	for _, p := range cloneVols {
 		params := VolumeCloneParams{
 			NodeId:       vm.NodeId,
@@ -92,6 +73,25 @@ func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []Vir
 		volume, err := manager.volumes.Clone(params)
 		if err != nil {
 			return util.NewError(err, "cannot clone volume")
+		}
+		vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{
+			Path:       volume.Path,
+			Alias:      p.Alias,
+			DeviceType: p.DeviceType,
+			DeviceBus:  p.DeviceBus,
+		})
+	}
+	for _, p := range newVols {
+		params := VolumeCreateParams{
+			NodeId: vm.NodeId,
+			Name:   p.Name,
+			Pool:   p.Pool,
+			Format: p.Format,
+			Size:   p.Size,
+		}
+		volume, err := manager.volumes.Create(params)
+		if err != nil {
+			return util.NewError(err, "cannot create volume")
 		}
 		vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{
 			Path:       volume.Path,
