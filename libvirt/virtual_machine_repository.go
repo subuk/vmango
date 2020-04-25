@@ -23,6 +23,7 @@ import (
 )
 
 const ConfigDriveMaxSize = 5 * 1024 * 1024
+const VirtualMachineSockets = 1
 
 type VirtualMachineRepository struct {
 	pool          *ConnectionPool
@@ -379,6 +380,15 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 	}
 	defer repo.pool.Release(vm.NodeId)
 
+	capsXml, err := conn.GetCapabilities()
+	if err != nil {
+		return util.NewError(err, "cannot fetch domain capabilities")
+	}
+	capsConfig := &libvirtxml.Caps{}
+	if err := capsConfig.Unmarshal(capsXml); err != nil {
+		return util.NewError(err, "cannot parse capabilities")
+	}
+
 	var isNewVm bool
 	var virDomainConfig *libvirtxml.Domain
 
@@ -419,6 +429,19 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 	} else {
 		if virDomainConfig.MemoryBacking != nil && virDomainConfig.MemoryBacking.MemoryHugePages != nil {
 			virDomainConfig.MemoryBacking.MemoryHugePages = nil
+		}
+	}
+
+	if capsConfig.Host.CPU != nil && capsConfig.Host.CPU.Topology != nil && capsConfig.Host.CPU.Topology.Threads > 0 {
+		threadsPerCore := capsConfig.Host.CPU.Topology.Threads
+		if vm.VCpus%threadsPerCore == 0 {
+			virDomainConfig.CPU.Topology = &libvirtxml.DomainCPUTopology{
+				Sockets: VirtualMachineSockets,
+				Cores:   vm.VCpus / threadsPerCore,
+				Threads: threadsPerCore,
+			}
+		} else {
+			virDomainConfig.CPU.Topology = nil
 		}
 	}
 
