@@ -9,7 +9,7 @@ ASSETS_SOURCES = $(shell find templates static)
 UNAME_S := $(shell uname -s)
 TARBALL_SOURCES = $(GO_SOURCES) Makefile README.md vmango.dist.conf vmango.service static/ templates/ vendor/ go.mod go.sum
 
-VERSION = 0.11.0
+VERSION = 0.12.0
 
 BUILD_LDFLAGS = -X subuk/vmango/web.AppVersion=$(VERSION)
 
