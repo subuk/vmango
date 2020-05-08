@@ -527,6 +527,19 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
 		return util.NewError(err, "cannot define new domain")
 	}
+	virDomain, err := conn.LookupDomainByName(vm.Id)
+	if err != nil {
+		return util.NewError(err, "cannot lookup domain after define")
+	}
+	virDomainAutostart, err := virDomain.GetAutostart()
+	if err != nil {
+		return util.NewError(err, "cannot get domain autostart state")
+	}
+	if vm.Autostart != virDomainAutostart {
+		if err := virDomain.SetAutostart(vm.Autostart); err != nil {
+			return util.NewError(err, "cannot set domain autostart state")
+		}
+	}
 	return nil
 }
 
