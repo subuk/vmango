@@ -55,7 +55,10 @@ rm -rf $RPM_BUILD_ROOT
 %{_unitdir}/vmango.service
 
 %changelog
-* Sat Apr 26 2020 09:13:49 +0000 Matvey Kruglov <kubuzzzz@gmail.com> 0.12.0-1
+* Wed Jun 24 2020 16:07:33 +0000 Matvey Kruglov <kubuzzzz@gmail.com> 0.12.1-1
+- Update upstream to 0.12.1
+
+* Sun Apr 26 2020 09:13:49 +0000 Matvey Kruglov <kubuzzzz@gmail.com> 0.12.0-1
 - Update upstream to 0.12.0
 
 * Sat Apr 4 2020 15:31:14 +0000 Matvey Kruglov <kubuzzzz@gmail.com> 0.11.0-1
