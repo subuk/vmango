@@ -83,10 +83,10 @@
                 <label>Source Image</label>
                 <select required="required" class="custom-select" name="CloneVolumeOriginalPath">
                   {{ range .Images }}
-                  {{ if eq .Metadata.OsName "" }}
-                  <option value="{{ .Path }}">{{ .Path }}</option>
+                  {{ if eq .Os.Name "" }}
+                  <option value="{{ .VolumePath }}">{{ .VolumePath }}</option>
                   {{ else }}
-                  <option value="{{ .Path }}">{{ .Metadata.OsName }} {{ .Metadata.OsVersion }} ({{ .Metadata.OsArch }})
+                  <option value="{{ .VolumePath }}">{{ .Os.Name }} {{ .Os.Version }} ({{ .Os.Arch }})
                   </option>
                   {{ end }}
                   {{ end }}

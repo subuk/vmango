@@ -137,14 +137,12 @@
                       </td>
                       <td>
                         <select required="required" class="form-control" name="CloneVolumeOriginalPath">
-                          <option value="">- Source Image -</option>
+                          <option value="">- Source Volume -</option>
                           {{ range .Images }}
-                          {{ if eq .Metadata.OsName "" }}
-                          <option value="{{ .Path }}">{{ .Path }}</option>
-                          {{ else }}
-                          <option value="{{ .Path }}">{{ .Metadata.OsName }} {{ .Metadata.OsVersion }} ({{ .Metadata.OsArch }})
-                          </option>
+                          <option value="{{ .VolumePath }}">{{ .VolumePath }}</option>
                           {{ end }}
+                          {{ range .AvailableVolumes }}
+                          <option value="{{ .Path }}">{{ .Pool }} / {{ .Name }}</option>
                           {{ end }}
                         </select>
                       </td>

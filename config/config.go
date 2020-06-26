@@ -53,12 +53,13 @@ type SubscribeConfig struct {
 }
 
 type LibvirtConfig struct {
-	Name                   string `hcl:",key"`
-	Uri                    string `hcl:"uri"`
-	ConfigDriveSuffix      string `hcl:"config_drive_suffix"`
-	ConfigDrivePool        string `hcl:"config_drive_pool"`
-	ConfigDriveWriteFormat string `hcl:"config_drive_write_format"`
-	Cache                  bool   `hcl:"cache"`
+	Name                   string   `hcl:",key"`
+	Uri                    string   `hcl:"uri"`
+	ConfigDriveSuffix      string   `hcl:"config_drive_suffix"`
+	ConfigDrivePool        string   `hcl:"config_drive_pool"`
+	ConfigDriveWriteFormat string   `hcl:"config_drive_write_format"`
+	Cache                  bool     `hcl:"cache"`
+	HiddenVolumes          []string `hcl:"hidden_volumes"`
 }
 
 type Config struct {
@@ -67,6 +68,7 @@ type Config struct {
 	Bridges    []string          `hcl:"bridges"`
 	Libvirts   []LibvirtConfig   `hcl:"libvirt"`
 	KeyFile    string            `hcl:"key_file"`
+	ImageFile  string            `hcl:"image_file"`
 	Web        WebConfig         `hcl:"web"`
 	Subscribes []SubscribeConfig `hcl:"subscribe"`
 
@@ -79,8 +81,9 @@ type Config struct {
 
 func Default() *Config {
 	return &Config{
-		LogLevel: "info",
-		KeyFile:  "~/.vmango/authorized_keys",
+		LogLevel:  "info",
+		ImageFile: "~/.vmango/images.json",
+		KeyFile:   "~/.vmango/authorized_keys",
 		Web: WebConfig{
 			Listen:         ":8080",
 			Debug:          false,

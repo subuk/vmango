@@ -59,7 +59,7 @@ func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Reque
 			attachedVolumes[attachmentInfo.Path] = volume
 			continue
 		}
-		if volume.AttachedTo == "" && volume.Metadata.OsName == "" {
+		if volume.AttachedTo == "" && volume.Image == "" {
 			availableVolumes = append(availableVolumes, volume)
 			continue
 		}
@@ -134,7 +134,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		NodeId           string
 		Nodes            []*compute.Node
 		AvailableVolumes []*compute.Volume
-		Images           []*compute.Volume
+		Images           []*compute.ImageManifest
 		Pools            []*compute.VolumePool
 		Networks         []*compute.Network
 		Keys             []*compute.Key
@@ -178,15 +178,17 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		return
 	}
 	for _, volume := range volumes {
-		if volume.AttachedTo != "" {
-			continue
-		}
-		if volume.Metadata.OsName != "" {
-			data.Images = append(data.Images, volume)
+		if !volume.Available() {
 			continue
 		}
 		data.AvailableVolumes = append(data.AvailableVolumes, volume)
 	}
+
+	images, err := env.images.List(compute.ImageManifestListOptions{})
+	if err != nil {
+		env.error(rw, req, err, "cannot list images", http.StatusInternalServerError)
+	}
+	data.Images = images
 
 	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeIds: []string{selectedNode.Id}})
 	if err != nil {
@@ -353,7 +355,7 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 	start := req.Form.Get("Start") == "true"
 	vm.Autostart = start
 
-	if err := env.vmanager.Create(vm, cloneVols, newVols, start); err != nil {
+	if err := env.vmanager.Create(vm, nil, cloneVols, newVols, start); err != nil {
 		env.logger.Debug().Interface("vm", vm).Interface("cloneVols", cloneVols).Interface("newVols", newVols).Msg("vm create data")
 		env.error(rw, req, err, "cannot create vm", http.StatusInternalServerError)
 		return

@@ -1,7 +1,6 @@
 package libvirt
 
 import (
-	"fmt"
 	"io"
 	"subuk/vmango/compute"
 	"subuk/vmango/util"
@@ -15,14 +14,34 @@ import (
 	libvirt "github.com/libvirt/libvirt-go"
 )
 
-type VolumeRepository struct {
-	pool     *ConnectionPool
-	metadata map[string]compute.VolumeMetadata
-	logger   zerolog.Logger
+type VolumeRepositoryHiddenVolumes map[string]struct{}
+
+func (h VolumeRepositoryHiddenVolumes) Add(nodeId string, paths ...string) {
+	for _, path := range paths {
+		h[nodeId+path] = struct{}{}
+	}
 }
 
-func NewVolumeRepository(pool *ConnectionPool, metadata map[string]compute.VolumeMetadata, logger zerolog.Logger) *VolumeRepository {
-	return &VolumeRepository{pool: pool, metadata: metadata, logger: logger}
+func (h VolumeRepositoryHiddenVolumes) Contains(nodeId, path string) bool {
+	if _, exists := h[nodeId+path]; exists {
+		return true
+	}
+	return false
+}
+
+type VolumeRepositoryImageFinder interface {
+	FindByVolumePaths(paths []string) (map[string]*compute.ImageManifest, error)
+}
+
+type VolumeRepository struct {
+	pool        *ConnectionPool
+	logger      zerolog.Logger
+	hidden      VolumeRepositoryHiddenVolumes
+	imageFinder VolumeRepositoryImageFinder
+}
+
+func NewVolumeRepository(pool *ConnectionPool, hidden VolumeRepositoryHiddenVolumes, imageFinder VolumeRepositoryImageFinder, logger zerolog.Logger) *VolumeRepository {
+	return &VolumeRepository{pool: pool, hidden: hidden, imageFinder: imageFinder, logger: logger}
 }
 
 func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.StoragePool, virVolume *libvirt.StorageVol) (*compute.Volume, error) {
@@ -48,7 +67,6 @@ func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.Sto
 	volume.Path = virVolumeConfig.Target.Path
 	volume.Name = virVolumeConfig.Name
 	volume.Pool = poolConfig.Name
-	volume.Metadata = repo.metadata[virVolumeConfig.Target.Path]
 	volume.Size = ComputeSizeFromLibvirtSize(virVolumeConfig.Capacity.Unit, virVolumeConfig.Capacity.Value)
 
 	switch getVolTargetFormatType(virVolumeConfig) {
@@ -93,7 +111,27 @@ func (repo *VolumeRepository) fetchAttachedVm(conn *libvirt.Connect, volumes []*
 	return nil
 }
 
+func (repo *VolumeRepository) fetchAttachedImages(conn *libvirt.Connect, volumes []*compute.Volume) error {
+	paths := make([]string, len(volumes))
+	for _, v := range volumes {
+		paths = append(paths, v.Path)
+	}
+	manifests, err := repo.imageFinder.FindByVolumePaths(paths)
+	if err != nil {
+		return util.NewError(err, "failed to get images")
+	}
+	for _, volume := range volumes {
+		if manifest, exists := manifests[volume.Path]; exists {
+			volume.Image = manifest.Description()
+		}
+	}
+	return nil
+}
+
 func (repo *VolumeRepository) Get(path, node string) (*compute.Volume, error) {
+	if repo.hidden.Contains(node, path) {
+		return nil, compute.ErrVolumeNotFound
+	}
 	conn, err := repo.pool.Acquire(node)
 	if err != nil {
 		return nil, util.NewError(err, "cannot acquire connection")
@@ -112,11 +150,11 @@ func (repo *VolumeRepository) Get(path, node string) (*compute.Volume, error) {
 	if err != nil {
 		return nil, util.NewError(err, "cannot parse volume")
 	}
-	if volume.Metadata.Hidden {
-		return nil, compute.ErrVolumeNotFound
-	}
 	if err := repo.fetchAttachedVm(conn, []*compute.Volume{volume}); err != nil {
 		return nil, util.NewError(err, "cannot fetch attached vm")
+	}
+	if err := repo.fetchAttachedImages(conn, []*compute.Volume{volume}); err != nil {
+		return nil, util.NewError(err, "cannot fetch attached images")
 	}
 	return volume, nil
 }
@@ -159,7 +197,7 @@ func (repo *VolumeRepository) listNode(nodeId string, onlyPools []string) ([]*co
 			if err != nil {
 				return nil, util.NewError(err, "cannot parse libvirt volume")
 			}
-			if volume.Metadata.Hidden {
+			if repo.hidden.Contains(nodeId, volume.Path) {
 				continue
 			}
 			volumes = append(volumes, volume)
@@ -167,6 +205,9 @@ func (repo *VolumeRepository) listNode(nodeId string, onlyPools []string) ([]*co
 	}
 	if err := repo.fetchAttachedVm(conn, volumes); err != nil {
 		return nil, util.NewError(err, "cannot fetch attached vm")
+	}
+	if err := repo.fetchAttachedImages(conn, volumes); err != nil {
+		return nil, util.NewError(err, "cannot fetch attached images")
 	}
 	return volumes, nil
 }
@@ -184,7 +225,7 @@ func (repo *VolumeRepository) List(options compute.VolumeListOptions) ([]*comput
 			nodeStart := time.Now()
 			vols, err := repo.listNode(nodeId, options.PoolNames)
 			if err != nil {
-				repo.logger.Warn().Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("cannot list volumes")
+				repo.logger.Warn().Err(err).Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("cannot list volumes")
 				return
 			}
 			repo.logger.Debug().Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("node volume list done")
@@ -334,6 +375,9 @@ func (repo *VolumeRepository) Resize(path, node string, newSize compute.Size) er
 }
 
 func (repo *VolumeRepository) Delete(path, node string) error {
+	if repo.hidden.Contains(node, path) {
+		return compute.ErrVolumeNotFound
+	}
 	conn, err := repo.pool.Acquire(node)
 	if err != nil {
 		return util.NewError(err, "cannot acquire connection")
@@ -343,9 +387,6 @@ func (repo *VolumeRepository) Delete(path, node string) error {
 	virVolume, err := conn.LookupStorageVolByPath(path)
 	if err != nil {
 		return util.NewError(err, "cannot lookup storage volume")
-	}
-	if md, ok := repo.metadata[path]; ok && md.Protected {
-		return fmt.Errorf("volume is protected")
 	}
 	if err := virVolume.Delete(libvirt.STORAGE_VOL_DELETE_NORMAL); err != nil {
 		return util.NewError(err, "cannot delete volume")

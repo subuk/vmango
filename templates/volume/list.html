@@ -79,7 +79,7 @@
                     <th>Node</th>
                     <th>Format</th>
                     <th>Size</th>
-                    <th>AttachedTo</th>
+                    <th>Attached To</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -95,11 +95,14 @@
                       {{ if .AttachedTo }}
                       <a href="{{ Url "virtual-machine-detail" "id" .AttachedTo "node" .NodeId }}">{{ .AttachedTo }}</a>
                       {{ end }}
+                      {{ if .Image }}
+                      <a href="{{ Url "image-list" }}">{{ .Image }}</a>
+                      {{ end }}
                     </td>
                     <td>
                       <a title="Clone" href="{{ Url "volume-clone-form" "path" .Path "node" .NodeId }}">C</a>
                       | <a title="Resize" href="{{ Url "volume-resize-form" "path" .Path "node" .NodeId }}">R</a>
-                      {{ if not .Metadata.Protected }}
+                      {{ if .Available }}
                       | <a title="Delete" style="color: red;" href="{{ Url "volume-delete-form" "path" .Path "node" .NodeId }}">D</a>
                       {{ end }}
                     </td>

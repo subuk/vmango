@@ -60,7 +60,13 @@ func NewVirtualMachineManager(vms *VirtualMachineService, volumes *VolumeService
 	}
 }
 
-func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool) error {
+func (manager *VirtualMachineManager) Create(
+	vm *VirtualMachine,
+	image *ImageManifest,
+	cloneVols []VirtualMachineManagerClonedVolumeParams,
+	newVols []VirtualMachineManagerCreatedVolumeParams,
+	start bool,
+) error {
 	for _, p := range cloneVols {
 		params := VolumeCloneParams{
 			NodeId:       vm.NodeId,

@@ -57,6 +57,7 @@ type Environ struct {
 	nodes    *libcompute.NodeService
 	volumes  *libcompute.VolumeService
 	vms      *libcompute.VirtualMachineService
+	images   *libcompute.ImageManifestService
 	vmanager *libcompute.VirtualMachineManager
 	ws       *websocket.Upgrader
 	cfg      *config.WebConfig
@@ -149,6 +150,7 @@ func New(
 	nodes *libcompute.NodeService,
 	volumes *libcompute.VolumeService,
 	vms *libcompute.VirtualMachineService,
+	images *libcompute.ImageManifestService,
 	vmanager *libcompute.VirtualMachineManager,
 ) http.Handler {
 
@@ -190,6 +192,7 @@ func New(
 	env.nodes = nodes
 	env.volumes = volumes
 	env.vms = vms
+	env.images = images
 	env.vmanager = vmanager
 	env.sessions = sessionStore
 
@@ -215,6 +218,8 @@ func New(
 	router.HandleFunc("/keys/{fingerprint}/show/", env.authenticated(env.KeyShow)).Name("key-show")
 	router.HandleFunc("/keys/{fingerprint}/delete/", env.authenticated(env.KeyDeleteFormProcess)).Methods("POST").Name("key-delete-form")
 	router.HandleFunc("/keys/{fingerprint}/delete/", env.authenticated(env.KeyDeleteFormShow)).Name("key-delete-form")
+
+	router.HandleFunc("/images/", env.authenticated(env.ImageList)).Name("image-list")
 
 	router.HandleFunc("/machines/", env.authenticated(env.VirtualMachineList)).Name("virtual-machine-list")
 	router.HandleFunc("/machines/add/", env.authenticated(env.VirtualMachineAddFormProcess)).Methods("POST").Name("virtual-machine-add")

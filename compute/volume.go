@@ -4,14 +4,6 @@ import (
 	"path/filepath"
 )
 
-type VolumeMetadata struct {
-	OsName    string
-	OsVersion string
-	OsArch    Arch
-	Protected bool
-	Hidden    bool
-}
-
 type Volume struct {
 	NodeId     string
 	Path       string
@@ -21,7 +13,11 @@ type Volume struct {
 	Format     VolumeFormat
 	AttachedTo string
 	AttachedAs DeviceType
-	Metadata   VolumeMetadata
+	Image      string
+}
+
+func (volume *Volume) Available() bool {
+	return volume.AttachedTo == "" && volume.Image == ""
 }
 
 func (volume *Volume) Base() string {
