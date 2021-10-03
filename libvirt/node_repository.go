@@ -133,24 +133,26 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 		node.Cpus[idx] = nodeCpuMap[idx]
 	}
 
-	reqFreePages := []uint64{}
-	for pageSize := range reqFreePagesMap {
-		reqFreePages = append(reqFreePages, pageSize)
-	}
-	freePages, err := conn.GetFreePages(reqFreePages, 0, uint(len(node.Numas)), 0)
-	if err != nil {
-		return nil, util.NewError(err, "cannot get free memory pages")
-	}
-	for idx, pageCount := range freePages {
-		pageSize := reqFreePages[idx%len(reqFreePages)]
-		numaId := idx / len(reqFreePages)
-		switch pageSize {
-		case 4:
-			node.Numas[numaId].Pages4kFree = pageCount
-		case 2048:
-			node.Numas[numaId].Pages2mFree = pageCount
-		case 1048576:
-			node.Numas[numaId].Pages1gFree = pageCount
+	if len(reqFreePagesMap) > 0 {
+		reqFreePages := []uint64{}
+		for pageSize := range reqFreePagesMap {
+			reqFreePages = append(reqFreePages, pageSize)
+		}
+		freePages, err := conn.GetFreePages(reqFreePages, 0, uint(len(node.Numas)), 0)
+		if err != nil {
+			return nil, util.NewError(err, "cannot get free memory pages")
+		}
+		for idx, pageCount := range freePages {
+			pageSize := reqFreePages[idx%len(reqFreePages)]
+			numaId := idx / len(reqFreePages)
+			switch pageSize {
+			case 4:
+				node.Numas[numaId].Pages4kFree = pageCount
+			case 2048:
+				node.Numas[numaId].Pages2mFree = pageCount
+			case 1048576:
+				node.Numas[numaId].Pages1gFree = pageCount
+			}
 		}
 	}
 
