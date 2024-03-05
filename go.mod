@@ -17,6 +17,6 @@ require (
 	github.com/libvirt/libvirt-go-xml v5.6.0+incompatible
 	github.com/rs/zerolog v1.15.0
 	github.com/unrolled/render v1.0.1
-	golang.org/x/crypto v0.1.0
+	golang.org/x/crypto v0.17.0
 	gopkg.in/yaml.v2 v2.2.2
 )
