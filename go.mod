@@ -22,7 +22,7 @@ require (
 	github.com/unrolled/render v1.0.1
 	golang.org/x/crypto v0.19.0
 	golang.org/x/oauth2 v0.20.0
-	gopkg.in/yaml.v2 v2.2.2
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
