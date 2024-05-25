@@ -11,8 +11,10 @@ import (
 
 func (env *Environ) PasswordLoginFormShow(rw http.ResponseWriter, req *http.Request) {
 	env.render.HTML(rw, http.StatusOK, "login", map[string]interface{}{
-		"Request": req,
-		"Title":   "Login",
+		"Request":   req,
+		"Title":     "Login",
+		"OidcShow":  env.oidcp != nil,
+		"OidcTitle": env.cfg.Oidc.Title,
 	})
 }
 
