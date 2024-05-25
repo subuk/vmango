@@ -1,9 +1,12 @@
 module subuk/vmango
 
-go 1.22
+go 1.21
+
+toolchain go1.22.3
 
 require (
 	github.com/akamensky/argparse v0.0.0-20190829110830-5293d9863374
+	github.com/coreos/go-oidc/v3 v3.10.0
 	github.com/dustin/go-humanize v1.0.0
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
 	github.com/google/uuid v1.1.1
@@ -18,16 +21,14 @@ require (
 	github.com/rs/zerolog v1.15.0
 	github.com/unrolled/render v1.0.1
 	golang.org/x/crypto v0.19.0
+	golang.org/x/oauth2 v0.20.0
 	gopkg.in/yaml.v2 v2.2.2
 )
 
 require (
-	github.com/coreos/go-oidc/v3 v3.10.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.1 // indirect
-	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/gorilla/securecookie v1.1.1 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
-	golang.org/x/oauth2 v0.20.0 // indirect
 	golang.org/x/sys v0.17.0 // indirect
 	golang.org/x/term v0.17.0 // indirect
 )

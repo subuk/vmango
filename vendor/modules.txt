@@ -16,9 +16,6 @@ github.com/go-bindata/go-bindata/go-bindata
 github.com/go-jose/go-jose/v4
 github.com/go-jose/go-jose/v4/cipher
 github.com/go-jose/go-jose/v4/json
-# github.com/golang-jwt/jwt/v5 v5.2.1
-## explicit; go 1.18
-github.com/golang-jwt/jwt/v5
 # github.com/google/uuid v1.1.1
 ## explicit
 github.com/google/uuid
