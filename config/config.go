@@ -23,9 +23,18 @@ type WebConfigLink struct {
 	Url    string `hcl:"url"`
 }
 
+type OidcConfig struct {
+	Title        string   `hcl:"title"`
+	IssuerUrl    string   `hcl:"issuer_url"`
+	ClientId     string   `hcl:"client_id"`
+	ClientSecret string   `hcl:"client_secret"`
+	Scopes       []string `hcl:"scopes"`
+}
+
 type WebConfig struct {
 	Listen         string          `hcl:"listen"`
 	Debug          bool            `hcl:"debug"`
+	BaseUrl        string          `hcl:"base_url"`
 	StaticVersion  string          `hcl:"static_version"`
 	SessionSecret  string          `hcl:"session_secret"`
 	SessionSecure  bool            `hcl:"session_secure"`
@@ -33,6 +42,7 @@ type WebConfig struct {
 	SessionMaxAge  int             `hcl:"session_max_age"`
 	MediaUploadTmp string          `hcl:"media_upload_tmp"`
 	Users          []UserWebConfig `hcl:"user"`
+	Oidc           OidcConfig      `hcl:"oidc"`
 	Links          []WebConfigLink `hcl:"link"`
 	LinksTitle     string          `hcl:"links_title"`
 }
@@ -147,6 +157,9 @@ func Parse(filename string) (*Config, error) {
 		if libvirt.ConfigDrivePool == "" {
 			libvirt.ConfigDrivePool = "default"
 		}
+	}
+	if len(config.Web.Oidc.Scopes) <= 0 {
+		config.Web.Oidc.Scopes = []string{"openid", "profile", "email"}
 	}
 	return config, nil
 }

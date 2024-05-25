@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"math/rand"
@@ -13,6 +14,7 @@ import (
 	"subuk/vmango/util"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/mux"
@@ -21,6 +23,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/unrolled/render"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/oauth2"
 )
 
 var AppVersion string
@@ -60,6 +63,8 @@ type Environ struct {
 	vmanager *libcompute.VirtualMachineManager
 	ws       *websocket.Upgrader
 	cfg      *config.WebConfig
+	oauth2   *oauth2.Config
+	oidcp    *oidc.Provider
 }
 
 func TemplateFuncs(env *Environ) []template.FuncMap {
@@ -195,6 +200,9 @@ func New(
 
 	router.HandleFunc("/static/{name:.*}", env.Static(cfg)).Name("static")
 
+	router.HandleFunc("/login-oidc/", env.OidcLoginRedirect).Name("oidc-redirect").Methods("GET")
+	router.HandleFunc("/login-oidc-callback/", env.OidcLoginCallback).Name("oidc-callback").Methods("GET")
+
 	router.HandleFunc("/login/", env.PasswordLoginFormProcess).Name("login").Methods("POST")
 	router.HandleFunc("/login/", env.PasswordLoginFormShow).Name("login")
 	router.HandleFunc("/logout/", env.Logout).Name("logout")
@@ -237,6 +245,23 @@ func New(
 
 	router.HandleFunc("/nodes/{id}/", env.authenticated(env.NodeDetail)).Name("node-detail")
 	router.HandleFunc("/", env.authenticated(env.NodeList)).Name("node-list")
+
+	if cfg.Web.Oidc.ClientId != "" {
+		env.logger.Info().Str("issuer", cfg.Web.Oidc.IssuerUrl).Msg("configuring openid authentication")
+		oidcp, err := oidc.NewProvider(context.Background(), cfg.Web.Oidc.IssuerUrl)
+		if err != nil {
+			panic("failed to initialize oidc provider: " + err.Error())
+		}
+		env.logger.Debug().Interface("endpoint", oidcp.Endpoint()).Msg("got openid endpoints configuration")
+		env.oauth2 = &oauth2.Config{
+			ClientID:     cfg.Web.Oidc.ClientId,
+			ClientSecret: cfg.Web.Oidc.ClientSecret,
+			RedirectURL:  cfg.Web.BaseUrl + "/login-oidc-callback/",
+			Scopes:       cfg.Web.Oidc.Scopes,
+			Endpoint:     oidcp.Endpoint(),
+		}
+		env.oidcp = oidcp
+	}
 
 	return csrfProtect(env)
 }
