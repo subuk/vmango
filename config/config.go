@@ -24,11 +24,12 @@ type WebConfigLink struct {
 }
 
 type OidcConfig struct {
-	Title        string   `hcl:"title"`
-	IssuerUrl    string   `hcl:"issuer_url"`
-	ClientId     string   `hcl:"client_id"`
-	ClientSecret string   `hcl:"client_secret"`
-	Scopes       []string `hcl:"scopes"`
+	Title         string   `hcl:"title"`
+	IssuerUrl     string   `hcl:"issuer_url"`
+	ClientId      string   `hcl:"client_id"`
+	ClientSecret  string   `hcl:"client_secret"`
+	Scopes        []string `hcl:"scopes"`
+	AllowedEmails []string `hcl:"allowed_emails"`
 }
 
 type WebConfig struct {

@@ -3,6 +3,7 @@ package web
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -71,6 +72,20 @@ func (env *Environ) OidcLoginCallback(rw http.ResponseWriter, req *http.Request)
 	if err := idToken.Claims(&claims); err != nil {
 		http.Error(rw, "Failed to extract claims: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if len(env.cfg.Oidc.AllowedEmails) > 0 {
+		allowed := false
+		for _, allowedEmail := range env.cfg.Oidc.AllowedEmails {
+			if claims.Email == allowedEmail {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			http.Error(rw, fmt.Sprintf("Address %s not in web.oidc.allowed_emails list", claims.Email), http.StatusForbidden)
+			return
+		}
 	}
 
 	user := &User{
