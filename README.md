@@ -1,7 +1,5 @@
 # vmango
 
-[![Chat](https://img.shields.io/badge/chat-on%20discord-7289da.svg)](https://discord.gg/k6X8bSy)
-
 Vmango is a virtual machines management web interface written using [Go](http://golang.org/).
 
 The main goal of project is not to provide a hypervisor configuration tool,
