@@ -107,8 +107,9 @@ func VirtualMachineAttachedInterfaceFromInterfaceConfig(ifaceConfig libvirtxml.D
 func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo *libvirt.DomainInfo) (*compute.VirtualMachine, error) {
 	vm := &compute.VirtualMachine{}
 	vm.Id = domainConfig.Name
-	vm.VCpus = domainConfig.VCPU.Value
+	vm.VCpus = int(domainConfig.VCPU.Value)
 	vm.Memory = ComputeSizeFromLibvirtSize(domainConfig.Memory.Unit, uint64(domainConfig.Memory.Value))
+	vm.Firmware = domainConfig.OS.Firmware
 
 	switch domainConfig.OS.Type.Arch {
 	default:
@@ -196,6 +197,60 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	}
 	if vm.VideoModel == compute.VideoModelUnknown {
 		vm.VideoModel = compute.VideoModelNone
+	}
+
+	if domainConfig.QEMUCommandline != nil && len(domainConfig.QEMUCommandline.Args) > 0 {
+		qargs := domainConfig.QEMUCommandline.Args
+		qemuNetdevs := map[string]map[string]string{}
+
+		for idx := 0; idx < len(qargs); idx++ {
+			switch qargs[idx].Value {
+			case "-netdev":
+				idx++
+				parts := strings.Split(qargs[idx].Value, ",")
+				params := map[string]string{}
+				params["type"] = parts[0]
+				for _, part := range parts[1:] {
+					kv := strings.SplitN(part, "=", 2)
+					params[kv[0]] = kv[1]
+				}
+				if params["id"] == "" {
+					continue
+				}
+				if _, ok := qemuNetdevs[params["id"]]; !ok {
+					qemuNetdevs[params["id"]] = map[string]string{}
+				}
+				for k, v := range params {
+					qemuNetdevs[params["id"]][k] = v
+				}
+			case "-device":
+				idx++
+				parts := strings.Split(qargs[idx].Value, ",")
+				params := map[string]string{}
+				params["model"] = parts[0]
+				for _, part := range parts[1:] {
+					kv := strings.SplitN(part, "=", 2)
+					params[kv[0]] = kv[1]
+				}
+				if params["netdev"] == "" {
+					continue
+				}
+				if _, ok := qemuNetdevs[params["netdev"]]; !ok {
+					qemuNetdevs[params["netdev"]] = map[string]string{}
+				}
+				for k, v := range params {
+					qemuNetdevs[params["netdev"]][k] = v
+				}
+			}
+		}
+		for netdevName, netdev := range qemuNetdevs {
+			iface := &compute.VirtualMachineAttachedInterface{
+				NetworkName: netdevName,
+				Model:       netdev["model"],
+				Mac:         netdev["mac"],
+			}
+			vm.Interfaces = append(vm.Interfaces, iface)
+		}
 	}
 
 	return vm, nil

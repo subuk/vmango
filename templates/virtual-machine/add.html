@@ -28,9 +28,17 @@
                   {{ end }}
                 </select>
               </div>
-              <div class="col-md-5">
+              <div class="col-md-3">
                 <label>Name</label>
                 <input required="required" class="form-control" name="Name" id="Name">
+              </div>
+              <div class="col-md-2">
+                <label>Arch</label>
+                <select name="Arch" id="Arch" class="JS-QueryStringSelector custom-select" name="Arch" data-paramname="arch" data-url="{{ Url "virtual-machine-add" }}">
+                  {{ range .Arches }}
+                  <option {{ if eq $.Arch . }}selected{{ end }} value="{{ . }}">{{ . }}</option>
+                  {{ end }}
+                </select>
               </div>
               <div class="col-md-2">
                 <label>Cpu Count</label>
@@ -86,7 +94,7 @@
                   {{ if eq .Metadata.OsName "" }}
                   <option value="{{ .Path }}">{{ .Path }}</option>
                   {{ else }}
-                  <option value="{{ .Path }}">{{ .Metadata.OsName }} {{ .Metadata.OsVersion }} ({{ .Metadata.OsArch }})
+                  <option value="{{ .Path }}">{{ .Metadata.OsName }} {{ .Metadata.OsVersion }} ({{ .Metadata.OsArch }}{{ if .Metadata.Efi }}, EFI{{ else }}, BIOS{{ end }})
                   </option>
                   {{ end }}
                   {{ end }}
@@ -111,6 +119,8 @@
                   {{ range .Networks }}
                   <option value="{{ .Name }}">{{ .Name }}</option>
                   {{ end }}
+                  <option value="__VMANGO_NONE__">No Network</option>
+                  <option value="macos-socket-vmnet">MacOS socket-vmnet</option>
                 </select>
               </div>
               <div class="col-md-4">

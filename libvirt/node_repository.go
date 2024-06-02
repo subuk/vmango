@@ -40,15 +40,6 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 	}
 	defer repo.pool.Release(nodeId)
 
-	sysinfoXml, err := conn.GetSysinfo(0)
-	if err != nil {
-		return nil, util.NewError(err, "cannot get sysinfo")
-	}
-	sysinfoConfig := &libvirtxml.DomainSysInfo{}
-	if err := xml.Unmarshal([]byte(sysinfoXml), sysinfoConfig); err != nil {
-		return nil, util.NewError(err, "cannot parse sysinfo")
-	}
-
 	capsXml, err := conn.GetCapabilities()
 	if err != nil {
 		return nil, util.NewError(err, "cannot fetch host capabilities")
@@ -61,13 +52,22 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 	if err != nil {
 		return nil, util.NewError(err, "cannot get hostname")
 	}
+	sysinfoXml, err := conn.GetSysinfo(0)
+	if err != nil {
+		// return nil, util.NewError(err, "cannot get sysinfo")
+	}
+	sysinfoConfig := &libvirtxml.DomainSysInfo{}
+	if sysinfoXml != "" {
+		if err := xml.Unmarshal([]byte(sysinfoXml), sysinfoConfig); err != nil {
+			return nil, util.NewError(err, "cannot parse sysinfo")
+		}
+	}
 	node := &compute.Node{
 		Id:       nodeId,
 		Hostname: hostname,
 	}
-
-	if len(sysinfoConfig.Processor) > 0 {
-		for _, entry := range sysinfoConfig.Processor[0].Entry {
+	if sysinfoConfig.SMBIOS != nil && len(sysinfoConfig.SMBIOS.Processor) > 0 {
+		for _, entry := range sysinfoConfig.SMBIOS.Processor[0].Entry {
 			if entry.Name == "version" {
 				node.CpuInfo = entry.Value
 			}
@@ -88,6 +88,8 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 		node.CpuArch = compute.ArchUnknown
 	case "x86_64":
 		node.CpuArch = compute.ArchAmd64
+	case "aarch64":
+		node.CpuArch = compute.ArchAarch64
 	}
 
 	reqFreePagesMap := map[uint64]struct{}{}

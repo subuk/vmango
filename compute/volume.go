@@ -10,6 +10,7 @@ type VolumeMetadata struct {
 	OsArch    Arch
 	Protected bool
 	Hidden    bool
+	Efi       bool
 }
 
 type Volume struct {

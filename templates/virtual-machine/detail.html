@@ -19,6 +19,7 @@
                 <div class="media-body">
                   <p class="text-muted">
                     Node <a href="{{ Url "node-detail" "id" .Vm.NodeId }}">{{ .Vm.NodeId }}</a><br>
+                    {{ if .Vm.Firmware }}{{ .Vm.Firmware | Upper }}<br>{{ end }}
                     Autostart {{ if .Vm.Autostart }}enabled{{ else }}disabled{{ end }}<br>
                     {{ if not .Vm.Graphic.Type.IsNone }}
                     {{ .Vm.Graphic.Type.String | Capitalize }} graphic {{ if .Vm.Graphic.Listen }}on {{ .Vm.Graphic.Listen }}{{ end }}<br>
@@ -187,6 +188,7 @@
                                 {{ range .Networks }}
                                 <option value="{{ .Name }}">{{ .Name }}</option>
                                 {{ end }}
+                                <option value="macos-socket-vmnet">MacOS socket-vmnet</option>
                               </select>
                             </td>
                             <td>

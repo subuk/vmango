@@ -112,6 +112,7 @@ func TemplateFuncs(env *Environ) []template.FuncMap {
 				return date.Format("Mon Jan 2 15:04:05 -0700 MST 2006")
 			},
 			"Capitalize": strings.Title,
+			"Upper":      strings.ToUpper,
 			"Title": func(s string) string {
 				return strings.Title(s)
 			},

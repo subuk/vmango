@@ -50,6 +50,7 @@ func (g VirtualMachineGraphic) Vnc() bool {
 
 type VirtualMachine struct {
 	Id         string
+	Firmware   string
 	NodeId     string
 	VCpus      int
 	Arch       Arch

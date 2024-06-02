@@ -139,11 +139,12 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		Networks         []*compute.Network
 		Keys             []*compute.Key
 		Arches           []compute.Arch
+		Arch             compute.Arch
 	}{
 		Title:           "Create Virtual Machine",
 		Request:         req,
 		User:            env.Session(req).AuthUser(),
-		Arches:          []compute.Arch{compute.ArchAmd64},
+		Arches:          []compute.Arch{compute.ArchAmd64, compute.ArchAarch64},
 		DeviceTypes:     DeviceTypes,
 		DeviceBuses:     DeviceBuses,
 		InterfaceModels: InterfaceModels,
@@ -172,6 +173,12 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 	}
 	data.NodeId = selectedNode.Id
 
+	selectedArch := compute.NewArch(req.URL.Query().Get("arch"))
+	if selectedArch == compute.ArchUnknown {
+		selectedArch = selectedNode.CpuArch
+	}
+	data.Arch = selectedArch
+
 	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeIds: []string{selectedNode.Id}})
 	if err != nil {
 		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
@@ -181,7 +188,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		if volume.AttachedTo != "" {
 			continue
 		}
-		if volume.Metadata.OsName != "" {
+		if volume.Metadata.OsName != "" && volume.Metadata.OsArch == selectedArch {
 			data.Images = append(data.Images, volume)
 			continue
 		}
@@ -227,6 +234,20 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 	vm := &compute.VirtualMachine{
 		Id:     req.Form.Get("Name"),
 		NodeId: req.Form.Get("NodeId"),
+		Arch:   compute.NewArch(req.Form.Get("Arch")),
+	}
+
+	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeIds: []string{vm.NodeId}})
+	if err != nil {
+		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
+		return
+	}
+	volumeMetadata := map[string]*compute.VolumeMetadata{}
+	for _, volume := range volumes {
+		if volume.Metadata.OsName == "" {
+			continue
+		}
+		volumeMetadata[volume.Path] = &volume.Metadata
 	}
 
 	vcpus, err := strconv.ParseInt(req.Form.Get("Vcpus"), 10, 16)
@@ -301,6 +322,12 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 			DeviceBus:    compute.NewDeviceBus(req.Form["CloneVolumeDeviceBus"][idx]),
 		}
 		cloneVols = append(cloneVols, volume)
+		volumeMd := volumeMetadata[volume.OriginalPath]
+		if req.Form["CloneVolumeNewName"][idx] == "__magic_root_suffix__" && volumeMd != nil {
+			if volumeMd.Efi {
+				vm.Firmware = "efi"
+			}
+		}
 	}
 	attachedVols := len(req.Form["AttachVolumePath"])
 	for idx := 0; idx < attachedVols; idx++ {
@@ -312,6 +339,9 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 	}
 
 	for idx := 0; idx < len(req.Form["InterfaceNetwork"]); idx++ {
+		if req.Form["InterfaceNetwork"][idx] == "__VMANGO_NONE__" {
+			continue
+		}
 		var accessVlan uint
 		accessVlanRaw := req.Form["InterfaceAccessVlan"][idx]
 		if accessVlanRaw != "" {

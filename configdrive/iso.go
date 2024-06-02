@@ -188,7 +188,7 @@ func GenerateIso(idata Data) (*os.File, error) {
 		if err := ioutil.WriteFile(filepath.Join(tmpdir, "user-data"), data.Userdata, 0644); err != nil {
 			return nil, util.NewError(err, "cannot write userdata file to config drive")
 		}
-		cmd := exec.Command("mkisofs", "-o", localConfigdriveFilename, "-V", "cidata", "-r", "-J", "--quiet", tmpdir)
+		cmd := exec.Command("mkisofs", "-o", localConfigdriveFilename, "-V", "CIDATA", "-r", "-J", "--quiet", tmpdir)
 		if err := cmd.Run(); err != nil {
 			return nil, err
 		}

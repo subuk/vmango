@@ -18,11 +18,12 @@ import (
 type VolumeRepository struct {
 	pool     *ConnectionPool
 	metadata map[string]compute.VolumeMetadata
+	settings map[string]NodeSettings
 	logger   zerolog.Logger
 }
 
-func NewVolumeRepository(pool *ConnectionPool, metadata map[string]compute.VolumeMetadata, logger zerolog.Logger) *VolumeRepository {
-	return &VolumeRepository{pool: pool, metadata: metadata, logger: logger}
+func NewVolumeRepository(pool *ConnectionPool, settings map[string]NodeSettings, metadata map[string]compute.VolumeMetadata, logger zerolog.Logger) *VolumeRepository {
+	return &VolumeRepository{pool: pool, settings: settings, metadata: metadata, logger: logger}
 }
 
 func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.StoragePool, virVolume *libvirt.StorageVol) (*compute.Volume, error) {
@@ -205,6 +206,8 @@ func (repo *VolumeRepository) Create(params compute.VolumeCreateParams) (*comput
 	}
 	defer repo.pool.Release(params.NodeId)
 
+	settings := repo.settings[params.NodeId]
+
 	virPool, err := conn.LookupStoragePoolByName(params.Pool)
 	if err != nil {
 		return nil, util.NewError(err, "cannot lookup libvirt pool")
@@ -229,7 +232,7 @@ func (repo *VolumeRepository) Create(params compute.VolumeCreateParams) (*comput
 		return nil, util.NewError(err, "cannot marshal libvirt volume config")
 	}
 	virVolCreateFlags := libvirt.StorageVolCreateFlags(0)
-	if params.Format == compute.VolumeFormatQcow2 {
+	if params.Format == compute.VolumeFormatQcow2 && settings.QcowPreallocMetadata {
 		virVolCreateFlags |= libvirt.STORAGE_VOL_CREATE_PREALLOC_METADATA
 	}
 
@@ -246,6 +249,8 @@ func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (*compute.
 		return nil, util.NewError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(params.NodeId)
+
+	settings := repo.settings[params.NodeId]
 
 	originalVirVolume, err := conn.LookupStorageVolByPath(params.OriginalPath)
 	if err != nil {
@@ -298,7 +303,7 @@ func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (*compute.
 	}
 
 	virVolCreateFlags := libvirt.StorageVolCreateFlags(0)
-	if params.Format == compute.VolumeFormatQcow2 {
+	if params.Format == compute.VolumeFormatQcow2 && settings.QcowPreallocMetadata {
 		virVolCreateFlags |= libvirt.STORAGE_VOL_CREATE_PREALLOC_METADATA
 	}
 

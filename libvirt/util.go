@@ -1,7 +1,9 @@
 package libvirt
 
 import (
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 	"subuk/vmango/compute"
@@ -12,8 +14,10 @@ import (
 )
 
 type NodeSettings struct {
-	CdSuffix string
-	Cache    bool
+	CdSuffix             string
+	Emulator             string
+	QcowPreallocMetadata bool
+	Cache                bool
 }
 
 func ComputeSizeUnitToLibvirtUnit(input compute.SizeUnit) string {
@@ -102,4 +106,29 @@ func getVolTargetFormatType(vol *libvirtxml.StorageVolume) string {
 		return vol.Target.Format.Type
 	}
 	return "raw"
+}
+
+func generateMacAddress(prefix string) string {
+	prefix = strings.TrimSuffix(prefix, ":")
+	parts := strings.Split(prefix, ":")
+
+	for i := len(parts); i < 6; i++ {
+		n, err := rand.Int(rand.Reader, big.NewInt(0xFF))
+		if err != nil {
+			panic(err)
+		}
+		parts = append(parts, fmt.Sprintf("%02x", n.Int64()))
+	}
+	return strings.Join(parts, ":")
+}
+
+func parseQemuDeviceArg(argv string) map[string]string {
+	parts := strings.Split(argv, ",")
+	params := map[string]string{}
+	params[""] = parts[0]
+	for _, part := range parts[1:] {
+		kv := strings.SplitN(part, "=", 2)
+		params[kv[0]] = kv[1]
+	}
+	return params
 }

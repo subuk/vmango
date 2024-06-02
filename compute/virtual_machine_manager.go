@@ -133,8 +133,8 @@ func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []Vir
 		attachedVolume := &VirtualMachineAttachedVolume{
 			Path:       cdVolume.Path,
 			Alias:      "configdrive",
-			DeviceType: DeviceTypeCdrom,
-			DeviceBus:  DeviceBusIde,
+			DeviceType: DeviceTypeDisk,
+			DeviceBus:  DeviceBusVirtio,
 		}
 		if err := manager.vms.AttachVolume(vm.Id, vm.NodeId, attachedVolume); err != nil {
 			return util.NewError(err, "cannot attach configdrive volume")

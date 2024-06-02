@@ -49,6 +49,7 @@ func Web(configFilename string) {
 			OsVersion: image.OsVersion,
 			OsArch:    libcompute.NewArch(image.OsArch),
 			Protected: image.Protected,
+			Efi:       image.Efi,
 			Hidden:    image.Hidden,
 		}
 	}
@@ -85,8 +86,10 @@ func Web(configFilename string) {
 			os.Exit(1)
 		}
 		vmRepSettings[c.Name] = libvirt.NodeSettings{
-			CdSuffix: c.ConfigDriveSuffix,
-			Cache:    c.Cache,
+			CdSuffix:             c.ConfigDriveSuffix,
+			Emulator:             c.Emulator,
+			QcowPreallocMetadata: c.QcowPreallocMetadata,
+			Cache:                c.Cache,
 		}
 		vmManSettings[c.Name] = compute.VirtualMachineManagerNodeSettings{
 			CdPool:   c.ConfigDrivePool,
@@ -98,7 +101,7 @@ func Web(configFilename string) {
 	connectionPool := libvirt.NewConnectionPool(nodeUri, nodeOrder, logger.With().Str("component", "libvirt-connection-pool").Logger())
 
 	vmRepo := libvirt.NewVirtualMachineRepository(connectionPool, vmRepSettings, logger.With().Str("component", "vm-repository").Logger())
-	volumeRepo := libvirt.NewVolumeRepository(connectionPool, volumeMetadata, logger.With().Str("component", "volume-repository").Logger())
+	volumeRepo := libvirt.NewVolumeRepository(connectionPool, vmRepSettings, volumeMetadata, logger.With().Str("component", "volume-repository").Logger())
 	volpoolRepo := libvirt.NewVolumePoolRepository(connectionPool, logger.With().Str("component", "vol-pool-repository").Logger())
 	nodeRepo := libvirt.NewNodeRepository(connectionPool, logger.With().Str("component", "node-repository").Logger())
 	netRepo := libvirt.NewNetworkRepository(connectionPool, logger.With().Str("component", "net-repository").Logger())

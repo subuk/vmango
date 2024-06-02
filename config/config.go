@@ -54,6 +54,7 @@ type ImageConfig struct {
 	OsVersion string `hcl:"os_version"`
 	OsArch    string `hcl:"os_arch"`
 	Protected bool   `hcl:"protected"`
+	Efi       bool   `hcl:"efi"`
 	Hidden    bool   `hcl:"hidden"`
 }
 
@@ -69,6 +70,8 @@ type LibvirtConfig struct {
 	ConfigDriveSuffix      string `hcl:"config_drive_suffix"`
 	ConfigDrivePool        string `hcl:"config_drive_pool"`
 	ConfigDriveWriteFormat string `hcl:"config_drive_write_format"`
+	Emulator               string `hcl:"emulator"`
+	QcowPreallocMetadata   bool   `hcl:"qcow_prealloc_metadata"`
 	Cache                  bool   `hcl:"cache"`
 }
 

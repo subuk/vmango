@@ -25,9 +25,17 @@
                   {{ end }}
                 </select>
               </div>
-              <div class="col-md-5">
+              <div class="col-md-3">
                 <label for="Name">Name</label>
                 <input required="required" class="form-control" name="Name" id="Name">
+              </div>
+              <div class="col-md-2">
+                <label>Arch</label>
+                <select name="Arch" id="Arch" class="JS-QueryStringSelector custom-select" name="Arch" data-paramname="arch" data-url="{{ Url "virtual-machine-add" }}">
+                  {{ range .Arches }}
+                  <option {{ if eq $.Arch . }}selected{{ end }} value="{{ . }}">{{ . }}</option>
+                  {{ end }}
+                </select>
               </div>
               <div class="col-md-2">
                 <label>Cpu Count</label>
@@ -66,8 +74,9 @@
                   {{ end }}
                 </select>
               </div>
-
             </div>
+
+            <hr/>
 
             <div class="form-group row">
               <div class="col-md-12">
@@ -230,6 +239,8 @@
               </div>
             </div>
 
+            <hr/>
+
             <div class="form-group row">
               <div class="col-md-12">
                 <table data-init-count="1" class="JS-DynamicItemList table table-borderless table-sm">
@@ -240,6 +251,7 @@
                           {{ range .Networks }}
                           <option value="{{ .Name }}">{{ .Name }}</option>
                           {{ end }}
+                          <option value="macos-socket-vmnet">MacOS socket-vmnet</option>
                         </select>
                       </td>
                       <td>
@@ -270,6 +282,8 @@
                 </table>
               </div>
             </div>
+
+            <hr/>
 
             <div class="form-group row">
               <div class="col-md-12">
