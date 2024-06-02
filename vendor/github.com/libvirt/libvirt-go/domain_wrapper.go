@@ -2471,5 +2471,76 @@ virDomainBackupGetXMLDescWrapper(virDomainPtr domain,
 }
 
 
+int
+virDomainAuthorizedSSHKeysGetWrapper(virDomainPtr domain,
+				     const char *user,
+				     char ***keys,
+				     unsigned int flags,
+				     virErrorPtr err)
+{
+#if LIBVIR_VERSION_NUMBER < 6010000
+    assert(0); // Caller should have checked version
+#else
+    int ret = virDomainAuthorizedSSHKeysGet(domain, user, keys, flags);
+    if (ret < 0) {
+        virCopyLastError(err);
+    }
+    return ret;
+#endif
+}
+
+int
+virDomainAuthorizedSSHKeysSetWrapper(virDomainPtr domain,
+				     const char *user,
+				     const char **keys,
+				     unsigned int nkeys,
+				     unsigned int flags,
+				     virErrorPtr err)
+{
+#if LIBVIR_VERSION_NUMBER < 6010000
+    assert(0); // Caller should have checked version
+#else
+    int ret = virDomainAuthorizedSSHKeysSet(domain, user, keys, nkeys, flags);
+    if (ret < 0) {
+        virCopyLastError(err);
+    }
+    return ret;
+#endif
+}
+
+
+int virDomainGetMessagesWrapper(virDomainPtr domain,
+                                char ***msgs,
+                                unsigned int flags,
+                                virErrorPtr err)
+{
+#if LIBVIR_VERSION_NUMBER < 7001000
+    assert(0); // Caller should have checked version
+#else
+    int ret = virDomainGetMessages(domain, msgs, flags);
+    if (ret < 0) {
+        virCopyLastError(err);
+    }
+    return ret;
+#endif
+}
+
+
+int virDomainStartDirtyRateCalcWrapper(virDomainPtr domain,
+                                       int secs,
+                                       unsigned int flags,
+	                               virErrorPtr err)
+{
+#if LIBVIR_VERSION_NUMBER < 7002000
+    assert(0); // Caller should have checked version
+#else
+    int ret = virDomainStartDirtyRateCalc(domain, secs, flags);
+    if (ret < 0) {
+        virCopyLastError(err);
+    }
+    return ret;
+#endif
+}
+
 */
 import "C"

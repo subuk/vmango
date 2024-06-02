@@ -31,15 +31,31 @@ import (
 )
 
 type NetworkPort struct {
-	XMLName     xml.Name              `xml:"networkport"`
-	UUID        string                `xml:"uuid,omitempty"`
-	Owner       *NetworkPortOwner     `xml:"owner",`
-	MAC         *NetworkPortMAC       `xml:"mac"`
-	Group       string                `xml:"group,omitempty"`
-	Bandwidth   *NetworkBandwidth     `xml:"bandwidth"`
-	VirtualPort *NetworkVirtualPort   `xml:"virtualport"`
-	RXFilters   *NetworkPortRXFilters `xml:"rxfilters"`
-	Plug        *NetworkPortPlug      `xml:"plug"`
+	XMLName     xml.Name                `xml:"networkport"`
+	UUID        string                  `xml:"uuid,omitempty"`
+	Owner       *NetworkPortOwner       `xml:"owner",`
+	MAC         *NetworkPortMAC         `xml:"mac"`
+	Group       string                  `xml:"group,omitempty"`
+	Bandwidth   *NetworkBandwidth       `xml:"bandwidth"`
+	VLAN        *NetworkPortVLAN        `xml:"vlan"`
+	PortOptions *NetworkPortPortOptions `xml:"port"`
+	VirtualPort *NetworkVirtualPort     `xml:"virtualport"`
+	RXFilters   *NetworkPortRXFilters   `xml:"rxfilters"`
+	Plug        *NetworkPortPlug        `xml:"plug"`
+}
+
+type NetworkPortPortOptions struct {
+	Isolated string `xml:"isolated,attr,omitempty"`
+}
+
+type NetworkPortVLAN struct {
+	Trunk string               `xml:"trunk,attr,omitempty"`
+	Tags  []NetworkPortVLANTag `xml:"tag"`
+}
+
+type NetworkPortVLANTag struct {
+	ID         uint   `xml:"id,attr"`
+	NativeMode string `xml:"nativeMode,attr,omitempty"`
 }
 
 type NetworkPortOwner struct {

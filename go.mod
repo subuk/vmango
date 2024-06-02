@@ -16,8 +16,8 @@ require (
 	github.com/gorilla/websocket v1.4.1
 	github.com/hashicorp/hcl v1.0.0
 	github.com/imdario/mergo v0.3.7
-	github.com/libvirt/libvirt-go v6.1.0+incompatible
-	github.com/libvirt/libvirt-go-xml v5.6.0+incompatible
+	github.com/libvirt/libvirt-go v7.4.0+incompatible
+	github.com/libvirt/libvirt-go-xml v7.4.0+incompatible
 	github.com/rs/zerolog v1.15.0
 	github.com/unrolled/render v1.0.1
 	golang.org/x/crypto v0.19.0

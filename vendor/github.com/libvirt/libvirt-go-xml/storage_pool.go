@@ -151,17 +151,26 @@ type StoragePoolRefresh struct {
 	Volume StoragePoolRefreshVol `xml:"volume"`
 }
 
+type StoragePoolFeatures struct {
+	COW StoragePoolFeatureCOW `xml:"cow"`
+}
+
+type StoragePoolFeatureCOW struct {
+	State string `xml:"state,attr"`
+}
+
 type StoragePool struct {
-	XMLName    xml.Name            `xml:"pool"`
-	Type       string              `xml:"type,attr"`
-	Name       string              `xml:"name,omitempty"`
-	UUID       string              `xml:"uuid,omitempty"`
-	Allocation *StoragePoolSize    `xml:"allocation"`
-	Capacity   *StoragePoolSize    `xml:"capacity"`
-	Available  *StoragePoolSize    `xml:"available"`
-	Target     *StoragePoolTarget  `xml:"target"`
-	Source     *StoragePoolSource  `xml:"source"`
-	Refresh    *StoragePoolRefresh `xml:"refresh"`
+	XMLName    xml.Name             `xml:"pool"`
+	Type       string               `xml:"type,attr"`
+	Name       string               `xml:"name,omitempty"`
+	UUID       string               `xml:"uuid,omitempty"`
+	Allocation *StoragePoolSize     `xml:"allocation"`
+	Capacity   *StoragePoolSize     `xml:"capacity"`
+	Available  *StoragePoolSize     `xml:"available"`
+	Features   *StoragePoolFeatures `xml:"features"`
+	Target     *StoragePoolTarget   `xml:"target"`
+	Source     *StoragePoolSource   `xml:"source"`
+	Refresh    *StoragePoolRefresh  `xml:"refresh"`
 
 	/* Pool backend namespcaes must be last */
 	FSCommandline  *StoragePoolFSCommandline

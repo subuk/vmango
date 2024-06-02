@@ -65,6 +65,10 @@ type NodeDeviceCapability struct {
 	DRM        *NodeDeviceDRMCapability
 	CCW        *NodeDeviceCCWCapability
 	MDev       *NodeDeviceMDevCapability
+	CSS        *NodeDeviceCSSCapability
+	APQueue    *NodeDeviceAPQueueCapability
+	APCard     *NodeDeviceAPCardCapability
+	APMatrix   *NodeDeviceAPMatrixCapability
 }
 
 type NodeDeviceIDName struct {
@@ -130,10 +134,10 @@ type NodeDevicePCIPhysFunctionCapability struct {
 }
 
 type NodeDevicePCIMDevTypesCapability struct {
-	Types []NodeDevicePCIMDevType `xml:"type"`
+	Types []NodeDeviceMDevType `xml:"type"`
 }
 
-type NodeDevicePCIMDevType struct {
+type NodeDeviceMDevType struct {
 	ID                 string `xml:"id,attr"`
 	Name               string `xml:"name"`
 	DeviceAPI          string `xml:"deviceAPI"`
@@ -285,12 +289,55 @@ type NodeDeviceCCWCapability struct {
 }
 
 type NodeDeviceMDevCapability struct {
-	Type       *NodeDeviceMDevCapabilityType `xml:"type"`
-	IOMMUGroup *NodeDeviceIOMMUGroup         `xml:"iommuGroup"`
+	Type       *NodeDeviceMDevCapabilityType   `xml:"type"`
+	IOMMUGroup *NodeDeviceIOMMUGroup           `xml:"iommuGroup"`
+	UUID       string                          `xml:"uuid,omitempty"`
+	Attrs      []NodeDeviceMDevCapabilityAttrs `xml:"attr,omitempty"`
 }
 
 type NodeDeviceMDevCapabilityType struct {
 	ID string `xml:"id,attr"`
+}
+
+type NodeDeviceMDevCapabilityAttrs struct {
+	Name  string `xml:"name,attr"`
+	Value string `xml:"value,attr"`
+}
+
+type NodeDeviceCSSCapability struct {
+	CSSID        *uint                        `xml:"cssid"`
+	SSID         *uint                        `xml:"ssid"`
+	DevNo        *uint                        `xml:"devno"`
+	Capabilities []NodeDeviceCSSSubCapability `xml:"capability"`
+}
+
+type NodeDeviceCSSSubCapability struct {
+	MDevTypes *NodeDeviceCSSMDevTypesCapability
+}
+
+type NodeDeviceCSSMDevTypesCapability struct {
+	Types []NodeDeviceMDevType `xml:"type"`
+}
+
+type NodeDeviceAPQueueCapability struct {
+	APAdapter string `xml:"ap-adapter"`
+	APDomain  string `xml:"ap-domain"`
+}
+
+type NodeDeviceAPCardCapability struct {
+	APAdapter string `xml:"ap-adapter"`
+}
+
+type NodeDeviceAPMatrixCapability struct {
+	Capabilities []NodeDeviceAPMatrixSubCapability `xml:"capability"`
+}
+
+type NodeDeviceAPMatrixSubCapability struct {
+	MDevTypes *NodeDeviceAPMatrixMDevTypesCapability
+}
+
+type NodeDeviceAPMatrixMDevTypesCapability struct {
+	Types []NodeDeviceMDevType `xml:"type"`
 }
 
 func (a *NodeDevicePCIAddress) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
@@ -324,6 +371,34 @@ func (a *NodeDevicePCIAddress) UnmarshalXML(d *xml.Decoder, start xml.StartEleme
 		}
 	}
 	d.Skip()
+	return nil
+}
+
+func (c *NodeDeviceCSSSubCapability) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	typ, ok := getAttr(start.Attr, "type")
+	if !ok {
+		return fmt.Errorf("Missing node device capability type")
+	}
+
+	switch typ {
+	case "mdev_types":
+		var mdevTypesCaps NodeDeviceCSSMDevTypesCapability
+		if err := d.DecodeElement(&mdevTypesCaps, &start); err != nil {
+			return err
+		}
+		c.MDevTypes = &mdevTypesCaps
+	}
+	d.Skip()
+	return nil
+}
+
+func (c *NodeDeviceCSSSubCapability) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if c.MDevTypes != nil {
+		start.Attr = append(start.Attr, xml.Attr{
+			xml.Name{Local: "type"}, "mdev_types",
+		})
+		return e.EncodeElement(c.MDevTypes, start)
+	}
 	return nil
 }
 
@@ -383,6 +458,101 @@ func (c *NodeDeviceCCWCapability) UnmarshalXML(d *xml.Decoder, start xml.StartEl
 			chardata, ok := cdata.(xml.CharData)
 			if !ok {
 				return fmt.Errorf("Expected text for CCW '%s'", tok.Name.Local)
+			}
+
+			valstr := strings.TrimPrefix(string(chardata), "0x")
+			val, err := strconv.ParseUint(valstr, 16, 64)
+			if err != nil {
+				return err
+			}
+
+			vali := uint(val)
+			if tok.Name.Local == "cssid" {
+				c.CSSID = &vali
+			} else if tok.Name.Local == "ssid" {
+				c.SSID = &vali
+			} else if tok.Name.Local == "devno" {
+				c.DevNo = &vali
+			}
+		}
+	}
+	return nil
+}
+
+func (c *NodeDeviceCSSCapability) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	e.EncodeToken(start)
+	if c.CSSID != nil {
+		cssid := xml.StartElement{
+			Name: xml.Name{Local: "cssid"},
+		}
+		e.EncodeToken(cssid)
+		e.EncodeToken(xml.CharData(fmt.Sprintf("0x%x", *c.CSSID)))
+		e.EncodeToken(cssid.End())
+	}
+	if c.SSID != nil {
+		ssid := xml.StartElement{
+			Name: xml.Name{Local: "ssid"},
+		}
+		e.EncodeToken(ssid)
+		e.EncodeToken(xml.CharData(fmt.Sprintf("0x%x", *c.SSID)))
+		e.EncodeToken(ssid.End())
+	}
+	if c.DevNo != nil {
+		devno := xml.StartElement{
+			Name: xml.Name{Local: "devno"},
+		}
+		e.EncodeToken(devno)
+		e.EncodeToken(xml.CharData(fmt.Sprintf("0x%04x", *c.DevNo)))
+		e.EncodeToken(devno.End())
+	}
+	if c.Capabilities != nil {
+		for _, subcap := range c.Capabilities {
+			start := xml.StartElement{
+				Name: xml.Name{Local: "capability"},
+			}
+			e.EncodeElement(&subcap, start)
+		}
+	}
+	e.EncodeToken(start.End())
+	return nil
+}
+
+func (c *NodeDeviceCSSCapability) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	for {
+		tok, err := d.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		switch tok := tok.(type) {
+		case xml.StartElement:
+			cdata, err := d.Token()
+			if err != nil {
+				return err
+			}
+
+			if tok.Name.Local == "capability" {
+				subcap := &NodeDeviceCSSSubCapability{}
+				err := d.DecodeElement(subcap, &tok)
+				if err != nil {
+					return err
+				}
+				c.Capabilities = append(c.Capabilities, *subcap)
+				continue
+			}
+
+			if tok.Name.Local != "cssid" &&
+				tok.Name.Local != "ssid" &&
+				tok.Name.Local != "devno" {
+				continue
+			}
+
+			chardata, ok := cdata.(xml.CharData)
+			if !ok {
+				return fmt.Errorf("Expected text for CSS '%s'", tok.Name.Local)
 			}
 
 			valstr := strings.TrimPrefix(string(chardata), "0x")
@@ -599,6 +769,34 @@ func (c *NodeDeviceNetSubCapability) MarshalXML(e *xml.Encoder, start xml.StartE
 	return nil
 }
 
+func (c *NodeDeviceAPMatrixSubCapability) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	typ, ok := getAttr(start.Attr, "type")
+	if !ok {
+		return fmt.Errorf("Missing node device capability type")
+	}
+
+	switch typ {
+	case "mdev_types":
+		var mdevTypeCaps NodeDeviceAPMatrixMDevTypesCapability
+		if err := d.DecodeElement(&mdevTypeCaps, &start); err != nil {
+			return err
+		}
+		c.MDevTypes = &mdevTypeCaps
+	}
+	d.Skip()
+	return nil
+}
+
+func (c *NodeDeviceAPMatrixSubCapability) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if c.MDevTypes != nil {
+		start.Attr = append(start.Attr, xml.Attr{
+			xml.Name{Local: "type"}, "mdev_types",
+		})
+		return e.EncodeElement(c.MDevTypes, start)
+	}
+	return nil
+}
+
 func (c *NodeDeviceCapability) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	typ, ok := getAttr(start.Attr, "type")
 	if !ok {
@@ -678,6 +876,30 @@ func (c *NodeDeviceCapability) UnmarshalXML(d *xml.Decoder, start xml.StartEleme
 			return err
 		}
 		c.MDev = &mdevCaps
+	case "css":
+		var cssCaps NodeDeviceCSSCapability
+		if err := d.DecodeElement(&cssCaps, &start); err != nil {
+			return err
+		}
+		c.CSS = &cssCaps
+	case "ap_queue":
+		var apCaps NodeDeviceAPQueueCapability
+		if err := d.DecodeElement(&apCaps, &start); err != nil {
+			return err
+		}
+		c.APQueue = &apCaps
+	case "ap_matrix":
+		var apCaps NodeDeviceAPMatrixCapability
+		if err := d.DecodeElement(&apCaps, &start); err != nil {
+			return err
+		}
+		c.APMatrix = &apCaps
+	case "ap_card":
+		var apCaps NodeDeviceAPCardCapability
+		if err := d.DecodeElement(&apCaps, &start); err != nil {
+			return err
+		}
+		c.APCard = &apCaps
 	}
 	d.Skip()
 	return nil
@@ -744,6 +966,26 @@ func (c *NodeDeviceCapability) MarshalXML(e *xml.Encoder, start xml.StartElement
 			xml.Name{Local: "type"}, "mdev",
 		})
 		return e.EncodeElement(c.MDev, start)
+	} else if c.CSS != nil {
+		start.Attr = append(start.Attr, xml.Attr{
+			xml.Name{Local: "type"}, "css",
+		})
+		return e.EncodeElement(c.CSS, start)
+	} else if c.APQueue != nil {
+		start.Attr = append(start.Attr, xml.Attr{
+			xml.Name{Local: "type"}, "ap_queue",
+		})
+		return e.EncodeElement(c.APQueue, start)
+	} else if c.APCard != nil {
+		start.Attr = append(start.Attr, xml.Attr{
+			xml.Name{Local: "type"}, "ap_card",
+		})
+		return e.EncodeElement(c.APCard, start)
+	} else if c.APMatrix != nil {
+		start.Attr = append(start.Attr, xml.Attr{
+			xml.Name{Local: "type"}, "ap_matrix",
+		})
+		return e.EncodeElement(c.APMatrix, start)
 	}
 	return nil
 }

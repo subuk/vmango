@@ -58,7 +58,7 @@ const (
 	CONNECT_CLOSE_REASON_CLIENT    = ConnectCloseReason(C.VIR_CONNECT_CLOSE_REASON_CLIENT)
 )
 
-type ConnectListAllDomainsFlags int
+type ConnectListAllDomainsFlags uint
 
 const (
 	CONNECT_LIST_DOMAINS_ACTIVE         = ConnectListAllDomainsFlags(C.VIR_CONNECT_LIST_DOMAINS_ACTIVE)
@@ -79,7 +79,7 @@ const (
 	CONNECT_LIST_DOMAINS_NO_CHECKPOINT  = ConnectListAllDomainsFlags(C.VIR_CONNECT_LIST_DOMAINS_NO_CHECKPOINT)
 )
 
-type ConnectListAllNetworksFlags int
+type ConnectListAllNetworksFlags uint
 
 const (
 	CONNECT_LIST_NETWORKS_INACTIVE     = ConnectListAllNetworksFlags(C.VIR_CONNECT_LIST_NETWORKS_INACTIVE)
@@ -90,7 +90,7 @@ const (
 	CONNECT_LIST_NETWORKS_NO_AUTOSTART = ConnectListAllNetworksFlags(C.VIR_CONNECT_LIST_NETWORKS_NO_AUTOSTART)
 )
 
-type ConnectListAllStoragePoolsFlags int
+type ConnectListAllStoragePoolsFlags uint
 
 const (
 	CONNECT_LIST_STORAGE_POOLS_INACTIVE     = ConnectListAllStoragePoolsFlags(C.VIR_CONNECT_LIST_STORAGE_POOLS_INACTIVE)
@@ -115,27 +115,28 @@ const (
 	CONNECT_LIST_STORAGE_POOLS_ISCSI_DIRECT = ConnectListAllStoragePoolsFlags(C.VIR_CONNECT_LIST_STORAGE_POOLS_ISCSI_DIRECT)
 )
 
-type ConnectBaselineCPUFlags int
+type ConnectBaselineCPUFlags uint
 
 const (
 	CONNECT_BASELINE_CPU_EXPAND_FEATURES = ConnectBaselineCPUFlags(C.VIR_CONNECT_BASELINE_CPU_EXPAND_FEATURES)
 	CONNECT_BASELINE_CPU_MIGRATABLE      = ConnectBaselineCPUFlags(C.VIR_CONNECT_BASELINE_CPU_MIGRATABLE)
 )
 
-type ConnectCompareCPUFlags int
+type ConnectCompareCPUFlags uint
 
 const (
 	CONNECT_COMPARE_CPU_FAIL_INCOMPATIBLE = ConnectCompareCPUFlags(C.VIR_CONNECT_COMPARE_CPU_FAIL_INCOMPATIBLE)
+	CONNECT_COMPARE_CPU_VALIDATE_XML      = ConnectCompareCPUFlags(C.VIR_CONNECT_COMPARE_CPU_VALIDATE_XML)
 )
 
-type ConnectListAllInterfacesFlags int
+type ConnectListAllInterfacesFlags uint
 
 const (
 	CONNECT_LIST_INTERFACES_INACTIVE = ConnectListAllInterfacesFlags(C.VIR_CONNECT_LIST_INTERFACES_INACTIVE)
 	CONNECT_LIST_INTERFACES_ACTIVE   = ConnectListAllInterfacesFlags(C.VIR_CONNECT_LIST_INTERFACES_ACTIVE)
 )
 
-type ConnectListAllNodeDeviceFlags int
+type ConnectListAllNodeDeviceFlags uint
 
 const (
 	CONNECT_LIST_NODE_DEVICES_CAP_SYSTEM        = ConnectListAllNodeDeviceFlags(C.VIR_CONNECT_LIST_NODE_DEVICES_CAP_SYSTEM)
@@ -154,9 +155,16 @@ const (
 	CONNECT_LIST_NODE_DEVICES_CAP_MDEV          = ConnectListAllNodeDeviceFlags(C.VIR_CONNECT_LIST_NODE_DEVICES_CAP_MDEV)
 	CONNECT_LIST_NODE_DEVICES_CAP_MDEV_TYPES    = ConnectListAllNodeDeviceFlags(C.VIR_CONNECT_LIST_NODE_DEVICES_CAP_MDEV_TYPES)
 	CONNECT_LIST_NODE_DEVICES_CAP_CCW_DEV       = ConnectListAllNodeDeviceFlags(C.VIR_CONNECT_LIST_NODE_DEVICES_CAP_CCW_DEV)
+	CONNECT_LIST_NODE_DEVICES_CAP_CSS_DEV       = ConnectListAllNodeDeviceFlags(C.VIR_CONNECT_LIST_NODE_DEVICES_CAP_CSS_DEV)
+	CONNECT_LIST_NODE_DEVICES_CAP_VDPA          = ConnectListAllNodeDeviceFlags(C.VIR_CONNECT_LIST_NODE_DEVICES_CAP_VDPA)
+	CONNECT_LIST_NODE_DEVICES_CAP_AP_CARD       = ConnectListAllNodeDeviceFlags(C.VIR_CONNECT_LIST_NODE_DEVICES_CAP_AP_CARD)
+	CONNECT_LIST_NODE_DEVICES_CAP_AP_QUEUE      = ConnectListAllNodeDeviceFlags(C.VIR_CONNECT_LIST_NODE_DEVICES_CAP_AP_QUEUE)
+	CONNECT_LIST_NODE_DEVICES_CAP_AP_MATRIX     = ConnectListAllNodeDeviceFlags(C.VIR_CONNECT_LIST_NODE_DEVICES_CAP_AP_MATRIX)
+	CONNECT_LIST_NODE_DEVICES_INACTIVE          = ConnectListAllNodeDeviceFlags(C.VIR_CONNECT_LIST_NODE_DEVICES_INACTIVE)
+	CONNECT_LIST_NODE_DEVICES_ACTIVE            = ConnectListAllNodeDeviceFlags(C.VIR_CONNECT_LIST_NODE_DEVICES_ACTIVE)
 )
 
-type ConnectListAllSecretsFlags int
+type ConnectListAllSecretsFlags uint
 
 const (
 	CONNECT_LIST_SECRETS_EPHEMERAL    = ConnectListAllSecretsFlags(C.VIR_CONNECT_LIST_SECRETS_EPHEMERAL)
@@ -165,7 +173,7 @@ const (
 	CONNECT_LIST_SECRETS_NO_PRIVATE   = ConnectListAllSecretsFlags(C.VIR_CONNECT_LIST_SECRETS_NO_PRIVATE)
 )
 
-type ConnectGetAllDomainStatsFlags int
+type ConnectGetAllDomainStatsFlags uint
 
 const (
 	CONNECT_GET_ALL_DOMAINS_STATS_ACTIVE        = ConnectGetAllDomainStatsFlags(C.VIR_CONNECT_GET_ALL_DOMAINS_STATS_ACTIVE)
@@ -181,7 +189,7 @@ const (
 	CONNECT_GET_ALL_DOMAINS_STATS_ENFORCE_STATS = ConnectGetAllDomainStatsFlags(C.VIR_CONNECT_GET_ALL_DOMAINS_STATS_ENFORCE_STATS)
 )
 
-type ConnectFlags int
+type ConnectFlags uint
 
 const (
 	CONNECT_RO         = ConnectFlags(C.VIR_CONNECT_RO)
@@ -212,7 +220,7 @@ const (
 	CPU_COMPARE_SUPERSET     = CPUCompareResult(C.VIR_CPU_COMPARE_SUPERSET)
 )
 
-type NodeAllocPagesFlags int
+type NodeAllocPagesFlags uint
 
 const (
 	NODE_ALLOC_PAGES_ADD = NodeAllocPagesFlags(C.VIR_NODE_ALLOC_PAGES_ADD)
@@ -410,6 +418,23 @@ func NewConnectWithAuth(uri string, auth *ConnectAuth, flags ConnectFlags) (*Con
 	return &Connect{ptr: ptr}, nil
 }
 
+// See also https://libvirt.org/html/libvirt-libvirt-host.html#virConnectOpenAuth
+func NewConnectWithAuthDefault(uri string, flags ConnectFlags) (*Connect, error) {
+	var cUri *C.char
+
+	if uri != "" {
+		cUri = C.CString(uri)
+		defer C.free(unsafe.Pointer(cUri))
+	}
+
+	var err C.virError
+	ptr := C.virConnectOpenAuthDefaultWrapper(cUri, C.uint(flags), &err)
+	if ptr == nil {
+		return nil, makeError(&err)
+	}
+	return &Connect{ptr: ptr}, nil
+}
+
 // See also https://libvirt.org/html/libvirt-libvirt-host.html#virConnectOpenReadOnly
 func NewConnectReadOnly(uri string) (*Connect, error) {
 	var cUri *C.char
@@ -557,7 +582,8 @@ func getConnectIdentityFieldInfo(params *ConnectIdentity) map[string]typedParams
 	}
 }
 
-func (c *Connect) SetIdentity(ident *ConnectIdentity, flags uint) error {
+// See also https://libvirt.org/html/libvirt-libvirt-host.html#virConnectSetIdentity
+func (c *Connect) SetIdentity(ident *ConnectIdentity, flags uint32) error {
 	if C.LIBVIR_VERSION_NUMBER < 5008000 {
 		return makeNotImplementedError("virConnectSetIdentity")
 	}
@@ -1550,6 +1576,21 @@ func (c *Connect) DeviceCreateXML(xmlConfig string, flags uint32) (*NodeDevice, 
 	return &NodeDevice{ptr: ptr}, nil
 }
 
+// See also https://libvirt.org/html/libvirt-libvirt-nodedev.html#virNodeDeviceDefineXML
+func (c *Connect) DeviceDefineXML(xmlConfig string, flags uint32) (*NodeDevice, error) {
+	if C.LIBVIR_VERSION_NUMBER < 7003000 {
+		return nil, makeNotImplementedError("virNodeDeviceDefineXML")
+	}
+	cXml := C.CString(string(xmlConfig))
+	defer C.free(unsafe.Pointer(cXml))
+	var err C.virError
+	ptr := C.virNodeDeviceDefineXMLWrapper(c.ptr, cXml, C.uint(flags), &err)
+	if ptr == nil {
+		return nil, makeError(&err)
+	}
+	return &NodeDevice{ptr: ptr}, nil
+}
+
 // See also https://libvirt.org/html/libvirt-libvirt-interface.html#virConnectListAllInterfaces
 func (c *Connect) ListAllInterfaces(flags ConnectListAllInterfacesFlags) ([]Interface, error) {
 	var cList *C.virInterfacePtr
@@ -1795,14 +1836,14 @@ func (c *Connect) GetCPUMap(flags uint32) (map[int]bool, uint, error) {
 	}
 	defer C.free(unsafe.Pointer(ccpumap))
 
-	cpumapbytes := C.GoBytes(unsafe.Pointer(ccpumap), C.int(ret/8))
+	cpumapbytes := C.GoBytes(unsafe.Pointer(ccpumap), C.int((ret+7)/8))
 
-	cpumap := make(map[int]bool, 0)
+	cpumap := make(map[int]bool, ret)
 	for i := 0; i < int(ret); i++ {
 		idx := int(i / 8)
 		val := byte(cpumapbytes[idx])
 		shift := i % 8
-		cpumap[i] = (val & (1 << uint(shift))) == 1
+		cpumap[i] = (val & (1 << uint(shift))) != 0
 	}
 
 	return cpumap, uint(conline), nil
@@ -2467,10 +2508,34 @@ func getDomainStatsCPUFieldInfo(params *DomainStatsCPU) map[string]typedParamsFi
 }
 
 type DomainStatsBalloon struct {
-	CurrentSet bool
-	Current    uint64
-	MaximumSet bool
-	Maximum    uint64
+	CurrentSet        bool
+	Current           uint64
+	MaximumSet        bool
+	Maximum           uint64
+	SwapInSet         bool
+	SwapIn            uint64
+	SwapOutSet        bool
+	SwapOut           uint64
+	MajorFaultSet     bool
+	MajorFault        uint64
+	MinorFaultSet     bool
+	MinorFault        uint64
+	UnusedSet         bool
+	Unused            uint64
+	AvailableSet      bool
+	Available         uint64
+	RssSet            bool
+	Rss               uint64
+	UsableSet         bool
+	Usable            uint64
+	LastUpdateSet     bool
+	LastUpdate        uint64
+	DiskCachesSet     bool
+	DiskCaches        uint64
+	HugetlbPgAllocSet bool
+	HugetlbPgAlloc    uint64
+	HugetlbPgFailSet  bool
+	HugetlbPgFail     uint64
 }
 
 func getDomainStatsBalloonFieldInfo(params *DomainStatsBalloon) map[string]typedParamsFieldInfo {
@@ -2483,14 +2548,69 @@ func getDomainStatsBalloonFieldInfo(params *DomainStatsBalloon) map[string]typed
 			set: &params.MaximumSet,
 			ul:  &params.Maximum,
 		},
+		"balloon.swap_in": typedParamsFieldInfo{
+			set: &params.SwapInSet,
+			ul:  &params.SwapIn,
+		},
+		"balloon.swap_out": typedParamsFieldInfo{
+			set: &params.SwapOutSet,
+			ul:  &params.SwapOut,
+		},
+		"balloon.major_fault": typedParamsFieldInfo{
+			set: &params.MajorFaultSet,
+			ul:  &params.MajorFault,
+		},
+		"balloon.minor_fault": typedParamsFieldInfo{
+			set: &params.MinorFaultSet,
+			ul:  &params.MinorFault,
+		},
+		"balloon.unused": typedParamsFieldInfo{
+			set: &params.UnusedSet,
+			ul:  &params.Unused,
+		},
+		"balloon.available": typedParamsFieldInfo{
+			set: &params.AvailableSet,
+			ul:  &params.Available,
+		},
+		"balloon.rss": typedParamsFieldInfo{
+			set: &params.RssSet,
+			ul:  &params.Rss,
+		},
+		"balloon.usable": typedParamsFieldInfo{
+			set: &params.UsableSet,
+			ul:  &params.Usable,
+		},
+		// note: last-update not last_update, verified in libvirt source
+		"balloon.last-update": typedParamsFieldInfo{
+			set: &params.LastUpdateSet,
+			ul:  &params.LastUpdate,
+		},
+		"balloon.disk_caches": typedParamsFieldInfo{
+			set: &params.DiskCachesSet,
+			ul:  &params.DiskCaches,
+		},
+		"balloon.hugetlb_pgalloc": typedParamsFieldInfo{
+			set: &params.HugetlbPgAllocSet,
+			ul:  &params.HugetlbPgAlloc,
+		},
+		"balloon.hugetlb_pgfail": typedParamsFieldInfo{
+			set: &params.HugetlbPgFailSet,
+			ul:  &params.HugetlbPgFail,
+		},
 	}
 }
 
 type DomainStatsVcpu struct {
-	StateSet bool
-	State    VcpuState
-	TimeSet  bool
-	Time     uint64
+	StateSet  bool
+	State     VcpuState
+	TimeSet   bool
+	Time      uint64
+	WaitSet   bool
+	Wait      uint64
+	HaltedSet bool
+	Halted    bool
+	DelaySet  bool
+	Delay     uint64
 }
 
 func getDomainStatsVcpuFieldInfo(idx int, params *DomainStatsVcpu) map[string]typedParamsFieldInfo {
@@ -2502,6 +2622,18 @@ func getDomainStatsVcpuFieldInfo(idx int, params *DomainStatsVcpu) map[string]ty
 		fmt.Sprintf("vcpu.%d.time", idx): typedParamsFieldInfo{
 			set: &params.TimeSet,
 			ul:  &params.Time,
+		},
+		fmt.Sprintf("vcpu.%d.wait", idx): typedParamsFieldInfo{
+			set: &params.WaitSet,
+			ul:  &params.Wait,
+		},
+		fmt.Sprintf("vcpu.%d.halted", idx): typedParamsFieldInfo{
+			set: &params.HaltedSet,
+			b:   &params.Halted,
+		},
+		fmt.Sprintf("vcpu.%d.delay", idx): typedParamsFieldInfo{
+			set: &params.DelaySet,
+			ul:  &params.Delay,
 		},
 	}
 }
@@ -2871,16 +3003,49 @@ func getDomainStatsMemoryBandwidthMonitorNodeFieldInfo(idx1, idx2 int, params *D
 	}
 }
 
+type DomainStatsDirtyRate struct {
+	CalcStatusSet         bool
+	CalcStatus            uint
+	CalcStartTimeSet      bool
+	CalcStartTime         int64
+	CalcPeriodSet         bool
+	CalcPeriod            int
+	MegabytesPerSecondSet bool
+	MegabytesPerSecond    int64
+}
+
+func getDomainStatsDirtyRateFieldInfo(params *DomainStatsDirtyRate) map[string]typedParamsFieldInfo {
+	return map[string]typedParamsFieldInfo{
+		"dirtyrate.calc_status": typedParamsFieldInfo{
+			set: &params.CalcStatusSet,
+			ui:  &params.CalcStatus,
+		},
+		"dirtyrate.calc_start_time": typedParamsFieldInfo{
+			set: &params.CalcStartTimeSet,
+			l:   &params.CalcStartTime,
+		},
+		"dirtyrate.calc_period": typedParamsFieldInfo{
+			set: &params.CalcPeriodSet,
+			i:   &params.CalcPeriod,
+		},
+		"dirtyrate.megabytes_per_second": typedParamsFieldInfo{
+			set: &params.MegabytesPerSecondSet,
+			l:   &params.MegabytesPerSecond,
+		},
+	}
+}
+
 type DomainStats struct {
-	Domain  *Domain
-	State   *DomainStatsState
-	Cpu     *DomainStatsCPU
-	Balloon *DomainStatsBalloon
-	Vcpu    []DomainStatsVcpu
-	Net     []DomainStatsNet
-	Block   []DomainStatsBlock
-	Perf    *DomainStatsPerf
-	Memory  *DomainStatsMemory
+	Domain    *Domain
+	State     *DomainStatsState
+	Cpu       *DomainStatsCPU
+	Balloon   *DomainStatsBalloon
+	Vcpu      []DomainStatsVcpu
+	Net       []DomainStatsNet
+	Block     []DomainStatsBlock
+	Perf      *DomainStatsPerf
+	Memory    *DomainStatsMemory
+	DirtyRate *DomainStatsDirtyRate
 }
 
 type domainStatsLengths struct {
@@ -3104,6 +3269,17 @@ func (c *Connect) GetAllDomainStats(doms []*Domain, statsTypes DomainStatsTypes,
 			}
 		}
 
+		dirtyrate := &DomainStatsDirtyRate{}
+		dirtyrateInfo := getDomainStatsDirtyRateFieldInfo(dirtyrate)
+
+		count, gerr = typedParamsUnpack(cdomstats.params, cdomstats.nparams, dirtyrateInfo)
+		if gerr != nil {
+			return []DomainStats{}, gerr
+		}
+		if count != 0 {
+			domstats.DirtyRate = dirtyrate
+		}
+
 		stats[i] = domstats
 	}
 
@@ -3174,7 +3350,7 @@ func (c *Connect) GetSEVInfo(flags uint32) (*NodeSEVParameters, error) {
 	return params, nil
 }
 
-// See also https://libvirt.org/html/libvirt-libvirt-domain.html#virNWFilterBindingCreateXML
+// See also https://libvirt.org/html/libvirt-libvirt-nwfilter.html#virNWFilterBindingCreateXML
 func (c *Connect) NWFilterBindingCreateXML(xmlConfig string, flags uint32) (*NWFilterBinding, error) {
 	if C.LIBVIR_VERSION_NUMBER < 4005000 {
 		return nil, makeNotImplementedError("virNWFilterBindingCreateXML")

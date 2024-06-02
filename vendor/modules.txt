@@ -48,10 +48,10 @@ github.com/hashicorp/hcl/json/token
 # github.com/imdario/mergo v0.3.7
 ## explicit
 github.com/imdario/mergo
-# github.com/libvirt/libvirt-go v6.1.0+incompatible
+# github.com/libvirt/libvirt-go v7.4.0+incompatible
 ## explicit
 github.com/libvirt/libvirt-go
-# github.com/libvirt/libvirt-go-xml v5.6.0+incompatible
+# github.com/libvirt/libvirt-go-xml v7.4.0+incompatible
 ## explicit
 github.com/libvirt/libvirt-go-xml
 # github.com/pkg/errors v0.8.1

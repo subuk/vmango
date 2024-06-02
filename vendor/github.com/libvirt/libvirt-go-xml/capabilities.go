@@ -84,6 +84,7 @@ type CapsHostNUMAPageInfo struct {
 type CapsHostNUMACPU struct {
 	ID       int    `xml:"id,attr"`
 	SocketID *int   `xml:"socket_id,attr"`
+	DieID    *int   `xml:"die_id,attr"`
 	CoreID   *int   `xml:"core_id,attr"`
 	Siblings string `xml:"siblings,attr,omitempty"`
 }

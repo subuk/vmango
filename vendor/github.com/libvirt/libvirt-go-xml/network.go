@@ -94,6 +94,7 @@ type NetworkForwardNATPort struct {
 }
 
 type NetworkForwardNAT struct {
+	IPv6      string                     `xml:"ipv6,attr,omitempty"`
 	Addresses []NetworkForwardNATAddress `xml:"address"`
 	Ports     []NetworkForwardNATPort    `xml:"port"`
 }
@@ -138,17 +139,24 @@ type NetworkMAC struct {
 }
 
 type NetworkDHCPRange struct {
-	XMLName xml.Name `xml:"range"`
-	Start   string   `xml:"start,attr,omitempty"`
-	End     string   `xml:"end,attr,omitempty"`
+	XMLName xml.Name          `xml:"range"`
+	Start   string            `xml:"start,attr,omitempty"`
+	End     string            `xml:"end,attr,omitempty"`
+	Lease   *NetworkDHCPLease `xml:"lease"`
+}
+
+type NetworkDHCPLease struct {
+	Expiry uint   `xml:"expiry,attr"`
+	Unit   string `xml:"unit,attr,omitempty"`
 }
 
 type NetworkDHCPHost struct {
-	XMLName xml.Name `xml:"host"`
-	ID      string   `xml:"id,attr,omitempty"`
-	MAC     string   `xml:"mac,attr,omitempty"`
-	Name    string   `xml:"name,attr,omitempty"`
-	IP      string   `xml:"ip,attr,omitempty"`
+	XMLName xml.Name          `xml:"host"`
+	ID      string            `xml:"id,attr,omitempty"`
+	MAC     string            `xml:"mac,attr,omitempty"`
+	Name    string            `xml:"name,attr,omitempty"`
+	IP      string            `xml:"ip,attr,omitempty"`
+	Lease   *NetworkDHCPLease `xml:"lease"`
 }
 
 type NetworkBootp struct {
@@ -249,12 +257,17 @@ type Network struct {
 	DNS                 *NetworkDNS         `xml:"dns"`
 	VLAN                *NetworkVLAN        `xml:"vlan"`
 	Bandwidth           *NetworkBandwidth   `xml:"bandwidth"`
+	PortOptions         *NetworkPortOptions `xml:"port"`
 	IPs                 []NetworkIP         `xml:"ip"`
 	Routes              []NetworkRoute      `xml:"route"`
 	VirtualPort         *NetworkVirtualPort `xml:"virtualport"`
 	PortGroups          []NetworkPortGroup  `xml:"portgroup"`
 
 	DnsmasqOptions *NetworkDnsmasqOptions
+}
+
+type NetworkPortOptions struct {
+	Isolated string `xml:"isolated,attr,omitempty"`
 }
 
 type NetworkPortGroup struct {
