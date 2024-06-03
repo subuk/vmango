@@ -173,7 +173,7 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId s
 }
 
 func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxml.Domain, attachedIface *compute.VirtualMachineAttachedInterface) error {
-	if attachedIface.NetworkName == "macos-socket-vmnet" {
+	if attachedIface.NetworkName == "macos-socket-vmnet" || attachedIface.NetworkName == "qemu-usernet" {
 		if virDomainConfig.QEMUCommandline == nil {
 			virDomainConfig.QEMUCommandline = &libvirtxml.DomainQEMUCommandline{}
 		}
@@ -201,10 +201,21 @@ func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxm
 		}
 		ifaceNum++
 		ifaceName := fmt.Sprintf("vmngmcos%d", ifaceNum)
-		virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-netdev"})
-		virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "socket,id=" + ifaceName + ",fd=3"})
-		virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-device"})
-		virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "virtio-net-device,netdev=" + ifaceName + ",mac=" + attachedIface.Mac})
+		switch attachedIface.NetworkName {
+		default:
+			panic(fmt.Errorf("unhandled network type %s", attachedIface.NetworkName))
+		case "macos-socket-vmnet":
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-netdev"})
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "socket,id=" + ifaceName + ",fd=3"})
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-device"})
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "virtio-net-device,netdev=" + ifaceName + ",mac=" + attachedIface.Mac})
+		case "qemu-usernet":
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-netdev"})
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "user,id=" + ifaceName})
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-device"})
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "virtio-net-device,netdev=" + ifaceName + ",mac=" + attachedIface.Mac})
+		}
+
 		return nil
 	}
 
