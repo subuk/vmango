@@ -20,7 +20,7 @@ require (
 	github.com/libvirt/libvirt-go-xml v7.4.0+incompatible
 	github.com/rs/zerolog v1.15.0
 	github.com/unrolled/render v1.0.1
-	golang.org/x/crypto v0.19.0
+	golang.org/x/crypto v0.31.0
 	golang.org/x/oauth2 v0.20.0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -29,6 +29,6 @@ require (
 	github.com/go-jose/go-jose/v4 v4.0.1 // indirect
 	github.com/gorilla/securecookie v1.1.1 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
-	golang.org/x/sys v0.17.0 // indirect
-	golang.org/x/term v0.17.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
 )
