@@ -58,5 +58,9 @@ test:
 clean:
 	rm -rf web/assets_generated.go bin/ *.tar.gz *.tar.hz *.rpm *.deb *_source.buildinfo *_source.changes *_source.ppa.upload *.debian.tar.xz *.dsc *.spec
 
+ifneq ("$(wildcard /usr/bin/rpm)","")
 -include Makefile.RPM.mk
+endif
+ifneq ("$(wildcard /usr/bin/dpkg)","")
 -include Makefile.DEB.mk
+endif
