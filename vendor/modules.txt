@@ -19,14 +19,14 @@ github.com/go-jose/go-jose/v4/json
 # github.com/google/uuid v1.1.1
 ## explicit
 github.com/google/uuid
-# github.com/gorilla/csrf v1.6.0
-## explicit
+# github.com/gorilla/csrf v1.7.3
+## explicit; go 1.20
 github.com/gorilla/csrf
 # github.com/gorilla/mux v1.7.3
 ## explicit
 github.com/gorilla/mux
-# github.com/gorilla/securecookie v1.1.1
-## explicit
+# github.com/gorilla/securecookie v1.1.2
+## explicit; go 1.20
 github.com/gorilla/securecookie
 # github.com/gorilla/sessions v1.2.0
 ## explicit
@@ -54,9 +54,6 @@ github.com/libvirt/libvirt-go
 # github.com/libvirt/libvirt-go-xml v7.4.0+incompatible
 ## explicit
 github.com/libvirt/libvirt-go-xml
-# github.com/pkg/errors v0.8.1
-## explicit
-github.com/pkg/errors
 # github.com/rs/zerolog v1.15.0
 ## explicit
 github.com/rs/zerolog

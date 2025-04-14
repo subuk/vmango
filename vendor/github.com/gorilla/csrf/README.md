@@ -1,6 +1,12 @@
 # gorilla/csrf
 
-[![GoDoc](https://godoc.org/github.com/gorilla/csrf?status.svg)](https://godoc.org/github.com/gorilla/csrf) [![Build Status](https://travis-ci.org/gorilla/csrf.svg?branch=master)](https://travis-ci.org/gorilla/csrf) [![Sourcegraph](https://sourcegraph.com/github.com/gorilla/csrf/-/badge.svg)](https://sourcegraph.com/github.com/gorilla/csrf?badge) [![Reviewed by Hound](https://img.shields.io/badge/Reviewed_by-Hound-8E64B0.svg)](https://houndci.com)
+![testing](https://github.com/gorilla/csrf/actions/workflows/test.yml/badge.svg)
+[![codecov](https://codecov.io/github/gorilla/csrf/branch/main/graph/badge.svg)](https://codecov.io/github/gorilla/csrf)
+[![godoc](https://godoc.org/github.com/gorilla/csrf?status.svg)](https://godoc.org/github.com/gorilla/csrf)
+[![sourcegraph](https://sourcegraph.com/github.com/gorilla/csrf/-/badge.svg)](https://sourcegraph.com/github.com/gorilla/csrf?badge)
+
+
+![Gorilla Logo](https://github.com/gorilla/.github/assets/53367916/d92caabf-98e0-473e-bfbf-ab554ba435e5)
 
 gorilla/csrf is a HTTP middleware library that provides [cross-site request
 forgery](http://blog.codinghorror.com/preventing-csrf-and-xsrf-attacks/) (CSRF)
@@ -26,6 +32,18 @@ gorilla/csrf is designed to work with any Go web framework, including:
 gorilla/csrf is also compatible with middleware 'helper' libraries like
 [Alice](https://github.com/justinas/alice) and [Negroni](https://github.com/codegangsta/negroni).
 
+## Contents
+
+  * [Install](#install)
+  * [Examples](#examples)
+    + [HTML Forms](#html-forms)
+    + [JavaScript Applications](#javascript-applications)
+    + [Google App Engine](#google-app-engine)
+    + [Setting SameSite](#setting-samesite)
+    + [Setting Options](#setting-options)
+  * [Design Notes](#design-notes)
+  * [License](#license)
+
 ## Install
 
 With a properly configured Go toolchain:
@@ -39,6 +57,7 @@ go get github.com/gorilla/csrf
 - [HTML Forms](#html-forms)
 - [JavaScript Apps](#javascript-applications)
 - [Google App Engine](#google-app-engine)
+- [Setting SameSite](#setting-samesite)
 - [Setting Options](#setting-options)
 
 gorilla/csrf is easy to use: add the middleware to your router with
@@ -52,9 +71,12 @@ http.ListenAndServe(":8000", CSRF(r))
 ...and then collect the token with `csrf.Token(r)` in your handlers before
 passing it to the template, JSON body or HTTP header (see below).
 
-Note that the authentication key passed to `csrf.Protect([]byte(key))` should be
-32-bytes long and persist across application restarts. Generating a random key
-won't allow you to authenticate existing cookies and will break your CSRF
+Note that the authentication key passed to `csrf.Protect([]byte(key))` should:
+- be 32-bytes long
+- persist across application restarts.
+- kept secret from potential malicious users - do not hardcode it into the source code, especially not in open-source applications.
+
+Generating a random key won't allow you to authenticate existing cookies and will break your CSRF
 validation.
 
 gorilla/csrf inspects the HTTP headers (first) and form body (second) on
@@ -196,6 +218,49 @@ try {
 }
 ```
 
+If you plan to host your JavaScript application on another domain, you can use the Trusted Origins
+feature to allow the host of your JavaScript application to make requests to your Go application. Observe the example below:
+
+
+```go
+package main
+
+import (
+    "github.com/gorilla/csrf"
+    "github.com/gorilla/mux"
+)
+
+func main() {
+    r := mux.NewRouter()
+    csrfMiddleware := csrf.Protect([]byte("32-byte-long-auth-key"), csrf.TrustedOrigins([]string{"ui.domain.com"}))
+
+    api := r.PathPrefix("/api").Subrouter()
+    api.Use(csrfMiddleware)
+    api.HandleFunc("/user/{id}", GetUser).Methods("GET")
+
+    http.ListenAndServe(":8000", r)
+}
+
+func GetUser(w http.ResponseWriter, r *http.Request) {
+    // Authenticate the request, get the id from the route params,
+    // and fetch the user from the DB, etc.
+
+    // Get the token and pass it in the CSRF header. Our JSON-speaking client
+    // or JavaScript framework can now read the header and return the token in
+    // in its own "X-CSRF-Token" request header on the subsequent POST.
+    w.Header().Set("X-CSRF-Token", csrf.Token(r))
+    b, err := json.Marshal(user)
+    if err != nil {
+        http.Error(w, err.Error(), 500)
+        return
+    }
+
+    w.Write(b)
+}
+```
+
+On the example above, you're authorizing requests from `ui.domain.com` to make valid CSRF requests to your application, so you can have your API server on another domain without problems.
+
 ### Google App Engine
 
 If you're using [Google App
@@ -220,6 +285,45 @@ func init() {
 Note: You can ignore this if you're using the
 [second-generation](https://cloud.google.com/appengine/docs/go/) Go runtime
 on App Engine (Go 1.11 and above).
+
+### Setting SameSite
+
+Go 1.11 introduced the option to set the SameSite attribute in cookies. This is
+valuable if a developer wants to instruct a browser to not include cookies during
+a cross site request. SameSiteStrictMode prevents all cross site requests from including
+the cookie. SameSiteLaxMode prevents CSRF prone requests (POST) from including the cookie
+but allows the cookie to be included in GET requests to support external linking.
+
+```go
+func main() {
+    CSRF := csrf.Protect(
+      []byte("a-32-byte-long-key-goes-here"),
+      // instruct the browser to never send cookies during cross site requests
+      csrf.SameSite(csrf.SameSiteStrictMode),
+    )
+
+    r := mux.NewRouter()
+    r.HandleFunc("/signup", GetSignupForm)
+    r.HandleFunc("/signup/post", PostSignupForm)
+
+    http.ListenAndServe(":8000", CSRF(r))
+}
+```
+
+### Cookie path
+
+By default, CSRF cookies are set on the path of the request.
+
+This can create issues, if the request is done from one path to a different path.
+
+You might want to set up a root path for all the cookies; that way, the CSRF will always work across all your paths.
+
+```
+    CSRF := csrf.Protect(
+      []byte("a-32-byte-long-key-goes-here"),
+      csrf.Path("/"),
+    )
+```
 
 ### Setting Options
 
@@ -268,6 +372,9 @@ Getting CSRF protection right is important, so here's some background:
 - Cookies are authenticated and based on the [securecookie](https://github.com/gorilla/securecookie)
   library. They're also Secure (issued over HTTPS only) and are HttpOnly
   by default, because sane defaults are important.
+- Cookie SameSite attribute (prevents cookies from being sent by a browser
+  during cross site requests) are not set by default to maintain backwards compatibility
+  for legacy systems. The SameSite attribute can be set with the SameSite option.
 - Go's `crypto/rand` library is used to generate the 32 byte (256 bit) tokens
   and the one-time-pad used for masking them.
 

@@ -1,12 +1,15 @@
 package csrf
 
-import "net/http"
+import (
+	"net/http"
+)
 
 // Option describes a functional option for configuring the CSRF handler.
 type Option func(*csrf)
 
 // MaxAge sets the maximum age (in seconds) of a CSRF token's underlying cookie.
-// Defaults to 12 hours.
+// Defaults to 12 hours. Call csrf.MaxAge(0) to explicitly set session-only
+// cookies.
 func MaxAge(age int) Option {
 	return func(cs *csrf) {
 		cs.opts.MaxAge = age
@@ -58,6 +61,26 @@ func HttpOnly(h bool) Option {
 	}
 }
 
+// SameSite sets the cookie SameSite attribute. Defaults to blank to maintain
+// backwards compatibility, however, Strict is recommended.
+//
+// SameSite(SameSiteStrictMode) will prevent the cookie from being sent by the
+// browser to the target site in all cross-site browsing context, even when
+// following a regular link (GET request).
+//
+// SameSite(SameSiteLaxMode) provides a reasonable balance between security and
+// usability for websites that want to maintain user's logged-in session after
+// the user arrives from an external link. The session cookie would be allowed
+// when following a regular link from an external website while blocking it in
+// CSRF-prone request methods (e.g. POST).
+//
+// This option is only available for go 1.11+.
+func SameSite(s SameSiteMode) Option {
+	return func(cs *csrf) {
+		cs.opts.SameSite = s
+	}
+}
+
 // ErrorHandler allows you to change the handler called when CSRF request
 // processing encounters an invalid token or request. A typical use would be to
 // provide a handler that returns a static HTML file with a HTTP 403 status. By
@@ -97,6 +120,17 @@ func CookieName(name string) Option {
 	}
 }
 
+// TrustedOrigins configures a set of origins (Referers) that are considered as trusted.
+// This will allow cross-domain CSRF use-cases - e.g. where the front-end is served
+// from a different domain than the API server - to correctly pass a CSRF check.
+//
+// You should only provide origins you own or have full control over.
+func TrustedOrigins(origins []string) Option {
+	return func(cs *csrf) {
+		cs.opts.TrustedOrigins = origins
+	}
+}
+
 // setStore sets the store used by the CSRF middleware.
 // Note: this is private (for now) to allow for internal API changes.
 func setStore(s store) Option {
@@ -117,6 +151,13 @@ func parseOptions(h http.Handler, opts ...Option) *csrf {
 	// Set here to allow package users to override the default.
 	cs.opts.Secure = true
 	cs.opts.HttpOnly = true
+
+	// Set SameSite=Lax by default, allowing the CSRF cookie to only be sent on
+	// top-level navigations.
+	cs.opts.SameSite = SameSiteLaxMode
+
+	// Default; only override this if the package user explicitly calls MaxAge(0)
+	cs.opts.MaxAge = defaultAge
 
 	// Range over each options function and apply it
 	// to our csrf type to configure it. Options functions are
