@@ -5,9 +5,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/oauth2"
 )
 
 func (env *Environ) PasswordLoginFormShow(rw http.ResponseWriter, req *http.Request) {
@@ -30,7 +32,10 @@ func (env *Environ) OidcLoginRedirect(rw http.ResponseWriter, req *http.Request)
 	state := base64.URLEncoding.EncodeToString(b)
 	cookie := http.Cookie{Name: "oauthstate", Value: state, Expires: time.Now().Add(15 * time.Minute), Path: "/"}
 	http.SetCookie(rw, &cookie)
-	u := env.oauth2.AuthCodeURL(state)
+	verifier := oauth2.GenerateVerifier()
+	verifierCookie := http.Cookie{Name: "oauthverifier", Value: verifier, Expires: time.Now().Add(15 * time.Minute), Path: "/", HttpOnly: true}
+	http.SetCookie(rw, &verifierCookie)
+	u := env.oauth2.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier))
 	http.Redirect(rw, req, u, http.StatusFound)
 }
 
@@ -46,8 +51,14 @@ func (env *Environ) OidcLoginCallback(rw http.ResponseWriter, req *http.Request)
 		http.Error(rw, "Invalid oauth state cookie", http.StatusBadRequest)
 		return
 	}
+	oauthVerifier, err := req.Cookie("oauthverifier")
+	if err != nil {
+		env.logger.Warn().Err(err).Msg("failed to read verifier cookie")
+		http.Error(rw, "Invalid oauth verifier cookie", http.StatusBadRequest)
+		return
+	}
 	code := req.FormValue("code")
-	token, err := env.oauth2.Exchange(req.Context(), code)
+	token, err := env.oauth2.Exchange(req.Context(), code, oauth2.VerifierOption(oauthVerifier.Value))
 	if err != nil {
 		http.Error(rw, "Failed to exchange code: "+err.Error(), http.StatusInternalServerError)
 		return
