@@ -19,7 +19,7 @@ require (
 	github.com/rs/zerolog v1.15.0
 	github.com/unrolled/render v1.0.1
 	golang.org/x/crypto v0.52.0
-	golang.org/x/oauth2 v0.20.0
+	golang.org/x/oauth2 v0.27.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
