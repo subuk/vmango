@@ -391,6 +391,11 @@ func (repo *VirtualMachineRepository) generateNewDomainConfig(conn *libvirt.Conn
 		return nil, util.NewError(err, "cannot parse domain capabilities")
 	}
 
+	return newDomainConfig(vm, domCapsConfig), nil
+}
+
+// newDomainConfig builds domain XML from capabilities without contacting a hypervisor.
+func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.DomainCaps) *libvirtxml.Domain {
 	virDomainConfig := &libvirtxml.Domain{}
 	virDomainConfig.UUID = uuid.New().String()
 	virDomainConfig.Type = domCapsConfig.Domain
@@ -405,6 +410,14 @@ func (repo *VirtualMachineRepository) generateNewDomainConfig(conn *libvirt.Conn
 	if vm.Firmware != "" {
 		virDomainConfig.OS.Firmware = vm.Firmware
 	}
+	// PC guests need ACPI/APIC for CPU discovery and power management.
+	// Select by guest architecture, not the host (which may also run ARM VMs).
+	if domCapsConfig.Arch == "x86_64" || domCapsConfig.Arch == "i686" {
+		virDomainConfig.Features = &libvirtxml.DomainFeatureList{
+			ACPI: &libvirtxml.DomainFeature{},
+			APIC: &libvirtxml.DomainFeatureAPIC{},
+		}
+	}
 	virDomainConfig.CPU = &libvirtxml.DomainCPU{}
 	virDomainConfig.CPU.Mode = "maximum"
 	virDomainConfig.Clock = &libvirtxml.DomainClock{Offset: "utc"}
@@ -414,7 +427,7 @@ func (repo *VirtualMachineRepository) generateNewDomainConfig(conn *libvirt.Conn
 	virDomainConfig.Devices = &libvirtxml.DomainDeviceList{Emulator: domCapsConfig.Path}
 	virDomainConfig.Devices.Consoles = append(virDomainConfig.Devices.Consoles, libvirtxml.DomainConsole{})
 
-	return virDomainConfig, nil
+	return virDomainConfig
 }
 
 func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
