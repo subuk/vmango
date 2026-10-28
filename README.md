@@ -127,6 +127,12 @@ Make sure to add ?socket option to remote libvirt urls.
 
 ## Documentation development
 
+The homepage uses a standalone HTML template in `docs/layouts/home.html` and
+plain CSS in `docs/static/landing/style.css`. It does not load Docsy styles or
+JavaScript. Hugo still builds the complete site, with Docsy reserved for the
+documentation routes. The homepage is a compact project overview with package
+links and source build instructions.
+
 The documentation in `docs/` uses Docsy 0.18. It requires Hugo Extended
 0.163.0 or newer, Node.js 22 or newer, and the native Dart Sass executable
 (`sass`) on `PATH`. Install Dart Sass outside the project directory; the

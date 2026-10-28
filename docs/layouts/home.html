@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Vmango is an open-source web interface for managing virtual machines on existing libvirt hypervisors.">
+  <meta name="theme-color" content="#ffffff">
+  <title>Vmango — a web interface for libvirt</title>
+  <link rel="canonical" href="{{ .Permalink }}">
+  <link rel="icon" href="/favicons/favicon.ico">
+  <link rel="stylesheet" href="/landing/style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header>
+    <a class="title" href="/">vmango</a>
+    <nav aria-label="Main navigation">
+      <a href="#install">Install</a>
+      <a href="https://github.com/subuk/vmango">Source</a>
+      <a href="https://github.com/subuk/vmango/issues">Issues</a>
+    </nav>
+  </header>
+  <main id="main">
+    <h1>A web interface for libvirt.</h1>
+    <p>Vmango manages virtual machines on the hypervisors you already have.
+      It is a small, self-hosted application written in Go.</p>
+    <p>Use your usual tools to configure the hosts, then use Vmango to create
+      machines, manage their disks and open a console in your browser.</p>
+
+    <section aria-labelledby="features-title">
+      <h2 id="features-title">What it does</h2>
+      <ul>
+        <li>Create, start, stop and reboot virtual machines through libvirt.</li>
+        <li>Provision from cloud images with SSH keys and cloud-init userdata.</li>
+        <li>Create, clone, resize and attach storage volumes.</li>
+        <li>Access serial and VNC consoles in the browser.</li>
+        <li>Connect to local or remote libvirt hosts.</li>
+      </ul>
+      <p>Linux with QEMU/KVM is the main target. Local development on macOS
+        is also possible with QEMU/HVF.</p>
+    </section>
+
+    <section id="install" aria-labelledby="install-title">
+      <h2 id="install-title">Getting started</h2>
+      <p>You will need a configured libvirt host, a storage pool and an OS image.
+        Choose a package repository below, then configure <code>/etc/vmango.conf</code>
+        for your environment.</p>
+      <dl class="packages">
+        <div><dt>Ubuntu</dt><dd><a href="https://launchpad.net/~subuk/+archive/ubuntu/vmango">Release PPA</a><span aria-hidden="true"> · </span><a href="https://launchpad.net/~subuk/+archive/ubuntu/vmango-devel">Development PPA</a></dd></div>
+        <div><dt>RPM</dt><dd><a href="https://copr.fedorainfracloud.org/coprs/subuk/vmango/">Release COPR</a><span aria-hidden="true"> · </span><a href="https://copr.fedorainfracloud.org/coprs/subuk/vmango-devel/">Development COPR</a></dd></div>
+      </dl>
+      <p class="note">See each repository for available distributions and builds.
+        Development packages follow the master branch.</p>
+      <h3>From source</h3>
+      <p>Building requires Go 1.26 or newer, a C compiler, pkg-config and the libvirt
+        development libraries. Config drives also need <code>mkisofs</code>.</p>
+      <pre><code>git clone https://github.com/subuk/vmango.git
+cd vmango
+make
+cp vmango.dist.conf vmango.conf
+# Edit vmango.conf for your host and web login.
+./bin/vmango web</code></pre>
+      <p>Open <a href="http://localhost:8080/">localhost:8080</a> once the server is running.
+        Use HTTPS when exposing the web interface remotely.</p>
+      <p>The <a href="https://github.com/subuk/vmango#readme">README</a> has more details on
+        host setup and development. The <a href="https://github.com/subuk/vmango/blob/master/vmango.dist.conf">example configuration</a>
+        documents the available settings.</p>
+    </section>
+
+    <section aria-labelledby="development-title">
+      <h2 id="development-title">Development</h2>
+      <p>Code, bug reports and contributions live on
+        <a href="https://github.com/subuk/vmango">GitHub</a>.
+        If something does not work, please
+        <a href="https://github.com/subuk/vmango/issues">open an issue</a>
+        with your Vmango version, host setup and relevant logs.</p>
+    </section>
+  </main>
+  <footer><span>Vmango Authors · 2015–{{ now.Year }}</span><a href="https://github.com/subuk/vmango/blob/master/LICENSE">License</a></footer>
+</body>
+</html>
