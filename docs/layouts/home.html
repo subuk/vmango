@@ -15,6 +15,7 @@
   <header>
     <a class="title" href="/">vmango</a>
     <nav aria-label="Main navigation">
+      <a href="#images">Images</a>
       <a href="#install">Install</a>
       <a href="https://github.com/subuk/vmango">Source</a>
       <a href="https://github.com/subuk/vmango/issues">Issues</a>
@@ -56,6 +57,40 @@
       </ul>
       <p>Linux with QEMU/KVM is the main target. Local development on macOS
         is also possible with QEMU/HVF.</p>
+    </section>
+
+    <section id="images" aria-labelledby="images-title">
+      <h2 id="images-title">Where to get cloud images</h2>
+      <p>Download a pre-installed disk image with cloud-init from the distribution's
+        official site. For QEMU/libvirt, choose QCOW2 and the architecture of your
+        host: <code>amd64</code>/<code>x86_64</code> or
+        <code>arm64</code>/<code>aarch64</code>.</p>
+      <ul class="image-list">
+        <li><a href="https://cloud-images.ubuntu.com/releases/">Ubuntu Cloud Images</a>
+          — choose a supported release and its <code>server-cloudimg-*.img</code>
+          disk image (QCOW2 despite the <code>.img</code> extension).</li>
+        <li><a href="https://cloud.debian.org/images/cloud/">Debian Cloud Images</a>
+          — choose a supported release, then <code>latest/</code> and a
+          <code>generic-*.qcow2</code> image for broad driver support.</li>
+        <li><a href="https://fedoraproject.org/cloud/download/">Fedora Cloud</a>
+          — download the Cloud Base QCOW2 image.</li>
+        <li><a href="https://wiki.almalinux.org/cloud/Generic-cloud.html">AlmaLinux Generic Cloud</a>
+          — cloud-init-enabled QCOW2 images, with download links by release and architecture.</li>
+        <li><a href="https://rockylinux.org/download">Rocky Linux</a>
+          — choose a GenericCloud QCOW2 image from the cloud image downloads.</li>
+        <li><a href="https://www.alpinelinux.org/cloud/">Alpine Linux Cloud Images</a>
+          — choose a virtual-machine QCOW2 image with <strong>cloud-init</strong>
+          as the bootstrap system and a boot method matching your VM (BIOS or UEFI).</li>
+      </ul>
+      <p>Check the publisher's checksum, unpack the image if needed, and place it
+        in a libvirt storage pool on the host that will run the VM. Register its
+        path and OS metadata in an <code>image</code> block in
+        <a href="https://github.com/subuk/vmango/blob/master/vmango.dist.conf">vmango.conf</a>
+        so it appears in Vmango's image selector. Set <code>efi = true</code>
+        for images that require UEFI.</p>
+      <p class="note">These are upstream download sources, not a tested compatibility
+        matrix. Image defaults vary; select an SSH key when creating the VM and
+        use the distribution's default cloud user to log in.</p>
     </section>
 
     <section id="install" aria-labelledby="install-title">

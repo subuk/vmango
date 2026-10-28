@@ -34,10 +34,12 @@ footer { display: flex; justify-content: space-between; gap: 20px; border-top: 1
 .skip:focus { top: 3px; }
 @media (max-width: 520px) {
   body { padding: 24px 20px 20px; }
-  header { gap: 15px; }
+  header { gap: 15px; flex-wrap: wrap; }
   nav { gap: 15px; font-size: 13px; }
   .title { font-size: 25px; }
   h1 { font-size: 24px; }
   .packages div { grid-template-columns: 1fr; gap: 2px; }
   pre { padding: 12px; }
 }
+
+.image-list li { margin-bottom: 10px; }
