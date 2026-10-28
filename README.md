@@ -91,6 +91,17 @@ Run app
 
 View it on http://localhost:8080 (login with admin / admin by default)
 
+The VNC console uses noVNC 1.7 and requires a modern browser. For remote access,
+serve Vmango over HTTPS; browser APIs used by noVNC require a secure context
+(localhost is also supported).
+
+CSRF protection uses Go's `net/http.CrossOriginProtection`: browser requests
+are checked using `Sec-Fetch-Site` and `Origin`, without form tokens. Reverse
+proxies must preserve these headers and the public `Host`. Set `web.base_url`
+to the public HTTPS URL and enable `web.session_secure` behind a TLS proxy.
+Requests without either browser header are treated as non-browser requests;
+session authentication is still required for protected routes.
+
 
 ### Dependencies for Ubuntu 14.04+
 

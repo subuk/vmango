@@ -9,7 +9,6 @@ require (
 	github.com/dustin/go-humanize v1.1.0
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/csrf v1.7.3
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/sessions v1.4.0
 	github.com/gorilla/websocket v1.5.3

@@ -23,7 +23,7 @@
           </div>
           <div class="row">
             <div class="col-md-12">
-              <form class="JS-ReactiveForm" method="post" action="">{{ CSRFField .Request }}
+              <form class="JS-ReactiveForm" method="post" action="">
                 <button class="btn {{ if eq .Action "stop" }}btn-danger{{ else }}btn-primary{{ end }}"
                   data-loading="<i class='icon-refresh icons'></i> Applying..."
                   type="submit">{{ .Action | Capitalize }}</button>

@@ -16,7 +16,6 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/dustin/go-humanize"
-	"github.com/gorilla/csrf"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
@@ -83,9 +82,6 @@ func TemplateFuncs(env *Environ) []template.FuncMap {
 			},
 			"ConfigLinks": func() []config.WebConfigLink {
 				return env.cfg.Links
-			},
-			"CSRFField": func(req *http.Request) template.HTML {
-				return csrf.TemplateField(req)
 			},
 			"Version": func() string {
 				return AppVersion
@@ -176,13 +172,6 @@ func New(
 	sessionStore.Options.Secure = cfg.Web.SessionSecure
 	sessionStore.Options.Domain = cfg.Web.SessionDomain
 
-	csrfOptions := []csrf.Option{
-		csrf.FieldName("csrf"),
-		csrf.ErrorHandler(http.HandlerFunc(env.CsrfError)),
-		csrf.Secure(false),
-	}
-	csrfProtect := csrf.Protect([]byte(cfg.Web.SessionSecret), csrfOptions...)
-
 	env.random = rand.New(rand.NewSource(time.Now().UnixNano()))
 	env.render = renderer
 	env.ws = &websocket.Upgrader{
@@ -264,15 +253,7 @@ func New(
 		env.oidcp = oidcp
 	}
 
-	protected := csrfProtect(env)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// HTTPS may terminate at a reverse proxy. Use the configured public
-		// URL or secure-session setting to retain HTTPS origin checks there.
-		if r.TLS == nil && !cfg.Web.SessionSecure && !strings.HasPrefix(strings.ToLower(cfg.Web.BaseUrl), "https://") {
-			r = csrf.PlaintextHTTPRequest(r)
-		}
-		protected.ServeHTTP(w, r)
-	})
+	return protectCrossOrigin(env, &cfg.Web)
 }
 
 func (env *Environ) error(rw http.ResponseWriter, req *http.Request, err error, message string, status int) {

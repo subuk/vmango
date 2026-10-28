@@ -100,7 +100,7 @@
                           <td>{{ .DeviceBus }}</td>
                           <td>{{ if $volumeInfo }}{{ $volumeInfo.Size.Bytes | HumanizeBytes }}{{ end }}</td>
                           <td>
-                            <form method="post" action="{{ Url "virtual-machine-detach-volume" "id" $.Vm.Id "node" $.Vm.NodeId }}">{{ CSRFField $.Request }}
+                            <form method="post" action="{{ Url "virtual-machine-detach-volume" "id" $.Vm.Id "node" $.Vm.NodeId }}">
                               <input type="hidden" name="Path" value="{{ .Path }}">
                               <button {{ if $.Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
                                 class="btn btn-light btn-sm" type="submit">Detach</button>
@@ -109,7 +109,7 @@
                           <td></td>
                         </tr>
                         {{ end }}
-                        <form method="post" action="{{ Url "virtual-machine-attach-disk" "id" .Vm.Id "node" .Vm.NodeId }}">{{ CSRFField $.Request }}
+                        <form method="post" action="{{ Url "virtual-machine-attach-disk" "id" .Vm.Id "node" .Vm.NodeId }}">
                           <tr>
                             <td>
                               <select required="required" class="form-control form-control-sm" name="DeviceType">
@@ -173,7 +173,7 @@
                           </td>
                           <td>
                             <form method="post" action="{{ Url "virtual-machine-detach-interface" "id" $.Vm.Id "node" $.Vm.NodeId }}">
-                              {{ CSRFField $.Request }}
+
                               <input type="hidden" name="Mac" value="{{ .Mac }}">
                               <button {{ if $.Vm.IsRunning }}disabled="disabled" title="Please stop machine" {{ end }}
                                 class="btn btn-light btn-sm" type="submit">Detach</button>
@@ -181,7 +181,7 @@
                           </td>
                         </tr>
                         {{ end }}
-                        <form method="post" action="{{ Url "virtual-machine-attach-interface" "id" .Vm.Id "node" .Vm.NodeId }}">{{ CSRFField $.Request }}
+                        <form method="post" action="{{ Url "virtual-machine-attach-interface" "id" .Vm.Id "node" .Vm.NodeId }}">
                           <tr>
                             <td>
                               <select required="required" class="form-control form-control-sm" name="Network">
