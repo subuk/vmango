@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libvirt/libvirt-go"
 	"github.com/rs/zerolog"
+	"libvirt.org/go/libvirt"
 
-	libvirtxml "github.com/libvirt/libvirt-go-xml"
+	libvirtxml "libvirt.org/go/libvirtxml"
 )
 
 type NetworkRepository struct {

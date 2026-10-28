@@ -1,19 +1,39 @@
 package zerolog
 
 import (
+	"bytes"
+	"encoding/json"
 	"strconv"
+	"sync/atomic"
 	"time"
 )
-import "sync/atomic"
 
 const (
 	// TimeFormatUnix defines a time format that makes time fields to be
 	// serialized as Unix timestamp integers.
 	TimeFormatUnix = ""
 
-	// TimeFormatUnix defines a time format that makes time fields to be
+	// TimeFormatUnixMs defines a time format that makes time fields to be
 	// serialized as Unix timestamp integers in milliseconds.
 	TimeFormatUnixMs = "UNIXMS"
+
+	// TimeFormatUnixMicro defines a time format that makes time fields to be
+	// serialized as Unix timestamp integers in microseconds.
+	TimeFormatUnixMicro = "UNIXMICRO"
+
+	// TimeFormatUnixNano defines a time format that makes time fields to be
+	// serialized as Unix timestamp integers in nanoseconds.
+	TimeFormatUnixNano = "UNIXNANO"
+
+	// DurationFormatFloat defines a format for Duration fields that makes duration fields to be
+	// serialized as floating point numbers.
+	DurationFormatFloat = "float"
+	// DurationFormatInt defines a format for Duration fields that makes duration fields to be
+	// serialized as integers.
+	DurationFormatInt = "int"
+	// DurationFormatString defines a format for Duration fields that makes duration fields to be
+	// serialized as string.
+	DurationFormatString = "string"
 )
 
 var (
@@ -23,7 +43,22 @@ var (
 	// LevelFieldName is the field name used for the level field.
 	LevelFieldName = "level"
 
-	// LevelFieldMarshalFunc allows customization of global level field marshaling
+	// LevelTraceValue is the value used for the trace level field.
+	LevelTraceValue = "trace"
+	// LevelDebugValue is the value used for the debug level field.
+	LevelDebugValue = "debug"
+	// LevelInfoValue is the value used for the info level field.
+	LevelInfoValue = "info"
+	// LevelWarnValue is the value used for the warn level field.
+	LevelWarnValue = "warn"
+	// LevelErrorValue is the value used for the error level field.
+	LevelErrorValue = "error"
+	// LevelFatalValue is the value used for the fatal level field.
+	LevelFatalValue = "fatal"
+	// LevelPanicValue is the value used for the panic level field.
+	LevelPanicValue = "panic"
+
+	// LevelFieldMarshalFunc allows customization of global level field marshaling.
 	LevelFieldMarshalFunc = func(l Level) string {
 		return l.String()
 	}
@@ -41,7 +76,7 @@ var (
 	CallerSkipFrameCount = 2
 
 	// CallerMarshalFunc allows customization of global caller marshaling
-	CallerMarshalFunc = func(file string, line int) string {
+	CallerMarshalFunc = func(pc uintptr, file string, line int) string {
 		return file + ":" + strconv.Itoa(line)
 	}
 
@@ -56,13 +91,34 @@ var (
 		return err
 	}
 
+	// InterfaceMarshalFunc allows customization of interface marshaling.
+	// Default: "encoding/json.Marshal" with disabled HTML escaping
+	InterfaceMarshalFunc = func(v interface{}) ([]byte, error) {
+		var buf bytes.Buffer
+		encoder := json.NewEncoder(&buf)
+		encoder.SetEscapeHTML(false)
+		err := encoder.Encode(v)
+		if err != nil {
+			return nil, err
+		}
+		b := buf.Bytes()
+		if len(b) > 0 {
+			// Remove trailing \n which is added by Encode.
+			return b[:len(b)-1], nil
+		}
+		return b, nil
+	}
+
 	// TimeFieldFormat defines the time format of the Time field type. If set to
-	// TimeFormatUnix or TimeFormatUnixMs, the time is formatted as an UNIX
+	// TimeFormatUnix, TimeFormatUnixMs, TimeFormatUnixMicro or TimeFormatUnixNano, the time is formatted as a UNIX
 	// timestamp as integer.
 	TimeFieldFormat = time.RFC3339
 
 	// TimestampFunc defines the function called to generate a timestamp.
 	TimestampFunc = time.Now
+
+	// DurationFieldFormat defines the format of the Duration field type.
+	DurationFieldFormat = DurationFormatFloat
 
 	// DurationFieldUnit defines the unit for time.Duration type fields added
 	// using the Dur method.
@@ -70,17 +126,59 @@ var (
 
 	// DurationFieldInteger renders Dur fields as integer instead of float if
 	// set to true.
+	// Deprecated: use DurationFieldFormat with DurationFormatInt instead.
 	DurationFieldInteger = false
 
 	// ErrorHandler is called whenever zerolog fails to write an event on its
 	// output. If not set, an error is printed on the stderr. This handler must
 	// be thread safe and non-blocking.
 	ErrorHandler func(err error)
+
+	// FatalExitFunc is called by log.Fatal() instead of os.Exit(1). If not set,
+	// os.Exit(1) is called.
+	FatalExitFunc func()
+
+	// DefaultContextLogger is returned from Ctx() if there is no logger associated
+	// with the context.
+	DefaultContextLogger *Logger
+
+	// LevelColors are used by ConsoleWriter's consoleDefaultFormatLevel to color
+	// log levels.
+	LevelColors = map[Level]int{
+		TraceLevel: colorBlue,
+		DebugLevel: 0,
+		InfoLevel:  colorGreen,
+		WarnLevel:  colorYellow,
+		ErrorLevel: colorRed,
+		FatalLevel: colorRed,
+		PanicLevel: colorRed,
+	}
+
+	// FormattedLevels are used by ConsoleWriter's consoleDefaultFormatLevel
+	// for a short level name.
+	FormattedLevels = map[Level]string{
+		TraceLevel: "TRC",
+		DebugLevel: "DBG",
+		InfoLevel:  "INF",
+		WarnLevel:  "WRN",
+		ErrorLevel: "ERR",
+		FatalLevel: "FTL",
+		PanicLevel: "PNC",
+	}
+
+	// TriggerLevelWriterBufferReuseLimit is a limit in bytes that a buffer is dropped
+	// from the TriggerLevelWriter buffer pool if the buffer grows above the limit.
+	TriggerLevelWriterBufferReuseLimit = 64 * 1024
+
+	// FloatingPointPrecision, if set to a value other than -1, controls the number
+	// of digits when formatting float numbers in JSON. See strconv.FormatFloat for
+	// more details.
+	FloatingPointPrecision = -1
 )
 
 var (
-	gLevel          = new(uint32)
-	disableSampling = new(uint32)
+	gLevel          = new(int32)
+	disableSampling = new(int32)
 )
 
 // SetGlobalLevel sets the global override for log level. If this
@@ -88,23 +186,23 @@ var (
 //
 // To globally disable logs, set GlobalLevel to Disabled.
 func SetGlobalLevel(l Level) {
-	atomic.StoreUint32(gLevel, uint32(l))
+	atomic.StoreInt32(gLevel, int32(l))
 }
 
 // GlobalLevel returns the current global log level
 func GlobalLevel() Level {
-	return Level(atomic.LoadUint32(gLevel))
+	return Level(atomic.LoadInt32(gLevel))
 }
 
 // DisableSampling will disable sampling in all Loggers if true.
 func DisableSampling(v bool) {
-	var i uint32
+	var i int32
 	if v {
 		i = 1
 	}
-	atomic.StoreUint32(disableSampling, i)
+	atomic.StoreInt32(disableSampling, i)
 }
 
 func samplingDisabled() bool {
-	return atomic.LoadUint32(disableSampling) == 1
+	return atomic.LoadInt32(disableSampling) == 1
 }

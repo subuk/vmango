@@ -5,8 +5,8 @@ import (
 	"strings"
 	"subuk/vmango/compute"
 
-	"github.com/libvirt/libvirt-go"
-	libvirtxml "github.com/libvirt/libvirt-go-xml"
+	"libvirt.org/go/libvirt"
+	libvirtxml "libvirt.org/go/libvirtxml"
 )
 
 func DomainDiskConfigFromVirtualMachineAttachedVolume(volume *compute.VirtualMachineAttachedVolume, volTargetFormatType, volumeType string, namer *DeviceNamer) *libvirtxml.DomainDisk {

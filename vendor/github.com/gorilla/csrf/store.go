@@ -1,3 +1,6 @@
+//go:build go1.11
+// +build go1.11
+
 package csrf
 
 import (
@@ -28,6 +31,7 @@ type cookieStore struct {
 	path     string
 	domain   string
 	sc       *securecookie.SecureCookie
+	sameSite SameSiteMode
 }
 
 // Get retrieves a CSRF token from the session cookie. It returns an empty token
@@ -63,6 +67,7 @@ func (cs *cookieStore) Save(token []byte, w http.ResponseWriter) error {
 		MaxAge:   cs.maxAge,
 		HttpOnly: cs.httpOnly,
 		Secure:   cs.secure,
+		SameSite: http.SameSite(cs.sameSite),
 		Path:     cs.path,
 		Domain:   cs.domain,
 	}

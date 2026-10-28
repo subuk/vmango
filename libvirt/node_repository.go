@@ -6,9 +6,9 @@ import (
 	"subuk/vmango/compute"
 	"subuk/vmango/util"
 
-	libvirt "github.com/libvirt/libvirt-go"
-	libvirtxml "github.com/libvirt/libvirt-go-xml"
 	"github.com/rs/zerolog"
+	libvirt "libvirt.org/go/libvirt"
+	libvirtxml "libvirt.org/go/libvirtxml"
 )
 
 type NodeRepository struct {

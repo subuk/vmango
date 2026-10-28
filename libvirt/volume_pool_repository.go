@@ -5,8 +5,8 @@ import (
 	"subuk/vmango/util"
 	"time"
 
-	libvirtxml "github.com/libvirt/libvirt-go-xml"
 	"github.com/rs/zerolog"
+	libvirtxml "libvirt.org/go/libvirtxml"
 )
 
 type VolumePoolRepository struct {

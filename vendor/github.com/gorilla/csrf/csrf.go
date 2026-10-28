@@ -1,11 +1,12 @@
 package csrf
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
-
-	"github.com/pkg/errors"
+	"slices"
 
 	"github.com/gorilla/securecookie"
 )
@@ -15,13 +16,21 @@ const tokenLength = 32
 
 // Context/session keys & prefixes
 const (
-	tokenKey     string = "gorilla.csrf.Token"
-	formKey      string = "gorilla.csrf.Form"
+	tokenKey     string = "gorilla.csrf.Token" // #nosec G101
+	formKey      string = "gorilla.csrf.Form"  // #nosec G101
 	errorKey     string = "gorilla.csrf.Error"
 	skipCheckKey string = "gorilla.csrf.Skip"
 	cookieName   string = "_gorilla_csrf"
 	errorPrefix  string = "gorilla/csrf: "
 )
+
+type contextKey string
+
+// PlaintextHTTPContextKey is the context key used to store whether the request
+// is being served via plaintext HTTP. This is used to signal to the middleware
+// that strict Referer checking should not be enforced as is done for HTTPS by
+// default.
+const PlaintextHTTPContextKey contextKey = "plaintext"
 
 var (
 	// The name value used in form fields.
@@ -42,6 +51,9 @@ var (
 	// ErrNoReferer is returned when a HTTPS request provides an empty Referer
 	// header.
 	ErrNoReferer = errors.New("referer not supplied")
+	// ErrBadOrigin is returned when the Origin header is present and is not a
+	// trusted origin.
+	ErrBadOrigin = errors.New("origin invalid")
 	// ErrBadReferer is returned when the scheme & host in the URL do not match
 	// the supplied Referer header.
 	ErrBadReferer = errors.New("referer invalid")
@@ -50,6 +62,26 @@ var (
 	// ErrBadToken is returned if the CSRF token in the request does not match
 	// the token in the session, or is otherwise malformed.
 	ErrBadToken = errors.New("CSRF token invalid")
+)
+
+// SameSiteMode allows a server to define a cookie attribute making it impossible for
+// the browser to send this cookie along with cross-site requests. The main
+// goal is to mitigate the risk of cross-origin information leakage, and provide
+// some protection against cross-site request forgery attacks.
+//
+// See https://tools.ietf.org/html/draft-ietf-httpbis-cookie-same-site-00 for details.
+type SameSiteMode int
+
+// SameSite options
+const (
+	// SameSiteDefaultMode sets the `SameSite` cookie attribute, which is
+	// invalid in some older browsers due to changes in the SameSite spec. These
+	// browsers will not send the cookie to the server.
+	// csrf uses SameSiteLaxMode (SameSite=Lax) as the default as of v1.7.0+
+	SameSiteDefaultMode SameSiteMode = iota + 1
+	SameSiteLaxMode
+	SameSiteStrictMode
+	SameSiteNoneMode
 )
 
 type csrf struct {
@@ -66,12 +98,14 @@ type options struct {
 	Path   string
 	// Note that the function and field names match the case of the associated
 	// http.Cookie field instead of the "correct" HTTPOnly name that golint suggests.
-	HttpOnly      bool
-	Secure        bool
-	RequestHeader string
-	FieldName     string
-	ErrorHandler  http.Handler
-	CookieName    string
+	HttpOnly       bool
+	Secure         bool
+	SameSite       SameSiteMode
+	RequestHeader  string
+	FieldName      string
+	ErrorHandler   http.Handler
+	CookieName     string
+	TrustedOrigins []string
 }
 
 // Protect is HTTP middleware that provides Cross-Site Request Forgery
@@ -86,6 +120,7 @@ type options struct {
 // 'Forbidden' error response.
 //
 // Example:
+//
 //	package main
 //
 //	import (
@@ -122,7 +157,6 @@ type options struct {
 //		// This is useful if you're sending JSON to clients or a front-end JavaScript
 //		// framework.
 //	}
-//
 func Protect(authKey []byte, opts ...Option) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		cs := parseOptions(h, opts...)
@@ -165,6 +199,7 @@ func Protect(authKey []byte, opts ...Option) func(http.Handler) http.Handler {
 				maxAge:   cs.opts.MaxAge,
 				secure:   cs.opts.Secure,
 				httpOnly: cs.opts.HttpOnly,
+				sameSite: cs.opts.SameSite,
 				path:     cs.opts.Path,
 				domain:   cs.opts.Domain,
 				sc:       cs.sc,
@@ -220,10 +255,50 @@ func (cs *csrf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// HTTP methods not defined as idempotent ("safe") under RFC7231 require
 	// inspection.
 	if !contains(safeMethods, r.Method) {
-		// Enforce an origin check for HTTPS connections. As per the Django CSRF
-		// implementation (https://goo.gl/vKA7GE) the Referer header is almost
-		// always present for same-domain HTTP requests.
-		if r.URL.Scheme == "https" {
+		var isPlaintext bool
+		val := r.Context().Value(PlaintextHTTPContextKey)
+		if val != nil {
+			isPlaintext, _ = val.(bool)
+		}
+
+		// take a copy of the request URL to avoid mutating the original
+		// attached to the request.
+		// set the scheme & host based on the request context as these are not
+		// populated by default for server requests
+		// ref: https://pkg.go.dev/net/http#Request
+		requestURL := *r.URL // shallow clone
+
+		requestURL.Scheme = "https"
+		if isPlaintext {
+			requestURL.Scheme = "http"
+		}
+		if requestURL.Host == "" {
+			requestURL.Host = r.Host
+		}
+
+		// if we have an Origin header, check it against our allowlist
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			parsedOrigin, err := url.Parse(origin)
+			if err != nil {
+				r = envError(r, ErrBadOrigin)
+				cs.opts.ErrorHandler.ServeHTTP(w, r)
+				return
+			}
+			if !sameOrigin(&requestURL, parsedOrigin) && !slices.Contains(cs.opts.TrustedOrigins, parsedOrigin.Host) {
+				r = envError(r, ErrBadOrigin)
+				cs.opts.ErrorHandler.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// If we are serving via TLS and have no Origin header, prevent against
+		// CSRF via HTTP machine in the middle attacks by enforcing strict
+		// Referer origin checks. Consider an attacker who performs a
+		// successful HTTP Machine-in-the-Middle attack and uses this to inject
+		// a form and cause submission to our origin. We strictly disallow
+		// cleartext HTTP origins and evaluate the domain against an allowlist.
+		if origin == "" && !isPlaintext {
 			// Fetch the Referer value. Call the error handler if it's empty or
 			// otherwise fails to parse.
 			referer, err := url.Parse(r.Referer())
@@ -233,23 +308,39 @@ func (cs *csrf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if sameOrigin(r.URL, referer) == false {
+			// disallow cleartext HTTP referers when serving via TLS
+			if referer.Scheme == "http" {
+				r = envError(r, ErrBadReferer)
+				cs.opts.ErrorHandler.ServeHTTP(w, r)
+				return
+			}
+
+			// If the request is being served via TLS and the Referer is not the
+			// same origin, check the domain against our allowlist. We only
+			// check when we have host information from the referer.
+			if referer.Host != "" && referer.Host != r.Host && !slices.Contains(cs.opts.TrustedOrigins, referer.Host) {
 				r = envError(r, ErrBadReferer)
 				cs.opts.ErrorHandler.ServeHTTP(w, r)
 				return
 			}
 		}
 
-		// If the token returned from the session store is nil for non-idempotent
-		// ("unsafe") methods, call the error handler.
-		if realToken == nil {
+		// Retrieve the combined token (pad + masked) token...
+		maskedToken, err := cs.requestToken(r)
+		if err != nil {
+			r = envError(r, ErrBadToken)
+			cs.opts.ErrorHandler.ServeHTTP(w, r)
+			return
+		}
+
+		if maskedToken == nil {
 			r = envError(r, ErrNoToken)
 			cs.opts.ErrorHandler.ServeHTTP(w, r)
 			return
 		}
 
-		// Retrieve the combined token (pad + masked) token and unmask it.
-		requestToken := unmask(cs.requestToken(r))
+		// ... and unmask it.
+		requestToken := unmask(maskedToken)
 
 		// Compare the request token against the real token
 		if !compareTokens(requestToken, realToken) {
@@ -269,11 +360,19 @@ func (cs *csrf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	contextClear(r)
 }
 
+// PlaintextHTTPRequest accepts as input a http.Request and returns a new
+// http.Request with the PlaintextHTTPContextKey set to true. This is used to
+// signal to the CSRF middleware that the request is being served over plaintext
+// HTTP and that Referer-based origin allow-listing checks should be skipped.
+func PlaintextHTTPRequest(r *http.Request) *http.Request {
+	ctx := context.WithValue(r.Context(), PlaintextHTTPContextKey, true)
+	return r.WithContext(ctx)
+}
+
 // unauthorizedhandler sets a HTTP 403 Forbidden status and writes the
 // CSRF failure reason to the response.
 func unauthorizedHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, fmt.Sprintf("%s - %s",
 		http.StatusText(http.StatusForbidden), FailureReason(r)),
 		http.StatusForbidden)
-	return
 }

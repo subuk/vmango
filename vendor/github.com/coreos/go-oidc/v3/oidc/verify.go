@@ -1,15 +1,12 @@
 package oidc
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
+	"slices"
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
@@ -21,9 +18,10 @@ const (
 	issuerGoogleAccountsNoScheme = "accounts.google.com"
 )
 
-// TokenExpiredError indicates that Verify failed because the token was expired. This
-// error does NOT indicate that the token is not also invalid for other reasons. Other
-// checks might have failed if the expiration check had not failed.
+// TokenExpiredError indicates that [IDTokenVerifier.Verify] or
+// [IDTokenVerifier.VerifyLogout] failed because the token was expired. This
+// error does NOT indicate that the token is not also invalid for other reasons.
+// Other checks might have failed if the expiration check had not failed.
 type TokenExpiredError struct {
 	// Expiry is the time when the token expired.
 	Expiry time.Time
@@ -33,7 +31,7 @@ func (e *TokenExpiredError) Error() string {
 	return fmt.Sprintf("oidc: token is expired (Token Expiry: %v)", e.Expiry)
 }
 
-// KeySet is a set of publc JSON Web Keys that can be used to validate the signature
+// KeySet is a set of public JSON Web Keys that can be used to validate the signature
 // of JSON web tokens. This is expected to be backed by a remote key set through
 // provider metadata discovery or an in-memory set of keys delivered out-of-band.
 type KeySet interface {
@@ -48,7 +46,7 @@ type KeySet interface {
 	VerifySignature(ctx context.Context, jwt string) (payload []byte, err error)
 }
 
-// IDTokenVerifier provides verification for ID Tokens.
+// IDTokenVerifier provides verification for ID Tokens and Logout Tokens.
 type IDTokenVerifier struct {
 	keySet KeySet
 	config *Config
@@ -58,8 +56,8 @@ type IDTokenVerifier struct {
 // NewVerifier returns a verifier manually constructed from a key set and issuer URL.
 //
 // It's easier to use provider discovery to construct an IDTokenVerifier than creating
-// one directly. This method is intended to be used with provider that don't support
-// metadata discovery, or avoiding round trips when the key set URL is already known.
+// one directly. This method is intended to be used with providers that don't support
+// metadata discovery, or to avoid round trips when the key set URL is already known.
 //
 // This constructor can be used to create a verifier directly using the issuer URL and
 // JSON Web Key Set URL without using discovery:
@@ -85,8 +83,8 @@ type Config struct {
 	ClientID string
 	// If specified, only this set of algorithms may be used to sign the JWT.
 	//
-	// If the IDTokenVerifier is created from a provider with (*Provider).Verifier, this
-	// defaults to the set of algorithms the provider supports. Otherwise this values
+	// If the IDTokenVerifier is created from a provider with [Provider.Verifier], this
+	// defaults to the set of algorithms the provider supports. Otherwise this value
 	// defaults to RS256.
 	SupportedSigningAlgs []string
 
@@ -95,7 +93,7 @@ type Config struct {
 	// If true, token expiry is not checked.
 	SkipExpiryCheck bool
 
-	// SkipIssuerCheck is intended for specialized cases where the the caller wishes to
+	// SkipIssuerCheck is intended for specialized cases where the caller wishes to
 	// defer issuer validation. When enabled, callers MUST independently verify the Token's
 	// Issuer is a known good value.
 	//
@@ -120,8 +118,9 @@ type Config struct {
 }
 
 // VerifierContext returns an IDTokenVerifier that uses the provider's key set to
-// verify JWTs. As opposed to Verifier, the context is used for all requests to
-// the upstream JWKs endpoint.
+// verify JWTs. As opposed to [Provider.Verifier], the context is used to configure
+// requests to the upstream JWKs endpoint. The provided context's cancellation is
+// ignored.
 func (p *Provider) VerifierContext(ctx context.Context, config *Config) *IDTokenVerifier {
 	return p.newVerifier(NewRemoteKeySet(ctx, p.jwksURL), config)
 }
@@ -129,7 +128,7 @@ func (p *Provider) VerifierContext(ctx context.Context, config *Config) *IDToken
 // Verifier returns an IDTokenVerifier that uses the provider's key set to verify JWTs.
 //
 // The returned verifier uses a background context for all requests to the upstream
-// JWKs endpoint. To control that context, use VerifierContext instead.
+// JWKs endpoint. To control that context, use [Provider.VerifierContext] instead.
 func (p *Provider) Verifier(config *Config) *IDTokenVerifier {
 	return p.newVerifier(p.remoteKeySet(), config)
 }
@@ -143,27 +142,6 @@ func (p *Provider) newVerifier(keySet KeySet, config *Config) *IDTokenVerifier {
 		config = cp
 	}
 	return NewVerifier(p.issuer, keySet, config)
-}
-
-func parseJWT(p string) ([]byte, error) {
-	parts := strings.Split(p, ".")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("oidc: malformed jwt, expected 3 parts got %d", len(parts))
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return nil, fmt.Errorf("oidc: malformed jwt payload: %v", err)
-	}
-	return payload, nil
-}
-
-func contains(sli []string, ele string) bool {
-	for _, s := range sli {
-		if s == ele {
-			return true
-		}
-	}
-	return false
 }
 
 // Returns the Claims from the distributed JWT token
@@ -202,7 +180,7 @@ func resolveDistributedClaim(ctx context.Context, verifier *IDTokenVerifier, src
 // Verify parses a raw ID Token, verifies it's been signed by the provider, performs
 // any additional checks depending on the Config, and returns the payload.
 //
-// Verify does NOT do nonce validation, which is the callers responsibility.
+// Verify does NOT do nonce validation, which is the caller's responsibility.
 //
 // See: https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
 //
@@ -219,11 +197,9 @@ func resolveDistributedClaim(ctx context.Context, verifier *IDTokenVerifier, src
 //
 //	token, err := verifier.Verify(ctx, rawIDToken)
 func (v *IDTokenVerifier) Verify(ctx context.Context, rawIDToken string) (*IDToken, error) {
-	// Throw out tokens with invalid claims before trying to verify the token. This lets
-	// us do cheap checks before possibly re-syncing keys.
-	payload, err := parseJWT(rawIDToken)
+	payload, sig, err := v.verifyJWT(ctx, rawIDToken)
 	if err != nil {
-		return nil, fmt.Errorf("oidc: malformed jwt: %v", err)
+		return nil, err
 	}
 	var token idToken
 	if err := json.Unmarshal(payload, &token); err != nil {
@@ -254,6 +230,7 @@ func (v *IDTokenVerifier) Verify(ctx context.Context, rawIDToken string) (*IDTok
 		AccessTokenHash:   token.AtHash,
 		claims:            payload,
 		distributedClaims: distributedClaims,
+		sigAlgorithm:      sig.Header.Algorithm,
 	}
 
 	// Check issuer.
@@ -273,7 +250,7 @@ func (v *IDTokenVerifier) Verify(ctx context.Context, rawIDToken string) (*IDTok
 	// This check DOES NOT ensure that the ClientID is the party to which the ID Token was issued (i.e. Authorized party).
 	if !v.config.SkipClientIDCheck {
 		if v.config.ClientID != "" {
-			if !contains(t.Audience, v.config.ClientID) {
+			if !slices.Contains(t.Audience, v.config.ClientID) {
 				return nil, fmt.Errorf("oidc: expected audience %q got %q", v.config.ClientID, t.Audience)
 			}
 		} else {
@@ -306,10 +283,16 @@ func (v *IDTokenVerifier) Verify(ctx context.Context, rawIDToken string) (*IDTok
 		}
 	}
 
-	if v.config.InsecureSkipSignatureCheck {
-		return t, nil
-	}
+	return t, nil
+}
 
+// Nonce returns an auth code option which requires the ID Token created by the
+// OpenID Connect provider to contain the specified nonce.
+func Nonce(nonce string) oauth2.AuthCodeOption {
+	return oauth2.SetAuthURLParam("nonce", nonce)
+}
+
+func (v *IDTokenVerifier) verifyJWT(ctx context.Context, rawIDToken string) ([]byte, jose.Signature, error) {
 	var supportedSigAlgs []jose.SignatureAlgorithm
 	for _, alg := range v.config.SupportedSigningAlgs {
 		supportedSigAlgs = append(supportedSigAlgs, jose.SignatureAlgorithm(alg))
@@ -319,37 +302,39 @@ func (v *IDTokenVerifier) Verify(ctx context.Context, rawIDToken string) (*IDTok
 		// to the one mandatory algorithm "RS256".
 		supportedSigAlgs = []jose.SignatureAlgorithm{jose.RS256}
 	}
+	if v.config.InsecureSkipSignatureCheck {
+		// "none" is a required value to even parse a JWT with the "none" algorithm
+		// using go-jose.
+		supportedSigAlgs = append(supportedSigAlgs, "none")
+	}
+
+	// Parse and verify the signature first. This at least forces the user to have
+	// a valid, signed ID token before we do any other processing.
 	jws, err := jose.ParseSigned(rawIDToken, supportedSigAlgs)
 	if err != nil {
-		return nil, fmt.Errorf("oidc: malformed jwt: %v", err)
+		return nil, jose.Signature{}, fmt.Errorf("oidc: malformed jwt: %v", err)
 	}
-
 	switch len(jws.Signatures) {
 	case 0:
-		return nil, fmt.Errorf("oidc: id token not signed")
+		return nil, jose.Signature{}, fmt.Errorf("oidc: id token not signed")
 	case 1:
 	default:
-		return nil, fmt.Errorf("oidc: multiple signatures on id token not supported")
+		return nil, jose.Signature{}, fmt.Errorf("oidc: multiple signatures on id token not supported")
 	}
 	sig := jws.Signatures[0]
-	t.sigAlgorithm = sig.Header.Algorithm
 
-	ctx = context.WithValue(ctx, parsedJWTKey, jws)
-	gotPayload, err := v.keySet.VerifySignature(ctx, rawIDToken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify signature: %v", err)
+	var payload []byte
+	if v.config.InsecureSkipSignatureCheck {
+		// Yolo mode.
+		payload = jws.UnsafePayloadWithoutVerification()
+	} else {
+		// The JWT is attached here for the happy path to avoid the verifier from
+		// having to parse the JWT twice.
+		ctx = context.WithValue(ctx, parsedJWTKey, jws)
+		payload, err = v.keySet.VerifySignature(ctx, rawIDToken)
+		if err != nil {
+			return nil, jose.Signature{}, fmt.Errorf("failed to verify signature: %v", err)
+		}
 	}
-
-	// Ensure that the payload returned by the square actually matches the payload parsed earlier.
-	if !bytes.Equal(gotPayload, payload) {
-		return nil, errors.New("oidc: internal error, payload parsed did not match previous payload")
-	}
-
-	return t, nil
-}
-
-// Nonce returns an auth code option which requires the ID Token created by the
-// OpenID Connect provider to contain the specified nonce.
-func Nonce(nonce string) oauth2.AuthCodeOption {
-	return oauth2.SetAuthURLParam("nonce", nonce)
+	return payload, sig, nil
 }

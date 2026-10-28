@@ -3,7 +3,7 @@ package libvirt
 import (
 	"subuk/vmango/compute"
 
-	libvirtxml "github.com/libvirt/libvirt-go-xml"
+	libvirtxml "libvirt.org/go/libvirtxml"
 )
 
 type DeviceNamer struct {
@@ -38,11 +38,11 @@ func (n *DeviceNamer) Next(bus compute.DeviceBus) string {
 	name := ""
 	switch bus {
 	case compute.DeviceBusIde:
-		name = "hd" + string('a'+n.state[bus])
+		name = "hd" + string(rune('a'+n.state[bus]))
 	case compute.DeviceBusScsi:
-		name = "sd" + string('a'+n.state[bus])
+		name = "sd" + string(rune('a'+n.state[bus]))
 	case compute.DeviceBusVirtio:
-		name = "vd" + string('a'+n.state[bus])
+		name = "vd" + string(rune('a'+n.state[bus]))
 	}
 	n.state[bus] += 1
 	return name

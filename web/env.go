@@ -264,7 +264,15 @@ func New(
 		env.oidcp = oidcp
 	}
 
-	return csrfProtect(env)
+	protected := csrfProtect(env)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// HTTPS may terminate at a reverse proxy. Use the configured public
+		// URL or secure-session setting to retain HTTPS origin checks there.
+		if r.TLS == nil && !cfg.Web.SessionSecure && !strings.HasPrefix(strings.ToLower(cfg.Web.BaseUrl), "https://") {
+			r = csrf.PlaintextHTTPRequest(r)
+		}
+		protected.ServeHTTP(w, r)
+	})
 }
 
 func (env *Environ) error(rw http.ResponseWriter, req *http.Request, err error, message string, status int) {

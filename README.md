@@ -81,6 +81,8 @@ Define default volume pool (if not exists) and start it:
 
 ## Local run
 
+Building requires Go 1.26 or newer and the libvirt development libraries.
+
 Copy vmango.dist.conf to vmango.conf and change configuration if needed.
 
 Run app
@@ -111,6 +113,24 @@ Install Go compiler, libvirt C library and mkisofs util (for configdrive creatio
 You need a linux hypervisor somewhere in the world, because libvirt doesn't support MacOS.
 Make sure to add ?socket option to remote libvirt urls.
 
+
+## Documentation development
+
+The documentation in `docs/` uses Docsy 0.18. It requires Hugo Extended
+0.163.0 or newer, Node.js 22 or newer, and the native Dart Sass executable
+(`sass`) on `PATH`. Install Dart Sass outside the project directory; the
+JavaScript-only npm `sass` package does not support Hugo's embedded protocol.
+See the [Hugo Sass setup guide](https://gohugo.io/functions/css/sass/).
+
+```sh
+cd docs
+npm ci
+npm run hugo -- server
+```
+
+After updating the Docsy module, run `hugo mod npm pack` and `npm install`
+to refresh its npm workspace and lockfile. Commit `docs/packages/hugoautogen/`
+along with the dependency manifests.
 
 ## Build RPM
 

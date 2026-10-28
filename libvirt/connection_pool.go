@@ -7,7 +7,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	libvirt "github.com/libvirt/libvirt-go"
+	libvirt "libvirt.org/go/libvirt"
 )
 
 type connection struct {

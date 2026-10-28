@@ -2,4 +2,4 @@ module github.com/subuk/vmango/website
 
 go 1.22.3
 
-require github.com/google/docsy v0.10.0 // indirect
+require github.com/docsy/docsy/theme v0.18.0 // indirect

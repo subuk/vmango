@@ -6,8 +6,8 @@ import (
 	"subuk/vmango/configdrive"
 	"subuk/vmango/util"
 
+	"dario.cat/mergo"
 	"github.com/hashicorp/hcl"
-	"github.com/imdario/mergo"
 )
 
 type UserWebConfig struct {

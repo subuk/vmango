@@ -18,9 +18,9 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/google/uuid"
-	"github.com/libvirt/libvirt-go"
-	libvirtxml "github.com/libvirt/libvirt-go-xml"
 	"github.com/rs/zerolog"
+	"libvirt.org/go/libvirt"
+	libvirtxml "libvirt.org/go/libvirtxml"
 )
 
 const ConfigDriveMaxSize = 5 * 1024 * 1024

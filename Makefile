@@ -26,10 +26,10 @@ BIN_DIR = $(DESTDIR)/$(PREFIX)/bin
 
 default: bin/vmango
 
-bin/vmango: $(GO_SOURCES) web/assets_generated.go Makefile
+bin/vmango: $(GO_SOURCES) web/assets_generated.go Makefile go.mod go.sum
 	$(GO) build -ldflags='$(BUILD_LDFLAGS)' -o bin/vmango
 
-bin/go-bindata:
+bin/go-bindata: go.mod go.sum
 	$(GO) build -o bin/go-bindata github.com/go-bindata/go-bindata/go-bindata
 
 web/assets_generated.go: bin/go-bindata $(ASSETS_SOURCES)
@@ -51,8 +51,8 @@ vendor:
 	$(GO) mod vendor -v
 
 .PHONY: test
-test:
-	go test
+test: web/assets_generated.go
+	$(GO) test ./...
 
 .PHONY: clean
 clean:

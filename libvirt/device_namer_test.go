@@ -5,7 +5,7 @@ import (
 	"subuk/vmango/compute"
 	"testing"
 
-	libvirtxml "github.com/libvirt/libvirt-go-xml"
+	libvirtxml "libvirt.org/go/libvirtxml"
 )
 
 func TestNewDeviceNamerFromDisks(t *testing.T) {

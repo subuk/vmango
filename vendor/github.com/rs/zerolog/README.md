@@ -1,6 +1,6 @@
 # Zero Allocation JSON Logger
 
-[![godoc](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/rs/zerolog) [![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://raw.githubusercontent.com/rs/zerolog/master/LICENSE) [![Build Status](https://travis-ci.org/rs/zerolog.svg?branch=master)](https://travis-ci.org/rs/zerolog) [![Coverage](http://gocover.io/_badge/github.com/rs/zerolog)](http://gocover.io/github.com/rs/zerolog)
+[![godoc](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/rs/zerolog) [![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://raw.githubusercontent.com/rs/zerolog/master/LICENSE) [![Build Status](https://github.com/rs/zerolog/actions/workflows/test.yml/badge.svg)](https://github.com/rs/zerolog/actions/workflows/test.yml) [![Go Coverage](https://github.com/rs/zerolog/wiki/coverage.svg)](https://raw.githack.com/wiki/rs/zerolog/coverage.html)
 
 The zerolog package provides a fast and simple logger dedicated to JSON output.
 
@@ -18,20 +18,22 @@ Find out [who uses zerolog](https://github.com/rs/zerolog/wiki/Who-uses-zerolog)
 
 ## Features
 
-* Blazing fast
-* Low to zero allocation
-* Level logging
-* Sampling
-* Hooks
-* Contextual fields
-* `context.Context` integration
-* `net/http` helpers
-* JSON and CBOR encoding formats
-* Pretty logging for development
+- [Blazing fast](#benchmarks)
+- [Low to zero allocation](#benchmarks)
+- [Leveled logging](#leveled-logging)
+- [Sampling](#log-sampling)
+- [Hooks](#hooks)
+- [Contextual fields](#contextual-logging)
+- [`context.Context` integration](#contextcontext-integration)
+- [Integration with `net/http`](#integration-with-nethttp)
+- [JSON and CBOR encoding formats](#binary-encoding)
+- [Pretty logging for development](#pretty-logging)
+- [Error Logging (with optional Stacktrace)](#error-logging)
+- [`log/slog` integration](#integration-with-logslog)
 
 ## Installation
 
-```go
+```bash
 go get -u github.com/rs/zerolog/log
 ```
 
@@ -51,8 +53,6 @@ import (
 
 func main() {
     // UNIX Time is faster and smaller than most timestamps
-    // If you set zerolog.TimeFieldFormat to an empty string,
-    // logs will write with UNIX time
     zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
     log.Print("hello world")
@@ -60,8 +60,9 @@ func main() {
 
 // Output: {"time":1516134303,"level":"debug","message":"hello world"}
 ```
+
 > Note: By default log writes to `os.Stderr`
-> Note: The default log level for `log.Print` is *debug*
+> Note: The default log level for `log.Print` is _trace_
 
 ### Contextual Logging
 
@@ -82,7 +83,7 @@ func main() {
         Str("Scale", "833 cents").
         Float64("Interval", 833.09).
         Msg("Fibonacci is everywhere")
-    
+
     log.Debug().
         Str("Name", "Tom").
         Send()
@@ -119,14 +120,15 @@ func main() {
 
 **zerolog** allows for logging at the following levels (from highest to lowest):
 
-* panic (`zerolog.PanicLevel`, 5)
-* fatal (`zerolog.FatalLevel`, 4)
-* error (`zerolog.ErrorLevel`, 3)
-* warn (`zerolog.WarnLevel`, 2)
-* info (`zerolog.InfoLevel`, 1)
-* debug (`zerolog.DebugLevel`, 0)
+- panic (`zerolog.PanicLevel`, 5)
+- fatal (`zerolog.FatalLevel`, 4)
+- error (`zerolog.ErrorLevel`, 3)
+- warn (`zerolog.WarnLevel`, 2)
+- info (`zerolog.InfoLevel`, 1)
+- debug (`zerolog.DebugLevel`, 0)
+- trace (`zerolog.TraceLevel`, -1)
 
-You can set the Global logging level to any of these options using the `SetGlobalLevel` function in the zerolog package, passing in one of the given constants above, e.g. `zerolog.InfoLevel` would be the "info" level.  Whichever level is chosen, all logs with a level greater than or equal to that level will be written. To turn off logging entirely, pass the `zerolog.Disabled` constant.
+You can set the Global logging level to any of these options using the `SetGlobalLevel` function in the zerolog package, passing in one of the given constants above, e.g. `zerolog.InfoLevel` would be the "info" level. Whichever level is chosen, all logs with a level greater than or equal to that level will be written. To turn off logging entirely, pass the `zerolog.Disabled` constant.
 
 #### Setting Global Log Level
 
@@ -203,6 +205,80 @@ func main() {
 
 // Output: {"time":1494567715,"foo":"bar"}
 ```
+
+### Error Logging
+
+You can log errors using the `Err` method
+
+```go
+package main
+
+import (
+    "errors"
+
+    "github.com/rs/zerolog"
+    "github.com/rs/zerolog/log"
+)
+
+func main() {
+    zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
+    err := errors.New("seems we have an error here")
+    log.Error().Err(err).Msg("")
+}
+
+// Output: {"level":"error","error":"seems we have an error here","time":1609085256}
+```
+
+> The default field name for errors is `error`, you can change this by setting `zerolog.ErrorFieldName` to meet your needs.
+
+#### Error Logging with Stacktrace
+
+Using `github.com/pkg/errors`, you can add a formatted stacktrace to your errors.
+
+```go
+package main
+
+import (
+    "github.com/pkg/errors"
+    "github.com/rs/zerolog/pkgerrors"
+
+    "github.com/rs/zerolog"
+    "github.com/rs/zerolog/log"
+)
+
+func main() {
+    zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+    zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
+
+    err := outer()
+    log.Error().Stack().Err(err).Msg("")
+}
+
+func inner() error {
+    return errors.New("seems we have an error here")
+}
+
+func middle() error {
+    err := inner()
+    if err != nil {
+        return err
+    }
+    return nil
+}
+
+func outer() error {
+    err := middle()
+    if err != nil {
+        return err
+    }
+    return nil
+}
+
+// Output: {"level":"error","stack":[{"func":"inner","line":"20","source":"errors.go"},{"func":"middle","line":"24","source":"errors.go"},{"func":"outer","line":"32","source":"errors.go"},{"func":"main","line":"15","source":"errors.go"},{"func":"main","line":"204","source":"proc.go"},{"func":"goexit","line":"1374","source":"asm_amd64.s"}],"error":"seems we have an error here","time":1609086683}
+```
+
+> zerolog.ErrorStackMarshaler must be set in order for the stack to output anything.
 
 #### Logging Fatal Messages
 
@@ -291,6 +367,37 @@ log.Info().Str("foo", "bar").Msg("Hello World")
 // Output: 2006-01-02T15:04:05Z07:00 | INFO  | ***Hello World**** foo:BAR
 ```
 
+To use custom advanced formatting:
+
+```go
+output := zerolog.ConsoleWriter{Out: os.Stdout, NoColor: true,
+    PartsOrder:    []string{"level", "one", "two", "three", "message"},
+    FieldsExclude: []string{"one", "two", "three"}}
+output.FormatLevel = func(i interface{}) string { return strings.ToUpper(fmt.Sprintf("%-6s", i)) }
+output.FormatFieldName = func(i interface{}) string { return fmt.Sprintf("%s:", i) }
+output.FormatPartValueByName = func(i interface{}, s string) string {
+    var ret string
+    switch s {
+    case "one":
+        ret = strings.ToUpper(fmt.Sprintf("%s", i))
+    case "two":
+        ret = strings.ToLower(fmt.Sprintf("%s", i))
+    case "three":
+        ret = strings.ToLower(fmt.Sprintf("(%s)", i))
+    }
+    return ret
+}
+log := zerolog.New(output)
+
+log.Info().Str("foo", "bar").
+    Str("two", "TEST_TWO").
+    Str("one", "test_one").
+    Str("three", "test_three").
+    Msg("Hello World")
+
+// Output: INFO   TEST_ONE test_two (test_three) Hello World foo:bar
+```
+
 ### Sub dictionary
 
 ```go
@@ -324,6 +431,8 @@ log.Logger = log.With().Str("foo", "bar").Logger()
 
 ### Add file and line number to log
 
+Equivalent of `Llongfile`:
+
 ```go
 log.Logger = log.With().Caller().Logger()
 log.Info().Msg("hello world")
@@ -331,16 +440,27 @@ log.Info().Msg("hello world")
 // Output: {"level": "info", "message": "hello world", "caller": "/go/src/your_project/some_file:21"}
 ```
 
+Equivalent of `Lshortfile`:
+
+```go
+zerolog.CallerMarshalFunc = func(pc uintptr, file string, line int) string {
+    return filepath.Base(file) + ":" + strconv.Itoa(line)
+}
+log.Logger = log.With().Caller().Logger()
+log.Info().Msg("hello world")
+
+// Output: {"level": "info", "message": "hello world", "caller": "some_file:21"}
+```
 
 ### Thread-safe, lock-free, non-blocking writer
 
-If your writer might be slow or not thread-safe and you need your log producers to never get slowed down by a slow writer, you can use a `diode.Writer` as follow:
+If your writer might be slow or not thread-safe and you need your log producers to never get slowed down by a slow writer, you can use a `diode.Writer` as follows:
 
 ```go
 wr := diode.NewWriter(os.Stdout, 1000, 10*time.Millisecond, func(missed int) {
-		fmt.Printf("Logger Dropped %d messages", missed)
-	})
-log := zerolog.New(w)
+        fmt.Printf("Logger Dropped %d messages", missed)
+    })
+log := zerolog.New(wr)
 log.Print("test")
 ```
 
@@ -415,6 +535,58 @@ stdlog.Print("hello world")
 // Output: {"foo":"bar","message":"hello world"}
 ```
 
+### context.Context integration
+
+Go contexts are commonly passed throughout Go code, and this can help you pass
+your Logger into places it might otherwise be hard to inject. The `Logger`
+instance may be attached to Go context (`context.Context`) using
+`Logger.WithContext(ctx)` and extracted from it using `zerolog.Ctx(ctx)`.
+For example:
+
+```go
+func f() {
+    logger := zerolog.New(os.Stdout)
+    ctx := context.Background()
+
+    // Attach the Logger to the context.Context
+    ctx = logger.WithContext(ctx)
+    someFunc(ctx)
+}
+
+func someFunc(ctx context.Context) {
+    // Get Logger from the go Context. if it's nil, then
+    // `zerolog.DefaultContextLogger` is returned, if
+    // `DefaultContextLogger` is nil, then a disabled logger is returned.
+    logger := zerolog.Ctx(ctx)
+    logger.Info().Msg("Hello")
+}
+```
+
+A second form of `context.Context` integration allows you to pass the current
+`context.Context` into the logged event, and retrieve it from hooks. This can be
+useful to log trace and span IDs or other information stored in the go context,
+and facilitates the unification of logging and tracing in some systems:
+
+```go
+type TracingHook struct{}
+
+func (h TracingHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
+    ctx := e.GetCtx()
+    spanId := getSpanIdFromContext(ctx) // as per your tracing framework
+    e.Str("span-id", spanId)
+}
+
+func f() {
+    // Setup the logger
+    logger := zerolog.New(os.Stdout)
+    logger = logger.Hook(TracingHook{})
+
+    ctx := context.Background()
+    // Use the Ctx function to make the context available to the hook
+    logger.Info().Ctx(ctx).Msg("Hello")
+}
+```
+
 ### Integration with `net/http`
 
 The `github.com/rs/zerolog/hlog` package provides some helpers to integrate zerolog with `http.Handler`.
@@ -434,11 +606,11 @@ c := alice.New()
 c = c.Append(hlog.NewHandler(log))
 
 // Install some provided extra handler to set some request's context fields.
-// Thanks to those handler, all our logs will come with some pre-populated fields.
+// Thanks to that handler, all our logs will come with some prepopulated fields.
 c = c.Append(hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
     hlog.FromRequest(r).Info().
         Str("method", r.Method).
-        Str("url", r.URL.String()).
+        Stringer("url", r.URL).
         Int("status", status).
         Int("size", size).
         Dur("duration", duration).
@@ -468,62 +640,121 @@ if err := http.ListenAndServe(":8080", nil); err != nil {
 }
 ```
 
+## Multiple Log Output
+
+`zerolog.MultiLevelWriter` may be used to send the log message to multiple outputs.
+
+In this example, we send the log message to both `os.Stdout` and the in-built `ConsoleWriter`.
+
+```go
+func main() {
+    consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout}
+    multi := zerolog.MultiLevelWriter(consoleWriter, os.Stdout)
+    logger := zerolog.New(multi).With().Timestamp().Logger()
+    logger.Info().Msg("Hello World!")
+}
+
+// Output (Line 1: Console; Line 2: Stdout)
+// 12:36PM INF Hello World!
+// {"level":"info","time":"2019-11-07T12:36:38+03:00","message":"Hello World!"}
+```
+
 ## Global Settings
 
-Some settings can be changed and will by applied to all loggers:
+Some settings can be changed and will be applied to all loggers:
 
-* `log.Logger`: You can set this value to customize the global logger (the one used by package level methods).
-* `zerolog.SetGlobalLevel`: Can raise the minimum level of all loggers. Set this to `zerolog.Disabled` to disable logging altogether (quiet mode).
-* `zerolog.DisableSampling`: If argument is `true`, all sampled loggers will stop sampling and issue 100% of their log events.
-* `zerolog.TimestampFieldName`: Can be set to customize `Timestamp` field name.
-* `zerolog.LevelFieldName`: Can be set to customize level field name.
-* `zerolog.MessageFieldName`: Can be set to customize message field name.
-* `zerolog.ErrorFieldName`: Can be set to customize `Err` field name.
-* `zerolog.TimeFieldFormat`: Can be set to customize `Time` field value formatting. If set with `zerolog.TimeFormatUnix` or `zerolog.TimeFormatUnixMs`, times are formated as UNIX timestamp.
-* DurationFieldUnit defines the unit for time.Duration type fields added using the Dur method.
-* `DurationFieldUnit`: Sets the unit of the fields added by `Dur` (default: `time.Millisecond`).
-* `DurationFieldInteger`: If set to true, `Dur` fields are formatted as integers instead of floats.
-* `ErrorHandler`: Called whenever zerolog fails to write an event on its output. If not set, an error is printed on the stderr. This handler must be thread safe and non-blocking.
+- `log.Logger`: You can set this value to customize the global logger (the one used by package level methods).
+- `zerolog.SetGlobalLevel`: Can raise the minimum level of all loggers. Call this with `zerolog.Disabled` to disable logging altogether (quiet mode).
+- `zerolog.DisableSampling`: If argument is `true`, all sampled loggers will stop sampling and issue 100% of their log events.
+- `zerolog.TimestampFieldName`: Can be set to customize `Timestamp` field name.
+- `zerolog.LevelFieldName`: Can be set to customize level field name.
+- `zerolog.MessageFieldName`: Can be set to customize message field name.
+- `zerolog.ErrorFieldName`: Can be set to customize `Err` field name.
+- `zerolog.TimeFieldFormat`: Can be set to customize `Time` field value formatting. If set with `zerolog.TimeFormatUnix`, `zerolog.TimeFormatUnixMs` or `zerolog.TimeFormatUnixMicro`, times are formatted as UNIX timestamp.
+- `zerolog.DurationFieldUnit`: Can be set to customize the unit for time.Duration type fields added by `Dur` (default: `time.Millisecond`).
+- `zerolog.DurationFieldFormat`: Can be set to `DurationFormatFloat`, `DurationFormatInt`, or `DurationFormatString` (default: `DurationFormatFloat`) to append the `Duration` as a `Float64`, `Int64`, or by calling `String()` (respectively).
+- `zerolog.DurationFieldInteger`: If set to `true`, `Dur` fields are formatted as integers instead of floats (default: `false`). Deprecated: Use `zerolog.DurationFieldFormat = DurationFormatInt` instead.
+- `zerolog.ErrorHandler`: Called whenever zerolog fails to write an event on its output. If not set, an error is printed on the stderr. This handler must be thread safe and non-blocking.
+- `zerolog.FloatingPointPrecision`: If set to a value other than -1, controls the number of digits when formatting float numbers in JSON. See [strconv.FormatFloat](https://pkg.go.dev/strconv#FormatFloat)
+  for more details.
 
 ## Field Types
 
 ### Standard Types
 
-* `Str`
-* `Bool`
-* `Int`, `Int8`, `Int16`, `Int32`, `Int64`
-* `Uint`, `Uint8`, `Uint16`, `Uint32`, `Uint64`
-* `Float32`, `Float64`
+- `Str`
+- `Bool`
+- `Int`, `Int8`, `Int16`, `Int32`, `Int64`
+- `Uint`, `Uint8`, `Uint16`, `Uint32`, `Uint64`
+- `Float32`, `Float64`
 
 ### Advanced Fields
 
-* `Err`: Takes an `error` and render it as a string using the `zerolog.ErrorFieldName` field name.
-* `Timestamp`: Insert a timestamp field with `zerolog.TimestampFieldName` field name and formatted using `zerolog.TimeFieldFormat`.
-* `Time`: Adds a field with the time formated with the `zerolog.TimeFieldFormat`.
-* `Dur`: Adds a field with a `time.Duration`.
-* `Dict`: Adds a sub-key/value as a field of the event.
-* `Interface`: Uses reflection to marshal the type.
+- `Err`: Takes an `error` and renders it as a string using the `zerolog.ErrorFieldName` field name.
+- `Func`: Run a `func` only if the level is enabled.
+- `Timestamp`: Inserts a timestamp field with `zerolog.TimestampFieldName` field name, formatted using `zerolog.TimeFieldFormat`.
+- `Time`: Adds a field with time formatted with `zerolog.TimeFieldFormat`.
+- `Dur`: Adds a field with `time.Duration`.
+- `Dict`: Adds a sub-key/value as a field of the event.
+- `RawJSON`: Adds a field with an already encoded JSON (`[]byte`)
+- `Hex`: Adds a field with value formatted as a hexadecimal string (`[]byte`)
+- `Interface`: Uses reflection to marshal the type.
+- `IPAddr`: Adds a field with `net.IP`.
+- `IPPrefix`: Adds a field with `net.IPNet`.
+- `MACAddr`: Adds a field with `net.HardwareAddr`
+
+Most fields are also available in the slice format (`Strs` for `[]string`, `Errs` for `[]error` etc.)
 
 ## Binary Encoding
 
-In addition to the default JSON encoding, `zerolog` can produce binary logs using [CBOR](http://cbor.io) encoding. The choice of encoding can be decided at compile time using the build tag `binary_log` as follows:
+In addition to the default JSON encoding, `zerolog` can produce binary logs using [CBOR](https://cbor.io) encoding. The choice of encoding can be decided at compile time using the build tag `binary_log` as follows:
 
 ```bash
 go build -tags binary_log .
 ```
 
-To Decode binary encoded log files you can use any CBOR decoder. One has been tested to work
+To decode binary encoded log files you can use any CBOR decoder. One has been tested to work
 with zerolog library is [CSD](https://github.com/toravir/csd/).
+
+## Integration with `log/slog`
+
+zerolog provides a `slog.Handler` implementation that routes `log/slog` records through a zerolog logger. This lets you use the standard library's `slog` API while keeping zerolog's performance and encoding:
+
+```go
+package main
+
+import (
+    "log/slog"
+
+    "github.com/rs/zerolog"
+    "github.com/rs/zerolog/log"
+)
+
+func main() {
+    zl := log.Logger
+    handler := zerolog.NewSlogHandler(zl)
+    logger := slog.New(handler)
+
+    logger.Info("user logged in", "user", "alice", "role", "admin")
+}
+
+// Output: {"level":"info","user":"alice","role":"admin","time":"...","message":"user logged in"}
+```
+
+The handler supports all `slog` features including `WithAttrs`, `WithGroup`, nested groups, and `LogValuer` resolution. slog levels are mapped to zerolog levels (e.g. `slog.LevelDebug` to `zerolog.DebugLevel`).
 
 ## Related Projects
 
-* [grpc-zerolog](https://github.com/cheapRoc/grpc-zerolog): Implementation of `grpclog.LoggerV2` interface using `zerolog`
+- [grpc-zerolog](https://github.com/cheapRoc/grpc-zerolog): Implementation of `grpclog.LoggerV2` interface using `zerolog`
+- [overlog](https://github.com/Trendyol/overlog): Implementation of `Mapped Diagnostic Context` interface using `zerolog`
+- [zerologr](https://github.com/go-logr/zerologr): Implementation of `logr.LogSink` interface using `zerolog`
+- [logze](https://github.com/maxbolgarin/logze): Implementation of `log/slog` interface using `zerolog`
 
 ## Benchmarks
 
-See [logbench](http://hackemist.com/logbench/) for more comprehensive and up-to-date benchmarks.
+See [logbench](http://bench.zerolog.io/) for more comprehensive and up-to-date benchmarks.
 
-All operations are allocation free (those numbers *include* JSON encoding):
+All operations are allocation free (those numbers _include_ JSON encoding):
 
 ```text
 BenchmarkLogEmpty-8        100000000    19.1 ns/op     0 B/op       0 allocs/op
@@ -535,52 +766,54 @@ BenchmarkLogFields-8       10000000     184 ns/op      0 B/op       0 allocs/op
 
 There are a few Go logging benchmarks and comparisons that include zerolog.
 
-* [imkira/go-loggers-bench](https://github.com/imkira/go-loggers-bench)
-* [uber-common/zap](https://github.com/uber-go/zap#performance)
+- [imkira/go-loggers-bench](https://github.com/imkira/go-loggers-bench)
+- [uber-common/zap](https://github.com/uber-go/zap#performance)
 
 Using Uber's zap comparison benchmark:
 
 Log a message and 10 fields:
 
-| Library | Time | Bytes Allocated | Objects Allocated |
-| :--- | :---: | :---: | :---: |
-| zerolog | 767 ns/op | 552 B/op | 6 allocs/op |
-| :zap: zap | 848 ns/op | 704 B/op | 2 allocs/op |
-| :zap: zap (sugared) | 1363 ns/op | 1610 B/op | 20 allocs/op |
-| go-kit | 3614 ns/op | 2895 B/op | 66 allocs/op |
-| lion | 5392 ns/op | 5807 B/op | 63 allocs/op |
-| logrus | 5661 ns/op | 6092 B/op | 78 allocs/op |
-| apex/log | 15332 ns/op | 3832 B/op | 65 allocs/op |
-| log15 | 20657 ns/op | 5632 B/op | 93 allocs/op |
+| Library             |    Time     | Bytes Allocated | Objects Allocated |
+| :------------------ | :---------: | :-------------: | :---------------: |
+| zerolog             |  767 ns/op  |    552 B/op     |    6 allocs/op    |
+| :zap: zap           |  848 ns/op  |    704 B/op     |    2 allocs/op    |
+| :zap: zap (sugared) | 1363 ns/op  |    1610 B/op    |   20 allocs/op    |
+| go-kit              | 3614 ns/op  |    2895 B/op    |   66 allocs/op    |
+| lion                | 5392 ns/op  |    5807 B/op    |   63 allocs/op    |
+| logrus              | 5661 ns/op  |    6092 B/op    |   78 allocs/op    |
+| apex/log            | 15332 ns/op |    3832 B/op    |   65 allocs/op    |
+| log15               | 20657 ns/op |    5632 B/op    |   93 allocs/op    |
 
 Log a message with a logger that already has 10 fields of context:
 
-| Library | Time | Bytes Allocated | Objects Allocated |
-| :--- | :---: | :---: | :---: |
-| zerolog | 52 ns/op | 0 B/op | 0 allocs/op |
-| :zap: zap | 283 ns/op | 0 B/op | 0 allocs/op |
-| :zap: zap (sugared) | 337 ns/op | 80 B/op | 2 allocs/op |
-| lion | 2702 ns/op | 4074 B/op | 38 allocs/op |
-| go-kit | 3378 ns/op | 3046 B/op | 52 allocs/op |
-| logrus | 4309 ns/op | 4564 B/op | 63 allocs/op |
-| apex/log | 13456 ns/op | 2898 B/op | 51 allocs/op |
-| log15 | 14179 ns/op | 2642 B/op | 44 allocs/op |
+| Library             |    Time     | Bytes Allocated | Objects Allocated |
+| :------------------ | :---------: | :-------------: | :---------------: |
+| zerolog             |  52 ns/op   |     0 B/op      |    0 allocs/op    |
+| :zap: zap           |  283 ns/op  |     0 B/op      |    0 allocs/op    |
+| :zap: zap (sugared) |  337 ns/op  |     80 B/op     |    2 allocs/op    |
+| lion                | 2702 ns/op  |    4074 B/op    |   38 allocs/op    |
+| go-kit              | 3378 ns/op  |    3046 B/op    |   52 allocs/op    |
+| logrus              | 4309 ns/op  |    4564 B/op    |   63 allocs/op    |
+| apex/log            | 13456 ns/op |    2898 B/op    |   51 allocs/op    |
+| log15               | 14179 ns/op |    2642 B/op    |   44 allocs/op    |
 
 Log a static string, without any context or `printf`-style templating:
 
-| Library | Time | Bytes Allocated | Objects Allocated |
-| :--- | :---: | :---: | :---: |
-| zerolog | 50 ns/op | 0 B/op | 0 allocs/op |
-| :zap: zap | 236 ns/op | 0 B/op | 0 allocs/op |
-| standard library | 453 ns/op | 80 B/op | 2 allocs/op |
-| :zap: zap (sugared) | 337 ns/op | 80 B/op | 2 allocs/op |
-| go-kit | 508 ns/op | 656 B/op | 13 allocs/op |
-| lion | 771 ns/op | 1224 B/op | 10 allocs/op |
-| logrus | 1244 ns/op | 1505 B/op | 27 allocs/op |
-| apex/log | 2751 ns/op | 584 B/op | 11 allocs/op |
-| log15 | 5181 ns/op | 1592 B/op | 26 allocs/op |
+| Library             |    Time    | Bytes Allocated | Objects Allocated |
+| :------------------ | :--------: | :-------------: | :---------------: |
+| zerolog             |  50 ns/op  |     0 B/op      |    0 allocs/op    |
+| :zap: zap           | 236 ns/op  |     0 B/op      |    0 allocs/op    |
+| standard library    | 453 ns/op  |     80 B/op     |    2 allocs/op    |
+| :zap: zap (sugared) | 337 ns/op  |     80 B/op     |    2 allocs/op    |
+| go-kit              | 508 ns/op  |    656 B/op     |   13 allocs/op    |
+| lion                | 771 ns/op  |    1224 B/op    |   10 allocs/op    |
+| logrus              | 1244 ns/op |    1505 B/op    |   27 allocs/op    |
+| apex/log            | 2751 ns/op |    584 B/op     |   11 allocs/op    |
+| log15               | 5181 ns/op |    1592 B/op    |   26 allocs/op    |
 
 ## Caveats
+
+### Field duplication
 
 Note that zerolog does no de-duplication of fields. Using the same key multiple times creates multiple keys in final JSON:
 
@@ -593,3 +826,33 @@ logger.Info().
 ```
 
 In this case, many consumers will take the last value, but this is not guaranteed; check yours if in doubt.
+
+### Concurrency safety
+
+Be careful when calling `UpdateContext`. It is not concurrency safe. Use the `With()` method to create a child logger:
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+    // Create a child logger for concurrency safety
+    logger := log.Logger.With().Logger()
+
+    // Add context fields, for example User-Agent from HTTP headers
+    logger.UpdateContext(func(c zerolog.Context) zerolog.Context {
+        ...
+    })
+}
+```
+
+The `Event` object returned from the `Logger` level-specific message functions (e.g. `Log()`, `Trace()`, `Debug()`, etc.)
+is allocated in `sync.Pool` memory that will be returned to the pool as soon as the `Msg()`, `Msgf()`, `Send()`,
+or `MsgFunc()` writes the message and **must not** be accessed afterwards.
+
+**Do not** hold a reference to the `*Event` while in callback functions or your own code. This is especially important in
+`Hook.Run()` and `HookFunc` functions or `MarshalZerologObject(e *Event)` callback (e.g. `LogObjectMarshaler` implementations).
+
+Any `Array` objects returned from `Context.CreateArray()` or `Event.CreateArray()` are from a `sync.Pool` so **do not** hold
+references to them from within any `MarshalZerologArray(a *Array)` callback (e.g. `LogArrayMarshaler` implementations) or your
+own code as they will be cleared and returned to the pool after being buffered by a call to `Context.Array()` or `Event.Array()`.
+
+Any _dictionary_ `Event` returned from `Context.CreateDict()` or `Event.CreateDict()` **must not** be referenced after being
+buffered by a call to `Array.Dict()`, `Context.Dict()`, or `Event.Dict()` as they will be cleared and returned to the pool.

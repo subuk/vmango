@@ -10,9 +10,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	libvirtxml "github.com/libvirt/libvirt-go-xml"
+	libvirtxml "libvirt.org/go/libvirtxml"
 
-	libvirt "github.com/libvirt/libvirt-go"
+	libvirt "libvirt.org/go/libvirt"
 )
 
 type VolumeRepository struct {
