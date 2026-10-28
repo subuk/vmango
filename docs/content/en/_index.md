@@ -1,4 +1,4 @@
 +++
 title = "Vmango"
-description = "An open-source web interface for your virtual machines."
+description = "Your own personal IaaS cloud, built on libvirt and cloud-init."
 +++

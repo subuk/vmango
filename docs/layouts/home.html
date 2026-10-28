@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Vmango is an open-source web interface for managing virtual machines on existing libvirt hypervisors.">
+  <meta name="description" content="Build your own cloud on libvirt. Launch virtual machines from cloud images with SSH keys and cloud-init, without installing an OS from an ISO.">
   <meta name="theme-color" content="#ffffff">
-  <title>Vmango — a web interface for libvirt</title>
+  <title>Vmango — your own personal IaaS cloud</title>
   <link rel="canonical" href="{{ .Permalink }}">
   <link rel="icon" href="/favicons/favicon.ico">
   <link rel="stylesheet" href="/landing/style.css">
@@ -21,14 +21,32 @@
     </nav>
   </header>
   <main id="main">
-    <h1>A web interface for libvirt.</h1>
-    <p>Vmango manages virtual machines on the hypervisors you already have.
-      It is a small, self-hosted application written in Go.</p>
-    <p>Use your usual tools to configure the hosts, then use Vmango to create
-      machines, manage their disks and open a console in your browser.</p>
+    <h1>Your own personal IaaS cloud.</h1>
+    <p>Vmango turns your libvirt hosts into a small, self-hosted cloud.
+      Choose a cloud image, set the machine's resources, add your SSH keys
+      and launch it from your browser.</p>
+    <p>No booting an installer, mounting a CD or clicking through OS setup for
+      every new VM. Start from a ready-made cloud image and let cloud-init
+      handle the initial configuration.</p>
+
+    <section aria-labelledby="provision-title">
+      <h2 id="provision-title">From cloud image to your own machine</h2>
+      <ol>
+        <li><strong>Choose an image.</strong> Use a cloud-init-enabled OS image
+          in your storage pool as the starting point for new machines.</li>
+        <li><strong>Make it yours.</strong> Set CPU, memory and disk size,
+          select your SSH keys and optionally provide cloud-init userdata
+          to install packages or run setup commands.</li>
+        <li><strong>Create and start.</strong> Vmango clones the disk and supplies
+          the configuration to the guest. The OS boots from the image and
+          configures itself on first boot.</li>
+      </ol>
+      <p>Once your hosts and images are set up, launching another machine is
+        a single form and a click. Your infrastructure stays on your own hardware.</p>
+    </section>
 
     <section aria-labelledby="features-title">
-      <h2 id="features-title">What it does</h2>
+      <h2 id="features-title">Manage the machines you launch</h2>
       <ul>
         <li>Create, start, stop and reboot virtual machines through libvirt.</li>
         <li>Provision from cloud images with SSH keys and cloud-init userdata.</li>
@@ -42,7 +60,7 @@
 
     <section id="install" aria-labelledby="install-title">
       <h2 id="install-title">Getting started</h2>
-      <p>You will need a configured libvirt host, a storage pool and an OS image.
+      <p>You will need a configured libvirt host, a storage pool and a cloud-init-enabled OS image.
         Choose a package repository below, then configure <code>/etc/vmango.conf</code>
         for your environment.</p>
       <dl class="packages">
