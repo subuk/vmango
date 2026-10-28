@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-USAGE="Usage: $0 [centos-7|centos-8|ubuntu-1804] <make args...>"
+USAGE="Usage: $0 [centos-7|centos-8|ubuntu-1804|ubuntu-2404|debian-10] <make args...>"
 CACHE_DIR=/tmp/vmango-package-build-cache
 mkdir -p $CACHE_DIR
 
@@ -34,18 +34,18 @@ case "$1" in
             -w /source \
             $DOCKER_IMAGE $@
     ;;
-    "ubuntu-1804")
-        DOCKER_IMAGE=vmango:build_ubuntu1804
-        YUM_CONFIG=`pwd`/dockerbuild/centos7.yum.conf
+    "ubuntu-1804"|"ubuntu-2404")
+        UBUNTU_VERSION=${1#ubuntu-}
+        DOCKER_IMAGE=vmango:build_ubuntu${UBUNTU_VERSION}
         if [[ "Y$(docker images -q $DOCKER_IMAGE)" == "Y" || "Y${FORCE_REBUILD}" != "Y" ]]; then
-            docker build -t $DOCKER_IMAGE -f dockerbuild/ubuntu1804.dockerfile .
+            docker build -t $DOCKER_IMAGE -f dockerbuild/ubuntu${UBUNTU_VERSION}.dockerfile .
         fi
         mkdir -p $CACHE_DIR/apt
         shift
         exec docker run --rm -it \
             -v `pwd`:/source \
             -v $HOME/.gnupg/:/root/.gnupg \
-            -v $CACHE_DIR/apt_ubuntu1804:/var/cache/apt \
+            -v $CACHE_DIR/apt_ubuntu${UBUNTU_VERSION}:/var/cache/apt \
             -w /source \
             $DOCKER_IMAGE $@
     ;;

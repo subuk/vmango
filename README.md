@@ -145,20 +145,42 @@ along with the dependency manifests.
 
 ## Build RPM
 
-With docker for Centos 7:
-
-    ./dockerbuild.sh centos-7 make rpm
-
-Locally:
+In an RPM build environment providing Go 1.26 or newer and libvirt-devel:
 
     make rpm
 
+The legacy CentOS 7/8 Docker images in `dockerbuild/` are not maintained;
+use a supported distribution with the required compiler or the COPR builders.
+
 ## Build DEB
 
-With docker for Ubuntu 18.04:
+With Docker for Ubuntu 24.04:
 
-    ./dockerbuild.sh ubuntu-1804 make deb
+    ./dockerbuild.sh ubuntu-2404 make deb
 
 Locally:
 
     make deb
+
+DEB builds require `golang-1.26-go`; `debian/rules` selects
+`/usr/lib/go-1.26/bin` explicitly. Ubuntu 22.04, 24.04 and 26.04 provide this
+compiler through their standard repositories with updates/security enabled.
+RPM and DEB builds use vendored modules and `GOTOOLCHAIN=local`, so the compiler
+must be installed before building. Both package builds run `make test`.
+
+## Publishing development packages
+
+COPR watches GitHub `master`. The Launchpad `master-daily` recipe reads a
+separate hosted repository, `lp:~subuk/+git/vmango`; pushing to GitHub alone
+does not update it. Configure the `lp` remote once:
+
+    git remote add lp git+ssh://subuk@git.launchpad.net/~subuk/+git/vmango
+
+After committing changes on `master`, publish to both repositories:
+
+    make publish-devel
+
+This pushes `master` without force to `origin` and then `lp`. Launchpad's daily
+recipe can also be triggered with **Request build(s)** on its recipe page.
+Select Ubuntu releases that provide Go 1.26 (Jammy, Noble and Resolute).
+Stable repositories are updated separately when publishing a release.

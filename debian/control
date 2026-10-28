@@ -2,7 +2,7 @@ Source: vmango
 Maintainer: Matvey Kruglov <kubuzzzz@gmail.com>
 Section: admin
 Priority: optional
-Build-Depends: libvirt-dev (>=1.2.0), debhelper (>=10), golang, pkg-config
+Build-Depends: libvirt-dev (>=1.2.0), debhelper (>=10), golang-1.26-go (>=1.26~), pkg-config
 Standards-Version: 4.1.2
 Homepage: https://github.com/subuk/vmango
 

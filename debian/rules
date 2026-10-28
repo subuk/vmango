@@ -2,6 +2,8 @@
 
 # output every command that modifies files on the build system.
 export DH_VERBOSE = 1
+export PATH := /usr/lib/go-1.26/bin:$(PATH)
+export GOTOOLCHAIN = local
 
 
 # see FEATURE AREAS in dpkg-buildflags(1)

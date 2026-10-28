@@ -54,6 +54,12 @@ vendor:
 test: web/assets_generated.go
 	$(GO) test ./...
 
+# Both build services use master, but Launchpad hosts a separate Git repository.
+.PHONY: publish-devel
+publish-devel:
+	git push origin refs/heads/master:refs/heads/master
+	git push lp refs/heads/master:refs/heads/master
+
 .PHONY: clean
 clean:
 	rm -rf web/assets_generated.go bin/ *.tar.gz *.tar.hz *.rpm *.deb *_source.buildinfo *_source.changes *_source.ppa.upload *.debian.tar.xz *.dsc *.spec

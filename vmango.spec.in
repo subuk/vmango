@@ -10,7 +10,10 @@ Group: Other
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}.buildroot
 Vendor: subuk
 Requires: genisoimage
-BuildRequires: go >= 1.11
+BuildRequires: go >= 1.26
+BuildRequires: make
+BuildRequires: gcc
+BuildRequires: pkgconfig
 BuildRequires: libvirt-devel
 Requires(pre): shadow-utils
 %{?systemd_requires}
@@ -22,7 +25,12 @@ Requires(pre): shadow-utils
 %setup -q
 
 %build
+export GOTOOLCHAIN=local
 make
+
+%check
+export GOTOOLCHAIN=local
+make test
 
 %install
 make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
