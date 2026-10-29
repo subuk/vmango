@@ -136,7 +136,7 @@ jobs:
           Push-Location $runtime
           try {
             Get-ChildItem *.test.exe | ForEach-Object {
-              & $_.FullName -test.v
+              & $_.FullName '-test.v'
               if ($LASTEXITCODE -ne 0) { throw "Tests failed: $_" }
             }
           } finally { Pop-Location }
