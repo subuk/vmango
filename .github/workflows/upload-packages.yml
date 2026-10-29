@@ -84,24 +84,8 @@ jobs:
   debian-compatibility:
     if: inputs.ppa
     needs: ppa
-    strategy:
-      fail-fast: false
-      matrix:
-        suite: [bookworm, trixie]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Install the Jammy package and test startup on Debian amd64
-        env:
-          PUBLICATION_CHANNEL: ${{ inputs.channel }}
-          VERSION: ${{ inputs.version }}
-          PACKAGE_REVISION: ${{ inputs.revision }}
-          SUITE: ${{ matrix.suite }}
-        run: |
-          docker run --rm --platform linux/amd64 \
-            -e PUBLICATION_CHANNEL -e VERSION -e PACKAGE_REVISION \
-            -v "$PWD:/src:ro" "debian:$SUITE-slim" \
-            bash /src/scripts/release/test-debian-compatibility.sh
+    uses: ./.github/workflows/test-debian.yml
+    with:
+      channel: ${{ inputs.channel }}
+      version: ${{ inputs.version }}
+      revision: ${{ inputs.revision }}
