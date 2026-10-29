@@ -14,6 +14,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  package-checks:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test package publication status handling
+        run: python3 -m unittest discover -s scripts/release -p 'test_*.py'
+      - id: version
+        run: echo "version=$(sed -n 's/^VERSION = //p' Makefile)" >> "$GITHUB_OUTPUT"
+  package-sources:
+    needs: package-checks
+    uses: ./.github/workflows/package-sources.yml
+    with:
+      source_ref: ${{ github.sha }}
+      version: ${{ needs.package-checks.outputs.version }}
   build:
     uses: ./.github/workflows/build.yml
     with:

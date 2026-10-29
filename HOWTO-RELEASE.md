@@ -95,7 +95,8 @@ packages receive updates. The Windows commands are in
 
 ## Distribution packages and development publication
 
-GitHub binary releases do not publish stable COPR or PPA packages. Build RPMs
+GitHub binary releases can optionally publish stable COPR and PPA packages using
+the jobs described below. To build packages locally, build RPMs
 with `make rpm` in a supported RPM environment and DEBs with
 `./dockerbuild.sh ubuntu-2404 make deb` or `make deb` in a suitable Linux
 environment. Check current service configuration before publishing stable
@@ -111,3 +112,108 @@ It pushes committed local `master` to GitHub `origin`, then to the separately
 hosted Launchpad `lp` repository without force. Check both push results. COPR
 watches GitHub `master`; Launchpad's `master-daily` recipe reads `lp` and builds
 daily or on request. Neither process publishes a stable release automatically.
+
+
+## Stable COPR and Launchpad publication
+
+The release form has `publish_copr` and `publish_ppa` switches, disabled by
+default until credentials and repository settings are ready. After publishing
+GitHub assets, selected jobs build distribution source packages from the exact
+published tag and upload them to `subuk/vmango` and `ppa:subuk/vmango`.
+Only stable `X.Y.Z` versions are accepted. The Makefile and package changelogs
+must already contain that version; the workflow does not edit release commits.
+
+`Publish distribution packages` can also be run directly for an existing
+published release. Select either destination and a positive package `revision`
+(default `1`). This does not recreate the GitHub release. Use this workflow or
+**Re-run failed jobs** after a destination fails. Accepted versions are monitored
+without uploading again; inspect remote logs before increasing `revision` for
+a new package attempt. Never move the release tag to correct package contents:
+code/packaging changes require a new release commit and version.
+
+The source artifact contains an SRPM and Ubuntu source packages for Jammy,
+Noble and Resolute. Debian versions are `VERSION-REVISIONppa1~SERIES`; source RPM
+versions are `VERSION-REVISION.release`, with binary dist tags resolved by COPR.
+CI builds these source artifacts without any publication credentials. It does
+not establish that all remote distribution builds work.
+
+COPR uses only the explicit `COPR_CHROOTS` list. Launchpad uses architectures
+enabled in the PPA. Publication jobs wait up to four hours: COPR must report
+success, and Launchpad must complete every scheduled architecture build and
+publish its `vmango` binary. Upload acceptance alone is not success. A timeout
+fails the job but does not cancel remote builds; rerun to resume checking.
+PPA rejection may only appear in the uploader's email, so inspect that inbox
+if acceptance times out. After an ambiguous COPR upload/network failure, inspect
+the project before rerunning, especially if source metadata is not visible yet.
+Publication across GitHub, COPR and Launchpad is not atomic: a failed destination
+does not roll back successful releases elsewhere.
+
+### Configure GitHub credentials
+
+In [repository Actions secrets](https://github.com/subuk/vmango/settings/secrets/actions),
+add the following **repository secrets**. They are used only by publication jobs,
+never by PR source builds. Do not paste their values into issues or PRs.
+
+| Secret | Value |
+| --- | --- |
+| `COPR_CONFIG` | Complete INI configuration from the COPR API page, including `[copr-cli]`, `login`, `username`, `token`, and `copr_url` |
+| `PPA_GPG_PRIVATE_KEY` | ASCII-armored private signing key registered to the Launchpad uploader |
+| `PPA_GPG_PASSPHRASE` | Passphrase protecting that private key |
+
+Obtain the COPR configuration by signing in as the project owner or a permitted
+builder at <https://copr.fedorainfracloud.org/api/>. Copy the generated
+configuration verbatim. Track its expiration and replace the secret when renewing.
+
+For Launchpad, use a dedicated password-protected signing key whose email is
+verified on the uploader's Launchpad account. The packaging identity currently
+uses `Matvey Kruglov <kubuzzzz@gmail.com>`. On your own machine:
+
+```sh
+gpg --quick-generate-key 'Vmango release CI <kubuzzzz@gmail.com>' rsa4096 sign 1y
+gpg --list-secret-keys --keyid-format LONG
+# Replace FINGERPRINT with the complete fingerprint of this new key.
+gpg --keyserver hkps://keyserver.ubuntu.com --send-keys FINGERPRINT
+```
+
+Register the fingerprint at <https://launchpad.net/~/+editpgpkeys> and complete
+Launchpad's ownership verification. The uploader must have upload access to
+`ppa:subuk/vmango`. Export the private key into a local private file:
+
+```sh
+umask 077
+gpg --armor --output vmango-release-private.asc --export-secret-keys FINGERPRINT
+```
+
+Paste the complete file into `PPA_GPG_PRIVATE_KEY`, put its passphrase in
+`PPA_GPG_PASSPHRASE`, then remove the temporary export after storing it securely.
+This is the uploader's signing key, **not** the PPA repository signing key shown
+on its overview page. GPG material is imported into a temporary runner directory
+and removed after signing. Uploads use `dput` and GPG signatures; no Launchpad
+OAuth token, SSH key or GitHub PAT is required.
+
+In [repository Actions variables](https://github.com/subuk/vmango/settings/variables/actions),
+set:
+
+| Variable | Value |
+| --- | --- |
+| `PPA_GPG_FINGERPRINT` | Full fingerprint of the uploaded signing key |
+| `COPR_CHROOTS` | Space-separated supported chroots enabled in stable `subuk/vmango` |
+
+### Prepare stable repositories before the first upload
+
+On 2026-10-29 the stable COPR project still advertised only `epel-7-x86_64` and
+`epel-8-x86_64`, with bootstrap disabled. Do not copy this obsolete configuration
+into CI. Enable the intended supported chroots in the stable project, configure
+bootstrap/dependencies as needed, and put that exact selection in `COPR_CHROOTS`.
+The development project currently includes EPEL 8/9, RHEL 9/10 and RHEL 10 + EPEL,
+for x86_64/aarch64; these are candidates to validate, not a claim of successful
+stable builds. Each target needs Go >= 1.26. Preserve package signature checks.
+
+For stable PPA, verify Jammy/Noble/Resolute availability, enabled architectures
+and build dependencies, particularly `golang-1.26-go`. Add the appropriate trusted
+compiler PPA dependency where Ubuntu does not provide it. Development recipe
+settings do not automatically configure the stable PPA. The existing
+`master-daily` recipe and `make publish-devel` remain unchanged.
+
+See [COPR submission methods](https://docs.copr.fedorainfracloud.org/user_documentation.html)
+and [Launchpad source upload/signing](https://ubuntu.com/docs/launchpad/user/how-to/packaging/build-deb-packages-in-launchpad/).
