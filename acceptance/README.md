@@ -9,8 +9,8 @@ randomly named `vmango-acceptance-*` storage pool and VM (2 vCPU, 2 GiB RAM,
 
 - Build dependencies from the main README, plus `virsh`, `qemu-img`, `mkisofs`
   and `isoinfo` on PATH.
-- A working local `qemu:///session` connection, QEMU and EFI firmware.
-  macOS requires HVF; Linux requires KVM. Software emulation fails the test.
+- A working local `qemu:///session` connection, QEMU and suitable firmware.
+  macOS requires HVF and EFI; Linux requires KVM (the x86 test uses the backend's default firmware). Software emulation fails the test.
 - An Ubuntu cloud image matching the host architecture, with cloud-init enabled.
 - Enough space for the downloaded image, a converted copy and a cloned VM disk.
   QEMU user networking provides guest networking without a privileged bridge.
@@ -45,8 +45,12 @@ Remote hypervisors are not supported by this harness.
 
 ## What constitutes success
 
-The test logs in through HTTP, loads the creation form, clones the image and
-creates the VM and config drive through Vmango. It checks the generated domain
+The test logs in through HTTP, loads both creation forms, rejects an insufficient
+RAM request before creating a disk, and exercises two catalog IDs referencing
+one source disk. It creates and deletes a VM with initialization disabled, then
+clones the image and
+creates the VM and config drive through Vmango. It checks the image-selected SCSI/virtio-scsi configuration, explicit guest agent
+disablement and presence/absence of the config drive. It checks the generated domain
 uses hardware acceleration, starts it through HTTP and checks libvirt reports
 it running. It then checks the VNC WebSocket proxy's RFB greeting and reads the
 serial WebSocket until cloud-init runs the supplied guest command, verifies the
@@ -58,6 +62,27 @@ HTTP, verifying they disappeared. `poweroff` is Vmango's hard power-off action;
 this does not test graceful shutdown. The suite does not yet test reboot, SSH,
 guest-agent integration, browser interaction, external networking or Linux KVM
 when run on a Mac.
+
+To exercise the OpenStack config drive instead of NoCloud:
+
+```sh
+ACCEPTANCE_INITIALIZATION=openstack ACCEPTANCE_IMAGE=/absolute/path/cloud.img make acceptance
+```
+
+## Running on a shared Linux host
+
+Run the suite locally on the target host, using `qemu:///system` if necessary.
+Supply a separately downloaded test image; do not reuse existing VM disks.
+Build artifacts can be transferred from another Linux build environment; place
+`bin/vmango` and a compiled acceptance test binary in the same project layout,
+and run the test binary with `acceptance/` as its working directory.
+
+Use a dedicated working directory accessible to the libvirt/QEMU account.
+Do not change the host's existing Vmango configuration, pools, networks or VMs.
+Record the exact resources created by each run and only remove those resources.
+Never infer ownership from a prefix alone or perform wildcard cleanup. Inspect
+cleanup on partial failures as well as successful runs. Report Linux/KVM and
+macOS/HVF results separately.
 
 ## Logs and cleanup
 

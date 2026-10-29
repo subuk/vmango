@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"subuk/vmango/catalog"
 	"subuk/vmango/compute"
 	libcompute "subuk/vmango/compute"
 	"subuk/vmango/config"
@@ -42,17 +43,15 @@ func Web(configFilename string) {
 
 	logger.Info().Str("filename", configFilename).Msg("using configuration file")
 
-	volumeMetadata := map[string]libcompute.VolumeMetadata{}
-	for _, image := range cfg.Images {
-		volumeMetadata[image.Path] = libcompute.VolumeMetadata{
-			OsName:    image.OsName,
-			OsVersion: image.OsVersion,
-			OsArch:    libcompute.NewArch(image.OsArch),
-			Protected: image.Protected,
-			Efi:       image.Efi,
-			Hidden:    image.Hidden,
-		}
+	definitions, volumeMetadata, err := cfg.ImageDefinitions()
+	if err != nil {
+		logger.Fatal().Err(err).Msg("invalid image configuration")
 	}
+	imageRepo, err := catalog.NewImageRepository(definitions)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cannot initialize image catalog")
+	}
+	images := compute.NewImageService(imageRepo)
 
 	keyRepo, err := filesystem.NewKeyRepository(util.ExpandHomeDir(cfg.KeyFile), logger.With().Str("component", "key-repository").Logger())
 	if err != nil {
@@ -113,9 +112,9 @@ func Web(configFilename string) {
 	volumes := libcompute.NewVolumeService(volumeRepo)
 	vms := libcompute.NewVirtualMachineService(vmRepo)
 
-	vmanager := libcompute.NewVirtualMachineManager(vms, volumes, epub, vmManSettings)
+	vmanager := libcompute.NewVirtualMachineManager(vms, volumes, epub, vmManSettings, images)
 
-	webenv := web.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager)
+	webenv := web.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager, images)
 	server := http.Server{
 		Addr:    cfg.Web.Listen,
 		Handler: webenv,

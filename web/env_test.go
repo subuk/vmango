@@ -47,7 +47,7 @@ func TestLoginCSRF(t *testing.T) {
 			cfg.Web.BaseUrl = tt.baseURL
 			cfg.Web.SessionSecure = tt.secure
 			cfg.Web.Users = []config.UserWebConfig{{Id: "admin", HashedPassword: string(hash)}}
-			handler := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil)
+			handler := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil)
 			get := httptest.NewRecorder()
 			handler.ServeHTTP(get, httptest.NewRequest(http.MethodGet, tt.requestURL, nil))
 			if get.Code != http.StatusOK {
@@ -71,6 +71,9 @@ func TestLoginCSRF(t *testing.T) {
 				for _, cookie := range post.Result().Cookies() {
 					if cookie.Name == SESSION_NAME {
 						authenticated = true
+						if cookie.SameSite != http.SameSiteLaxMode {
+							t.Fatal("session must work on HTTP without an insecure SameSite=None cookie")
+						}
 					}
 				}
 				if !authenticated {
@@ -88,7 +91,7 @@ type vncTestRepository struct {
 func TestOriginlessRequestStillRequiresAuthentication(t *testing.T) {
 	cfg := config.Default()
 	cfg.Web.SessionSecret = "0123456789abcdef0123456789abcdef"
-	handler := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil)
+	handler := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/machines/node/vm/delete/", nil))
 	if response.Code != http.StatusFound || response.Header().Get("Location") != "/login/" {
@@ -118,7 +121,7 @@ func TestVNCPageAndAssets(t *testing.T) {
 		req.AddCookie(cookie)
 	}
 	handler := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil,
-		compute.NewVirtualMachineService(vncTestRepository{}), nil)
+		compute.NewVirtualMachineService(vncTestRepository{}), nil, nil)
 	page := httptest.NewRecorder()
 	handler.ServeHTTP(page, req)
 	if page.Code != http.StatusOK {

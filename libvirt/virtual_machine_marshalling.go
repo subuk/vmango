@@ -116,6 +116,8 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 		vm.Arch = compute.ArchUnknown
 	case "x86_64":
 		vm.Arch = compute.ArchAmd64
+	case "aarch64":
+		vm.Arch = compute.ArchAarch64
 	}
 
 	switch domainInfo.State {

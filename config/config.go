@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
+	"subuk/vmango/compute"
 	"subuk/vmango/configdrive"
 	"subuk/vmango/util"
 
@@ -49,13 +51,89 @@ type WebConfig struct {
 }
 
 type ImageConfig struct {
+	ID               string `hcl:",key"`
+	Path             string `hcl:"path"`
+	Name             string `hcl:"name"`
+	OsName           string `hcl:"os_name"`
+	OsVersion        string `hcl:"os_version"`
+	OsArch           string `hcl:"os_arch"`
+	Protected        bool   `hcl:"protected"`
+	Hidden           bool   `hcl:"hidden"`
+	Efi              *bool  `hcl:"efi"`
+	Firmware         string `hcl:"firmware"`
+	DiskBus          string `hcl:"disk_bus"`
+	DiskController   string `hcl:"disk_controller"`
+	NICModel         string `hcl:"nic_model"`
+	GuestAgent       *bool  `hcl:"guest_agent"`
+	Initialization   string `hcl:"initialization"`
+	MinimumMemoryMiB int64  `hcl:"minimum_memory_mib"`
+	MinimumDiskGiB   int64  `hcl:"minimum_disk_gib"`
+}
+
+type VolumeConfig struct {
 	Path      string `hcl:",key"`
-	OsName    string `hcl:"os_name"`
-	OsVersion string `hcl:"os_version"`
-	OsArch    string `hcl:"os_arch"`
 	Protected bool   `hcl:"protected"`
-	Efi       bool   `hcl:"efi"`
 	Hidden    bool   `hcl:"hidden"`
+}
+
+// ImageDefinitions converts legacy path labels and new catalog IDs without
+// consulting a node. Policies remain properties of storage paths.
+func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeMetadata, error) {
+	images := []compute.Image{}
+	policies := map[string]compute.VolumeMetadata{}
+	mergePolicy := func(path string, protected, hidden bool) {
+		old := policies[path]
+		policies[path] = compute.VolumeMetadata{Protected: old.Protected || protected, Hidden: old.Hidden || hidden}
+	}
+	seen := map[string]bool{}
+	for _, entry := range c.Images {
+		path := entry.Path
+		if path == "" {
+			path = entry.ID
+		}
+		mergePolicy(path, entry.Protected, entry.Hidden)
+		// Legacy image blocks without OS metadata were ordinary volume policies.
+		if entry.Path == "" && entry.OsName == "" {
+			continue
+		}
+		firmware := entry.Firmware
+		if entry.Efi != nil {
+			legacy := "auto"
+			if *entry.Efi {
+				legacy = "efi"
+			}
+			if firmware != "" && firmware != legacy {
+				return nil, nil, fmt.Errorf("image %q: conflicting efi and firmware", entry.ID)
+			}
+			firmware = legacy
+		}
+		bus := compute.NewDeviceBus(entry.DiskBus)
+		if entry.DiskBus != "" && bus == compute.DeviceBusUnknown {
+			return nil, nil, fmt.Errorf("image %q: invalid disk_bus", entry.ID)
+		}
+		if entry.MinimumMemoryMiB < 0 || entry.MinimumDiskGiB < 0 || entry.MinimumMemoryMiB > math.MaxUint64/(1<<20) || entry.MinimumDiskGiB > math.MaxUint64/(1<<30) {
+			return nil, nil, fmt.Errorf("image %q: resource minimum overflows", entry.ID)
+		}
+		name := entry.Name
+		if name == "" {
+			name = entry.ID
+		}
+		i := compute.Image{ID: entry.ID, Name: name, OSName: entry.OsName, OSVersion: entry.OsVersion, Arch: compute.NewArch(entry.OsArch), SourcePath: path,
+			Defaults:           compute.ImageDefaults{Firmware: firmware, DiskBus: bus, DiskController: entry.DiskController, NICModel: entry.NICModel, GuestAgent: entry.GuestAgent, Initialization: entry.Initialization},
+			MinimumMemoryBytes: uint64(entry.MinimumMemoryMiB) << 20, MinimumDiskBytes: uint64(entry.MinimumDiskGiB) << 30}
+		if err := i.Validate(); err != nil {
+			return nil, nil, err
+		}
+		if seen[i.ID] {
+			return nil, nil, fmt.Errorf("duplicate image identifier %q", i.ID)
+		}
+		seen[i.ID] = true
+		images = append(images, i)
+	}
+	for _, v := range c.Volumes {
+		mergePolicy(v.Path, v.Protected, v.Hidden)
+	}
+	return images, policies, nil
 }
 
 type SubscribeConfig struct {
@@ -78,6 +156,7 @@ type LibvirtConfig struct {
 type Config struct {
 	LogLevel   string            `hcl:"log_level"`
 	Images     []ImageConfig     `hcl:"image"`
+	Volumes    []VolumeConfig    `hcl:"volume"`
 	Bridges    []string          `hcl:"bridges"`
 	Libvirts   []LibvirtConfig   `hcl:"libvirt"`
 	KeyFile    string            `hcl:"key_file"`
@@ -164,6 +243,9 @@ func Parse(filename string) (*Config, error) {
 	}
 	if len(config.Web.Oidc.Scopes) <= 0 {
 		config.Web.Oidc.Scopes = []string{"openid", "profile", "email"}
+	}
+	if _, _, err := config.ImageDefinitions(); err != nil {
+		return nil, err
 	}
 	return config, nil
 }

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -54,12 +55,17 @@ func (env *Environ) VirtualMachineDetail(rw http.ResponseWriter, req *http.Reque
 
 	attachedVolumes := map[string]*compute.Volume{}
 	availableVolumes := []*compute.Volume{}
+	sourcePaths, err := env.images.SourcePaths()
+	if err != nil {
+		env.error(rw, req, err, "cannot list images", http.StatusInternalServerError)
+		return
+	}
 	for _, volume := range volumes {
 		if attachmentInfo := vm.AttachmentInfo(volume.Path); attachmentInfo != nil {
 			attachedVolumes[attachmentInfo.Path] = volume
 			continue
 		}
-		if volume.AttachedTo == "" && volume.Metadata.OsName == "" {
+		if volume.AttachedTo == "" && !sourcePaths[volume.Path] {
 			availableVolumes = append(availableVolumes, volume)
 			continue
 		}
@@ -134,7 +140,7 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		NodeId           string
 		Nodes            []*compute.Node
 		AvailableVolumes []*compute.Volume
-		Images           []*compute.Volume
+		Images           []compute.Image
 		Pools            []*compute.VolumePool
 		Networks         []*compute.Network
 		Keys             []*compute.Key
@@ -184,15 +190,20 @@ func (env *Environ) VirtualMachineAddFormShow(rw http.ResponseWriter, req *http.
 		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
 		return
 	}
+	data.Images, err = env.images.Available(selectedNode.Id, selectedArch, volumes)
+	if err != nil {
+		env.error(rw, req, err, "cannot list images", http.StatusInternalServerError)
+		return
+	}
+	sourcePaths, err := env.images.SourcePaths()
+	if err != nil {
+		env.error(rw, req, err, "cannot list images", http.StatusInternalServerError)
+		return
+	}
 	for _, volume := range volumes {
-		if volume.AttachedTo != "" {
-			continue
+		if volume.AttachedTo == "" && !sourcePaths[volume.Path] {
+			data.AvailableVolumes = append(data.AvailableVolumes, volume)
 		}
-		if volume.Metadata.OsName != "" && volume.Metadata.OsArch == selectedArch {
-			data.Images = append(data.Images, volume)
-			continue
-		}
-		data.AvailableVolumes = append(data.AvailableVolumes, volume)
 	}
 
 	pools, err := env.volpools.List(compute.VolumePoolListOptions{NodeIds: []string{selectedNode.Id}})
@@ -231,23 +242,40 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// Parallel form fields describe rows; reject incomplete rows before indexing.
+	for _, group := range [][]string{
+		{"CloneImageID", "CloneVolumeNewName", "CloneVolumeNewPool", "CloneVolumeNewFormat", "CloneVolumeNewSizeValue", "CloneVolumeNewSizeUnit", "CloneVolumeDeviceType", "CloneVolumeDeviceBus"},
+		{"CreateVolumeName", "CreateVolumePool", "CreateVolumeFormat", "CreateVolumeSizeValue", "CreateVolumeSizeUnit", "CreateVolumeDeviceType", "CreateVolumeDeviceBus"},
+		{"AttachVolumePath", "AttachVolumeDeviceType", "AttachVolumeDeviceBus"},
+		{"InterfaceNetwork", "InterfaceMac", "InterfaceModel", "InterfaceAccessVlan"},
+	} {
+		for _, key := range group[1:] {
+			if len(req.Form[key]) != len(req.Form[group[0]]) {
+				http.Error(rw, "incomplete creation form", http.StatusBadRequest)
+				return
+			}
+		}
+	}
+	if len(req.Form["CloneVolumeOriginalPath"]) > 0 {
+		http.Error(rw, "select an image identifier instead of a source path", http.StatusBadRequest)
+		return
+	}
+	for _, id := range req.Form["CloneImageID"] {
+		if id == "" {
+			http.Error(rw, "select an image", http.StatusBadRequest)
+			return
+		}
+	}
+	for _, bus := range req.Form["CloneVolumeDeviceBus"] {
+		if bus != "" && compute.NewDeviceBus(bus) == compute.DeviceBusUnknown {
+			http.Error(rw, "invalid disk bus", http.StatusBadRequest)
+			return
+		}
+	}
 	vm := &compute.VirtualMachine{
 		Id:     req.Form.Get("Name"),
 		NodeId: req.Form.Get("NodeId"),
 		Arch:   compute.NewArch(req.Form.Get("Arch")),
-	}
-
-	volumes, err := env.volumes.List(compute.VolumeListOptions{NodeIds: []string{vm.NodeId}})
-	if err != nil {
-		env.error(rw, req, err, "cannot list volumes", http.StatusInternalServerError)
-		return
-	}
-	volumeMetadata := map[string]*compute.VolumeMetadata{}
-	for _, volume := range volumes {
-		if volume.Metadata.OsName == "" {
-			continue
-		}
-		volumeMetadata[volume.Path] = &volume.Metadata
 	}
 
 	vcpus, err := strconv.ParseInt(req.Form.Get("Vcpus"), 10, 16)
@@ -296,7 +324,7 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 		newVols = append(newVols, volume)
 	}
 	cloneVols := []compute.VirtualMachineManagerClonedVolumeParams{}
-	cloneVolsCount := len(req.Form["CloneVolumeOriginalPath"])
+	cloneVolsCount := len(req.Form["CloneImageID"])
 	for idx := 0; idx < cloneVolsCount; idx++ {
 		var sizeValue uint64
 		if req.Form["CloneVolumeNewSizeValue"][idx] != "" {
@@ -309,25 +337,18 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 			sizeValue = size
 		}
 		newName := req.Form["CloneVolumeNewName"][idx]
-		if newName == "__magic_root_suffix__" {
-			newName = fmt.Sprintf("%s_root", vm.Id)
-		}
+
 		volume := compute.VirtualMachineManagerClonedVolumeParams{
-			OriginalPath: req.Form["CloneVolumeOriginalPath"][idx],
-			NewName:      newName,
-			NewPool:      req.Form["CloneVolumeNewPool"][idx],
-			NewFormat:    compute.NewVolumeFormat(req.Form["CloneVolumeNewFormat"][idx]),
-			NewSize:      compute.NewSize(sizeValue, compute.NewSizeUnit(req.Form["CloneVolumeNewSizeUnit"][idx])),
-			DeviceType:   compute.NewDeviceType(req.Form["CloneVolumeDeviceType"][idx]),
-			DeviceBus:    compute.NewDeviceBus(req.Form["CloneVolumeDeviceBus"][idx]),
+			ImageID:    req.Form["CloneImageID"][idx],
+			NewName:    newName,
+			NewPool:    req.Form["CloneVolumeNewPool"][idx],
+			NewFormat:  compute.NewVolumeFormat(req.Form["CloneVolumeNewFormat"][idx]),
+			NewSize:    compute.NewSize(sizeValue, compute.NewSizeUnit(req.Form["CloneVolumeNewSizeUnit"][idx])),
+			DeviceType: compute.NewDeviceType(req.Form["CloneVolumeDeviceType"][idx]),
+			DeviceBus:  compute.NewDeviceBus(req.Form["CloneVolumeDeviceBus"][idx]),
 		}
 		cloneVols = append(cloneVols, volume)
-		volumeMd := volumeMetadata[volume.OriginalPath]
-		if req.Form["CloneVolumeNewName"][idx] == "__magic_root_suffix__" && volumeMd != nil {
-			if volumeMd.Efi {
-				vm.Firmware = "efi"
-			}
-		}
+
 	}
 	attachedVols := len(req.Form["AttachVolumePath"])
 	for idx := 0; idx < attachedVols; idx++ {
@@ -362,7 +383,16 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 
 	vm.VCpus = int(vcpus)
 	vm.Memory = compute.NewSize(memoryValue, memoryUnit)
-	vm.GuestAgent = req.Form.Get("GuestAgent") == "true"
+	vm.GuestAgent = req.Form.Get("GuestAgent") != "false"
+	overrides := compute.ImageDefaults{}
+	if raw := req.Form.Get("GuestAgent"); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			http.Error(rw, "invalid guest agent value", http.StatusBadRequest)
+			return
+		}
+		overrides.GuestAgent = &value
+	}
 	vm.Hugepages = req.Form.Get("Hugepages") == "true"
 	vm.Graphic = compute.VirtualMachineGraphic{
 		Type: graphicType,
@@ -383,9 +413,13 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 	start := req.Form.Get("Start") == "true"
 	vm.Autostart = start
 
-	if err := env.vmanager.Create(vm, cloneVols, newVols, start); err != nil {
+	if err := env.vmanager.CreateWithImageDefaults(vm, cloneVols, newVols, start, overrides); err != nil {
 		env.logger.Debug().Interface("vm", vm).Interface("cloneVols", cloneVols).Interface("newVols", newVols).Msg("vm create data")
-		env.error(rw, req, err, "cannot create vm", http.StatusInternalServerError)
+		status := http.StatusInternalServerError
+		if errors.Is(err, compute.ErrInvalidImageRequest) {
+			status = http.StatusBadRequest
+		}
+		env.error(rw, req, err, "cannot create vm", status)
 		return
 	}
 

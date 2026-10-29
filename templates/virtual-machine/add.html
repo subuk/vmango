@@ -18,7 +18,7 @@
           <form class="JS-ReactiveForm" method="post" action="">
             <input type="hidden" name="GraphicType" value="none">
             <input type="hidden" name="VideoModel" value="none">
-            <input type="hidden" name="GuestAgent" value="true">
+            <input type="hidden" name="GuestAgent" value="">
             <div class="form-group row">
               <div class="col-md-3">
                 <label>Node</label>
@@ -62,7 +62,7 @@
 
             <div class="form-group row">
               <input type="hidden" name="CloneVolumeDeviceType" value="disk">
-              <input type="hidden" name="CloneVolumeDeviceBus" value="virtio">
+              <input type="hidden" name="CloneVolumeDeviceBus" value="">
               <input type="hidden" name="CloneVolumeNewName" value="__magic_root_suffix__">
               <div class="col-md-4">
                 <label>Root Volume Pool</label>
@@ -89,14 +89,9 @@
               </div>
               <div class="col-md-4">
                 <label>Source Image</label>
-                <select required="required" class="custom-select" name="CloneVolumeOriginalPath">
+                <select required="required" class="custom-select" name="CloneImageID">
                   {{ range .Images }}
-                  {{ if eq .Metadata.OsName "" }}
-                  <option value="{{ .Path }}">{{ .Path }}</option>
-                  {{ else }}
-                  <option value="{{ .Path }}">{{ .Metadata.OsName }} {{ .Metadata.OsVersion }} ({{ .Metadata.OsArch }}{{ if .Metadata.Efi }}, EFI{{ else }}, BIOS{{ end }})
-                  </option>
-                  {{ end }}
+                  <option value="{{ .ID }}">{{ .Name }} — {{ .OSName }} {{ .OSVersion }} ({{ .Arch }})</option>
                   {{ end }}
                 </select>
               </div>
@@ -110,7 +105,7 @@
             </div>
 
             <div class="form-group row">
-              <input type="hidden" name="InterfaceModel" value="virtio">
+              <input type="hidden" name="InterfaceModel" value="">
               <input type="hidden" name="InterfaceAccessVlan" value="">
 
               <div class="col-md-4">

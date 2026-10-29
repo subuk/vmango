@@ -30,6 +30,7 @@ type VolumeListOptions struct {
 }
 
 type VolumeRepository interface {
+	ValidateCreate(params VolumeCreateParams) error
 	Get(path, node string) (*Volume, error)
 	Create(params VolumeCreateParams) (*Volume, error)
 	Clone(params VolumeCloneParams) (*Volume, error)

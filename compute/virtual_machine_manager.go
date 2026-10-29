@@ -17,6 +17,7 @@ type VirtualMachineManagerNodeSettings struct {
 }
 
 type VirtualMachineManagerClonedVolumeParams struct {
+	ImageID      string
 	OriginalPath string
 	NewName      string
 	NewPool      string
@@ -45,14 +46,16 @@ type VirtualMachineManagerCreateParams struct {
 }
 
 type VirtualMachineManager struct {
+	images   *ImageService
 	vms      *VirtualMachineService
 	volumes  *VolumeService
 	settings map[string]VirtualMachineManagerNodeSettings
 	epub     EventPublisher
 }
 
-func NewVirtualMachineManager(vms *VirtualMachineService, volumes *VolumeService, epub EventPublisher, settings map[string]VirtualMachineManagerNodeSettings) *VirtualMachineManager {
+func NewVirtualMachineManager(vms *VirtualMachineService, volumes *VolumeService, epub EventPublisher, settings map[string]VirtualMachineManagerNodeSettings, images *ImageService) *VirtualMachineManager {
 	return &VirtualMachineManager{
+		images:   images,
 		vms:      vms,
 		volumes:  volumes,
 		epub:     epub,
@@ -61,6 +64,15 @@ func NewVirtualMachineManager(vms *VirtualMachineService, volumes *VolumeService
 }
 
 func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool) error {
+	return manager.CreateWithImageDefaults(vm, cloneVols, newVols, start, ImageDefaults{})
+}
+
+func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool, overrides ImageDefaults) error {
+	prepared, clones, err := manager.PrepareImages(vm, cloneVols, newVols, overrides)
+	if err != nil {
+		return err
+	}
+	vm, cloneVols = prepared, clones
 	for _, p := range cloneVols {
 		params := VolumeCloneParams{
 			NodeId:       vm.NodeId,
@@ -105,10 +117,16 @@ func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []Vir
 	}
 	settings := manager.settings[vm.NodeId]
 	if vm.Config != nil {
-		cdFile, err := manager.generateConfigDrive(vm.Config, settings.CdFormat)
+		format := settings.CdFormat
+		if vm.Config.Initialization != "" {
+			format = configdrive.NewFormat(vm.Config.Initialization)
+		}
+		cdFile, err := manager.generateConfigDrive(vm.Config, format)
 		if err != nil {
 			return util.NewError(err, "cannot generate configdrive")
 		}
+		defer os.Remove(cdFile.Name())
+		defer cdFile.Close()
 		cdLen, err := cdFile.Seek(0, io.SeekEnd)
 		if err != nil {
 			return util.NewError(err, "cannot get configdrive length")

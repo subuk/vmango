@@ -33,9 +33,10 @@ type VirtualMachineCpuPin struct {
 }
 
 type VirtualMachineConfig struct {
-	Hostname string
-	Keys     []*Key
-	Userdata []byte
+	Initialization string
+	Hostname       string
+	Keys           []*Key
+	Userdata       []byte
 }
 
 type VirtualMachineGraphic struct {
@@ -49,22 +50,23 @@ func (g VirtualMachineGraphic) Vnc() bool {
 }
 
 type VirtualMachine struct {
-	Id         string
-	Firmware   string
-	NodeId     string
-	VCpus      int
-	Arch       Arch
-	State      VirtualMachineState
-	Memory     Size
-	Interfaces []*VirtualMachineAttachedInterface
-	Volumes    []*VirtualMachineAttachedVolume
-	Config     *VirtualMachineConfig
-	Cpupin     *VirtualMachineCpuPin
-	GuestAgent bool
-	Autostart  bool
-	Graphic    VirtualMachineGraphic
-	VideoModel VideoModel
-	Hugepages  bool
+	Id             string
+	Firmware       string
+	DiskController string
+	NodeId         string
+	VCpus          int
+	Arch           Arch
+	State          VirtualMachineState
+	Memory         Size
+	Interfaces     []*VirtualMachineAttachedInterface
+	Volumes        []*VirtualMachineAttachedVolume
+	Config         *VirtualMachineConfig
+	Cpupin         *VirtualMachineCpuPin
+	GuestAgent     bool
+	Autostart      bool
+	Graphic        VirtualMachineGraphic
+	VideoModel     VideoModel
+	Hugepages      bool
 }
 
 func (vm *VirtualMachine) AttachmentInfo(path string) *VirtualMachineAttachedVolume {

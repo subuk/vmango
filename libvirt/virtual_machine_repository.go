@@ -201,6 +201,10 @@ func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxm
 		}
 		ifaceNum++
 		ifaceName := fmt.Sprintf("vmngmcos%d", ifaceNum)
+		deviceModel := "virtio-net-device"
+		if virDomainConfig.OS.Type.Arch == "x86_64" {
+			deviceModel = "virtio-net-pci"
+		}
 		switch attachedIface.NetworkName {
 		default:
 			panic(fmt.Errorf("unhandled network type %s", attachedIface.NetworkName))
@@ -208,12 +212,12 @@ func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxm
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-netdev"})
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "socket,id=" + ifaceName + ",fd=3"})
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-device"})
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "virtio-net-device,netdev=" + ifaceName + ",mac=" + attachedIface.Mac})
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: deviceModel + ",netdev=" + ifaceName + ",mac=" + attachedIface.Mac})
 		case "qemu-usernet":
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-netdev"})
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "user,id=" + ifaceName})
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-device"})
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "virtio-net-device,netdev=" + ifaceName + ",mac=" + attachedIface.Mac})
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: deviceModel + ",netdev=" + ifaceName + ",mac=" + attachedIface.Mac})
 		}
 
 		return nil
@@ -425,6 +429,9 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 	virDomainConfig.OnReboot = "restart"
 	virDomainConfig.OnCrash = "destroy"
 	virDomainConfig.Devices = &libvirtxml.DomainDeviceList{Emulator: domCapsConfig.Path}
+	if vm.DiskController != "" {
+		virDomainConfig.Devices.Controllers = append(virDomainConfig.Devices.Controllers, libvirtxml.DomainController{Type: "scsi", Model: vm.DiskController})
+	}
 	virDomainConfig.Devices.Consoles = append(virDomainConfig.Devices.Consoles, libvirtxml.DomainConsole{})
 
 	return virDomainConfig

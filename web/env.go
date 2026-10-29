@@ -59,6 +59,7 @@ type Environ struct {
 	nodes    *libcompute.NodeService
 	volumes  *libcompute.VolumeService
 	vms      *libcompute.VirtualMachineService
+	images   *libcompute.ImageService
 	vmanager *libcompute.VirtualMachineManager
 	ws       *websocket.Upgrader
 	cfg      *config.WebConfig
@@ -152,9 +153,10 @@ func New(
 	volumes *libcompute.VolumeService,
 	vms *libcompute.VirtualMachineService,
 	vmanager *libcompute.VirtualMachineManager,
+	images *libcompute.ImageService,
 ) http.Handler {
 
-	env := &Environ{cfg: &cfg.Web}
+	env := &Environ{cfg: &cfg.Web, images: images}
 	router := mux.NewRouter()
 	renderer := render.New(render.Options{
 		Extensions:    []string{".html"},
@@ -169,6 +171,7 @@ func New(
 	sessionStore := sessions.NewCookieStore([]byte(cfg.Web.SessionSecret))
 	sessionStore.Options.MaxAge = cfg.Web.SessionMaxAge
 	sessionStore.Options.HttpOnly = true
+	sessionStore.Options.SameSite = http.SameSiteLaxMode
 	sessionStore.Options.Secure = cfg.Web.SessionSecure
 	sessionStore.Options.Domain = cfg.Web.SessionDomain
 

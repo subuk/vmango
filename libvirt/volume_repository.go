@@ -1,6 +1,7 @@
 package libvirt
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"subuk/vmango/compute"
@@ -389,6 +390,36 @@ func (repo *VolumeRepository) Upload(path, nodeId string, content io.Reader, siz
 	}
 	if err := stream.Finish(); err != nil {
 		return util.NewError(err, "cannot finalize upload")
+	}
+	return nil
+}
+
+// ValidateCreate checks storage destinations without creating or resizing them.
+func (repo *VolumeRepository) ValidateCreate(p compute.VolumeCreateParams) error {
+	conn, err := repo.pool.Acquire(p.NodeId)
+	if err != nil {
+		return err
+	}
+	defer repo.pool.Release(p.NodeId)
+	pool, err := conn.LookupStoragePoolByName(p.Pool)
+	if err != nil {
+		return err
+	}
+	defer pool.Free()
+	active, err := pool.IsActive()
+	if err != nil {
+		return err
+	}
+	if !active {
+		return fmt.Errorf("destination storage pool is inactive")
+	}
+	volume, err := pool.LookupStorageVolByName(p.Name)
+	if err == nil {
+		volume.Free()
+		return fmt.Errorf("destination volume %q already exists", p.Name)
+	}
+	if !errors.Is(err, libvirt.ERR_NO_STORAGE_VOL) {
+		return err
 	}
 	return nil
 }

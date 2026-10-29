@@ -4,6 +4,7 @@ package acceptance
 
 import (
 	"context"
+	encodingxml "encoding/xml"
 	"fmt"
 	"io"
 	"net"
@@ -49,15 +50,27 @@ func TestLifecycle(t *testing.T) {
 		arch = "aarch64"
 	}
 	expectedType := "kvm"
+	firmware := "auto"
+	initialization := os.Getenv("ACCEPTANCE_INITIALIZATION")
+	if initialization == "" {
+		initialization = "nocloud"
+	}
+	if initialization != "nocloud" && initialization != "openstack" {
+		t.Fatal("ACCEPTANCE_INITIALIZATION must be nocloud or openstack")
+	}
 	if runtime.GOOS == "darwin" {
 		expectedType = "hvf"
+		firmware = "efi"
 	}
 	name := "vmango-acceptance-" + uuid.NewString()
 	root, err := filepath.Abs("../result/" + name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(root, 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(root), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(root, 0755); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("artifacts: %s", root)
@@ -89,11 +102,14 @@ func TestLifecycle(t *testing.T) {
 		t.Fatal("unexpected existing test domain")
 	}
 	poolDir := filepath.Join(root, "pool")
-	if err := os.Mkdir(poolDir, 0700); err != nil {
+	if err := os.Mkdir(poolDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 	// Pool creation fails on collisions. Cleanup is limited to this random name.
 	mustVir("pool-define-as", name, "dir", "--target", poolDir)
+	poolUUID := strings.TrimSpace(mustVir("pool-uuid", name))
+	domainUUID := ""
+	write(filepath.Join(root, "resources.txt"), "pool="+name+"\npool_uuid="+poolUUID+"\npool_path="+poolDir+"\n")
 	t.Cleanup(func() {
 		// A connection error is not evidence that the domain is gone. Never
 		// remove its storage unless domain absence/undefine was confirmed.
@@ -117,9 +133,24 @@ func TestLifecycle(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(root, "domain.xml"), []byte(xml), 0600); err != nil {
 				t.Error(err)
 			}
-			if !strings.Contains(xml, poolDir) {
-				t.Errorf("refusing cleanup: domain doesn't reference test pool")
+			var ownership struct {
+				UUID  string `xml:"uuid"`
+				Disks []struct {
+					Source struct {
+						File string `xml:"file,attr"`
+						Dev  string `xml:"dev,attr"`
+					} `xml:"source"`
+				} `xml:"devices>disk"`
+			}
+			if err := encodingxml.Unmarshal([]byte(xml), &ownership); err != nil || len(ownership.Disks) == 0 || (domainUUID != "" && domainUUID != ownership.UUID) {
+				t.Errorf("refusing cleanup: cannot verify test domain ownership")
 				return
+			}
+			for _, disk := range ownership.Disks {
+				if disk.Source.Dev != "" || !strings.HasPrefix(disk.Source.File, poolDir+string(os.PathSeparator)) {
+					t.Errorf("refusing cleanup: domain has storage outside the test pool")
+					return
+				}
 			}
 			state, err := vir("domstate", name)
 			if err != nil {
@@ -136,6 +167,11 @@ func TestLifecycle(t *testing.T) {
 				t.Errorf("cleanup domain: %s %v", out, err)
 				return
 			}
+		}
+		currentUUID, err := vir("pool-uuid", name)
+		if err != nil || strings.TrimSpace(currentUUID) != poolUUID {
+			t.Errorf("refusing cleanup: pool identity changed")
+			return
 		}
 		vir("pool-destroy", name)
 		if out, err := vir("pool-undefine", name); err != nil {
@@ -171,13 +207,14 @@ libvirt "acceptance" {
  config_drive_pool = %q
  qcow_prealloc_metadata = false
 }
-image %q { os_name = "Ubuntu" os_arch = %q efi = true protected = true }
+image "boot" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q protected = true disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false initialization = %q minimum_memory_mib = 1024 minimum_disk_gib = 8 }
+image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q initialization = "none" }
 web {
  listen = %q
  session_secret = %q
  user "acceptance" { hashed_password = %q }
 }
-`, filepath.Join(root, "keys"), uri, name, base, arch, address, uuid.NewString(), string(hash)))
+`, filepath.Join(root, "keys"), uri, name, base, arch, firmware, initialization, base, arch, firmware, address, uuid.NewString(), string(hash)))
 	log, err := os.Create(filepath.Join(root, "vmango.log"))
 	if err != nil {
 		t.Fatal(err)
@@ -241,21 +278,48 @@ web {
 	}
 	request("/login/", url.Values{"Username": {"acceptance"}, "Password": {password}}, 302)
 	request("/machines/add/?node=acceptance&arch="+arch, nil, 200)
+	request("/machines/add/?node=acceptance&mode=advanced&arch="+arch, nil, 200)
 	marker := "VMANGO_BOOT_OK_" + uuid.NewString()
 	userdata := fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, 'test \"$(hostname)\" = %s && echo %s > /dev/console']\n", name, marker)
-	request("/machines/add/", url.Values{
+	values := url.Values{
 		"Name": {name}, "NodeId": {"acceptance"}, "Arch": {arch}, "Vcpus": {"2"}, "MemoryValue": {"2"}, "MemoryUnit": {"G"},
 		"GraphicType": {"vnc"}, "VideoModel": {"none"}, "Userdata": {userdata},
-		"CloneVolumeOriginalPath": {base}, "CloneVolumeNewName": {"__magic_root_suffix__"}, "CloneVolumeNewPool": {name},
+		"CloneImageID": {"boot"}, "CloneVolumeNewName": {"__magic_root_suffix__"}, "CloneVolumeNewPool": {name},
 		"CloneVolumeNewFormat": {"qcow2"}, "CloneVolumeNewSizeValue": {"8"}, "CloneVolumeNewSizeUnit": {"G"},
-		"CloneVolumeDeviceType": {"disk"}, "CloneVolumeDeviceBus": {"virtio"},
-		"InterfaceNetwork": {"qemu-usernet"}, "InterfaceMac": {""}, "InterfaceModel": {"virtio"}, "InterfaceAccessVlan": {""},
-	}, 302)
+		"CloneVolumeDeviceType": {"disk"}, "CloneVolumeDeviceBus": {""},
+		"InterfaceNetwork": {"qemu-usernet"}, "InterfaceMac": {""}, "InterfaceModel": {""}, "InterfaceAccessVlan": {""},
+	}
+	// Resource validation must fail without leaving any destination disk.
+	values.Set("MemoryValue", "512")
+	values.Set("MemoryUnit", "M")
+	request("/machines/add/", values, 400)
+	if _, err := os.Stat(filepath.Join(poolDir, name+"_root")); !os.IsNotExist(err) {
+		t.Fatal("invalid request created a disk")
+	}
+	values.Set("MemoryValue", "2")
+	values.Set("MemoryUnit", "G")
+	// The second catalog ID uses the same source with independent defaults.
+	values.Set("CloneImageID", "no-init")
+	request("/machines/add/", values, 302)
+	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
+	noInitXML := mustVir("dumpxml", name)
+	if strings.Contains(noInitXML, "_config.iso") || !strings.Contains(noInitXML, "org.qemu.guest_agent.0") {
+		t.Fatal("no-init alias defaults were not applied")
+	}
+	request("/machines/acceptance/"+name+"/delete/", url.Values{"DeleteVolumes": {"true"}}, 302)
+	values.Set("CloneImageID", "boot")
+	domainUUID = ""
+	request("/machines/add/", values, 302)
+	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
+	write(filepath.Join(root, "resources.txt"), "pool="+name+"\npool_uuid="+poolUUID+"\npool_path="+poolDir+"\nvm_uuid="+domainUUID+"\n")
 	path := "/machines/acceptance/" + name + "/"
 	xml := mustVir("dumpxml", name)
 	write(filepath.Join(root, "domain.xml"), xml)
 	if !strings.Contains(xml, "type='"+expectedType+"'") {
 		t.Fatalf("expected hardware accelerator %s; see domain.xml", expectedType)
+	}
+	if !strings.Contains(xml, "virtio-scsi") || strings.Contains(xml, "org.qemu.guest_agent.0") || !strings.Contains(xml, "_config.iso") {
+		t.Fatal("image launch defaults did not reach domain XML")
 	}
 	request(path, nil, 200)
 	t.Log("created VM and cloud-init disk through HTTP; starting guest")

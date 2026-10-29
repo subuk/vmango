@@ -7,6 +7,8 @@ type VirtualMachineListOptions struct {
 }
 
 type VirtualMachineRepository interface {
+	ValidateNew(vm *VirtualMachine) error
+	Capabilities(node string, arch Arch) (VirtualMachineCapabilities, error)
 	List(options VirtualMachineListOptions) ([]*VirtualMachine, error)
 	Get(id, node string) (*VirtualMachine, error)
 	Save(vm *VirtualMachine) error
@@ -41,4 +43,17 @@ func (service *VirtualMachineService) Action(id string, node, action string) err
 	case "start":
 		return service.VirtualMachineRepository.Start(id, node)
 	}
+}
+
+// VirtualMachineCapabilities exposes supported launch options without backend XML.
+type VirtualMachineCapabilities struct {
+	Arch            Arch
+	MaxVCPUs        uint
+	Firmwares       []string
+	DiskBuses       []DeviceBus
+	NICModels       []string
+	NetworkModels   map[string][]string
+	DiskControllers []string
+	Graphics        []GraphicType
+	VideoModels     []VideoModel
 }

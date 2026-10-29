@@ -5,12 +5,8 @@ import (
 )
 
 type VolumeMetadata struct {
-	OsName    string
-	OsVersion string
-	OsArch    Arch
 	Protected bool
 	Hidden    bool
-	Efi       bool
 }
 
 type Volume struct {

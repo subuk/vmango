@@ -145,17 +145,12 @@
                         </select>
                       </td>
                       <td>
-                        <select required="required" class="form-control" name="CloneVolumeOriginalPath">
+                        <select required="required" class="form-control" name="CloneImageID">
                           <option value="">- Source Image -</option>
                           {{ range .Images }}
-                          {{ if eq .Metadata.OsName "" }}
-                          <option value="{{ .Path }}">{{ .Path }}</option>
-                          {{ else }}
-                          <option value="{{ .Path }}">{{ .Metadata.OsName }} {{ .Metadata.OsVersion }} ({{ .Metadata.OsArch }})
-                          </option>
-                          {{ end }}
-                          {{ end }}
-                        </select>
+                  <option value="{{ .ID }}">{{ .Name }} — {{ .OSName }} {{ .OSVersion }} ({{ .Arch }})</option>
+                  {{ end }}
+                </select>
                       </td>
                       <td style="max-width: 150px;">
                         <div class="input-group">
@@ -185,7 +180,8 @@
                         </select>
                       </td>
                       <td>
-                        <select required="required" class="form-control" name="CloneVolumeDeviceBus">
+                        <select class="form-control" name="CloneVolumeDeviceBus">
+ <option value="">Image default</option>
                           {{ range .DeviceBuses }}
                           <option value="{{ . }}">{{ . }}</option>
                           {{ end }}
@@ -256,7 +252,8 @@
                         </select>
                       </td>
                       <td>
-                        <select required="required" class="form-control" name="InterfaceModel">
+                        <select class="form-control" name="InterfaceModel">
+ <option value="">Image default</option>
                           {{ range .InterfaceModels }}
                           <option value="{{ . }}">{{ . }}</option>
                           {{ end }}
@@ -306,10 +303,12 @@
 
             <div class="form-group row">
               <div class="col-md-12">
-                <div class="custom-control custom-checkbox">
-                  <input id="GuestAgent" name="GuestAgent" value="true" class="custom-control-input" type="checkbox" checked />
-                  <label class="custom-control-label" for="GuestAgent">Guest Agent</label>
-                </div>
+                <label for="GuestAgent">Guest Agent</label>
+                <select id="GuestAgent" name="GuestAgent" class="custom-select w-auto mb-2">
+                  <option value="">Image default</option>
+                  <option value="true">Enabled</option>
+                  <option value="false">Disabled</option>
+                </select>
                 <div class="custom-control custom-checkbox">
                   <input id="start" name="Start" value="true" class="custom-control-input" type="checkbox" checked />
                   <label class="custom-control-label" for="start">Start immediately after creation</label>
