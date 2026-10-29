@@ -35,17 +35,17 @@ jobs:
       sha: ${{ steps.source.outputs.sha }}
       version: ${{ steps.source.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.source_ref }}
-          persist-credentials: false
       - name: Resolve the exact source and unique test version
         id: source
         env:
           BASE_VERSION: ${{ inputs.version }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          sha=$(git rev-parse HEAD)
+          sha=$(gh api "repos/$GH_REPO/commits/$SOURCE_REF" --jq .sha)
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "version=$BASE_VERSION~test.$GITHUB_RUN_ID.g$sha" >> "$GITHUB_OUTPUT"
   sources:
