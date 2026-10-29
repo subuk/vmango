@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"subuk/vmango/compute"
-	"subuk/vmango/util"
 
 	libvirt "libvirt.org/go/libvirt"
 	libvirtxml "libvirt.org/go/libvirtxml"
@@ -13,16 +12,16 @@ import (
 func (repo *VirtualMachineRepository) Capabilities(node string, arch compute.Arch) (compute.VirtualMachineCapabilities, error) {
 	conn, err := repo.pool.Acquire(node)
 	if err != nil {
-		return compute.VirtualMachineCapabilities{}, err
+		return compute.VirtualMachineCapabilities{}, repositoryError(err, "capabilities unavailable")
 	}
 	defer repo.pool.Release(node)
 	xml, err := conn.GetDomainCapabilities(repo.settings[node].Emulator, arch.String(), "", "", 0)
 	if err != nil {
-		return compute.VirtualMachineCapabilities{}, util.NewError(err, "cannot fetch domain capabilities")
+		return compute.VirtualMachineCapabilities{}, repositoryError(err, "cannot fetch domain capabilities")
 	}
 	caps := &libvirtxml.DomainCaps{}
 	if err := caps.Unmarshal(xml); err != nil {
-		return compute.VirtualMachineCapabilities{}, err
+		return compute.VirtualMachineCapabilities{}, repositoryError(err, "capabilities unavailable")
 	}
 	return imageCapabilities(caps), nil
 }
@@ -94,16 +93,16 @@ func imageCapabilities(caps *libvirtxml.DomainCaps) compute.VirtualMachineCapabi
 func (repo *VirtualMachineRepository) ValidateNew(vm *compute.VirtualMachine) error {
 	conn, err := repo.pool.Acquire(vm.NodeId)
 	if err != nil {
-		return err
+		return repositoryError(err, "backend validation failed")
 	}
 	defer repo.pool.Release(vm.NodeId)
 	domain, err := conn.LookupDomainByName(vm.Id)
 	if err == nil {
 		domain.Free()
-		return fmt.Errorf("VM %q already exists", vm.Id)
+		return fmt.Errorf("%w: VM %q already exists", compute.ErrConflict, vm.Id)
 	}
 	if !errors.Is(err, libvirt.ERR_NO_DOMAIN) {
-		return err
+		return repositoryError(err, "backend validation failed")
 	}
 	return nil
 }

@@ -2,7 +2,6 @@ package libvirt
 
 import (
 	"subuk/vmango/compute"
-	"subuk/vmango/util"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -22,26 +21,26 @@ func (repo *VolumePoolRepository) listNode(nodeId string) ([]*compute.VolumePool
 	volumePools := []*compute.VolumePool{}
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return nil, util.NewError(err, "cannot acquire connection")
+		return nil, repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	virPools, err := conn.ListAllStoragePools(0)
 	if err != nil {
-		return nil, util.NewError(err, "cannot list storage pools")
+		return nil, repositoryError(err, "cannot list storage pools")
 	}
 	for _, virPool := range virPools {
 		virPoolXml, err := virPool.GetXMLDesc(0)
 		if err != nil {
-			return nil, util.NewError(err, "cannot get pool name")
+			return nil, repositoryError(err, "cannot get pool name")
 		}
 		virPoolConfig := &libvirtxml.StoragePool{}
 		if err := virPoolConfig.Unmarshal(virPoolXml); err != nil {
-			return nil, util.NewError(err, "cannot unmarshal volume pool xml")
+			return nil, repositoryError(err, "cannot unmarshal volume pool xml")
 		}
 		active, err := virPool.IsActive()
 		if err != nil {
-			return nil, util.NewError(err, "cannot check if pool %s is active", virPoolConfig.Name)
+			return nil, repositoryError(err, "cannot check if pool %s is active", virPoolConfig.Name)
 		}
 		if !active {
 			continue

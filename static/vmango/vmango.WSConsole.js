@@ -24,7 +24,7 @@
         socket = new WebSocket(wsUri);
         socket.binaryType = "arraybuffer";
         terminal.onData(function(data){
-            socket.send(data);
+            if (socket.readyState === WebSocket.OPEN) socket.send(new TextEncoder().encode(data));
         })
         socket.onopen = function(){
             terminal.on();

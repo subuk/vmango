@@ -3,7 +3,6 @@ package libvirt
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/url"
 	"os/exec"
@@ -11,7 +10,6 @@ import (
 	"strings"
 	"subuk/vmango/compute"
 	"subuk/vmango/configdrive"
-	"subuk/vmango/util"
 	"sync"
 	"time"
 
@@ -55,18 +53,18 @@ func (r *virStreamReader) Read(b []byte) (int, error) {
 func (repo *VirtualMachineRepository) parseConfigDrive(conn *libvirt.Connect, volumePath string) (*compute.VirtualMachineConfig, error) {
 	virVolume, err := conn.LookupStorageVolByPath(volumePath)
 	if err != nil {
-		return nil, util.NewError(err, "cannot lookup volume")
+		return nil, repositoryError(err, "cannot lookup volume")
 	}
 	stream, err := conn.NewStream(0)
 	if err != nil {
-		return nil, util.NewError(err, "cannot initialize configdrive download stream")
+		return nil, repositoryError(err, "cannot initialize configdrive download stream")
 	}
 	if err := virVolume.Download(stream, 0, ConfigDriveMaxSize, 0); err != nil {
-		return nil, util.NewError(err, "cannot start configdrive download")
+		return nil, repositoryError(err, "cannot start configdrive download")
 	}
 	data, err := configdrive.ParseIso(configdrive.AllFormats, &virStreamReader{stream})
 	if err != nil {
-		return nil, util.NewError(err, "cannot parse configdrive iso")
+		return nil, repositoryError(err, "cannot parse configdrive iso")
 	}
 	config := &compute.VirtualMachineConfig{
 		Hostname: data.Hostname(),
@@ -92,24 +90,24 @@ func (repo *VirtualMachineRepository) parseConfigDrive(conn *libvirt.Connect, vo
 func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId string, domain *libvirt.Domain, settings NodeSettings) (*compute.VirtualMachine, error) {
 	domainXml, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
-		return nil, util.NewError(err, "cannot get domain xml")
+		return nil, repositoryError(err, "cannot get domain xml")
 	}
 	domainConfig := &libvirtxml.Domain{}
 	if err := domainConfig.Unmarshal(domainXml); err != nil {
-		return nil, util.NewError(err, "cannot unmarshal domain xml")
+		return nil, repositoryError(err, "cannot unmarshal domain xml")
 	}
 	domainInfo, err := domain.GetInfo()
 	if err != nil {
-		return nil, util.NewError(err, "cannot get domain info")
+		return nil, repositoryError(err, "cannot get domain info")
 	}
 	vm, err := VirtualMachineFromDomainConfig(domainConfig, domainInfo)
 	if err != nil {
-		return nil, util.NewError(err, "cannot create virtual machine from domain config")
+		return nil, repositoryError(err, "cannot create virtual machine from domain config")
 	}
 
 	autostart, err := domain.GetAutostart()
 	if err != nil {
-		return nil, util.NewError(err, "cannot get domain autostart value")
+		return nil, repositoryError(err, "cannot get domain autostart value")
 	}
 	vm.Autostart = autostart
 
@@ -257,26 +255,34 @@ func (r *virStreamReadWriteCloser) Write(b []byte) (int, error) {
 }
 
 func (r *virStreamReadWriteCloser) Close() error {
-	return r.Stream.Finish()
+	err := r.Stream.Abort()
+	r.Stream.Free()
+	return err
 }
 
-func (repo *VirtualMachineRepository) GetConsoleStream(id, nodeId string) (compute.VirtualMachineConsoleStream, error) {
+func (repo *VirtualMachineRepository) GetConsoleStream(id, nodeId string, force bool) (compute.VirtualMachineConsoleStream, error) {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return nil, util.NewError(err, "cannot acquire libvirt connection")
+		return nil, repositoryError(err, "cannot acquire libvirt connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return nil, util.NewError(err, "cannot get vm")
+		return nil, repositoryError(err, "cannot get vm")
 	}
+	defer virDomain.Free()
 	stream, err := conn.NewStream(0)
 	if err != nil {
-		return nil, util.NewError(err, "cannot create stream")
+		return nil, repositoryError(err, "cannot create stream")
 	}
-	if err := virDomain.OpenConsole("", stream, libvirt.DOMAIN_CONSOLE_FORCE); err != nil {
-		return nil, util.NewError(err, "cannot open domain console")
+	flags := libvirt.DOMAIN_CONSOLE_SAFE
+	if force {
+		flags |= libvirt.DOMAIN_CONSOLE_FORCE
+	}
+	if err := virDomain.OpenConsole("", stream, flags); err != nil {
+		stream.Free()
+		return nil, fmt.Errorf("%w: console unavailable or occupied", compute.ErrConflict)
 	}
 	return &virStreamReadWriteCloser{stream}, nil
 }
@@ -284,6 +290,7 @@ func (repo *VirtualMachineRepository) GetConsoleStream(id, nodeId string) (compu
 type cmdIoWrapper struct {
 	stdin  io.WriteCloser
 	stdout io.ReadCloser
+	cmd    *exec.Cmd
 }
 
 func (w *cmdIoWrapper) Read(p []byte) (int, error) {
@@ -296,6 +303,9 @@ func (w *cmdIoWrapper) Write(p []byte) (int, error) {
 
 func (w *cmdIoWrapper) Close() error {
 	w.stdin.Close()
+	if w.cmd != nil {
+		w.cmd.Process.Kill()
+	}
 	return w.stdout.Close()
 
 }
@@ -303,36 +313,36 @@ func (w *cmdIoWrapper) Close() error {
 func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compute.VirtualMachineGraphicStream, error) {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return nil, util.NewError(err, "cannot acquire libvirt connection")
+		return nil, repositoryError(err, "cannot acquire libvirt connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	connUriRaw, err := conn.GetURI()
 	if err != nil {
-		return nil, util.NewError(err, "cannot get connection hostname")
+		return nil, repositoryError(err, "cannot get connection hostname")
 	}
 	connUri, err := url.Parse(connUriRaw)
 	if err != nil {
-		return nil, util.NewError(err, "cannot parse connection uri")
+		return nil, repositoryError(err, "cannot parse connection uri")
 	}
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return nil, util.NewError(err, "cannot get vm")
+		return nil, repositoryError(err, "cannot get vm")
 	}
 	virDomainRunning, err := virDomain.IsActive()
 	if err != nil {
-		return nil, util.NewError(err, "cannot check if domain is running")
+		return nil, repositoryError(err, "cannot check if domain is running")
 	}
 	if !virDomainRunning {
-		return nil, fmt.Errorf("domain is not running")
+		return nil, fmt.Errorf("%w: domain is not running", compute.ErrConflict)
 	}
 	virDomainXml, err := virDomain.GetXMLDesc(0)
 	if err != nil {
-		return nil, util.NewError(err, "cannot fetch domain xml")
+		return nil, repositoryError(err, "cannot fetch domain xml")
 	}
 	virDomainConfig := &libvirtxml.Domain{}
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return nil, util.NewError(err, "cannot parse domain xml")
+		return nil, repositoryError(err, "cannot parse domain xml")
 	}
 	graphicPort := 0
 	for _, graphic := range virDomainConfig.Devices.Graphics {
@@ -341,7 +351,7 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compu
 		}
 	}
 	if graphicPort <= 0 {
-		return nil, fmt.Errorf("no graphic port found")
+		return nil, fmt.Errorf("%w: no graphic port found", compute.ErrConflict)
 	}
 
 	if strings.Contains(connUri.Scheme, "ssh") {
@@ -355,44 +365,40 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compu
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			return nil, util.NewError(err, "cannot initialize cmd stdout")
+			return nil, repositoryError(err, "cannot initialize cmd stdout")
 		}
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			return nil, util.NewError(err, "cannot initialize cmd stdin")
-		}
+		cmd.Stderr = io.Discard
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
-			return nil, util.NewError(err, "cannot initialize cmd stdin")
+			return nil, repositoryError(err, "cannot initialize cmd stdin")
 		}
 		if err := cmd.Start(); err != nil {
-			return nil, util.NewError(err, "cannot start ssh forwarding command")
+			return nil, repositoryError(err, "cannot start ssh forwarding command")
 		}
 		repo.logger.Debug().Msg("ssh started successfully")
 		go func(cmd *exec.Cmd) {
 			if err := cmd.Wait(); err != nil {
-				errText, _ := ioutil.ReadAll(stderr)
-				repo.logger.Warn().Err(err).Str("text", string(errText)).Msg("graphics forwarding command failed")
+				repo.logger.Warn().Msg("graphics forwarding command failed")
 				return
 			}
 			repo.logger.Debug().Msg("graphics command finished successfully")
 		}(cmd)
-		return &cmdIoWrapper{stdin: stdin, stdout: stdout}, nil
+		return &cmdIoWrapper{stdin: stdin, stdout: stdout, cmd: cmd}, nil
 	}
 	addr := fmt.Sprintf("%s:%d", connUri.Hostname(), graphicPort)
 	repo.logger.Debug().Str("addr", addr).Msg("connecting directly to console")
-	return net.Dial("tcp", addr)
+	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
 
 func (repo *VirtualMachineRepository) generateNewDomainConfig(conn *libvirt.Connect, vm *compute.VirtualMachine) (*libvirtxml.Domain, error) {
 	settings := repo.settings[vm.NodeId]
 	domCapsXml, err := conn.GetDomainCapabilities(settings.Emulator, vm.Arch.String(), "", "", 0)
 	if err != nil {
-		return nil, util.NewError(err, "cannot fetch domain capabilities")
+		return nil, repositoryError(err, "cannot fetch domain capabilities")
 	}
 	domCapsConfig := &libvirtxml.DomainCaps{}
 	if err := domCapsConfig.Unmarshal(domCapsXml); err != nil {
-		return nil, util.NewError(err, "cannot parse domain capabilities")
+		return nil, repositoryError(err, "cannot parse domain capabilities")
 	}
 
 	return newDomainConfig(vm, domCapsConfig), nil
@@ -440,17 +446,17 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 	conn, err := repo.pool.Acquire(vm.NodeId)
 	if err != nil {
-		return util.NewError(err, "cannot acquire libvirt connection")
+		return repositoryError(err, "cannot acquire libvirt connection")
 	}
 	defer repo.pool.Release(vm.NodeId)
 
 	capsXml, err := conn.GetCapabilities()
 	if err != nil {
-		return util.NewError(err, "cannot fetch domain capabilities")
+		return repositoryError(err, "cannot fetch domain capabilities")
 	}
 	capsConfig := &libvirtxml.Caps{}
 	if err := capsConfig.Unmarshal(capsXml); err != nil {
-		return util.NewError(err, "cannot parse capabilities")
+		return repositoryError(err, "cannot parse capabilities")
 	}
 
 	var isNewVm bool
@@ -460,7 +466,7 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 	if err != nil {
 		if lErr, ok := err.(*libvirt.Error); ok {
 			if lErr.Code != libvirt.ERR_NO_DOMAIN {
-				return util.NewError(err, "cannot lookup domain")
+				return repositoryError(err, "cannot lookup domain")
 			}
 		}
 		isNewVm = true
@@ -469,17 +475,17 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 	if isNewVm {
 		newVirDomainConfig, err := repo.generateNewDomainConfig(conn, vm)
 		if err != nil {
-			return util.NewError(err, "cannot generate new domain config")
+			return repositoryError(err, "cannot generate new domain config")
 		}
 		virDomainConfig = newVirDomainConfig
 	} else {
 		virDomainXml, err := existingVirDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 		if err != nil {
-			return util.NewError(err, "cannot fetch xml")
+			return repositoryError(err, "cannot fetch xml")
 		}
 		virDomainConfig = &libvirtxml.Domain{}
 		if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-			return util.NewError(err, "cannot parse domain xml")
+			return repositoryError(err, "cannot parse domain xml")
 		}
 	}
 
@@ -575,34 +581,33 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 		namer := NewDeviceNamer()
 		for _, attachedVolume := range vm.Volumes {
 			if err := repo.attachVolume(conn, virDomainConfig, attachedVolume, namer); err != nil {
-				return util.NewError(err, "cannot attach volume")
+				return repositoryError(err, "cannot attach volume")
 			}
 		}
 		for _, attachedIface := range vm.Interfaces {
 			if err := repo.attachInterface(virDomainConfig, attachedIface); err != nil {
-				return util.NewError(err, "cannot attach interface")
+				return repositoryError(err, "cannot attach interface")
 			}
 		}
 	}
 	virDomainXml, err := virDomainConfig.Marshal()
 	if err != nil {
-		return util.NewError(err, "cannot marshal domain xml")
+		return repositoryError(err, "cannot marshal domain xml")
 	}
 	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
-		fmt.Println(virDomainXml)
-		return util.NewError(err, "cannot define new domain")
+		return repositoryError(err, "cannot define new domain")
 	}
 	virDomain, err := conn.LookupDomainByName(vm.Id)
 	if err != nil {
-		return util.NewError(err, "cannot lookup domain after define")
+		return repositoryError(err, "cannot lookup domain after define")
 	}
 	virDomainAutostart, err := virDomain.GetAutostart()
 	if err != nil {
-		return util.NewError(err, "cannot get domain autostart state")
+		return repositoryError(err, "cannot get domain autostart state")
 	}
 	if vm.Autostart != virDomainAutostart {
 		if err := virDomain.SetAutostart(vm.Autostart); err != nil {
-			return util.NewError(err, "cannot set domain autostart state")
+			return repositoryError(err, "cannot set domain autostart state")
 		}
 	}
 	return nil
@@ -611,33 +616,33 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 func (repo *VirtualMachineRepository) Delete(id, nodeId string) error {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return util.NewError(err, "cannot acquire libvirt connection")
+		return repositoryError(err, "cannot acquire libvirt connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return util.NewError(err, "lookup domain failed")
+		return repositoryError(err, "lookup domain failed")
 	}
 	virDomainRunning, err := virDomain.IsActive()
 	if err != nil {
-		return util.NewError(err, "cannot check if domain is running")
+		return repositoryError(err, "cannot check if domain is running")
 	}
 	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
-		return util.NewError(err, "cannot fetch domain xml")
+		return repositoryError(err, "cannot fetch domain xml")
 	}
 	virDomainConfig := &libvirtxml.Domain{}
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return util.NewError(err, "cannot parse domain xml")
+		return repositoryError(err, "cannot parse domain xml")
 	}
 	if virDomainRunning {
 		if err := virDomain.Destroy(); err != nil {
-			return util.NewError(err, "cannot destroy domain")
+			return repositoryError(err, "cannot destroy domain")
 		}
 	}
 	if err := virDomain.UndefineFlags(libvirt.DOMAIN_UNDEFINE_NVRAM); err != nil {
-		return util.NewError(err, "cannot undefine domain")
+		return repositoryError(err, "cannot undefine domain")
 	}
 	return nil
 }
@@ -645,7 +650,7 @@ func (repo *VirtualMachineRepository) Delete(id, nodeId string) error {
 func (repo *VirtualMachineRepository) nodeList(nodeId string) ([]*compute.VirtualMachine, error) {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return nil, util.NewError(err, "cannot acquire libvirt connection")
+		return nil, repositoryError(err, "cannot acquire libvirt connection")
 	}
 	defer repo.pool.Release(nodeId)
 	vms := []*compute.VirtualMachine{}
@@ -654,7 +659,7 @@ func (repo *VirtualMachineRepository) nodeList(nodeId string) ([]*compute.Virtua
 	for _, domain := range domains {
 		vm, err := repo.domainToVm(conn, nodeId, &domain, settings)
 		if err != nil {
-			return nil, util.NewError(err, "cannot convert libvirt domain to vm")
+			return nil, repositoryError(err, "cannot convert libvirt domain to vm")
 		}
 		vms = append(vms, vm)
 	}
@@ -691,18 +696,18 @@ func (repo *VirtualMachineRepository) List(options compute.VirtualMachineListOpt
 func (repo *VirtualMachineRepository) Get(id, nodeId string) (*compute.VirtualMachine, error) {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return nil, util.NewError(err, "cannot acquire connection")
+		return nil, repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	settings := repo.settings[nodeId]
 	domain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return nil, util.NewError(err, "failed to lookup vm")
+		return nil, repositoryError(err, "failed to lookup vm")
 	}
 	vm, err := repo.domainToVm(conn, nodeId, domain, settings)
 	if err != nil {
-		return nil, util.NewError(err, "cannot convert libvirt domain to vm")
+		return nil, repositoryError(err, "cannot convert libvirt domain to vm")
 	}
 	return vm, nil
 }
@@ -710,13 +715,13 @@ func (repo *VirtualMachineRepository) Get(id, nodeId string) (*compute.VirtualMa
 func (repo *VirtualMachineRepository) Poweroff(id, nodeId string) error {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return util.NewError(err, "cannot acquire connection")
+		return repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	domain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return util.NewError(err, "domain lookup failed")
+		return repositoryError(err, "domain lookup failed")
 	}
 	return domain.Destroy()
 }
@@ -724,13 +729,13 @@ func (repo *VirtualMachineRepository) Poweroff(id, nodeId string) error {
 func (repo *VirtualMachineRepository) Reboot(id, nodeId string) error {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return util.NewError(err, "cannot acquire connection")
+		return repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	domain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return util.NewError(err, "domain lookup failed")
+		return repositoryError(err, "domain lookup failed")
 	}
 	return domain.Reboot(libvirt.DOMAIN_REBOOT_DEFAULT)
 }
@@ -738,13 +743,13 @@ func (repo *VirtualMachineRepository) Reboot(id, nodeId string) error {
 func (repo *VirtualMachineRepository) Start(id, nodeId string) error {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return util.NewError(err, "cannot acquire connection")
+		return repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	domain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return util.NewError(err, "domain lookup failed")
+		return repositoryError(err, "domain lookup failed")
 	}
 	return domain.Create()
 }
@@ -752,7 +757,7 @@ func (repo *VirtualMachineRepository) Start(id, nodeId string) error {
 func (repo *VirtualMachineRepository) attachVolume(conn *libvirt.Connect, virDomainConfig *libvirtxml.Domain, attachedVolume *compute.VirtualMachineAttachedVolume, namer *DeviceNamer) error {
 	virVolumeConfig, err := getVolumeConfigByPath(conn, attachedVolume.Path)
 	if err != nil {
-		return util.NewError(err, "cannot get volume config")
+		return repositoryError(err, "cannot get volume config")
 	}
 	diskConfig := DomainDiskConfigFromVirtualMachineAttachedVolume(
 		attachedVolume,
@@ -767,42 +772,41 @@ func (repo *VirtualMachineRepository) attachVolume(conn *libvirt.Connect, virDom
 func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVolume *compute.VirtualMachineAttachedVolume) error {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return util.NewError(err, "cannot acquire connection")
+		return repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return util.NewError(err, "domain lookup failed")
+		return repositoryError(err, "domain lookup failed")
 	}
 	running, err := virDomain.IsActive()
 	if err != nil {
-		return util.NewError(err, "cannot check if domain is running")
+		return repositoryError(err, "cannot check if domain is running")
 	}
 	if running {
-		return fmt.Errorf("domain must be stopped")
+		return fmt.Errorf("%w: domain must be stopped", compute.ErrConflict)
 	}
 
 	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
-		return util.NewError(err, "cannot get domain xml")
+		return repositoryError(err, "cannot get domain xml")
 	}
 	virDomainConfig := &libvirtxml.Domain{}
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return util.NewError(err, "cannot parse domain xml")
+		return repositoryError(err, "cannot parse domain xml")
 	}
 	namer := NewDeviceNamerFromDisks(virDomainConfig.Devices.Disks)
 	if err := repo.attachVolume(conn, virDomainConfig, attachedVolume, namer); err != nil {
-		return util.NewError(err, "cannot add volume xml config")
+		return repositoryError(err, "cannot add volume xml config")
 	}
 
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {
-		return util.NewError(err, "cannot create domain xml")
+		return repositoryError(err, "cannot create domain xml")
 	}
 	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
-		fmt.Println(virDomainXml)
-		return util.NewError(err, "cannot update domain")
+		return repositoryError(err, "cannot update domain")
 	}
 	return nil
 }
@@ -810,32 +814,32 @@ func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVo
 func (repo *VirtualMachineRepository) DetachVolume(id, nodeId, needlePath string) error {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return util.NewError(err, "cannot acquire connection")
+		return repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return util.NewError(err, "domain lookup failed")
+		return repositoryError(err, "domain lookup failed")
 	}
 	running, err := virDomain.IsActive()
 	if err != nil {
-		return util.NewError(err, "cannot check if domain is running")
+		return repositoryError(err, "cannot check if domain is running")
 	}
 	if running {
-		return fmt.Errorf("domain must be stopped")
+		return fmt.Errorf("%w: domain must be stopped", compute.ErrConflict)
 	}
 
 	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
-		return util.NewError(err, "cannot get domain xml")
+		return repositoryError(err, "cannot get domain xml")
 	}
 	virDomainConfig := &libvirtxml.Domain{}
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return util.NewError(err, "cannot parse domain xml")
+		return repositoryError(err, "cannot parse domain xml")
 	}
 	if virDomainConfig.Devices.Disks == nil {
-		return fmt.Errorf("no disk found")
+		return compute.ErrNotFound
 	}
 	newDisks := []libvirtxml.DomainDisk{}
 	needleFound := false
@@ -848,15 +852,15 @@ func (repo *VirtualMachineRepository) DetachVolume(id, nodeId, needlePath string
 		newDisks = append(newDisks, disk)
 	}
 	if !needleFound {
-		return fmt.Errorf("no disk found")
+		return compute.ErrNotFound
 	}
 	virDomainConfig.Devices.Disks = newDisks
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {
-		return util.NewError(err, "cannot create domain xml")
+		return repositoryError(err, "cannot create domain xml")
 	}
 	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
-		return util.NewError(err, "cannot update domain")
+		return repositoryError(err, "cannot update domain")
 	}
 	return nil
 }
@@ -864,38 +868,38 @@ func (repo *VirtualMachineRepository) DetachVolume(id, nodeId, needlePath string
 func (repo *VirtualMachineRepository) AttachInterface(id, nodeId string, attachedIface *compute.VirtualMachineAttachedInterface) error {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return util.NewError(err, "cannot acquire connection")
+		return repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return util.NewError(err, "domain lookup failed")
+		return repositoryError(err, "domain lookup failed")
 	}
 	running, err := virDomain.IsActive()
 	if err != nil {
-		return util.NewError(err, "cannot check if domain is running")
+		return repositoryError(err, "cannot check if domain is running")
 	}
 	if running {
-		return fmt.Errorf("domain must be stopped")
+		return fmt.Errorf("%w: domain must be stopped", compute.ErrConflict)
 	}
 	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
-		return util.NewError(err, "cannot get domain xml")
+		return repositoryError(err, "cannot get domain xml")
 	}
 	virDomainConfig := &libvirtxml.Domain{}
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return util.NewError(err, "cannot parse domain xml")
+		return repositoryError(err, "cannot parse domain xml")
 	}
 	if err := repo.attachInterface(virDomainConfig, attachedIface); err != nil {
 		return err
 	}
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {
-		return util.NewError(err, "cannot create domain xml")
+		return repositoryError(err, "cannot create domain xml")
 	}
 	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
-		return util.NewError(err, "cannot update domain xml")
+		return repositoryError(err, "cannot update domain xml")
 	}
 	return nil
 }
@@ -903,29 +907,29 @@ func (repo *VirtualMachineRepository) AttachInterface(id, nodeId string, attache
 func (repo *VirtualMachineRepository) detachInterfaceLibvirt(id, nodeId, needleMac string) error {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return util.NewError(err, "cannot acquire connection")
+		return repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return util.NewError(err, "domain lookup failed")
+		return repositoryError(err, "domain lookup failed")
 	}
 	running, err := virDomain.IsActive()
 	if err != nil {
-		return util.NewError(err, "cannot check if domain is running")
+		return repositoryError(err, "cannot check if domain is running")
 	}
 	if running {
-		return fmt.Errorf("domain must be stopped")
+		return fmt.Errorf("%w: domain must be stopped", compute.ErrConflict)
 	}
 
 	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
-		return util.NewError(err, "cannot get domain xml")
+		return repositoryError(err, "cannot get domain xml")
 	}
 	virDomainConfig := &libvirtxml.Domain{}
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return util.NewError(err, "cannot parse domain xml")
+		return repositoryError(err, "cannot parse domain xml")
 	}
 	if virDomainConfig.Devices.Interfaces == nil {
 		return compute.ErrInterfaceNotFound
@@ -946,10 +950,10 @@ func (repo *VirtualMachineRepository) detachInterfaceLibvirt(id, nodeId, needleM
 	virDomainConfig.Devices.Interfaces = newInterfaces
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {
-		return util.NewError(err, "cannot create domain xml")
+		return repositoryError(err, "cannot create domain xml")
 	}
 	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
-		return util.NewError(err, "cannot update domain")
+		return repositoryError(err, "cannot update domain")
 	}
 	return nil
 }
@@ -957,28 +961,28 @@ func (repo *VirtualMachineRepository) detachInterfaceLibvirt(id, nodeId, needleM
 func (repo *VirtualMachineRepository) detachInterfaceQemuArgs(id, nodeId, needleMac string) error {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return util.NewError(err, "cannot acquire connection")
+		return repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	virDomain, err := conn.LookupDomainByName(id)
 	if err != nil {
-		return util.NewError(err, "domain lookup failed")
+		return repositoryError(err, "domain lookup failed")
 	}
 	running, err := virDomain.IsActive()
 	if err != nil {
-		return util.NewError(err, "cannot check if domain is running")
+		return repositoryError(err, "cannot check if domain is running")
 	}
 	if running {
-		return fmt.Errorf("domain must be stopped")
+		return fmt.Errorf("%w: domain must be stopped", compute.ErrConflict)
 	}
 	virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
-		return util.NewError(err, "cannot get domain xml")
+		return repositoryError(err, "cannot get domain xml")
 	}
 	virDomainConfig := &libvirtxml.Domain{}
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-		return util.NewError(err, "cannot parse domain xml")
+		return repositoryError(err, "cannot parse domain xml")
 	}
 	if virDomainConfig.QEMUCommandline == nil {
 		return compute.ErrInterfaceNotFound
@@ -992,8 +996,6 @@ func (repo *VirtualMachineRepository) detachInterfaceQemuArgs(id, nodeId, needle
 		switch qarg.Value {
 		case "-device":
 			argv := virDomainConfig.QEMUCommandline.Args[idx+1].Value
-			params := parseQemuDeviceArg(argv)
-			fmt.Println(params)
 			if strings.Contains(strings.ToLower(argv), "="+strings.ToLower(needleMac)) {
 				params := parseQemuDeviceArg(argv)
 				needleNetdevId = params["netdev"]
@@ -1031,10 +1033,10 @@ func (repo *VirtualMachineRepository) detachInterfaceQemuArgs(id, nodeId, needle
 	virDomainConfig.QEMUCommandline.Args = newArgs
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {
-		return util.NewError(err, "cannot create domain xml")
+		return repositoryError(err, "cannot create domain xml")
 	}
 	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
-		return util.NewError(err, "cannot update domain")
+		return repositoryError(err, "cannot update domain")
 	}
 	return nil
 }

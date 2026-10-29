@@ -2,7 +2,6 @@ package libvirt
 
 import (
 	"subuk/vmango/compute"
-	"subuk/vmango/util"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -77,7 +76,7 @@ func (p *ConnectionPool) Acquire(node string) (*libvirt.Connect, error) {
 		newConn, err := libvirt.NewConnect(uri)
 		if err != nil {
 			p.cache[uri].Mu.Unlock()
-			return nil, util.NewError(err, "cannot open libvirt connection")
+			return nil, repositoryError(err, "cannot open libvirt connection")
 		}
 		p.cache[uri].Conn = newConn
 		return newConn, nil
@@ -87,7 +86,7 @@ func (p *ConnectionPool) Acquire(node string) (*libvirt.Connect, error) {
 		newConn, err := libvirt.NewConnect(uri)
 		if err != nil {
 			p.cache[uri].Mu.Unlock()
-			return nil, util.NewError(err, "cannot reopen libvirt connection")
+			return nil, repositoryError(err, "cannot reopen libvirt connection")
 		}
 		p.cache[uri].Conn = newConn
 		return newConn, nil
@@ -96,7 +95,7 @@ func (p *ConnectionPool) Acquire(node string) (*libvirt.Connect, error) {
 		newConn, err := libvirt.NewConnect(uri)
 		if err != nil {
 			p.cache[uri].Mu.Unlock()
-			return nil, util.NewError(err, "cannot reopen libvirt connection")
+			return nil, repositoryError(err, "cannot reopen libvirt connection")
 		}
 		p.cache[uri].Conn = newConn
 		return newConn, nil

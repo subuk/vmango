@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"subuk/vmango/compute"
-	"subuk/vmango/util"
 
 	"github.com/rs/zerolog"
 	libvirt "libvirt.org/go/libvirt"
@@ -36,30 +35,30 @@ func (repo *NodeRepository) List(options compute.NodeListOptions) ([]*compute.No
 func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (*compute.Node, error) {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return nil, util.NewError(err, "cannot acquire libvirt connection")
+		return nil, repositoryError(err, "cannot acquire libvirt connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	capsXml, err := conn.GetCapabilities()
 	if err != nil {
-		return nil, util.NewError(err, "cannot fetch host capabilities")
+		return nil, repositoryError(err, "cannot fetch host capabilities")
 	}
 	capsConfig := &libvirtxml.Caps{}
 	if err := capsConfig.Unmarshal(capsXml); err != nil {
-		return nil, util.NewError(err, "cannot parse capabilities")
+		return nil, repositoryError(err, "cannot parse capabilities")
 	}
 	hostname, err := conn.GetHostname()
 	if err != nil {
-		return nil, util.NewError(err, "cannot get hostname")
+		return nil, repositoryError(err, "cannot get hostname")
 	}
 	sysinfoXml, err := conn.GetSysinfo(0)
 	if err != nil {
-		// return nil, util.NewError(err, "cannot get sysinfo")
+		// return nil, repositoryError(err, "cannot get sysinfo")
 	}
 	sysinfoConfig := &libvirtxml.DomainSysInfo{}
 	if sysinfoXml != "" {
 		if err := xml.Unmarshal([]byte(sysinfoXml), sysinfoConfig); err != nil {
-			return nil, util.NewError(err, "cannot parse sysinfo")
+			return nil, repositoryError(err, "cannot parse sysinfo")
 		}
 	}
 	node := &compute.Node{
@@ -142,7 +141,7 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 		}
 		freePages, err := conn.GetFreePages(reqFreePages, 0, uint(len(node.Numas)), 0)
 		if err != nil {
-			return nil, util.NewError(err, "cannot get free memory pages")
+			return nil, repositoryError(err, "cannot get free memory pages")
 		}
 		for idx, pageCount := range freePages {
 			pageSize := reqFreePages[idx%len(reqFreePages)]
@@ -164,16 +163,16 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 
 	virDomains, err := conn.ListAllDomains(0)
 	if err != nil {
-		return nil, util.NewError(err, "cannot list node domains")
+		return nil, repositoryError(err, "cannot list node domains")
 	}
 	for _, virDomain := range virDomains {
 		virDomainXml, err := virDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 		if err != nil {
-			return nil, util.NewError(err, "cannot get domain xml")
+			return nil, repositoryError(err, "cannot get domain xml")
 		}
 		virDomainConfig := &libvirtxml.Domain{}
 		if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
-			return nil, util.NewError(err, "cannot unmarshal domain xml")
+			return nil, repositoryError(err, "cannot unmarshal domain xml")
 		}
 		if virDomainConfig.CPUTune == nil {
 			for cpuId := range node.Cpus {

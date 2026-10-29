@@ -35,19 +35,22 @@ type OidcConfig struct {
 }
 
 type WebConfig struct {
-	Listen         string          `hcl:"listen"`
-	Debug          bool            `hcl:"debug"`
-	BaseUrl        string          `hcl:"base_url"`
-	StaticVersion  string          `hcl:"static_version"`
-	SessionSecret  string          `hcl:"session_secret"`
-	SessionSecure  bool            `hcl:"session_secure"`
-	SessionDomain  string          `hcl:"session_domain"`
-	SessionMaxAge  int             `hcl:"session_max_age"`
-	MediaUploadTmp string          `hcl:"media_upload_tmp"`
-	Users          []UserWebConfig `hcl:"user"`
-	Oidc           OidcConfig      `hcl:"oidc"`
-	Links          []WebConfigLink `hcl:"link"`
-	LinksTitle     string          `hcl:"links_title"`
+	APIDisabled                bool            `hcl:"api_disabled"`
+	ConsoleSigningKey          string          `hcl:"console_signing_key"`
+	ConsoleLinkLifetimeSeconds int             `hcl:"console_link_lifetime_seconds"`
+	Listen                     string          `hcl:"listen"`
+	Debug                      bool            `hcl:"debug"`
+	BaseUrl                    string          `hcl:"base_url"`
+	StaticVersion              string          `hcl:"static_version"`
+	SessionSecret              string          `hcl:"session_secret"`
+	SessionSecure              bool            `hcl:"session_secure"`
+	SessionDomain              string          `hcl:"session_domain"`
+	SessionMaxAge              int             `hcl:"session_max_age"`
+	MediaUploadTmp             string          `hcl:"media_upload_tmp"`
+	Users                      []UserWebConfig `hcl:"user"`
+	Oidc                       OidcConfig      `hcl:"oidc"`
+	Links                      []WebConfigLink `hcl:"link"`
+	LinksTitle                 string          `hcl:"links_title"`
 }
 
 type ImageConfig struct {
@@ -175,10 +178,11 @@ func Default() *Config {
 		LogLevel: "info",
 		KeyFile:  "~/.vmango/authorized_keys",
 		Web: WebConfig{
-			Listen:         ":8080",
-			Debug:          false,
-			SessionMaxAge:  12 * 60 * 60,
-			MediaUploadTmp: "/tmp/",
+			Listen:                     ":8080",
+			Debug:                      false,
+			SessionMaxAge:              12 * 60 * 60,
+			ConsoleLinkLifetimeSeconds: 3600,
+			MediaUploadTmp:             "/tmp/",
 		},
 	}
 }
@@ -243,6 +247,12 @@ func Parse(filename string) (*Config, error) {
 	}
 	if len(config.Web.Oidc.Scopes) <= 0 {
 		config.Web.Oidc.Scopes = []string{"openid", "profile", "email"}
+	}
+	if config.Web.ConsoleLinkLifetimeSeconds < 1 || config.Web.ConsoleLinkLifetimeSeconds > 86400*30 {
+		return nil, fmt.Errorf("console_link_lifetime_seconds must be between 1 and 2592000")
+	}
+	if config.Web.ConsoleSigningKey != "" && len(config.Web.ConsoleSigningKey) < 32 {
+		return nil, fmt.Errorf("console_signing_key must contain at least 32 random bytes")
 	}
 	if _, _, err := config.ImageDefinitions(); err != nil {
 		return nil, err

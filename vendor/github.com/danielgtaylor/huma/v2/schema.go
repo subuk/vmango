@@ -1,0 +1,1199 @@
+package huma
+
+import (
+	"encoding"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"math/bits"
+	"net"
+	"net/netip"
+	"net/url"
+	"reflect"
+	"regexp"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/danielgtaylor/huma/v2/validation"
+)
+
+// ErrSchemaInvalid is sent when there is a problem building the schema.
+var ErrSchemaInvalid = errors.New("schema is invalid")
+
+// DefaultArrayNullable controls whether arrays are nullable by default. Set
+// this to `false` to make arrays non-nullable by default, but be aware that
+// any `nil` slice will still encode as `null` in JSON. See also:
+// https://pkg.go.dev/encoding/json#Marshal.
+var DefaultArrayNullable = true
+
+// JSON Schema type constants
+const (
+	TypeBoolean = "boolean"
+	TypeInteger = "integer"
+	TypeNumber  = "number"
+	TypeString  = "string"
+	TypeArray   = "array"
+	TypeObject  = "object"
+	TypeNull    = "null"
+)
+
+// Special JSON Schema formats.
+var (
+	ipType                = reflect.TypeFor[net.IP]()
+	ipAddrType            = reflect.TypeFor[netip.Addr]()
+	rawMessageType        = reflect.TypeFor[json.RawMessage]()
+	schemaProviderType    = reflect.TypeFor[SchemaProvider]()
+	schemaTransformerType = reflect.TypeFor[SchemaTransformer]()
+	textUnmarshalerType   = reflect.TypeFor[encoding.TextUnmarshaler]()
+	timeType              = reflect.TypeFor[time.Time]()
+	urlType               = reflect.TypeFor[url.URL]()
+)
+
+func baseType(t reflect.Type) reflect.Type {
+	t = deref(t)
+	for {
+		switch t.Kind() {
+		case reflect.Slice, reflect.Array, reflect.Map:
+			t = deref(t.Elem())
+		default:
+			return t
+		}
+	}
+}
+
+func deref(t reflect.Type) reflect.Type {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t
+}
+
+func isTextUnmarshaler(t reflect.Type) bool {
+	return t.Implements(textUnmarshalerType) || reflect.PointerTo(t).Implements(textUnmarshalerType)
+}
+
+// Discriminator object when request bodies or response payloads may be one of a
+// number of different schemas can be used to aid in serialization,
+// deserialization, and validation. The discriminator is a specific object in a
+// schema that is used to inform the consumer of the document of an alternative
+// schema based on the value associated with it.
+type Discriminator struct {
+	// PropertyName in the payload that will hold the discriminator value.
+	// REQUIRED.
+	PropertyName string `yaml:"propertyName"`
+
+	// Mapping object to hold mappings between payload values and schema names or
+	// references.
+	Mapping map[string]string `yaml:"mapping,omitempty"`
+}
+
+func (d *Discriminator) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"propertyName", d.PropertyName, omitNever},
+		{"mapping", d.Mapping, omitEmpty},
+	}, nil)
+}
+
+// Schema represents a JSON Schema compatible with OpenAPI 3.1. It is extensible
+// with your own custom properties. It supports a subset of the full JSON Schema
+// spec, designed specifically for use with Go structs and to enable fast zero
+// or near-zero allocation happy-path validation for incoming requests.
+//
+// Typically, you will use a registry and `huma.SchemaFromType` to generate
+// schemas for your types. You can then use `huma.Validate` to validate
+// incoming requests.
+//
+//	// Create a registry and register a type.
+//	registry := huma.NewMapRegistry("#/prefix", huma.DefaultSchemaNamer)
+//	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
+//
+// Note that the registry may create references for your types.
+type Schema struct {
+	Type                 string              `yaml:"type,omitempty"`
+	Nullable             bool                `yaml:"-"`
+	Title                string              `yaml:"title,omitempty"`
+	Description          string              `yaml:"description,omitempty"`
+	Ref                  string              `yaml:"$ref,omitempty"`
+	Format               string              `yaml:"format,omitempty"`
+	ContentEncoding      string              `yaml:"contentEncoding,omitempty"`
+	Default              any                 `yaml:"default,omitempty"`
+	Examples             []any               `yaml:"examples,omitempty"`
+	Items                *Schema             `yaml:"items,omitempty"`
+	AdditionalProperties any                 `yaml:"additionalProperties,omitempty"`
+	Properties           map[string]*Schema  `yaml:"properties,omitempty"`
+	Enum                 []any               `yaml:"enum,omitempty"`
+	Const                any                 `yaml:"const,omitempty"`
+	Minimum              *float64            `yaml:"minimum,omitempty"`
+	ExclusiveMinimum     *float64            `yaml:"exclusiveMinimum,omitempty"`
+	Maximum              *float64            `yaml:"maximum,omitempty"`
+	ExclusiveMaximum     *float64            `yaml:"exclusiveMaximum,omitempty"`
+	MultipleOf           *float64            `yaml:"multipleOf,omitempty"`
+	MinLength            *int                `yaml:"minLength,omitempty"`
+	MaxLength            *int                `yaml:"maxLength,omitempty"`
+	Pattern              string              `yaml:"pattern,omitempty"`
+	PatternDescription   string              `yaml:"patternDescription,omitempty"`
+	MinItems             *int                `yaml:"minItems,omitempty"`
+	MaxItems             *int                `yaml:"maxItems,omitempty"`
+	UniqueItems          bool                `yaml:"uniqueItems,omitempty"`
+	Required             []string            `yaml:"required,omitempty"`
+	MinProperties        *int                `yaml:"minProperties,omitempty"`
+	MaxProperties        *int                `yaml:"maxProperties,omitempty"`
+	ReadOnly             bool                `yaml:"readOnly,omitempty"`
+	WriteOnly            bool                `yaml:"writeOnly,omitempty"`
+	Deprecated           bool                `yaml:"deprecated,omitempty"`
+	Extensions           map[string]any      `yaml:",inline"`
+	DependentRequired    map[string][]string `yaml:"dependentRequired,omitempty"`
+
+	OneOf []*Schema `yaml:"oneOf,omitempty"`
+	AnyOf []*Schema `yaml:"anyOf,omitempty"`
+	AllOf []*Schema `yaml:"allOf,omitempty"`
+	Not   *Schema   `yaml:"not,omitempty"`
+
+	// OpenAPI specific fields
+	Discriminator *Discriminator `yaml:"discriminator,omitempty"`
+
+	patternRe     *regexp.Regexp  `yaml:"-"`
+	requiredMap   map[string]bool `yaml:"-"`
+	propertyNames []string        `yaml:"-"`
+	hidden        bool            `yaml:"-"`
+
+	// Precomputed validation messages. These prevent allocations during
+	// validation and are known at schema creation time.
+	msgEnum              string                       `yaml:"-"`
+	msgConst             string                       `yaml:"-"`
+	msgMinimum           string                       `yaml:"-"`
+	msgExclusiveMinimum  string                       `yaml:"-"`
+	msgMaximum           string                       `yaml:"-"`
+	msgExclusiveMaximum  string                       `yaml:"-"`
+	msgMultipleOf        string                       `yaml:"-"`
+	msgMinLength         string                       `yaml:"-"`
+	msgMaxLength         string                       `yaml:"-"`
+	msgPattern           string                       `yaml:"-"`
+	msgMinItems          string                       `yaml:"-"`
+	msgMaxItems          string                       `yaml:"-"`
+	msgMinProperties     string                       `yaml:"-"`
+	msgMaxProperties     string                       `yaml:"-"`
+	msgRequired          map[string]string            `yaml:"-"`
+	msgDependentRequired map[string]map[string]string `yaml:"-"`
+}
+
+// MarshalJSON marshals the schema into JSON, respecting the `Extensions` map
+// to marshal extensions inline.
+func (s *Schema) MarshalJSON() ([]byte, error) {
+	var typ any = s.Type
+	if s.Nullable {
+		typ = []string{s.Type, "null"}
+	}
+
+	var contentMediaType string
+	if s.Format == "binary" {
+		contentMediaType = "application/octet-stream"
+	}
+
+	props := s.Properties
+	for _, ps := range props {
+		if ps.hidden {
+			// Copy the map to avoid modifying the original schema.
+			props = make(map[string]*Schema, len(s.Properties))
+			for k, v := range s.Properties {
+				if !v.hidden {
+					props[k] = v
+				}
+			}
+			break
+		}
+	}
+
+	return marshalJSON([]jsonFieldInfo{
+		{"type", typ, omitEmpty},
+		{"title", s.Title, omitEmpty},
+		{"description", s.Description, omitEmpty},
+		{"$ref", s.Ref, omitEmpty},
+		{"format", s.Format, omitEmpty},
+		{"contentMediaType", contentMediaType, omitEmpty},
+		{"contentEncoding", s.ContentEncoding, omitEmpty},
+		{"default", s.Default, omitNil},
+		{"examples", s.Examples, omitEmpty},
+		{"items", s.Items, omitEmpty},
+		{"additionalProperties", s.AdditionalProperties, omitNil},
+		{"properties", props, omitEmpty},
+		{"enum", s.Enum, omitEmpty},
+		{"const", s.Const, omitNil},
+		{"minimum", s.Minimum, omitEmpty},
+		{"exclusiveMinimum", s.ExclusiveMinimum, omitEmpty},
+		{"maximum", s.Maximum, omitEmpty},
+		{"exclusiveMaximum", s.ExclusiveMaximum, omitEmpty},
+		{"multipleOf", s.MultipleOf, omitEmpty},
+		{"minLength", s.MinLength, omitEmpty},
+		{"maxLength", s.MaxLength, omitEmpty},
+		{"pattern", s.Pattern, omitEmpty},
+		{"patternDescription", s.PatternDescription, omitEmpty},
+		{"minItems", s.MinItems, omitEmpty},
+		{"maxItems", s.MaxItems, omitEmpty},
+		{"uniqueItems", s.UniqueItems, omitEmpty},
+		{"required", s.Required, omitEmpty},
+		{"dependentRequired", s.DependentRequired, omitEmpty},
+		{"minProperties", s.MinProperties, omitEmpty},
+		{"maxProperties", s.MaxProperties, omitEmpty},
+		{"readOnly", s.ReadOnly, omitEmpty},
+		{"writeOnly", s.WriteOnly, omitEmpty},
+		{"deprecated", s.Deprecated, omitEmpty},
+		{"oneOf", s.OneOf, omitEmpty},
+		{"anyOf", s.AnyOf, omitEmpty},
+		{"allOf", s.AllOf, omitEmpty},
+		{"not", s.Not, omitEmpty},
+		{"discriminator", s.Discriminator, omitEmpty},
+	}, s.Extensions)
+}
+
+// UnmarshalJSON loads a JSON Schema, such as one stored for runtime validation.
+// A `type` array may hold one type plus "null" (setting Nullable), `x-` keys
+// become Extensions, and unsupported keywords are ignored. Messages are
+// precomputed as Validate silently skips properties and patterns without them.
+func (s *Schema) UnmarshalJSON(data []byte) error {
+	var typ json.RawMessage
+	var addl json.RawMessage
+
+	// contentMediaType is omitted as MarshalJSON derives it from format.
+	if err := unmarshalJSON(data, map[string]any{
+		"type":                 &typ,
+		"title":                &s.Title,
+		"description":          &s.Description,
+		"$ref":                 &s.Ref,
+		"format":               &s.Format,
+		"contentEncoding":      &s.ContentEncoding,
+		"default":              &s.Default,
+		"examples":             &s.Examples,
+		"items":                &s.Items,
+		"additionalProperties": &addl,
+		"properties":           &s.Properties,
+		"enum":                 &s.Enum,
+		"const":                &s.Const,
+		"minimum":              &s.Minimum,
+		"exclusiveMinimum":     &s.ExclusiveMinimum,
+		"maximum":              &s.Maximum,
+		"exclusiveMaximum":     &s.ExclusiveMaximum,
+		"multipleOf":           &s.MultipleOf,
+		"minLength":            &s.MinLength,
+		"maxLength":            &s.MaxLength,
+		"pattern":              &s.Pattern,
+		"patternDescription":   &s.PatternDescription,
+		"minItems":             &s.MinItems,
+		"maxItems":             &s.MaxItems,
+		"uniqueItems":          &s.UniqueItems,
+		"required":             &s.Required,
+		"dependentRequired":    &s.DependentRequired,
+		"minProperties":        &s.MinProperties,
+		"maxProperties":        &s.MaxProperties,
+		"readOnly":             &s.ReadOnly,
+		"writeOnly":            &s.WriteOnly,
+		"deprecated":           &s.Deprecated,
+		"oneOf":                &s.OneOf,
+		"anyOf":                &s.AnyOf,
+		"allOf":                &s.AllOf,
+		"not":                  &s.Not,
+		"discriminator":        &s.Discriminator,
+	}, &s.Extensions); err != nil {
+		return err
+	}
+
+	// Inverse of MarshalJSON emitting `[type, "null"]` for nullable schemas.
+	if len(typ) > 0 {
+		var types []string
+		if json.Unmarshal(typ, &types) != nil {
+			var single string
+			if err := json.Unmarshal(typ, &single); err != nil {
+				return fmt.Errorf("type: %w", err)
+			}
+			types = []string{single}
+		}
+		// Reset so decoding into a reused Schema doesn't see the old type.
+		s.Type = ""
+		s.Nullable = false
+		for _, t := range types {
+			switch {
+			case t == "null":
+				s.Nullable = true
+			case s.Type != "":
+				return fmt.Errorf("type: multiple non-null types are unsupported: %s", typ)
+			default:
+				s.Type = t
+			}
+		}
+		if s.Nullable && s.Type == "" {
+			return fmt.Errorf("type: null-only types are unsupported: %s", typ)
+		}
+	}
+
+	// Validate only understands bool or *Schema here, not a generic map. Null
+	// would otherwise decode as false and silently disallow extra properties.
+	if len(addl) > 0 && string(addl) != "null" {
+		var b bool
+		if json.Unmarshal(addl, &b) == nil {
+			s.AdditionalProperties = b
+		} else {
+			addlSchema := &Schema{}
+			if err := json.Unmarshal(addl, addlSchema); err != nil {
+				return fmt.Errorf("additionalProperties: %w", err)
+			}
+			s.AdditionalProperties = addlSchema
+		}
+	}
+
+	// A null subschema would panic in PrecomputeMessages and Validate.
+	for name, sub := range s.Properties {
+		if sub == nil {
+			return fmt.Errorf("properties: %s: null schema", name)
+		}
+	}
+	for key, subs := range map[string][]*Schema{"oneOf": s.OneOf, "anyOf": s.AnyOf, "allOf": s.AllOf} {
+		if slices.Contains(subs, nil) {
+			return fmt.Errorf("%s: null schema", key)
+		}
+	}
+
+	// PrecomputeMessages panics on a bad pattern; this input is untrusted.
+	if s.Pattern != "" {
+		if _, err := regexp.Compile(s.Pattern); err != nil {
+			return fmt.Errorf("pattern: %w", err)
+		}
+	}
+	s.PrecomputeMessages()
+	return nil
+}
+
+// PrecomputeMessages tries to precompute as many validation error messages
+// as possible so that new strings aren't allocated during request validation.
+func (s *Schema) PrecomputeMessages() {
+	s.msgEnum = ErrorFormatter(validation.MsgExpectedOneOf, strings.Join(mapTo(s.Enum, func(v any) string {
+		return fmt.Sprintf("%v", v)
+	}), ", "))
+	if s.Const != nil {
+		s.msgConst = ErrorFormatter(validation.MsgExpectedConst, fmt.Sprintf("%v", s.Const))
+	}
+	if s.Minimum != nil {
+		s.msgMinimum = ErrorFormatter(validation.MsgExpectedMinimumNumber, *s.Minimum)
+	}
+	if s.ExclusiveMinimum != nil {
+		s.msgExclusiveMinimum = ErrorFormatter(validation.MsgExpectedExclusiveMinimumNumber, *s.ExclusiveMinimum)
+	}
+	if s.Maximum != nil {
+		s.msgMaximum = ErrorFormatter(validation.MsgExpectedMaximumNumber, *s.Maximum)
+	}
+	if s.ExclusiveMaximum != nil {
+		s.msgExclusiveMaximum = ErrorFormatter(validation.MsgExpectedExclusiveMaximumNumber, *s.ExclusiveMaximum)
+	}
+	if s.MultipleOf != nil {
+		s.msgMultipleOf = ErrorFormatter(validation.MsgExpectedNumberBeMultipleOf, *s.MultipleOf)
+	}
+	if s.MinLength != nil {
+		s.msgMinLength = ErrorFormatter(validation.MsgExpectedMinLength, *s.MinLength)
+	}
+	if s.MaxLength != nil {
+		s.msgMaxLength = ErrorFormatter(validation.MsgExpectedMaxLength, *s.MaxLength)
+	}
+	if s.Pattern != "" {
+		s.patternRe = regexp.MustCompile(s.Pattern)
+		if s.PatternDescription != "" {
+			s.msgPattern = ErrorFormatter(validation.MsgExpectedBePattern, s.PatternDescription)
+		} else {
+			s.msgPattern = ErrorFormatter(validation.MsgExpectedMatchPattern, s.Pattern)
+		}
+	}
+	if s.MinItems != nil {
+		s.msgMinItems = ErrorFormatter(validation.MsgExpectedMinItems, *s.MinItems)
+	}
+	if s.MaxItems != nil {
+		s.msgMaxItems = ErrorFormatter(validation.MsgExpectedMaxItems, *s.MaxItems)
+	}
+	if s.MinProperties != nil {
+		s.msgMinProperties = ErrorFormatter(validation.MsgExpectedMinProperties, *s.MinProperties)
+	}
+	if s.MaxProperties != nil {
+		s.msgMaxProperties = ErrorFormatter(validation.MsgExpectedMaxProperties, *s.MaxProperties)
+	}
+
+	if s.Required != nil {
+		if s.msgRequired == nil {
+			s.msgRequired = map[string]string{}
+		}
+		for _, name := range s.Required {
+			s.msgRequired[name] = ErrorFormatter(validation.MsgExpectedRequiredProperty, name)
+		}
+	}
+
+	if s.DependentRequired != nil {
+		if s.msgDependentRequired == nil {
+			s.msgDependentRequired = map[string]map[string]string{}
+		}
+		for name, dependents := range s.DependentRequired {
+			for _, dependent := range dependents {
+				if s.msgDependentRequired[name] == nil {
+					s.msgDependentRequired[name] = map[string]string{}
+				}
+				s.msgDependentRequired[name][dependent] = ErrorFormatter(validation.MsgExpectedDependentRequiredProperty, dependent, name)
+			}
+		}
+	}
+
+	s.propertyNames = make([]string, 0, len(s.Properties))
+	for name := range s.Properties {
+		s.propertyNames = append(s.propertyNames, name)
+	}
+	sort.Strings(s.propertyNames)
+
+	s.requiredMap = map[string]bool{}
+	for _, name := range s.Required {
+		s.requiredMap[name] = true
+	}
+
+	if s.Items != nil {
+		s.Items.PrecomputeMessages()
+	}
+
+	for _, prop := range s.Properties {
+		prop.PrecomputeMessages()
+	}
+
+	for _, sub := range s.OneOf {
+		sub.PrecomputeMessages()
+	}
+
+	for _, sub := range s.AnyOf {
+		sub.PrecomputeMessages()
+	}
+
+	for _, sub := range s.AllOf {
+		sub.PrecomputeMessages()
+	}
+
+	if sub := s.Not; sub != nil {
+		sub.PrecomputeMessages()
+	}
+}
+
+func boolTag(f reflect.StructField, tag string, def bool) bool {
+	if v := f.Tag.Get(tag); v != "" {
+		switch v {
+		case "true":
+			return true
+		case "false":
+			return false
+		default:
+			panic(fmt.Errorf("invalid bool tag '%s' for field '%s': %v", tag, f.Name, v))
+		}
+	}
+	return def
+}
+
+func intTag(f reflect.StructField, tag string) *int {
+	if v := f.Tag.Get(tag); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return &i
+		} else {
+			panic(fmt.Errorf("invalid int tag '%s' for field '%s': %v (%w)", tag, f.Name, v, err))
+		}
+	}
+	return nil
+}
+
+func floatTag(f reflect.StructField, tag string) *float64 {
+	if v := f.Tag.Get(tag); v != "" {
+		if i, err := strconv.ParseFloat(v, 64); err == nil {
+			return &i
+		} else {
+			panic(fmt.Errorf("invalid float tag '%s' for field '%s': %v (%w)", tag, f.Name, v, err))
+		}
+	}
+	return nil
+}
+
+func stringTag(f reflect.StructField, tag string, def string) string {
+	if v := f.Tag.Get(tag); v != "" {
+		return v
+	}
+	return def
+}
+
+// ensureType panics if the given value does not match the JSON Schema type.
+func ensureType(r Registry, fieldName string, s *Schema, value string, v any) {
+	if s.Ref != "" {
+		s = r.SchemaFromRef(s.Ref)
+		if s == nil {
+			// We may not have access to this type, e.g., custom schema provided
+			// by the user with remote refs. Skip validation.
+			return
+		}
+	}
+
+	switch s.Type {
+	case TypeBoolean:
+		if _, ok := v.(bool); !ok {
+			panic(fmt.Errorf("invalid boolean tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+		}
+	case TypeInteger, TypeNumber:
+		if _, ok := v.(float64); !ok {
+			panic(fmt.Errorf("invalid number tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+		}
+
+		if s.Type == TypeInteger {
+			if v.(float64) != float64(int(v.(float64))) {
+				panic(fmt.Errorf("invalid integer tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+			}
+		}
+	case TypeString:
+		if _, ok := v.(string); !ok {
+			panic(fmt.Errorf("invalid string tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+		}
+	case TypeArray:
+		if _, ok := v.([]any); !ok {
+			panic(fmt.Errorf("invalid array tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+		}
+
+		if s.Items != nil {
+			for i, item := range v.([]any) {
+				b, _ := json.Marshal(item)
+				ensureType(r, fieldName+"["+strconv.Itoa(i)+"]", s.Items, string(b), item)
+			}
+		}
+	case TypeObject:
+		if _, ok := v.(map[string]any); !ok {
+			panic(fmt.Errorf("invalid object tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+		}
+
+		for name, prop := range s.Properties {
+			if val, ok := v.(map[string]any)[name]; ok {
+				b, _ := json.Marshal(val)
+				ensureType(r, fieldName+"."+name, prop, string(b), val)
+			}
+		}
+	}
+}
+
+// convertType panics if the given value does not match or cannot be converted
+// to the field's Go type.
+func convertType(fieldName string, t reflect.Type, v any) any {
+	if v == nil {
+		return v
+	}
+
+	tv := reflect.TypeOf(v)
+	if tv == t {
+		return v
+	}
+
+	target := deref(t)
+	if s, ok := v.(string); ok && isTextUnmarshaler(target) {
+		converted := reflect.New(target)
+		if err := converted.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(s)); err != nil {
+			panic(fmt.Errorf("unable to convert %q to %v for field '%s': %v: %w", s, t, fieldName, err, ErrSchemaInvalid))
+		}
+		if t.Kind() == reflect.Pointer {
+			return converted.Interface()
+		}
+		return converted.Elem().Interface()
+	}
+
+	// JSON numbers decode as float64 and reflect's Convert silently wraps
+	// out-of-range values, e.g. 128 -> int8(-128).
+	if f, ok := v.(float64); ok && overflows(target, f) {
+		panic(fmt.Errorf("value %v overflows %v for field '%s': %w", f, t, fieldName, ErrSchemaInvalid))
+	}
+
+	// Directly convert equal underlying types, avoiding traversal.
+	// e.g., json.RawMessage -> []byte.
+	if tv.ConvertibleTo(t) {
+		return reflect.ValueOf(v).Convert(t).Interface()
+	}
+
+	val := reflect.ValueOf(v)
+
+	if tv.Kind() == reflect.Slice {
+		// Slices can't be cast due to the different layouts. Instead, we make a
+		// new instance of the destination slice, and convert each value in
+		// the original to the new type.
+		tmp := reflect.MakeSlice(t, 0, val.Len())
+		for i := 0; i < val.Len(); i++ {
+			item := val.Index(i)
+			if item.Kind() == reflect.Interface {
+				// E.g. []any and we want the underlying type.
+				item = item.Elem()
+			}
+
+			item = reflect.Indirect(item)
+			tmp = reflect.Append(tmp, reflect.ValueOf(convertType(fieldName, t.Elem(), item.Interface())))
+		}
+
+		return tmp.Interface()
+	}
+
+	if !tv.ConvertibleTo(target) {
+		panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
+	}
+
+	converted := val.Convert(target)
+	if t.Kind() == reflect.Pointer {
+		// Special case: if the field is a pointer, we need to get a pointer
+		// to the converted value.
+		tmp := reflect.New(t.Elem())
+		tmp.Elem().Set(converted)
+		converted = tmp
+	}
+
+	return converted.Interface()
+}
+
+// intRange returns the bounds of integer type t. 64-bit bounds round to the
+// nearest float64, so tags written as e.g. MaxInt64 still fall within them.
+func intRange(t reflect.Type) (lo, hi float64, ok bool) {
+	switch t.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		hi = math.Ldexp(1, t.Bits()-1) - 1
+		return -hi - 1, hi, true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return 0, math.Ldexp(1, t.Bits()) - 1, true
+	}
+	return 0, 0, false
+}
+
+// overflows reports whether f cannot be represented by numeric type t.
+func overflows(t reflect.Type, f float64) bool {
+	z := reflect.Zero(t)
+	switch t.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return f < -(1<<63) || f >= 1<<63 || z.OverflowInt(int64(f))
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return f < 0 || f >= 1<<64 || z.OverflowUint(uint64(f))
+	case reflect.Float32, reflect.Float64:
+		return z.OverflowFloat(f)
+	}
+	return false
+}
+
+func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
+	if s.Ref != "" {
+		s = r.SchemaFromRef(s.Ref)
+		if s == nil {
+			return nil
+		}
+	}
+
+	// Special case: strings don't need quotes.
+	if s.Type == TypeString {
+		return value
+	}
+
+	// Special case: array of strings with comma-separated values and no quotes.
+	if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && value[0] != '[' {
+		var values []string
+		for s := range strings.SplitSeq(value, ",") {
+			values = append(values, strings.TrimSpace(s))
+		}
+		return values
+	}
+
+	var v any
+	if err := json.Unmarshal([]byte(value), &v); err != nil {
+		panic(fmt.Errorf("invalid %s tag value '%s' for field '%s': %w", s.Type, value, fieldName, err))
+	}
+
+	ensureType(r, fieldName, s, value, v)
+
+	return v
+}
+
+// jsonTag returns a value of the schema's type for the given tag string.
+// Uses JSON parsing if the schema is not a string.
+func jsonTag(r Registry, f reflect.StructField, s *Schema, name string) any {
+	t := f.Type
+	if value := f.Tag.Get(name); value != "" {
+		parsed := jsonTagValue(r, f.Name, s, value)
+		converted := convertType(f.Name, t, parsed)
+		// TextUnmarshaler types are documented as strings, so keep the tag text.
+		base := deref(t)
+		if _, ok := parsed.(string); ok && isTextUnmarshaler(base) {
+			return parsed
+		}
+		if base.Kind() == reflect.Slice && isTextUnmarshaler(deref(base.Elem())) {
+			return parsed
+		}
+		return converted
+	}
+	return nil
+}
+
+// SchemaFromField generates a schema for a given struct field. If the field
+// is a struct (or slice/map of structs) then the registry is used to
+// potentially get a reference to that type.
+//
+// This is used by `huma.SchemaFromType` when it encounters a struct, and
+// is used to generate schemas for path/query/header parameters.
+func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Schema {
+	fs := registry.Schema(f.Type, true, hint)
+	if fs == nil {
+		return fs
+	}
+	fs.Description = stringTag(f, "doc", fs.Description)
+	if fs.Format == "date-time" && f.Tag.Get("header") != "" {
+		// Special case: this is a header and uses a different date/time format.
+		// Note that it can still be overridden by the `format` or `timeFormat`
+		// tags later.
+		fs.Format = "date-time-http"
+	}
+	if format := f.Tag.Get("format"); format != "" {
+		targetSchema(fs).Format = format
+	}
+	if timeFmt := f.Tag.Get("timeFormat"); timeFmt != "" {
+		s := targetSchema(fs)
+		switch timeFmt {
+		case "2006-01-02":
+			s.Format = "date"
+		case "15:04:05":
+			s.Format = "time"
+		default:
+			s.Format = timeFmt
+		}
+	}
+	fs.ContentEncoding = stringTag(f, "encoding", fs.ContentEncoding)
+	if defaultValue := jsonTag(registry, f, fs, "default"); defaultValue != nil {
+		fs.Default = defaultValue
+	}
+
+	if value, ok := f.Tag.Lookup("example"); ok {
+		if e := jsonTagValue(registry, f.Name, fs, value); e != nil {
+			fs.Examples = []any{e}
+		}
+	}
+
+	if enum := f.Tag.Get("enum"); enum != "" {
+		s := targetSchema(fs)
+		var enumValues []any
+		for e := range strings.SplitSeq(enum, ",") {
+			enumValues = append(enumValues, jsonTagValue(registry, f.Name, s, e))
+		}
+		s.Enum = enumValues
+	}
+
+	if constValue := f.Tag.Get("const"); constValue != "" {
+		s := targetSchema(fs)
+		s.Const = jsonTagValue(registry, f.Name, s, constValue)
+	}
+
+	fs.Nullable = boolTag(f, "nullable", fs.Nullable)
+	if fs.Nullable && fs.Ref != "" && registry.SchemaFromRef(fs.Ref).Type == "object" {
+		// Nullability is only supported for scalar types for now. Objects are
+		// much more complicated. The `null` type lives within the object
+		// definition (requiring multiple copies of the object) or needs to use
+		// `anyOf` or `not` which is not supported by all code generators, or is
+		// supported poorly & generates hard-to-use code. This is less than ideal
+		// but a compromise for now to support some nullability built-in.
+		panic(fmt.Errorf("nullable is not supported for field '%s' which is type '%s'", f.Name, fs.Ref))
+	}
+
+	if v := floatTag(f, "minimum"); v != nil {
+		targetSchema(fs).Minimum = v
+	}
+	if v := floatTag(f, "exclusiveMinimum"); v != nil {
+		targetSchema(fs).ExclusiveMinimum = v
+	}
+	if v := floatTag(f, "maximum"); v != nil {
+		targetSchema(fs).Maximum = v
+	}
+	if v := floatTag(f, "exclusiveMaximum"); v != nil {
+		targetSchema(fs).ExclusiveMaximum = v
+	}
+
+	// A bound outside the Go type's range documents values the server rejects.
+	t := deref(f.Type)
+	if k := t.Kind(); fs.Type == TypeArray && (k == reflect.Slice || k == reflect.Array) {
+		t = deref(t.Elem())
+	}
+	ts := targetSchema(fs)
+	if lo, hi, ok := intRange(t); ok && ts.Type == TypeInteger {
+		for _, b := range []struct {
+			name  string
+			v     *float64
+			slack float64
+		}{{"minimum", ts.Minimum, 0}, {"exclusiveMinimum", ts.ExclusiveMinimum, 1}, {"maximum", ts.Maximum, 0}, {"exclusiveMaximum", ts.ExclusiveMaximum, 1}} {
+			if b.v != nil && (*b.v < lo-b.slack || *b.v > hi+b.slack) {
+				panic(fmt.Errorf("%s %v for field '%s' is outside the range of %v: %w", b.name, *b.v, f.Name, t, ErrSchemaInvalid))
+			}
+		}
+	}
+	if v := floatTag(f, "multipleOf"); v != nil {
+		targetSchema(fs).MultipleOf = v
+	}
+	if v := intTag(f, "minLength"); v != nil {
+		targetSchema(fs).MinLength = v
+	}
+	if v := intTag(f, "maxLength"); v != nil {
+		targetSchema(fs).MaxLength = v
+	}
+	if v := f.Tag.Get("pattern"); v != "" {
+		targetSchema(fs).Pattern = v
+	}
+	if v := f.Tag.Get("patternDescription"); v != "" {
+		targetSchema(fs).PatternDescription = v
+	}
+	if v := intTag(f, "minItems"); v != nil {
+		fs.MinItems = v
+	}
+	if v := intTag(f, "maxItems"); v != nil {
+		fs.MaxItems = v
+	}
+	if v := intTag(f, "minProperties"); v != nil {
+		fs.MinProperties = v
+	}
+	if v := intTag(f, "maxProperties"); v != nil {
+		fs.MaxProperties = v
+	}
+	fs.UniqueItems = boolTag(f, "uniqueItems", fs.UniqueItems)
+	fs.ReadOnly = boolTag(f, "readOnly", fs.ReadOnly)
+	fs.WriteOnly = boolTag(f, "writeOnly", fs.WriteOnly)
+	fs.Deprecated = boolTag(f, "deprecated", fs.Deprecated)
+	fs.PrecomputeMessages()
+
+	fs.hidden = boolTag(f, "hidden", fs.hidden)
+
+	return fs
+}
+
+// targetSchema returns the schema to apply scalar constraints to
+// (the items schema for arrays, otherwise the schema itself).
+func targetSchema(fs *Schema) *Schema {
+	if fs.Type == TypeArray {
+		return fs.Items
+	}
+	return fs
+}
+
+// fieldInfo stores information about a field, which may come from an
+// embedded type. The `Parent` stores the field's direct parent.
+type fieldInfo struct {
+	Parent reflect.Type
+	Field  reflect.StructField
+}
+
+// getFields performs a breadth-first search for all fields, including embedded
+// ones. It may return multiple fields with the same name, the first of which
+// represents the outermost declaration.
+func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo {
+	fields := make([]fieldInfo, 0, typ.NumField())
+	var embedded []reflect.StructField
+
+	if _, ok := visited[typ]; ok {
+		return fields
+	}
+	visited[typ] = struct{}{}
+
+	for i := 0; i < typ.NumField(); i++ {
+		f := typ.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+
+		// An anonymous (embedded) field is merged into the parent object when
+		// it has no explicit JSON name. This covers both an absent tag and a
+		// name-less tag such as `json:",inline"` or `json:",omitempty"`. Giving
+		// the field a name (e.g. `json:"meta"`) makes it a nested object
+		// instead, matching encoding/json's behavior.
+		jsonName, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		if f.Anonymous && jsonName == "" {
+			embedded = append(embedded, f)
+			continue
+		}
+
+		fields = append(fields, fieldInfo{typ, f})
+	}
+
+	for _, f := range embedded {
+		newTyp := f.Type
+		for newTyp.Kind() == reflect.Pointer {
+			newTyp = newTyp.Elem()
+		}
+		if newTyp.Kind() == reflect.Struct {
+			fields = append(fields, getFields(newTyp, visited)...)
+		}
+	}
+
+	return fields
+}
+
+// SchemaProvider is an interface that can be implemented by types to provide
+// a custom schema for themselves, overriding the built-in schema generation.
+// This can be used by custom types with their own special serialization rules.
+type SchemaProvider interface {
+	Schema(r Registry) *Schema
+}
+
+// SchemaTransformer is an interface that types can implement to transform
+// the generated schema as needed. This can be used to leverage the
+// default schema generation for a type and arbitrarily modify parts of it.
+type SchemaTransformer interface {
+	TransformSchema(r Registry, s *Schema) *Schema
+}
+
+// SchemaFromType returns a schema for a given type, using the registry to
+// possibly create references for nested structs. The schema that is returned
+// can then be passed to `huma.Validate` to efficiently validate incoming
+// requests.
+//
+//	// Create a registry and register a type.
+//	registry := huma.NewMapRegistry("#/prefix", huma.DefaultSchemaNamer)
+//	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
+func SchemaFromType(r Registry, t reflect.Type) *Schema {
+	s := schemaFromType(r, t)
+	t = deref(t)
+
+	// Transform generated schema if type implements SchemaTransformer
+	ptrT := reflect.PointerTo(t)
+	if t.Implements(schemaTransformerType) || ptrT.Implements(schemaTransformerType) {
+		s = reflect.New(t).Interface().(SchemaTransformer).TransformSchema(r, s)
+
+		// The schema may have been modified, so recompute the error messages.
+		s.PrecomputeMessages()
+	}
+	return s
+}
+
+func schemaFromType(r Registry, t reflect.Type) *Schema {
+	isPointer := t.Kind() == reflect.Pointer
+
+	s := Schema{}
+	t = deref(t)
+
+	ptrT := reflect.PointerTo(t)
+	if t.Implements(schemaProviderType) || ptrT.Implements(schemaProviderType) {
+		// Special case: type provides its own schema. Do not try to generate.
+		custom := reflect.New(t).Interface().(SchemaProvider).Schema(r)
+		custom.PrecomputeMessages()
+		return custom
+	}
+
+	if s := stdlibUUIDSchema(t, isPointer); s != nil {
+		return s
+	}
+
+	// Handle special cases for known stdlib types.
+	switch t {
+	case timeType:
+		return &Schema{Type: TypeString, Nullable: isPointer, Format: "date-time"}
+	case urlType:
+		return &Schema{Type: TypeString, Nullable: isPointer, Format: "uri"}
+	case ipType:
+		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ipv4"}
+	case ipAddrType:
+		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ip"}
+	case rawMessageType:
+		return &Schema{}
+	}
+
+	if t.Implements(textUnmarshalerType) || ptrT.Implements(textUnmarshalerType) {
+		// Special case: types that implement encoding.TextUnmarshaler are able to
+		// be loaded from plain text, and so should be treated as strings.
+		// This behavior can be overridden by implementing `huma.SchemaProvider`
+		// and returning a custom schema.
+		return &Schema{Type: TypeString, Nullable: isPointer}
+	}
+
+	minZero := 0.0
+	switch t.Kind() {
+	case reflect.Bool:
+		s.Type = TypeBoolean
+	case reflect.Int:
+		s.Type = TypeInteger
+		if bits.UintSize == 32 {
+			s.Format = "int32"
+		} else {
+			s.Format = "int64"
+		}
+	case reflect.Int8, reflect.Int16, reflect.Uint8, reflect.Uint16:
+		// The int32 format alone would advertise values the type can't hold.
+		s.Type = TypeInteger
+		s.Format = "int32"
+		lo, hi, _ := intRange(t)
+		s.Minimum = &lo
+		s.Maximum = &hi
+	case reflect.Int32:
+		s.Type = TypeInteger
+		s.Format = "int32"
+	case reflect.Int64:
+		s.Type = TypeInteger
+		s.Format = "int64"
+	case reflect.Uint:
+		s.Type = TypeInteger
+		if bits.UintSize == 32 {
+			s.Format = "int32"
+		} else {
+			s.Format = "int64"
+		}
+		s.Minimum = &minZero
+	case reflect.Uint32:
+		// Unsigned integers can't be negative.
+		s.Type = TypeInteger
+		s.Format = "int32"
+		s.Minimum = &minZero
+	case reflect.Uint64:
+		// Unsigned integers can't be negative.
+		s.Type = TypeInteger
+		s.Format = "int64"
+		s.Minimum = &minZero
+	case reflect.Float32:
+		s.Type = TypeNumber
+		s.Format = "float"
+	case reflect.Float64:
+		s.Type = TypeNumber
+		s.Format = "double"
+	case reflect.String:
+		s.Type = TypeString
+	case reflect.Slice, reflect.Array:
+		if t.Elem().Kind() == reflect.Uint8 {
+			// Special case: []byte will be serialized as a base64 string.
+			s.Type = TypeString
+			s.ContentEncoding = "base64"
+		} else {
+			s.Type = TypeArray
+			s.Nullable = DefaultArrayNullable
+			s.Items = r.Schema(t.Elem(), true, t.Name()+"Item")
+
+			if t.Kind() == reflect.Array {
+				l := t.Len()
+				s.MinItems = &l
+				s.MaxItems = &l
+			}
+		}
+	case reflect.Map:
+		s.Type = TypeObject
+		s.AdditionalProperties = r.Schema(t.Elem(), true, t.Name()+"Value")
+	case reflect.Struct:
+		var required []string
+		requiredMap := map[string]bool{}
+		var propNames []string
+		fieldSet := map[string]struct{}{}
+		props := map[string]*Schema{}
+		dependentRequiredMap := map[string][]string{}
+		for _, info := range getFields(t, make(map[reflect.Type]struct{})) {
+			f := info.Field
+
+			if _, ok := fieldSet[f.Name]; ok {
+				// This field was overridden by an ancestor type, so we
+				// should ignore it.
+				continue
+			}
+
+			fieldSet[f.Name] = struct{}{}
+
+			// Controls whether the field is required or not. All fields start as
+			// required (unless the registry says otherwise), then can be made
+			// optional with the `omitempty` JSON tag, `omitzero` JSON tag, or it
+			// can be overridden manually via the `required` tag.
+			fieldRequired := !getConfig[registryConfig](r).FieldsOptionalByDefault
+
+			name := f.Name
+			if j := f.Tag.Get("json"); j != "" {
+				if n := strings.Split(j, ",")[0]; n != "" {
+					name = n
+				}
+				if strings.Contains(j, "omitempty") {
+					fieldRequired = false
+				}
+				if strings.Contains(j, "omitzero") {
+					fieldRequired = false
+				}
+			}
+			if name == "-" {
+				// This field is deliberately ignored.
+				continue
+			}
+
+			if _, ok := f.Tag.Lookup("required"); ok {
+				fieldRequired = boolTag(f, "required", false)
+			}
+
+			if dr := f.Tag.Get("dependentRequired"); strings.TrimSpace(dr) != "" {
+				dependentRequiredMap[name] = strings.Split(dr, ",")
+			}
+
+			fs := SchemaFromField(r, f, t.Name()+f.Name+"Struct")
+			if fs != nil {
+				props[name] = fs
+				propNames = append(propNames, name)
+
+				if fs.hidden {
+					// This field is deliberately ignored. It may still exist but won't
+					// be documented as a required field.
+					fieldRequired = false
+				}
+
+				if fieldRequired {
+					required = append(required, name)
+					requiredMap[name] = true
+				}
+
+				// Special case: pointer with omitempty and not manually set to
+				// nullable, which will never get `null` sent over the wire.
+				if f.Type.Kind() == reflect.Pointer && strings.Contains(f.Tag.Get("json"), "omitempty") && f.Tag.Get("nullable") != "true" {
+					fs.Nullable = false
+				}
+			}
+		}
+		s.Type = TypeObject
+
+		// Check if the dependent fields exist. If they don't, panic with the correct message.
+		var errs []string
+		depKeys := make([]string, 0, len(dependentRequiredMap))
+		for field := range dependentRequiredMap {
+			depKeys = append(depKeys, field)
+		}
+		sort.Strings(depKeys)
+		for _, field := range depKeys {
+			dependents := dependentRequiredMap[field]
+			for _, dependent := range dependents {
+				if _, ok := props[dependent]; ok {
+					continue
+				}
+				errs = append(errs, fmt.Sprintf("dependent field '%s' for field '%s' does not exist", dependent, field))
+			}
+		}
+		if errs != nil {
+			panic(errors.New(strings.Join(errs, "; ")))
+		}
+
+		additionalProps := getConfig[registryConfig](r).AllowAdditionalPropertiesByDefault
+		if f, ok := t.FieldByName("_"); ok {
+			if _, ok = f.Tag.Lookup("additionalProperties"); ok {
+				additionalProps = boolTag(f, "additionalProperties", false)
+			}
+
+			if _, ok = f.Tag.Lookup("nullable"); ok {
+				// Allow overriding nullability per struct.
+				s.Nullable = boolTag(f, "nullable", false)
+			}
+		}
+
+		s.AdditionalProperties = additionalProps
+		s.Properties = props
+		s.propertyNames = propNames
+		s.Required = required
+		s.DependentRequired = dependentRequiredMap
+		s.requiredMap = requiredMap
+		s.PrecomputeMessages()
+	case reflect.Interface:
+		// Interfaces mean any object.
+	default:
+		return nil
+	}
+
+	switch s.Type {
+	case TypeBoolean, TypeInteger, TypeNumber, TypeString:
+		// Scalar types which are pointers are nullable by default. This can be
+		// overridden via the `nullable:"false"` field tag in structs.
+		s.Nullable = isPointer
+	}
+
+	return &s
+}

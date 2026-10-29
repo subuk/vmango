@@ -18,7 +18,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
-	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 	"github.com/unrolled/render"
 	"golang.org/x/crypto/bcrypt"
@@ -61,7 +60,6 @@ type Environ struct {
 	vms      *libcompute.VirtualMachineService
 	images   *libcompute.ImageService
 	vmanager *libcompute.VirtualMachineManager
-	ws       *websocket.Upgrader
 	cfg      *config.WebConfig
 	oauth2   *oauth2.Config
 	oidcp    *oidc.Provider
@@ -177,9 +175,6 @@ func New(
 
 	env.random = rand.New(rand.NewSource(time.Now().UnixNano()))
 	env.render = renderer
-	env.ws = &websocket.Upgrader{
-		Subprotocols: []string{"binary"},
-	}
 	env.logger = logger
 	env.router = router
 	env.networks = networks
@@ -190,6 +185,8 @@ func New(
 	env.vms = vms
 	env.vmanager = vmanager
 	env.sessions = sessionStore
+
+	env.registerAPI()
 
 	router.HandleFunc("/static/{name:.*}", env.Static(cfg)).Name("static")
 

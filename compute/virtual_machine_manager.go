@@ -6,6 +6,7 @@ import (
 	"os"
 	"subuk/vmango/configdrive"
 	"subuk/vmango/util"
+	"sync"
 
 	"github.com/google/uuid"
 )
@@ -46,6 +47,7 @@ type VirtualMachineManagerCreateParams struct {
 }
 
 type VirtualMachineManager struct {
+	createMu sync.Mutex
 	images   *ImageService
 	vms      *VirtualMachineService
 	volumes  *VolumeService
@@ -67,12 +69,55 @@ func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []Vir
 	return manager.CreateWithImageDefaults(vm, cloneVols, newVols, start, ImageDefaults{})
 }
 
-func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool, overrides ImageDefaults) error {
+func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool, overrides ImageDefaults) (err error) {
+	if vm == nil || vm.Id == "" || vm.NodeId == "" {
+		return fmt.Errorf("%w: VM name and node are required", ErrInvalid)
+	}
+	manager.createMu.Lock()
+	defer manager.createMu.Unlock()
+	if err := manager.vms.ValidateNew(vm); err != nil {
+		return err
+	}
+	failure := &ProvisioningError{Stage: "prepare", Node: vm.NodeId, VM: vm.Id, Volumes: []string{}}
+	mutated := false
+	defer func() {
+		if err != nil && mutated {
+			failure.Cause = err
+			err = failure
+		}
+	}()
 	prepared, clones, err := manager.PrepareImages(vm, cloneVols, newVols, overrides)
 	if err != nil {
 		return err
 	}
 	vm, cloneVols = prepared, clones
+	if err := ValidateVM(vm); err != nil {
+		return err
+	}
+	if !resourceName.MatchString(vm.Id) {
+		return fmt.Errorf("%w: invalid VM name", ErrInvalid)
+	}
+	for _, v := range vm.Volumes {
+		if err := ValidateVolumeAttachment(v); err != nil {
+			return err
+		}
+	}
+	for _, n := range vm.Interfaces {
+		if err := ValidateInterface(n); err != nil {
+			return err
+		}
+	}
+	for _, p := range newVols {
+		if err := validateVolumeCreate(VolumeCreateParams{NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}); err != nil {
+			return err
+		}
+		if err := manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}); err != nil {
+			return err
+		}
+	}
+	if vm.Config != nil && vm.Config.Initialization != "" && configdrive.NewFormat(vm.Config.Initialization) == configdrive.FormatUnknown {
+		return fmt.Errorf("%w: invalid initialization", ErrInvalid)
+	}
 	for _, p := range cloneVols {
 		params := VolumeCloneParams{
 			NodeId:       vm.NodeId,
@@ -82,10 +127,13 @@ func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine
 			NewPool:      p.NewPool,
 			NewSize:      p.NewSize,
 		}
+		failure.Stage = "clone-volume"
+		mutated = true
 		volume, err := manager.volumes.Clone(params)
 		if err != nil {
 			return util.NewError(err, "cannot clone volume")
 		}
+		failure.Volumes = append(failure.Volumes, volume.Path)
 		vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{
 			Path:       volume.Path,
 			Alias:      p.Alias,
@@ -101,10 +149,13 @@ func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine
 			Format: p.Format,
 			Size:   p.Size,
 		}
+		failure.Stage = "create-volume"
+		mutated = true
 		volume, err := manager.volumes.Create(params)
 		if err != nil {
 			return util.NewError(err, "cannot create volume")
 		}
+		failure.Volumes = append(failure.Volumes, volume.Path)
 		vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{
 			Path:       volume.Path,
 			Alias:      p.Alias,
@@ -112,15 +163,19 @@ func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine
 			DeviceBus:  p.DeviceBus,
 		})
 	}
+	failure.Stage = "define-vm"
+	mutated = true
 	if err := manager.vms.Save(vm); err != nil {
 		return err
 	}
+	failure.VMCreated = true
 	settings := manager.settings[vm.NodeId]
 	if vm.Config != nil {
 		format := settings.CdFormat
 		if vm.Config.Initialization != "" {
 			format = configdrive.NewFormat(vm.Config.Initialization)
 		}
+		failure.Stage = "generate-config-drive"
 		cdFile, err := manager.generateConfigDrive(vm.Config, format)
 		if err != nil {
 			return util.NewError(err, "cannot generate configdrive")
@@ -141,10 +196,13 @@ func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine
 			Format: VolumeFormatIso,
 			Size:   NewSize(uint64(cdLen), SizeUnitB),
 		}
+		failure.Stage = "create-config-drive"
 		cdVolume, err := manager.volumes.Create(cdVolumeParams)
 		if err != nil {
 			return util.NewError(err, "cannot create configdrive volume")
 		}
+		failure.Volumes = append(failure.Volumes, cdVolume.Path)
+		failure.Stage = "upload-config-drive"
 		if err := manager.volumes.Upload(cdVolume.Path, cdVolume.NodeId, cdFile, cdVolume.Size.Bytes()); err != nil {
 			return util.NewError(err, "cannot upload configdrive volume")
 		}
@@ -154,15 +212,17 @@ func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine
 			DeviceType: DeviceTypeDisk,
 			DeviceBus:  DeviceBusVirtio,
 		}
+		failure.Stage = "attach-config-drive"
 		if err := manager.vms.AttachVolume(vm.Id, vm.NodeId, attachedVolume); err != nil {
 			return util.NewError(err, "cannot attach configdrive volume")
 		}
 	}
+	failure.Stage = "created-event"
 	if err := manager.epub.Publish(NewEventVirtualMachineCreated(vm)); err != nil {
-		manager.vms.Delete(vm.Id, vm.NodeId) // Ignore error
 		return util.NewError(err, "cannot publish event virtual machine created")
 	}
 	if start {
+		failure.Stage = "start-vm"
 		if err := manager.vms.Start(vm.Id, vm.NodeId); err != nil {
 			return util.NewError(err, "cannot start vm")
 		}

@@ -19,3 +19,5 @@ func NewError(err error, msg string, args ...interface{}) Error {
 func (e Error) Error() string {
 	return fmt.Sprintf("%s: %s", e.Message, e.Original)
 }
+
+func (e Error) Unwrap() error { return e.Original }

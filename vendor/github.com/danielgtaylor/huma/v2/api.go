@@ -1,0 +1,791 @@
+package huma
+
+import (
+	"context"
+	"crypto/tls"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"html"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"net/url"
+	"path"
+	"reflect"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/danielgtaylor/huma/v2/negotiation"
+)
+
+var (
+	rxSchema       = regexp.MustCompile(`#/components/schemas/([^"]+)`)
+	rxServerURLVar = regexp.MustCompile(`(?i){([a-z0-9._~-]+)}`)
+)
+
+var ErrUnknownContentType = errors.New("unknown content type")
+
+var ErrUnknownAcceptContentType = errors.New("unknown accept content type")
+
+// Resolver runs a `Resolve` function after a request has been parsed, enabling
+// you to run custom validation or other code that can modify the request and /
+// or return errors.
+type Resolver interface {
+	Resolve(ctx Context) []error
+}
+
+// ResolverWithPath runs a `Resolve` function after a request has been parsed,
+// enabling you to run custom validation or other code that can modify the
+// request and / or return errors. The `prefix` is the path to the current
+// location for errors, e.g. `body.foo[0].bar`.
+type ResolverWithPath interface {
+	Resolve(ctx Context, prefix *PathBuffer) []error
+}
+
+var (
+	resolverType         = reflect.TypeFor[Resolver]()
+	resolverWithPathType = reflect.TypeFor[ResolverWithPath]()
+)
+
+// Adapter is an interface that allows the API to be used with different HTTP
+// routers and frameworks. It is designed to work with the standard library
+// `http.Request` and `http.ResponseWriter` types as well as types like
+// `gin.Context` or `fiber.Ctx` that provide both request and response
+// functionality in one place, by using the `huma.Context` interface which
+// abstracts away those router-specific differences.
+//
+// The handler function takes uses the context to get request information like
+// path / query / header params, the input body, and provide response data
+// like a status code, response headers, and a response body.
+type Adapter interface {
+	Handle(op *Operation, handler func(ctx Context))
+	ServeHTTP(http.ResponseWriter, *http.Request)
+}
+
+// Context is the current request/response context. It provides a generic
+// interface to get request information and write responses.
+type Context interface {
+	// Operation returns the OpenAPI operation that matched the request.
+	Operation() *Operation
+
+	// Context returns the underlying request context.
+	Context() context.Context
+
+	// TLS / SSL connection information.
+	TLS() *tls.ConnectionState
+
+	// Version of the HTTP protocol as text and integers.
+	Version() ProtoVersion
+
+	// Method returns the HTTP method for the request.
+	Method() string
+
+	// Host returns the HTTP host for the request.
+	Host() string
+
+	// RemoteAddr returns the remote address of the client.
+	RemoteAddr() string
+
+	// URL returns the full URL for the request.
+	URL() url.URL
+
+	// Param returns the value for the given path parameter.
+	Param(name string) string
+
+	// Query returns the value for the given query parameter.
+	Query(name string) string
+
+	// Header returns the value for the given header.
+	Header(name string) string
+
+	// EachHeader iterates over all headers and calls the given callback with
+	// the header name and value.
+	EachHeader(cb func(name, value string))
+
+	// BodyReader returns the request body reader.
+	BodyReader() io.Reader
+
+	// GetMultipartForm returns the parsed multipart form, if any.
+	GetMultipartForm() (*multipart.Form, error)
+
+	// SetReadDeadline sets the read deadline for the request body.
+	SetReadDeadline(time.Time) error
+
+	// SetStatus sets the HTTP status code for the response.
+	SetStatus(code int)
+
+	// Status returns the HTTP status code for the response.
+	Status() int
+
+	// SetHeader sets the given header to the given value, overwriting any
+	// existing value. Use `AppendHeader` to append a value instead.
+	SetHeader(name, value string)
+
+	// AppendHeader appends the given value to the given header.
+	AppendHeader(name, value string)
+
+	// BodyWriter returns the response body writer.
+	BodyWriter() io.Writer
+}
+
+// ProtoVersion represents the http protocol version.
+type ProtoVersion struct {
+	Proto      string
+	ProtoMajor int
+	ProtoMinor int
+}
+
+type humaContext Context
+
+type subContext struct {
+	humaContext
+	override context.Context
+}
+
+func (c subContext) Context() context.Context {
+	return c.override
+}
+
+// Unwrap returns the underlying Huma context, which enables you to access
+// the original adapter-specific request context.
+func (c subContext) Unwrap() Context {
+	return c.humaContext
+}
+
+// WithContext returns a new `huma.Context` with the underlying `context.Context`
+// replaced with the given one. This is useful for middleware that needs to
+// modify the request context. Adapters propagate the new context to the
+// underlying request, so the value is also visible to later middleware that
+// unwrap the context (e.g. `humachi.Unwrap`) or to native router middleware.
+func WithContext(ctx Context, override context.Context) Context {
+	if sub, ok := ctx.(interface{ WithContext(context.Context) Context }); ok {
+		return sub.WithContext(override)
+	}
+	return subContext{humaContext: ctx, override: override}
+}
+
+// WithValue returns a new `huma.Context` with the given key and value set in
+// the underlying `context.Context`. This is useful for middleware that needs to
+// set request-scoped values. Like `WithContext`, the value propagates to the
+// underlying request context.
+func WithValue(ctx Context, key, value any) Context {
+	return WithContext(ctx, context.WithValue(ctx.Context(), key, value))
+}
+
+// Transformer is a function that can modify a response body before it is
+// serialized. The `status` is the HTTP status code for the response and `v` is
+// the value to be serialized. The return value is the new value to be
+// serialized or an error.
+type Transformer func(ctx Context, status string, v any) (any, error)
+
+const DocsRendererScalar = "scalar"
+const DocsRendererStoplightElements = "stoplight"
+const DocsRendererSwaggerUI = "swagger-ui"
+
+// Config represents a configuration for a new API. See `huma.DefaultConfig()`
+// as a starting point.
+type Config struct {
+	// OpenAPI spec for the API. You should set at least the `Info.Title` and
+	// `Info.Version` fields.
+	*OpenAPI
+
+	// registryConfig contains a few minor configuration options for the
+	// internal registry.
+	registryConfig
+
+	// OpenAPIPath is the path to the OpenAPI spec without extension. If set
+	// to `/openapi` it will allow clients to get `/openapi.json` or
+	// `/openapi.yaml`, for example. Note that some middleware like chi's
+	// `URLFormat` can interfere with these paths by stripping the extension.
+	OpenAPIPath string
+
+	// DocsPath is the path to the API documentation. If set to `/docs `, it will
+	// allow clients to get `/docs` to view the documentation in a browser. If
+	// you wish to provide your own documentation renderer, you can leave this
+	// blank and attach it directly to the router or adapter.
+	DocsPath string
+
+	// DocsRenderer lets you switch the default renderer from Stoplight Elements.
+	// Alternatively, you can set DocsPath to empty to disable the built-in docs
+	// route altogether.
+	DocsRenderer string
+
+	// DocsRendererConfig is an optional renderer-specific config. When set, it is
+	// JSON-marshaled into the docs HTML. Scalar and SwaggerUI use it, Stoplight
+	// Elements ignores it.
+	//
+	// Scalar reads it from the `data-configuration` attribute. See
+	// https://github.com/scalar/scalar/blob/main/documentation/configuration.md
+	// for the options.
+	//
+	// SwaggerUI merges its fields into the SwaggerUIBundle config object. See
+	// https://swagger.io/docs/open-source-tools/swagger-ui/usage/configuration/
+	// for the options. Huma owns the `url` and `dom_id` fields, so setting
+	// them here does nothing.
+	DocsRendererConfig any
+
+	// SchemasPath is the path to the API schemas. If set to `/schemas` it will
+	// allow clients to get `/schemas/{schema}` to view the schema in a browser
+	// or for use in editors like VSCode to provide autocomplete & validation.
+	SchemasPath string
+
+	// Formats defines the supported request/response formats by content type or
+	// extension (e.g. `json` for `application/my-format+json`).
+	Formats map[string]Format
+
+	// DefaultFormat specifies the default content type to use when the client
+	// does not specify one. If unset, the default type will be randomly
+	// chosen from the keys of `Formats`.
+	DefaultFormat string
+
+	// NoFormatFallback disables the fallback to application/json (if available)
+	// when the client requests an unknown content type. If set and no format is
+	// negotiated, then a 406 Not Acceptable response will be returned.
+	NoFormatFallback bool
+
+	// RejectUnknownQueryParameters indicates whether unknown query parameters
+	// should be rejected during validation.
+	RejectUnknownQueryParameters bool
+
+	// Transformers are a way to modify a response body before it is serialized.
+	Transformers []Transformer
+
+	// CreateHooks is a list of functions that will be called before the API is
+	// created. This allows you to modify the configuration at creation time,
+	// for example, if you need access to the path settings that may be changed
+	// by the user after the defaults have been set.
+	CreateHooks []func(Config) Config
+}
+
+// configProvider is an internal interface to get the configuration from an
+// implementation of the API or Registry. This is used to access settings
+// without exposing them through public interfaces.
+type configProvider[T any] interface {
+	Config() T
+}
+
+func getConfig[T any](v any) T {
+	if cp, ok := v.(configProvider[T]); ok {
+		return cp.Config()
+	}
+
+	var zero T
+	return zero
+}
+
+// API represents a Huma API wrapping a specific router.
+type API interface {
+	// Adapter returns the router adapter for this API, providing a generic
+	// interface to get request information and write responses.
+	Adapter() Adapter
+
+	// OpenAPI returns the OpenAPI spec for this API. You may edit this spec
+	// until the server starts.
+	OpenAPI() *OpenAPI
+
+	// Negotiate returns the selected content type given the client's `accept`
+	// header and the server's supported content types. If the client does not
+	// send an `accept` header, then JSON is used.
+	Negotiate(accept string) (string, error)
+
+	// Transform runs the API transformers on the given value. The `status` is
+	// the key in the operation's `Responses` map that corresponds to the
+	// response being sent (e.g. "200" for a 200 OK response).
+	Transform(ctx Context, status string, v any) (any, error)
+
+	// Marshal marshals the given value into the given writer. The
+	// content type is used to determine which format to use. Use `Negotiate` to
+	// get the content type from an accept header.
+	Marshal(w io.Writer, contentType string, v any) error
+
+	// Unmarshal unmarshals the given data into the given value. The content type
+	Unmarshal(contentType string, data []byte, v any) error
+
+	// UseMiddleware appends a middleware handler to the API middleware stack.
+	//
+	// The stack wraps operations registered via huma.Register after this call and
+	// runs before input parsing and validation. Unmatched requests (e.g. 404s) and
+	// the built-in OpenAPI/docs/schema routes skip it; use router-specific
+	// middleware there.
+	UseMiddleware(middlewares ...func(ctx Context, next func(Context)))
+
+	// Middlewares returns a slice of middleware handler functions that will be
+	// run for all operations. Middleware are run in the order they are added.
+	// See also `huma.Operation{}.Middlewares` for adding operation-specific
+	// middleware at operation registration time.
+	Middlewares() Middlewares
+}
+
+// Format represents a request / response format. It is used to marshal and
+// unmarshal data.
+type Format struct {
+	// Marshal a value to a given writer (e.g. response body).
+	Marshal func(writer io.Writer, v any) error
+
+	// Unmarshal a value into `v` from the given bytes (e.g. request body).
+	Unmarshal func(data []byte, v any) error
+}
+
+type api struct {
+	adapter      Adapter
+	config       Config
+	formats      map[string]Format
+	formatKeys   []string
+	transformers []Transformer
+	middlewares  Middlewares
+}
+
+var _ API = (*api)(nil)                    // The api struct must implement our API interface
+var _ configProvider[Config] = (*api)(nil) // The api struct must implement the configProvider[Config] interface in order to provide a way to access its configuration
+
+func (a *api) Adapter() Adapter {
+	return a.adapter
+}
+
+func (a *api) Config() Config {
+	return a.config
+}
+
+func (a *api) OpenAPI() *OpenAPI {
+	return a.config.OpenAPI
+}
+
+func (a *api) Unmarshal(contentType string, data []byte, v any) error {
+	start, end, err := parseContentType(contentType)
+	if err != nil {
+		return err
+	}
+
+	ct := strings.ToLower(contentType[start:end])
+	if ct == "" {
+		// Default to assume JSON since this is an API.
+		ct = "application/json"
+	}
+
+	f, ok := a.formats[ct]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrUnknownContentType, contentType)
+	}
+
+	return f.Unmarshal(data, v)
+}
+
+func (a *api) Negotiate(accept string) (string, error) {
+	ct := negotiation.SelectQValueFast(accept, a.formatKeys)
+	if ct == "" {
+		if a.config.NoFormatFallback {
+			return "", ErrUnknownAcceptContentType
+		}
+		if a.formatKeys != nil {
+			ct = a.formatKeys[0]
+		}
+	}
+	if _, ok := a.formats[ct]; !ok {
+		return ct, fmt.Errorf("%w: %s", ErrUnknownContentType, ct)
+	}
+	return ct, nil
+}
+
+func (a *api) Transform(ctx Context, status string, v any) (any, error) {
+	var err error
+
+	for _, t := range a.transformers {
+		v, err = t(ctx, status, v)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return v, nil
+}
+
+func (a *api) Marshal(w io.Writer, ct string, v any) error {
+	lower := strings.ToLower(ct)
+	f, ok := a.formats[lower]
+	if !ok {
+		start, end, err := parseContentType(lower)
+		if err != nil {
+			return err
+		}
+
+		f, ok = a.formats[lower[start:end]]
+	}
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrUnknownContentType, ct)
+	}
+	return f.Marshal(w, v)
+}
+
+func (a *api) UseMiddleware(middlewares ...func(ctx Context, next func(Context))) {
+	a.middlewares = append(a.middlewares, middlewares...)
+}
+
+func (a *api) Middlewares() Middlewares {
+	return a.middlewares
+}
+
+// getAPIPrefix returns the API prefix from the first server URL in the OpenAPI
+// spec. If no server URL is set, then an empty string is returned.
+func getAPIPrefix(oapi *OpenAPI) string {
+	for _, server := range oapi.Servers {
+		if server.URL == "" {
+			continue
+		}
+
+		urlWithVars := getServerURLWithDefaultVars(*server)
+
+		serverURL, err := url.Parse(urlWithVars)
+		if err != nil {
+			panic("invalid server URL: " + urlWithVars + " (" + server.URL + "): " + err.Error())
+		}
+
+		if serverURL.Path == "" {
+			continue
+		}
+
+		if strings.HasPrefix(server.URL, "/") || serverURL.Host != "" {
+			return serverURL.Path
+		}
+	}
+
+	return ""
+}
+
+func getServerURLWithDefaultVars(s Server) string {
+	if s.URL == "" || len(s.Variables) == 0 {
+		return s.URL
+	}
+
+	res := s.URL
+	matches := rxServerURLVar.FindAllStringSubmatch(s.URL, -1)
+
+	for _, m := range matches {
+		v, ok := s.Variables[m[1]]
+		if !ok {
+			continue
+		}
+
+		val := v.Default
+		if val == "" && len(v.Enum) > 0 {
+			val = v.Enum[0]
+		}
+
+		res = strings.ReplaceAll(res, m[0], val)
+	}
+
+	return res
+}
+
+func parseContentType(contentType string) (int, int, error) {
+	// Handle e.g. `application/json; charset=utf-8` or `my/format+json`
+	start := strings.IndexRune(contentType, '+') + 1
+	end := strings.IndexRune(contentType, ';')
+	if end == -1 {
+		end = len(contentType)
+	}
+
+	if end < start {
+		// This can happen if the `+` is after the `;`, which is not expected,
+		// but we should handle it gracefully.
+		return 0, 0, fmt.Errorf("%w: %s", ErrUnknownContentType, contentType)
+	}
+
+	return start, end, nil
+}
+
+// NewAPI creates a new API with the given configuration and router adapter.
+// You usually don't need to use this function directly, and can instead use
+// the `New(...)` function provided by the adapter packages which call this
+// function internally.
+//
+// When the API is created, this function will ensure a schema registry exists
+// (or create a new map registry if not), will set a default format if not
+// set, and will set up the handlers for the OpenAPI spec, documentation, and
+// JSON schema routes if the paths are set in the config.
+//
+//	router := chi.NewMux()
+//	adapter := humachi.NewAdapter(router)
+//	config := huma.DefaultConfig("Example API", "1.0.0")
+//	api := huma.NewAPI(config, adapter)
+func NewAPI(config Config, a Adapter) API {
+	for i := 0; i < len(config.CreateHooks); i++ {
+		config = config.CreateHooks[i](config)
+	}
+
+	newAPI := &api{
+		adapter:      a,
+		config:       config,
+		formats:      map[string]Format{},
+		transformers: config.Transformers,
+	}
+
+	if config.OpenAPI == nil {
+		config.OpenAPI = &OpenAPI{}
+	}
+
+	if config.OpenAPI.OpenAPI == "" {
+		config.OpenAPI.OpenAPI = "3.1.0"
+	}
+
+	if config.Components == nil {
+		config.Components = &Components{}
+	}
+
+	if config.Components.Schemas == nil {
+		config.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	}
+
+	if mr, ok := config.Components.Schemas.(*mapRegistry); ok {
+		mr.config = config.registryConfig
+	}
+
+	if config.DefaultFormat == "" && !config.NoFormatFallback {
+		if config.Formats["application/json"].Marshal != nil {
+			config.DefaultFormat = "application/json"
+		}
+	}
+
+	if config.DefaultFormat != "" {
+		newAPI.formatKeys = append(newAPI.formatKeys, config.DefaultFormat)
+	}
+
+	for k, v := range config.Formats {
+		newAPI.formats[k] = v
+		newAPI.formatKeys = append(newAPI.formatKeys, k)
+	}
+
+	if config.OpenAPIPath != "" {
+		var specJSON []byte
+		a.Handle(&Operation{
+			Method: http.MethodGet,
+			Path:   config.OpenAPIPath + ".json",
+		}, func(ctx Context) {
+			ctx.SetHeader("Content-Type", "application/openapi+json")
+			if specJSON == nil {
+				specJSON, _ = json.Marshal(newAPI.OpenAPI())
+			}
+			ctx.BodyWriter().Write(specJSON)
+		})
+
+		var specJSON30 []byte
+		a.Handle(&Operation{
+			Method: http.MethodGet,
+			Path:   config.OpenAPIPath + "-3.0.json",
+		}, func(ctx Context) {
+			ctx.SetHeader("Content-Type", "application/openapi+json")
+			if specJSON30 == nil {
+				specJSON30, _ = newAPI.OpenAPI().Downgrade()
+			}
+			ctx.BodyWriter().Write(specJSON30)
+		})
+
+		var specYAML []byte
+		a.Handle(&Operation{
+			Method: http.MethodGet,
+			Path:   config.OpenAPIPath + ".yaml",
+		}, func(ctx Context) {
+			ctx.SetHeader("Content-Type", "application/openapi+yaml")
+			if specYAML == nil {
+				specYAML, _ = newAPI.OpenAPI().YAML()
+			}
+			ctx.BodyWriter().Write(specYAML)
+		})
+
+		var specYAML30 []byte
+		a.Handle(&Operation{
+			Method: http.MethodGet,
+			Path:   config.OpenAPIPath + "-3.0.yaml",
+		}, func(ctx Context) {
+			ctx.SetHeader("Content-Type", "application/openapi+yaml")
+			if specYAML30 == nil {
+				specYAML30, _ = newAPI.OpenAPI().DowngradeYAML()
+			}
+			ctx.BodyWriter().Write(specYAML30)
+		})
+	}
+
+	if config.DocsPath != "" {
+		newAPI.registerDocsRoute()
+	}
+
+	if config.SchemasPath != "" {
+		a.Handle(&Operation{
+			Method: http.MethodGet,
+			Path:   config.SchemasPath + "/{schema}",
+		}, func(ctx Context) {
+			// Some routers dislike a path param+suffix, so we strip it here instead.
+			schema := strings.TrimSuffix(ctx.Param("schema"), ".json")
+			ctx.SetHeader("Content-Type", "application/json")
+			b, _ := json.Marshal(config.Components.Schemas.Map()[schema])
+			b = rxSchema.ReplaceAll(b, []byte(config.SchemasPath+`/$1.json`))
+			ctx.BodyWriter().Write(b)
+		})
+	}
+
+	return newAPI
+}
+
+func (a *api) registerDocsRoute() {
+	openAPIPath := a.config.OpenAPIPath
+	if prefix := getAPIPrefix(a.OpenAPI()); prefix != "" {
+		openAPIPath = path.Join(prefix, openAPIPath)
+	}
+
+	var title string
+	var csp []string
+	var body []byte
+
+	if a.config.Info != nil && a.config.Info.Title != "" {
+		title = a.config.Info.Title + " Reference"
+	}
+
+	if a.config.DocsRenderer == "" {
+		a.config.DocsRenderer = DocsRendererStoplightElements
+	}
+
+	switch a.config.DocsRenderer {
+	case DocsRendererScalar:
+		if title == "" {
+			title = "Scalar in HTML"
+		}
+
+		csp = []string{
+			"default-src 'none'",
+			"base-uri 'none'",
+			"connect-src 'self'",
+			"font-src https://fonts.scalar.com",
+			"form-action 'none'",
+			"frame-ancestors 'none'",
+			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads",
+			"script-src https://unpkg.com/@scalar/api-reference@1.76.0/dist/browser/standalone.js",
+			"style-src 'unsafe-inline'", // TODO: Somehow drop 'unsafe-inline'
+		}
+
+		var configAttr string
+		if a.config.DocsRendererConfig != nil {
+			b, err := json.Marshal(a.config.DocsRendererConfig)
+			if err != nil {
+				panic("failed to marshal DocsRendererConfig: " + err.Error())
+			}
+			configAttr = ` data-configuration="` + html.EscapeString(string(b)) + `"`
+		}
+
+		body = []byte(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>` + title + `</title>
+  </head>
+  <body>
+    <script id="api-reference" data-url="` + openAPIPath + `.json"` + configAttr + `></script>
+    <script src="https://unpkg.com/@scalar/api-reference@1.76.0/dist/browser/standalone.js" crossorigin integrity="sha384-oH1C0RwqcwbVXkC+r8A+4qRoyEUQdtxAzOwumkxZtQBBcsy61FOoPt7B50OVJYYQ"></script>
+  </body>
+</html>`)
+	case DocsRendererStoplightElements:
+		if title == "" {
+			title = "Elements in HTML"
+		}
+
+		csp = []string{
+			"default-src 'none'",
+			"base-uri 'none'",
+			"connect-src 'self'",
+			"form-action 'none'",
+			"frame-ancestors 'none'",
+			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads",
+			"script-src https://unpkg.com/@stoplight/elements@9.0.29/web-components.min.js",
+			"style-src 'unsafe-inline' https://unpkg.com/@stoplight/elements@9.0.29/styles.min.css",
+		}
+
+		body = []byte(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>` + title + `</title>
+    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@9.0.29/styles.min.css" crossorigin integrity="sha384-iVQBHadsD+eV0M5+ubRCEVXrXEBj+BqcuwjUwPoVJc0Pb1fmrhYSAhL+BFProHdV">
+    <script src="https://unpkg.com/@stoplight/elements@9.0.29/web-components.min.js" crossorigin integrity="sha384-enyjBaVmV00WFIo0D7AIVgtZ/4x0idVNWHotG8WUpvQo9HXgMSGAAW2YEOpiJTpP"></script>
+  </head>
+  <body style="height: 100vh;">
+    <elements-api
+      apiDescriptionUrl="` + openAPIPath + `.yaml"
+      router="hash"
+      layout="sidebar"
+      tryItCredentialsPolicy="same-origin"
+    ></elements-api>
+  </body>
+</html>`)
+	case DocsRendererSwaggerUI:
+		if title == "" {
+			title = "SwaggerUI in HTML"
+		}
+
+		csp = []string{
+			"default-src 'none'",
+			"base-uri 'none'",
+			"connect-src 'self'",
+			"form-action 'none'",
+			"frame-ancestors 'none'",
+			"img-src data:",
+			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-downloads",
+			"script-src https://unpkg.com/swagger-ui-dist@5.34.0/swagger-ui-bundle.js 'sha256-gRya58TMnKTH/Tne/zBInjBwFUxL66aMDYvPuAX0lNY='",
+			"style-src https://unpkg.com/swagger-ui-dist@5.34.0/swagger-ui.css",
+		}
+
+		var configAttr string
+		if a.config.DocsRendererConfig != nil {
+			b, err := json.Marshal(a.config.DocsRendererConfig)
+			if err != nil {
+				panic("failed to marshal DocsRendererConfig: " + err.Error())
+			}
+			configAttr = ` data-config="` + html.EscapeString(string(b)) + `"`
+		}
+
+		body = []byte(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>` + title + `</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.34.0/swagger-ui.css" crossorigin integrity="sha384-4c3vsE5f+trhFyHrFrLM1fFGUn531NIaC7dcqEWIJdoRQJ5CkJbSuSCwXLpaS1KF">
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.34.0/swagger-ui-bundle.js" crossorigin integrity="sha384-9Td7MKiIr2S83E1kZyyVi8KdJw/S8CpAvu0llLyMeg0xq/hDGiZJfVn0fV4llCmK"></script>
+    <script data-url="` + openAPIPath + `.json"` + configAttr + `>
+      const script = document.currentScript;
+      const url = script.dataset.url;
+      const config = script.dataset.config ? JSON.parse(script.dataset.config) : {};
+      window.onload = () => {
+        window.ui = SwaggerUIBundle({
+          ...config,
+          url: url,
+          dom_id: '#swagger-ui',
+        });
+      };
+    </script>
+  </body>
+</html>`)
+	default:
+		panic("unknown docs renderer: " + a.config.DocsRenderer)
+	}
+
+	if len(csp) == 0 {
+		panic("missing CSP for docs renderer: " + a.config.DocsRenderer)
+	}
+
+	a.adapter.Handle(&Operation{
+		Method: http.MethodGet,
+		Path:   a.config.DocsPath,
+	}, func(ctx Context) {
+		ctx.SetHeader("Content-Security-Policy", strings.Join(csp, "; "))
+		ctx.SetHeader("Content-Type", "text/html")
+		ctx.BodyWriter().Write(body)
+	})
+}

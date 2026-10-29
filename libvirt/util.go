@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"subuk/vmango/compute"
-	"subuk/vmango/util"
 
 	libvirt "libvirt.org/go/libvirt"
 	libvirtxml "libvirt.org/go/libvirtxml"
@@ -88,15 +87,15 @@ func ParseCpuAffinity(input string) []uint {
 func getVolumeConfigByPath(conn *libvirt.Connect, path string) (*libvirtxml.StorageVolume, error) {
 	virVolume, err := conn.LookupStorageVolByPath(path)
 	if err != nil {
-		return nil, util.NewError(err, "cannot lookup volume")
+		return nil, repositoryError(err, "cannot lookup volume")
 	}
 	virVolumeXml, err := virVolume.GetXMLDesc(0)
 	if err != nil {
-		return nil, util.NewError(err, "cannot get volume xml")
+		return nil, repositoryError(err, "cannot get volume xml")
 	}
 	virVolumeConfig := &libvirtxml.StorageVolume{}
 	if err := virVolumeConfig.Unmarshal(virVolumeXml); err != nil {
-		return nil, util.NewError(err, "cannot unmarshal volume config")
+		return nil, repositoryError(err, "cannot unmarshal volume config")
 	}
 	return virVolumeConfig, nil
 }

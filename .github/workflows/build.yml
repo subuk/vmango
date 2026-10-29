@@ -50,6 +50,11 @@ jobs:
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install libvirt dvdrtools
+      - name: Validate OpenAPI contract
+        run: |
+          python3 -m venv /tmp/vmango-openapi-validator
+          /tmp/vmango-openapi-validator/bin/pip install openapi-spec-validator==0.7.2
+          /tmp/vmango-openapi-validator/bin/openapi-spec-validator web/testdata/openapi.json
       - name: Build and test
         env:
           VERSION: ${{ inputs.version }}

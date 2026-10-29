@@ -2,7 +2,6 @@ package libvirt
 
 import (
 	"subuk/vmango/compute"
-	"subuk/vmango/util"
 	"sync"
 	"time"
 
@@ -24,11 +23,11 @@ func NewNetworkRepository(pool *ConnectionPool, logger zerolog.Logger) *NetworkR
 func (repo *NetworkRepository) virNetworkToNetwork(virNetwork *libvirt.Network, nodeId string) (*compute.Network, error) {
 	virNetworkXml, err := virNetwork.GetXMLDesc(0)
 	if err != nil {
-		return nil, util.NewError(err, "cannot get network xml")
+		return nil, repositoryError(err, "cannot get network xml")
 	}
 	virNetworkConfig := &libvirtxml.Network{}
 	if err := virNetworkConfig.Unmarshal(virNetworkXml); err != nil {
-		return nil, util.NewError(err, "cannot parse network xml")
+		return nil, repositoryError(err, "cannot parse network xml")
 	}
 	network := &compute.Network{
 		NodeId: nodeId,
@@ -40,13 +39,13 @@ func (repo *NetworkRepository) virNetworkToNetwork(virNetwork *libvirt.Network, 
 func (repo *NetworkRepository) Get(name, nodeId string) (*compute.Network, error) {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return nil, util.NewError(err, "cannot acquire connection")
+		return nil, repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	virNetwork, err := conn.LookupNetworkByName(name)
 	if err != nil {
-		return nil, util.NewError(err, "cannot lookup network")
+		return nil, repositoryError(err, "cannot lookup network")
 	}
 	network, err := repo.virNetworkToNetwork(virNetwork, nodeId)
 	if err != nil {
@@ -58,13 +57,13 @@ func (repo *NetworkRepository) Get(name, nodeId string) (*compute.Network, error
 func (repo *NetworkRepository) listNode(nodeId string) ([]*compute.Network, error) {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
-		return nil, util.NewError(err, "cannot aquire connection")
+		return nil, repositoryError(err, "cannot aquire connection")
 	}
 	defer repo.pool.Release(nodeId)
 
 	virNetworks, err := conn.ListAllNetworks(0)
 	if err != nil {
-		return nil, util.NewError(err, "ListAllNetworks failed")
+		return nil, repositoryError(err, "ListAllNetworks failed")
 	}
 	networks := []*compute.Network{}
 	for _, virNetwork := range virNetworks {

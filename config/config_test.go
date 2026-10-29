@@ -53,3 +53,30 @@ func TestQuickStartConfig(t *testing.T) {
 		t.Fatalf("quick start needs an explicit admin user: %+v", cfg.Web.Users)
 	}
 }
+
+func TestAPIConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		body     string
+		valid    bool
+		disabled bool
+		ttl      int
+	}{
+		{`web {}`, true, false, 3600},
+		{`web { api_disabled = true console_link_lifetime_seconds = 90 }`, true, true, 90},
+		{`web { console_link_lifetime_seconds = -1 }`, false, false, 0},
+		{`web { console_link_lifetime_seconds = 2592001 }`, false, false, 0},
+		{`web { console_signing_key = "short" }`, false, false, 0},
+	} {
+		file := filepath.Join(t.TempDir(), "vmango.conf")
+		if err := os.WriteFile(file, []byte(tc.body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Parse(file)
+		if (err == nil) != tc.valid {
+			t.Fatalf("%s: %v", tc.body, err)
+		}
+		if err == nil && (cfg.Web.APIDisabled != tc.disabled || cfg.Web.ConsoleLinkLifetimeSeconds != tc.ttl) {
+			t.Fatalf("API defaults/overrides lost")
+		}
+	}
+}

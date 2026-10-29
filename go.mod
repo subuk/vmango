@@ -6,6 +6,7 @@ require (
 	dario.cat/mergo v1.0.2
 	github.com/akamensky/argparse v1.4.0
 	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/danielgtaylor/huma/v2 v2.40.0
 	github.com/dustin/go-humanize v1.1.0
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
 	github.com/google/uuid v1.6.0

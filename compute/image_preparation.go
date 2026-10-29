@@ -29,7 +29,7 @@ func sizeBytes(s Size) (uint64, error) {
 func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested []VirtualMachineManagerClonedVolumeParams, newVolumes []VirtualMachineManagerCreatedVolumeParams, overrides ImageDefaults) (vm *VirtualMachine, clones []VirtualMachineManagerClonedVolumeParams, err error) {
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("%w: %v", ErrInvalidImageRequest, err)
+			err = fmt.Errorf("%w: %w", ErrInvalidImageRequest, err)
 		}
 	}()
 	copyVM := *input
@@ -180,7 +180,36 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 			common.GuestAgent = i.Defaults.GuestAgent
 		}
 	}
+
 	if !hasImages {
+		if overrides.Firmware != "" {
+			vm.Firmware = overrides.Firmware
+			if vm.Firmware == "auto" {
+				vm.Firmware = ""
+			}
+		}
+		if overrides.DiskController != "" {
+			vm.DiskController = overrides.DiskController
+		}
+		if overrides.GuestAgent != nil {
+			vm.GuestAgent = *overrides.GuestAgent
+		}
+		if overrides.Initialization == "none" {
+			vm.Config = nil
+		} else if overrides.Initialization != "" {
+			if vm.Config == nil {
+				vm.Config = &VirtualMachineConfig{Hostname: vm.Id}
+			}
+			vm.Config.Initialization = overrides.Initialization
+		}
+		for _, n := range vm.Interfaces {
+			if n.Model == "" {
+				n.Model = overrides.NICModel
+			}
+			if n.Model == "" {
+				n.Model = "virtio"
+			}
+		}
 		return vm, clones, nil
 	}
 	// A raw path must not bypass image rules when the caller also selects images.
@@ -237,6 +266,17 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 			vm.Config = &VirtualMachineConfig{Hostname: vm.Id}
 		}
 		vm.Config.Initialization = initialization
+	}
+	if !resourceName.MatchString(vm.Id) {
+		return nil, nil, fmt.Errorf("invalid VM name")
+	}
+	if e := ValidateVM(vm); e != nil {
+		return nil, nil, e
+	}
+	for _, iface := range vm.Interfaces {
+		if e := ValidateInterface(iface); e != nil {
+			return nil, nil, e
+		}
 	}
 	if e := m.vms.ValidateNew(vm); e != nil {
 		return nil, nil, e

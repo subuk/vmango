@@ -17,7 +17,7 @@ type VirtualMachineRepository interface {
 	DetachVolume(machineId, node, attachmentDeviceName string) error
 	AttachInterface(id, node string, iface *VirtualMachineAttachedInterface) error
 	DetachInterface(id, node, mac string) error
-	GetConsoleStream(id, node string) (VirtualMachineConsoleStream, error)
+	GetConsoleStream(id, node string, force bool) (VirtualMachineConsoleStream, error)
 	GetGraphicStream(id, node string) (VirtualMachineGraphicStream, error)
 	Poweroff(id, node string) error
 	Reboot(id, node string) error

@@ -3,14 +3,12 @@ package web
 import (
 	"errors"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"subuk/vmango/compute"
+	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
 )
 
 func (env *Environ) VirtualMachineList(rw http.ResponseWriter, req *http.Request) {
@@ -414,7 +412,6 @@ func (env *Environ) VirtualMachineAddFormProcess(rw http.ResponseWriter, req *ht
 	vm.Autostart = start
 
 	if err := env.vmanager.CreateWithImageDefaults(vm, cloneVols, newVols, start, overrides); err != nil {
-		env.logger.Debug().Interface("vm", vm).Interface("cloneVols", cloneVols).Interface("newVols", newVols).Msg("vm create data")
 		status := http.StatusInternalServerError
 		if errors.Is(err, compute.ErrInvalidImageRequest) {
 			status = http.StatusBadRequest
@@ -654,46 +651,8 @@ func (env *Environ) VirtualMachineConsoleShow(rw http.ResponseWriter, req *http.
 }
 
 func (env *Environ) VirtualMachineConsoleWS(rw http.ResponseWriter, req *http.Request) {
-	urlvars := mux.Vars(req)
-
-	wsconn, err := env.ws.Upgrade(rw, req, nil)
-	if err != nil {
-		env.logger.Debug().Err(err).Msg("cannot upgrade websocket connection")
-		return
-	}
-
-	console, err := env.vms.GetConsoleStream(urlvars["id"], urlvars["node"])
-	if err != nil {
-		env.error(rw, req, err, "cannot get vm console", http.StatusInternalServerError)
-		return
-	}
-	defer console.Close()
-
-	go func() {
-		buf := make([]byte, 1024)
-		for {
-			n, err := console.Read(buf)
-			if err != nil {
-				env.logger.Debug().Err(err).Msg("console read error")
-				return
-			}
-			if err := wsconn.WriteMessage(websocket.BinaryMessage, buf[0:n]); err != nil {
-				env.logger.Debug().Err(err).Msg("wsconn write error")
-				return
-			}
-		}
-	}()
-	for {
-		_, reader, err := wsconn.NextReader()
-		if err != nil {
-			env.logger.Debug().Err(err).Msg("ws message error")
-			return
-		}
-		if _, err := io.Copy(console, reader); err != nil {
-			env.logger.Debug().Err(err).Msg("console write error")
-			return
-		}
-	}
+	v := mux.Vars(req)
+	env.serveConsole(rw, req, v["node"], v["id"], "serial", req.URL.Query().Get("force") == "true", time.Time{})
 }
 
 func (env *Environ) VirtualMachineVncShow(rw http.ResponseWriter, req *http.Request) {
@@ -716,52 +675,6 @@ func (env *Environ) VirtualMachineVncShow(rw http.ResponseWriter, req *http.Requ
 }
 
 func (env *Environ) VirtualMachineVncWs(rw http.ResponseWriter, req *http.Request) {
-	urlvars := mux.Vars(req)
-	wsconn, err := env.ws.Upgrade(rw, req, nil)
-	if err != nil {
-		env.logger.Debug().Err(err).Msg("cannot upgrade websocket connection")
-		return
-	}
-	graphic, err := env.vms.GetGraphicStream(urlvars["id"], urlvars["node"])
-	if err != nil {
-		http.Error(rw, "Cannot get vm graphic: "+err.Error(), http.StatusServiceUnavailable)
-		env.logger.Warn().Err(err).Msg("failed to establish tcp connection")
-		return
-	}
-
-	go func() {
-		buf := make([]byte, 4096)
-		for {
-			n, err := graphic.Read(buf)
-			if err != nil {
-				env.logger.Debug().Err(err).Msg("graphic read error")
-				return
-			}
-			if err := wsconn.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
-				env.logger.Debug().Err(err).Msg("wsconn write error")
-				return
-			}
-		}
-	}()
-	for {
-		t, buf, err := wsconn.ReadMessage()
-		if err != nil {
-			env.logger.Debug().Err(err).Msg("ws message error")
-			return
-		}
-		switch t {
-		case websocket.BinaryMessage:
-			if _, err := graphic.Write(buf); err != nil {
-				env.logger.Debug().Err(err).Msg("graphic write error")
-				return
-			}
-		case websocket.PingMessage:
-			if err := wsconn.WriteMessage(websocket.PongMessage, buf); err != nil {
-				log.Println(err)
-				return
-			}
-		default:
-		}
-
-	}
+	v := mux.Vars(req)
+	env.serveConsole(rw, req, v["node"], v["id"], "vnc", false, time.Time{})
 }

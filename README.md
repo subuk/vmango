@@ -212,3 +212,10 @@ must be installed before building. Both package builds run `make test`.
 Maintainer instructions for manual package validation and release publication
 are in [HOWTO-RELEASE.md](HOWTO-RELEASE.md). Pushing a branch does not publish
 distribution packages.
+
+## Automation API
+
+Vmango provides a versioned JSON API with HTTP Basic authentication, generated
+OpenAPI and locally bundled Swagger UI at `/api/docs`. See [API documentation](docs/API.md)
+for VM/cloud-init examples, synchronous operation semantics and serial/VNC
+clients with reusable signed browser links.

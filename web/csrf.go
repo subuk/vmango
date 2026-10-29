@@ -12,7 +12,11 @@ func protectCrossOrigin(next http.Handler, cfg *config.WebConfig) http.Handler {
 	protection := http.NewCrossOriginProtection()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := protection.Check(r); err != nil {
-			http.Error(w, "Forbidden - "+err.Error(), http.StatusForbidden)
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				writeAPIProblem(w, 403, "Cross-origin requests are disabled.")
+			} else {
+				http.Error(w, "Forbidden - "+err.Error(), http.StatusForbidden)
+			}
 			return
 		}
 		// Preserve HTTP-to-HTTPS downgrade protection for older browsers that
@@ -22,7 +26,11 @@ func protectCrossOrigin(next http.Handler, cfg *config.WebConfig) http.Handler {
 			if origin := r.Header.Get("Origin"); origin != "" {
 				u, err := url.Parse(origin)
 				if err != nil || u.Scheme != "https" {
-					http.Error(w, "Forbidden - insecure origin", http.StatusForbidden)
+					if strings.HasPrefix(r.URL.Path, "/api/") {
+						writeAPIProblem(w, 403, "Insecure origin.")
+					} else {
+						http.Error(w, "Forbidden - insecure origin", http.StatusForbidden)
+					}
 					return
 				}
 			}

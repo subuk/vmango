@@ -4,6 +4,10 @@ package acceptance
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	encodingxml "encoding/xml"
 	"fmt"
 	"io"
@@ -22,6 +26,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/ssh"
 )
 
 // TestLifecycle boots a real guest. Explicit opt-in and a local libvirt URI are
@@ -276,6 +281,32 @@ web {
 			t.Fatal("unexpected authentication redirect")
 		}
 	}
+	apiRequest := func(method, path string, value any, status int) []byte {
+		t.Helper()
+		data, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req, err := http.NewRequest(method, origin+path, strings.NewReader(string(data)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.SetBasicAuth("acceptance", password)
+		response, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		body, _ := io.ReadAll(response.Body)
+		if response.StatusCode != status {
+			t.Fatalf("%s %s: %d, want %d: %s", method, path, response.StatusCode, status, body)
+		}
+		return body
+	}
+	for _, resource := range []string{"nodes", "nodes/acceptance", "nodes/acceptance/images", "nodes/acceptance/pools", "nodes/acceptance/networks", "nodes/acceptance/capabilities", "keys"} {
+		apiRequest("GET", "/api/v1/"+resource, nil, 200)
+	}
 	request("/login/", url.Values{"Username": {"acceptance"}, "Password": {password}}, 302)
 	request("/machines/add/?node=acceptance&arch="+arch, nil, 200)
 	request("/machines/add/?node=acceptance&mode=advanced&arch="+arch, nil, 200)
@@ -309,7 +340,11 @@ web {
 	request("/machines/acceptance/"+name+"/delete/", url.Values{"DeleteVolumes": {"true"}}, 302)
 	values.Set("CloneImageID", "boot")
 	domainUUID = ""
-	request("/machines/add/", values, 302)
+	apiVMPath := "/api/v1/nodes/acceptance/vms/" + name
+	createBody := map[string]any{"id": name, "arch": arch, "vcpus": 2, "memory_bytes": uint64(2 << 30), "cloud_init": map[string]any{"user_data": userdata}, "clone_disks": []any{map[string]any{"image_id": "boot", "name": name + "_root", "pool": name, "size_bytes": uint64(8 << 30)}}, "interfaces": []any{map[string]any{"network": "qemu-usernet"}}}
+	apiRequest("POST", "/api/v1/nodes/acceptance/vms", createBody, 201)
+	apiRequest("POST", "/api/v1/nodes/acceptance/vms", createBody, 409)
+	apiRequest("PATCH", apiVMPath, map[string]any{"autostart": false}, 200)
 	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
 	write(filepath.Join(root, "resources.txt"), "pool="+name+"\npool_uuid="+poolUUID+"\npool_path="+poolDir+"\nvm_uuid="+domainUUID+"\n")
 	path := "/machines/acceptance/" + name + "/"
@@ -323,18 +358,18 @@ web {
 	}
 	request(path, nil, 200)
 	t.Log("created VM and cloud-init disk through HTTP; starting guest")
-	request(path+"set-state/start/", url.Values{}, 302)
+	apiRequest("POST", apiVMPath+"/actions", map[string]string{"action": "start"}, 204)
 	if state := strings.TrimSpace(mustVir("domstate", name)); state != "running" {
 		t.Fatalf("expected running, got %s", state)
 	}
-	headers := http.Header{"Origin": {origin}}
+	headers := http.Header{"Origin": {origin}, "Authorization": {"Basic " + base64.StdEncoding.EncodeToString([]byte("acceptance:"+password))}}
 	u, _ := url.Parse(origin)
 	for _, c := range jar.Cookies(u) {
 		headers.Add("Cookie", c.String())
 	}
 	dial := func(suffix string) *websocket.Conn {
 		t.Helper()
-		conn, resp, err := websocket.DefaultDialer.Dial("ws://"+address+path+suffix, headers)
+		conn, resp, err := websocket.DefaultDialer.Dial("ws://"+address+apiVMPath+"/consoles/"+suffix, headers)
 		if err != nil {
 			if resp != nil {
 				resp.Body.Close()
@@ -343,7 +378,7 @@ web {
 		}
 		return conn
 	}
-	console := dial("console-ws/")
+	console := dial("serial/ws")
 	defer console.Close()
 	console.SetReadDeadline(time.Now().Add(5 * time.Minute))
 	consoleLog, err := os.Create(filepath.Join(root, "console.log"))
@@ -351,7 +386,7 @@ web {
 		t.Fatal(err)
 	}
 	defer consoleLog.Close()
-	vnc := dial("vnc/ws/")
+	vnc := dial("vnc/ws")
 	vnc.SetReadDeadline(time.Now().Add(10 * time.Second))
 	_, greeting, err := vnc.ReadMessage()
 	vnc.Close()
@@ -373,11 +408,95 @@ web {
 	}
 	console.Close()
 	t.Log("guest ran cloud-init userdata and confirmed its hostname")
-	request(path+"set-state/poweroff/", url.Values{}, 302)
+	// Test signed browser transports without UI session cookies or Basic headers.
+	for _, kind := range []string{"serial", "vnc"} {
+		var link struct {
+			URL string `json:"url"`
+		}
+		raw := apiRequest("POST", apiVMPath+"/consoles/"+kind+"/links", map[string]bool{"force": kind == "serial"}, 201)
+		if err := json.Unmarshal(raw, &link); err != nil {
+			t.Fatal(err)
+		}
+		u, err := url.Parse(link.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := websocket.Dialer{Subprotocols: []string{"binary", "vmango.token." + u.Fragment}}
+		for n := 0; n < 2; n++ {
+			c, response, err := d.Dial("ws://"+address+u.Path+"/ws", http.Header{"Origin": {origin}})
+			if err != nil {
+				if response != nil {
+					response.Body.Close()
+				}
+				t.Fatalf("signed %s reconnect: %v", kind, err)
+			}
+			if kind == "vnc" {
+				c.SetReadDeadline(time.Now().Add(10 * time.Second))
+				_, data, err := c.ReadMessage()
+				if err != nil || !strings.HasPrefix(string(data), "RFB ") {
+					t.Fatalf("signed VNC greeting: %q %v", data, err)
+				}
+			} else {
+				other, response, err := websocket.DefaultDialer.Dial("ws://"+address+apiVMPath+"/consoles/serial/ws", headers)
+				if err == nil {
+					other.Close()
+					t.Fatal("second serial client silently displaced first")
+				}
+				if response == nil || response.StatusCode != 409 {
+					t.Fatalf("second serial client: %v %v", response, err)
+				}
+				response.Body.Close()
+			}
+			c.Close()
+		}
+	}
+	t.Log("signed serial/VNC links reconnected; second serial client rejected")
+	apiRequest("POST", apiVMPath+"/actions", map[string]string{"action": "poweroff"}, 204)
 	if state := strings.TrimSpace(mustVir("domstate", name)); state != "shut off" {
 		t.Fatalf("expected shut off, got %s", state)
 	}
-	request(path+"delete/", url.Values{"DeleteVolumes": {"true"}}, 302)
+	// Exercise the remaining mutating routes only against this isolated VM/pool.
+	volumeBase := "/api/v1/nodes/acceptance/volumes"
+	var disk struct {
+		ID string `json:"id"`
+	}
+	rawDisk := apiRequest("POST", volumeBase, map[string]any{"name": "extra", "pool": name, "format": "qcow2", "size_bytes": 16 << 20}, 201)
+	if err := json.Unmarshal(rawDisk, &disk); err != nil {
+		t.Fatal(err)
+	}
+	apiRequest("GET", volumeBase+"/"+disk.ID, nil, 200)
+	apiRequest("POST", volumeBase+"/"+disk.ID+"/resize", map[string]any{"size_bytes": 32 << 20}, 204)
+	var clone struct {
+		ID string `json:"id"`
+	}
+	rawClone := apiRequest("POST", volumeBase+"/"+disk.ID+"/clone", map[string]any{"name": "extra-clone", "pool": name, "format": "qcow2", "size_bytes": 32 << 20}, 201)
+	if err := json.Unmarshal(rawClone, &clone); err != nil {
+		t.Fatal(err)
+	}
+	apiRequest("POST", apiVMPath+"/disks", map[string]any{"volume_id": disk.ID}, 204)
+	apiRequest("DELETE", volumeBase+"/"+disk.ID, nil, 409)
+	apiRequest("DELETE", apiVMPath+"/disks/"+disk.ID, nil, 204)
+	apiRequest("DELETE", volumeBase+"/"+disk.ID, nil, 204)
+	apiRequest("DELETE", volumeBase+"/"+clone.ID, nil, 204)
+	apiRequest("DELETE", volumeBase+"/"+base64.RawURLEncoding.EncodeToString([]byte(base)), nil, 409)
+	apiRequest("POST", apiVMPath+"/interfaces", map[string]any{"network": "qemu-usernet", "mac": "52:54:00:ab:cd:01", "model": "virtio"}, 204)
+	apiRequest("DELETE", apiVMPath+"/interfaces/52:54:00:ab:cd:01", nil, 204)
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, err := ssh.NewPublicKey(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := string(ssh.MarshalAuthorizedKey(pub))
+	fp := ssh.FingerprintLegacyMD5(pub)
+	apiRequest("POST", "/api/v1/keys", map[string]string{"public_key": key}, 201)
+	apiRequest("GET", "/api/v1/keys/"+fp, nil, 200)
+	apiRequest("POST", "/api/v1/keys", map[string]string{"public_key": key}, 409)
+	apiRequest("DELETE", "/api/v1/keys/"+fp, nil, 204)
+	apiRequest("GET", "/api/v1/keys/"+fp, nil, 404)
+	apiRequest("DELETE", apiVMPath+"?delete_volumes=true", nil, 204)
 	if _, err := vir("dominfo", name); err == nil {
 		t.Fatal("VM still exists after HTTP delete")
 	}

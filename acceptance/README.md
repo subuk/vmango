@@ -49,7 +49,8 @@ The test logs in through HTTP, loads both creation forms, rejects an insufficien
 RAM request before creating a disk, and exercises two catalog IDs referencing
 one source disk. It creates and deletes a VM with initialization disabled, then
 clones the image and
-creates the VM and config drive through Vmango. It checks the image-selected SCSI/virtio-scsi configuration, explicit guest agent
+creates the VM and config drive through the Basic-authenticated JSON API.
+It also checks API discovery, duplicate-create conflicts and partial updates. It checks the image-selected SCSI/virtio-scsi configuration, explicit guest agent
 disablement and presence/absence of the config drive. It checks the generated domain
 uses hardware acceleration, starts it through HTTP and checks libvirt reports
 it running. It then checks the VNC WebSocket proxy's RFB greeting and reads the
@@ -57,8 +58,11 @@ serial WebSocket until cloud-init runs the supplied guest command, verifies the
 hostname and prints a unique marker. Merely reaching libvirt's `running` state
 is not sufficient.
 
+It reconnects through signed serial/VNC links and verifies a second serial
+client gets a conflict without explicit force.
+
 Finally it powers off the guest and deletes the VM and its attached disks through
-HTTP, verifying they disappeared. `poweroff` is Vmango's hard power-off action;
+the JSON API, verifying they disappeared. `poweroff` is Vmango's hard power-off action;
 this does not test graceful shutdown. The suite does not yet test reboot, SSH,
 guest-agent integration, browser interaction, external networking or Linux KVM
 when run on a Mac.

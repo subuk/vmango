@@ -7,6 +7,15 @@ github.com/akamensky/argparse
 # github.com/coreos/go-oidc/v3 v3.21.0
 ## explicit; go 1.25.0
 github.com/coreos/go-oidc/v3/oidc
+# github.com/danielgtaylor/huma/v2 v2.40.0
+## explicit; go 1.26.0
+github.com/danielgtaylor/huma/v2
+github.com/danielgtaylor/huma/v2/adapters/humamux
+github.com/danielgtaylor/huma/v2/casing
+github.com/danielgtaylor/huma/v2/negotiation
+github.com/danielgtaylor/huma/v2/queryparam
+github.com/danielgtaylor/huma/v2/validation
+github.com/danielgtaylor/huma/v2/yaml
 # github.com/dustin/go-humanize v1.1.0
 ## explicit; go 1.21
 github.com/dustin/go-humanize
