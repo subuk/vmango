@@ -64,6 +64,13 @@ sudo apt-get install vmango
 Edit `/etc/vmango.conf` before starting the service. The PPA packages target
 Ubuntu; they are not Debian distribution builds.
 
+### Debian 12 and 13 (amd64)
+
+Use the Ubuntu 22.04 Jammy package from the release PPA, following the
+[Debian package instructions](https://vmango.org/docs/packages/#debian-12-and-13-amd64).
+The repository suite must remain `jammy`, not the Debian codename. Package
+validation checks installation and startup on both Debian versions.
+
 ## Hypervisor configuration
 
 Install libvirt and qemu-kvm.
