@@ -134,7 +134,9 @@ code/packaging changes require a new release commit and version.
 The source artifact contains an SRPM and Ubuntu source packages for Jammy,
 Noble and Resolute. Debian versions are `VERSION-REVISIONppa1~SERIES`; source RPM
 versions are `VERSION-REVISION.release`, with binary dist tags resolved by COPR.
-CI builds these source artifacts without any publication credentials. It does
+CI builds these source artifacts without any publication credentials. It also
+signs a temporary package copy with a disposable key and runs a simulated
+`dput` upload, exercising signature checks without sending packages. It does
 not establish that all remote distribution builds work.
 
 COPR uses only the explicit `COPR_CHROOTS` list. Launchpad uses architectures
@@ -190,7 +192,7 @@ Paste the complete file into `PPA_GPG_PRIVATE_KEY`, put its passphrase in
 `PPA_GPG_PASSPHRASE`, then remove the temporary export after storing it securely.
 This is the uploader's signing key, **not** the PPA repository signing key shown
 on its overview page. GPG material is imported into a temporary runner directory
-and removed after signing. Uploads use `dput` and GPG signatures; no Launchpad
+and removed after signing and upload verification. Uploads use `dput` and GPG signatures; no Launchpad
 OAuth token, SSH key or GitHub PAT is required.
 
 In [repository Actions variables](https://github.com/subuk/vmango/settings/variables/actions),

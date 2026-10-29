@@ -56,7 +56,6 @@ def ppa(version, series):
         if len(changes) != 1:
             raise RuntimeError('Expected exactly one source changes file')
         subprocess.run(['bash', 'scripts/release/sign-ppa.sh', str(changes[0])], check=True)
-        subprocess.run(['dput', 'ppa:subuk/vmango', str(changes[0])], check=True)
     else:
         print('Source version already exists; monitoring without uploading again.', flush=True)
     deadline = time.monotonic() + 4 * 3600
@@ -79,6 +78,20 @@ def ppa(version, series):
     raise TimeoutError('PPA acceptance/build/publication timed out. Inspect Launchpad and rejection email; rerun to resume monitoring an accepted version.')
 
 
+def copr_builds(client, version):
+    matches = []
+    offset = 0
+    while True:
+        # copr.v3 unwraps the API's JSON envelope into a list with metadata.
+        page = client.build_proxy.get_list('subuk', 'vmango', packagename='vmango',
+                                          pagination={'limit': 100, 'offset': offset})
+        matches.extend(b for b in page
+                       if (b.get('source_package') or {}).get('version') == version)
+        if len(page) < 100:
+            return matches
+        offset += 100
+
+
 def copr(version):
     from copr.v3 import Client
     import tempfile
@@ -94,16 +107,7 @@ def copr(version):
         if not set(chroots) <= set(project.chroot_repos):
             raise RuntimeError('Enable the requested chroots in stable COPR before publishing')
         # Reuse an accepted build of this release/revision on reruns, including failures.
-        matches = []
-        offset = 0
-        while True:
-            page = client.build_proxy.get_list('subuk', 'vmango', packagename='vmango',
-                                               pagination={'limit': 100, 'offset': offset})
-            matches.extend(b for b in page['items']
-                           if (b.get('source_package') or {}).get('version') == version)
-            if len(page['items']) < 100:
-                break
-            offset += 100
+        matches = copr_builds(client, version)
         if matches:
             build = max(matches, key=lambda b: b.id)
             if set(build.chroots) != set(chroots):

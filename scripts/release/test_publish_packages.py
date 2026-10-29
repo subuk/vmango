@@ -35,3 +35,22 @@ class PublicationStateTest(unittest.TestCase):
     def test_removed_source_is_not_success(self):
         with self.assertRaises(RuntimeError):
             publication.ppa_state({'status': 'Deleted'}, [self.build], [self.binary])
+
+
+class CoprPaginationTest(unittest.TestCase):
+    def test_client_list_response_and_multiple_pages(self):
+        from copr.v3.helpers import List
+        from unittest.mock import Mock
+        client = Mock()
+        older = {'source_package': {'version': '0.12.0-1.release'}}
+        expected = {'id': 42, 'source_package': {'version': '0.13.0-1.release'}}
+        client.build_proxy.get_list.side_effect = [List([older] * 100), List([expected])]
+        self.assertEqual(publication.copr_builds(client, '0.13.0-1.release'), [expected])
+        self.assertEqual(client.build_proxy.get_list.call_args.kwargs['pagination']['offset'], 100)
+
+    def test_unprocessed_source_metadata_is_ignored(self):
+        from copr.v3.helpers import List
+        from unittest.mock import Mock
+        client = Mock()
+        client.build_proxy.get_list.return_value = List([{'source_package': None}])
+        self.assertEqual(publication.copr_builds(client, '0.13.0-1.release'), [])
