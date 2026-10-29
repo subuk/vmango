@@ -59,6 +59,12 @@ Follow [libvirt's TLS setup](https://libvirt.org/kbase/tlscerts.html) and
 [Windows client certificate locations](https://libvirt.org/windows.html).
 Do not substitute an unauthenticated public TCP connection.
 
+The bundled Windows client cannot use SSH: `qemu+ssh` is unsupported on Windows,
+and the Fedora MinGW libvirt build has both `qemu+libssh` and `qemu+libssh2`
+disabled. Installing OpenSSH or adding a libssh2 DLL does not enable these
+transports. CI probes all three URIs with the packaged `virsh.exe`; using SSH
+would require a different libvirt build and a separate connection test.
+
 The archive does not include ISO tools. Creating or reading cloud-init config
 drives requires Windows-compatible `mkisofs.exe` and `isoinfo.exe` on `PATH`.
 Until those are installed, use Windows for managing existing VMs; provisioning
