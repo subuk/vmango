@@ -189,10 +189,10 @@ Open [http://localhost:8080/](http://localhost:8080/) and log in as `admin` with
 the password you just entered. The node should appear after login. Stop the
 foreground server with Ctrl+C.
 
-To create a VM, put a cloud-init-enabled image in a storage pool **on the
-hypervisor**, then add an `image` block with its path and OS metadata from
-`vmango.dist.conf`. Configure networking on the hypervisor first. The binary
-archive does not configure KVM, pools, networks or guest images for you.
+To create a VM, follow the [cloud images and provisioning guide](/docs/images/)
+to put a cloud-init-enabled image in a storage pool **on the hypervisor** and
+register it in `vmango.conf`. Configure networking on the hypervisor first.
+The binary archive does not configure KVM, pools, networks or guest images for you.
 
 For remote browser access, serve Vmango through HTTPS, set `web.base_url` to
 that public URL and enable `web.session_secure`. Preserve `Host`, `Origin` and
