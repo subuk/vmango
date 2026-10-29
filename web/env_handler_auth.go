@@ -5,9 +5,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/oauth2"
 )
 
 func (env *Environ) PasswordLoginFormShow(rw http.ResponseWriter, req *http.Request) {
@@ -28,13 +30,27 @@ func (env *Environ) OidcLoginRedirect(rw http.ResponseWriter, req *http.Request)
 	b := make([]byte, 16)
 	rand.Read(b)
 	state := base64.URLEncoding.EncodeToString(b)
-	cookie := http.Cookie{Name: "oauthstate", Value: state, Expires: time.Now().Add(15 * time.Minute), Path: "/"}
-	http.SetCookie(rw, &cookie)
-	u := env.oauth2.AuthCodeURL(state)
+	env.setOidcCookie(rw, req, "oauthstate", state, 900)
+	verifier := oauth2.GenerateVerifier()
+	env.setOidcCookie(rw, req, "oauthverifier", verifier, 900)
+	u := env.oauth2.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier))
 	http.Redirect(rw, req, u, http.StatusFound)
 }
 
+func (env *Environ) setOidcCookie(rw http.ResponseWriter, req *http.Request, name, value string, maxAge int) {
+	secure := req.TLS != nil || env.cfg.SessionSecure || strings.HasPrefix(strings.ToLower(env.cfg.BaseUrl), "https://")
+	http.SetCookie(rw, &http.Cookie{
+		Name: name, Value: value, Path: "/", HttpOnly: true, Secure: secure,
+		SameSite: http.SameSiteLaxMode, MaxAge: maxAge,
+		Expires: time.Now().Add(time.Duration(maxAge) * time.Second),
+	})
+}
+
 func (env *Environ) OidcLoginCallback(rw http.ResponseWriter, req *http.Request) {
+	if env.oidcp == nil || env.oauth2 == nil {
+		http.Error(rw, "OpenID not configured", http.StatusBadRequest)
+		return
+	}
 	oauthState, err := req.Cookie("oauthstate")
 	if err != nil {
 		env.logger.Warn().Err(err).Msg("failed to read state cookie")
@@ -42,12 +58,22 @@ func (env *Environ) OidcLoginCallback(rw http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	if req.FormValue("state") != oauthState.Value {
+	if oauthState.Value == "" || req.FormValue("state") != oauthState.Value {
 		http.Error(rw, "Invalid oauth state cookie", http.StatusBadRequest)
 		return
 	}
+	// Clear the browser's temporary credentials once its state has been validated,
+	// including when the provider rejects the code or the verifier is missing.
+	env.setOidcCookie(rw, req, "oauthstate", "", -1)
+	env.setOidcCookie(rw, req, "oauthverifier", "", -1)
+	oauthVerifier, err := req.Cookie("oauthverifier")
+	if err != nil || oauthVerifier.Value == "" {
+		env.logger.Warn().Err(err).Msg("failed to read verifier cookie")
+		http.Error(rw, "Invalid oauth verifier cookie", http.StatusBadRequest)
+		return
+	}
 	code := req.FormValue("code")
-	token, err := env.oauth2.Exchange(req.Context(), code)
+	token, err := env.oauth2.Exchange(req.Context(), code, oauth2.VerifierOption(oauthVerifier.Value))
 	if err != nil {
 		http.Error(rw, "Failed to exchange code: "+err.Error(), http.StatusInternalServerError)
 		return
