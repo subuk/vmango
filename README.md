@@ -144,8 +144,12 @@ Install Go compiler, libvirt C library and mkisofs util (for configdrive creatio
     brew install libvirt
     brew install dvdrtools
 
-You need a linux hypervisor somewhere in the world, because libvirt doesn't support MacOS.
-Make sure to add ?socket option to remote libvirt urls.
+For local VMs, install QEMU (`brew install qemu`) and use libvirt's
+`qemu:///session` connection with HVF acceleration and a matching guest
+architecture. A remote Linux/KVM host is also supported.
+
+See [local acceptance testing](acceptance/README.md) for a real VM lifecycle
+test on macOS or Linux. Ordinary tests run with `make test`.
 
 
 ## Documentation development

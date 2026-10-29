@@ -75,3 +75,8 @@ endif
 ifneq ("$(wildcard /usr/bin/dpkg)","")
 -include Makefile.DEB.mk
 endif
+
+# Real local hypervisor; explicitly supply ACCEPTANCE_IMAGE (see acceptance/README.md).
+.PHONY: acceptance
+acceptance: bin/vmango
+	$(GO) test -tags=acceptance -count=1 -v -timeout=15m ./acceptance
