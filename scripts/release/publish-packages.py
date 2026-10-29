@@ -1,15 +1,42 @@
 #!/usr/bin/env python3
 """Submit source packages and wait for remote builds; never treat upload as success."""
 import json
+from email.parser import Parser
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import time
 import urllib.parse
 import urllib.request
 
-PPA = 'https://api.launchpad.net/1.0/~subuk/+archive/ubuntu/vmango'
+CHROOTS = ['rhel-9-x86_64', 'rhel-10-x86_64']
+SERIES = ('jammy', 'noble', 'resolute')
+
+
+def destination(channel, version):
+    """Keep untagged test versions out of the stable repositories."""
+    patterns = {'stable': r'[0-9]+\.[0-9]+\.[0-9]+',
+                'devel': r'[0-9]+\.[0-9]+\.[0-9]+~test\.[1-9][0-9]*\.g[0-9a-f]{40}'}
+    if channel not in patterns or not re.fullmatch(patterns[channel], version):
+        raise ValueError('Version does not match the requested publication channel')
+    return 'vmango' if channel == 'stable' else 'vmango-devel'
+
+
+def ppa_url(project):
+    return f'https://api.launchpad.net/1.0/~subuk/+archive/ubuntu/{project}'
+
+
+def validate_changes(path, version, revision, series):
+    """Verify the actual source upload, not just the workflow inputs."""
+    if series not in SERIES or not re.fullmatch(r'[1-9][0-9]*', revision):
+        raise ValueError('Unsupported source package revision or series')
+    fields = Parser().parsestr(pathlib.Path(path).read_text())
+    expected = f'{version}-{revision}ppa1~{series}'
+    if (fields.get('Source') != 'vmango' or fields.get('Version') != expected
+            or fields.get('Distribution') != series):
+        raise ValueError('Source changes do not match the requested package version and series')
 
 
 def get(url, **params):
@@ -28,8 +55,8 @@ def entries(url, **params):
     return result
 
 
-def sources(version, series):
-    return entries(PPA, **{'ws.op': 'getPublishedSources', 'source_name': 'vmango',
+def sources(version, series, project):
+    return entries(ppa_url(project), **{'ws.op': 'getPublishedSources', 'source_name': 'vmango',
                           'exact_match': 'true', 'version': version,
                           'distro_series': f'https://api.launchpad.net/1.0/ubuntu/{series}'})
 
@@ -39,6 +66,8 @@ def ppa_state(source, builds, binaries):
         raise RuntimeError('Source publication is ' + source['status'])
     pending = {'Needs building', 'Currently building', 'Uploading build', 'Cancelling'}
     for build in builds:
+        if build.get('arch_tag') != 'amd64':
+            raise RuntimeError('Expected only amd64 PPA builds')
         state = build['buildstate']
         if state != 'Successfully built' and state not in pending:
             raise RuntimeError(f"Launchpad build {build['web_link']}: {state}")
@@ -49,8 +78,14 @@ def ppa_state(source, builds, binaries):
                     and b['self_link'] in published_builds for b in builds))
 
 
-def ppa(version, series):
-    existing = sources(version, series)
+def ppa(version, series, project):
+    if series not in SERIES:
+        raise ValueError('Unsupported Ubuntu series')
+    archive = get(ppa_url(project))
+    processors = entries(archive['processors_collection_link'])
+    if {p['name'] for p in processors} != {'amd64'}:
+        raise RuntimeError('Configure the PPA to build only on amd64')
+    existing = sources(version, series, project)
     if not existing:
         changes = list(pathlib.Path(f'dist/packages/ppa/{series}').glob('*_source.changes'))
         if len(changes) != 1:
@@ -61,7 +96,7 @@ def ppa(version, series):
     deadline = time.monotonic() + 4 * 3600
     previous = None
     while time.monotonic() < deadline:
-        found = sources(version, series)
+        found = sources(version, series, project)
         status = 'Waiting for upload acceptance'
         if found:
             source = found[0]
@@ -78,21 +113,23 @@ def ppa(version, series):
     raise TimeoutError('PPA acceptance/build/publication timed out. Inspect Launchpad and rejection email; rerun to resume monitoring an accepted version.')
 
 
-def copr_builds(client, version):
+def copr_builds(client, version, project='vmango'):
     matches = []
     offset = 0
     while True:
         # copr.v3 unwraps the API's JSON envelope into a list with metadata.
-        page = client.build_proxy.get_list('subuk', 'vmango', packagename='vmango',
+        page = client.build_proxy.get_list('subuk', project, packagename='vmango',
                                           pagination={'limit': 100, 'offset': offset})
+        # COPR may report Version-Release without the SRPM's dist suffix.
+        versions = {version, version.removesuffix('.release')}
         matches.extend(b for b in page
-                       if (b.get('source_package') or {}).get('version') == version)
+                       if (b.get('source_package') or {}).get('version') in versions)
         if len(page) < 100:
             return matches
         offset += 100
 
 
-def copr(version):
+def copr(version, project_name):
     from copr.v3 import Client
     import tempfile
     with tempfile.TemporaryDirectory() as tmp:
@@ -100,14 +137,12 @@ def copr(version):
         config.write_text(os.environ['COPR_CONFIG'])
         config.chmod(0o600)
         client = Client.create_from_config_file(str(config))
-        chroots = os.environ['COPR_CHROOTS'].split()
-        if not chroots:
-            raise RuntimeError('Set COPR_CHROOTS to the supported stable project chroots')
-        project = client.project_proxy.get('subuk', 'vmango')
+        chroots = CHROOTS
+        project = client.project_proxy.get('subuk', project_name)
         if not set(chroots) <= set(project.chroot_repos):
-            raise RuntimeError('Enable the requested chroots in stable COPR before publishing')
+            raise RuntimeError('Enable the requested chroots in COPR before publishing')
         # Reuse an accepted build of this release/revision on reruns, including failures.
-        matches = copr_builds(client, version)
+        matches = copr_builds(client, version, project_name)
         if matches:
             build = max(matches, key=lambda b: b.id)
             if set(build.chroots) != set(chroots):
@@ -116,7 +151,7 @@ def copr(version):
             srpms = list(pathlib.Path('dist/packages/rpm').glob('*.src.rpm'))
             if len(srpms) != 1:
                 raise RuntimeError('Expected exactly one SRPM')
-            build = client.build_proxy.create_from_file('subuk', 'vmango', str(srpms[0]),
+            build = client.build_proxy.create_from_file('subuk', project_name, str(srpms[0]),
                                                        buildopts={'chroots': chroots})
         print(f'https://copr.fedorainfracloud.org/coprs/build/{build.id}/', flush=True)
         deadline = time.monotonic() + 4 * 3600
@@ -135,9 +170,12 @@ def copr(version):
 
 
 if __name__ == '__main__':
+    project = destination(os.environ['PUBLICATION_CHANNEL'], os.environ['VERSION'])
+    if not re.fullmatch(r'[1-9][0-9]*', os.environ['PACKAGE_REVISION']):
+        raise SystemExit('Expected a positive package revision')
     if sys.argv[1] == 'copr':
-        copr(f"{os.environ['VERSION']}-{os.environ['PACKAGE_REVISION']}.release")
+        copr(f"{os.environ['VERSION']}-{os.environ['PACKAGE_REVISION']}.release", project)
     elif sys.argv[1] == 'ppa':
-        ppa(f"{os.environ['VERSION']}-{os.environ['PACKAGE_REVISION']}ppa1~{os.environ['SERIES']}", os.environ['SERIES'])
+        ppa(f"{os.environ['VERSION']}-{os.environ['PACKAGE_REVISION']}ppa1~{os.environ['SERIES']}", os.environ['SERIES'], project)
     else:
         raise SystemExit('Expected copr or ppa')

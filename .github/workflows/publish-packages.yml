@@ -75,55 +75,13 @@ jobs:
       source_ref: ${{ needs.prepare.outputs.sha }}
       version: ${{ inputs.version }}
       revision: ${{ inputs.revision }}
-  copr:
-    if: inputs.copr
+  upload:
     needs: [prepare, sources]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 260
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@v4
-        with:
-          name: distribution-sources
-          path: dist/packages
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - run: python -m pip install copr==2.7
-      - name: Submit SRPM and wait for COPR
-        env:
-          VERSION: ${{ inputs.version }}
-          PACKAGE_REVISION: ${{ inputs.revision }}
-          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
-          COPR_CHROOTS: ${{ vars.COPR_CHROOTS }}
-        run: python scripts/release/publish-packages.py copr
-  ppa:
-    if: inputs.ppa
-    needs: [prepare, sources]
-    strategy:
-      fail-fast: false
-      matrix:
-        series: [jammy, noble, resolute]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 260
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@v4
-        with:
-          name: distribution-sources
-          path: dist/packages
-      - name: Install upload tools
-        run: sudo apt-get update && sudo apt-get install -y devscripts dput gnupg
-      - name: Sign, upload and wait for Launchpad publication
-        env:
-          VERSION: ${{ inputs.version }}
-          PACKAGE_REVISION: ${{ inputs.revision }}
-          SERIES: ${{ matrix.series }}
-          PPA_GPG_PRIVATE_KEY: ${{ secrets.PPA_GPG_PRIVATE_KEY }}
-          PPA_GPG_PASSPHRASE: ${{ secrets.PPA_GPG_PASSPHRASE }}
-          PPA_GPG_FINGERPRINT: ${{ vars.PPA_GPG_FINGERPRINT }}
-        run: python3 scripts/release/publish-packages.py ppa
+    uses: ./.github/workflows/upload-packages.yml
+    with:
+      channel: stable
+      version: ${{ inputs.version }}
+      revision: ${{ inputs.revision }}
+      copr: ${{ inputs.copr }}
+      ppa: ${{ inputs.ppa }}
+    secrets: inherit

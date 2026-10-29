@@ -26,6 +26,8 @@ with tempfile.TemporaryDirectory() as temp:
         # Do not expose the generation keyring to the signing/upload helper.
         signing_env = dict(os.environ, PPA_GPG_PRIVATE_KEY=key,
                            PPA_GPG_PASSPHRASE='ci-test-only', PPA_GPG_FINGERPRINT=fingerprint)
+        signing_env['PUBLICATION_CHANNEL'] = ('devel' if '~test.' in signing_env['VERSION'] else 'stable')
+        signing_env['SERIES'] = 'jammy'
         subprocess.run(['bash', 'scripts/release/sign-ppa.sh', str(changes), '--simulate'],
                        env=signing_env, check=True)
         for file in [changes, *package.glob('*.dsc'), *package.glob('*.buildinfo')]:

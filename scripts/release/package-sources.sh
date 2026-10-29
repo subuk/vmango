@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 : "${VERSION:?}" "${PACKAGE_REVISION:?}"
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(~test\.[1-9][0-9]*\.g[0-9a-f]{40})?$ ]]
 [[ "$PACKAGE_REVISION" =~ ^[1-9][0-9]*$ ]]
 mkdir -p dist/packages/rpm dist/packages/ppa
 # Archive the exact checkout, including vendored dependencies and test fixtures.
@@ -31,7 +31,7 @@ for series in jammy noble resolute; do
     DEBFULLNAME='Vmango release CI' DEBEMAIL='admin@vmango.org' \
       dch --force-distribution --distribution "$series" \
       --newversion "$VERSION-${PACKAGE_REVISION}ppa1~$series" \
-      "Release $VERSION from $(git -C "$OLDPWD" rev-parse HEAD)."
+      "Package $VERSION from $(git -C "$OLDPWD" rev-parse HEAD)."
     # Source-only build: the Launchpad builders install compiler dependencies.
     dpkg-buildpackage -S -sa -d -nc -us -uc
   )

@@ -1,0 +1,65 @@
+name: Test distribution packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Trusted branch, tag or commit to test'
+        type: string
+        required: true
+        default: master
+      version:
+        description: 'Next stable version without v; test packages sort below it'
+        type: string
+        required: true
+      copr:
+        description: 'Test RHEL 9/10 x86_64 in subuk/vmango-devel'
+        type: boolean
+        default: true
+      ppa:
+        description: 'Test Ubuntu LTS amd64 in ppa:subuk/vmango-devel'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-distribution-packages
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      version: ${{ steps.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+      - name: Resolve the exact source and unique test version
+        id: source
+        env:
+          BASE_VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          sha=$(git rev-parse HEAD)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "version=$BASE_VERSION~test.$GITHUB_RUN_ID.g$sha" >> "$GITHUB_OUTPUT"
+  sources:
+    needs: prepare
+    uses: ./.github/workflows/package-sources.yml
+    with:
+      source_ref: ${{ needs.prepare.outputs.sha }}
+      version: ${{ needs.prepare.outputs.version }}
+  upload:
+    needs: [prepare, sources]
+    uses: ./.github/workflows/upload-packages.yml
+    with:
+      channel: devel
+      version: ${{ needs.prepare.outputs.version }}
+      copr: ${{ inputs.copr }}
+      ppa: ${{ inputs.ppa }}
+    secrets: inherit

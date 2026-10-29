@@ -107,7 +107,7 @@ process, not a promise of byte-identical archives: runner images and system
 packages receive updates. The Windows commands are in
 `scripts/release/windows.sh` and the reusable build workflow.
 
-## Distribution packages and development publication
+## Distribution packages
 
 GitHub binary releases can optionally publish stable COPR and PPA packages using
 the jobs described below. To build packages locally, build RPMs
@@ -116,17 +116,40 @@ with `make rpm` in a supported RPM environment and DEBs with
 environment. Check current service configuration before publishing stable
 packages; the former CentOS 7 / Ubuntu Bionic release commands are obsolete.
 
-Development publication remains a separate direct-push process:
+## Manual package validation
 
-```sh
-make publish-devel
-```
+The existing `subuk/vmango-devel` COPR project and `ppa:subuk/vmango-devel` PPA
+are reserved for maintainer testing. They have no automatic builds from
+`master`: the COPR webhook is disabled and Launchpad's `master-daily` recipe
+has daily builds disabled. The hosted Launchpad Git repository is no longer
+part of package publication. Do not restore `make publish-devel` or push to
+Launchpad to trigger package builds.
 
-It pushes committed local `master` to GitHub `origin`, then to the separately
-hosted Launchpad `lp` repository without force. Check both push results. COPR
-watches GitHub `master`; Launchpad's `master-daily` recipe reads `lp` and builds
-daily or on request. Neither process publishes a stable release automatically.
+Run **Test distribution packages** in GitHub Actions:
 
+1. Select a trusted source branch, tag or commit and the next stable version
+   without `v`, for example `0.13.0`.
+2. Select COPR, PPA, or both. COPR builds RHEL 9/10 on x86_64; PPA builds
+   Jammy/Noble/Resolute on amd64 only.
+3. The workflow resolves the source to a commit SHA and generates
+   `0.13.0~test.RUN_ID.gFULL_SHA`. This sorts below `0.13.0` in RPM and Debian
+   version ordering. A new run gets a new version; rerunning failed jobs resumes
+   monitoring the same upload without reusing a version for different sources.
+4. Wait for completed remote builds and PPA binary publication. Inspect the
+   service logs, then test package installation and startup in clean target
+   environments. A successful build does not establish real KVM operation.
+5. Fix failures in the branch and start a new run. Release the tested commit
+   under its final version; the stable rebuild must also complete successfully.
+
+Test and stable workflows share source packaging, signing and upload code.
+The upload destination is derived from the channel and validated version;
+test versions cannot be uploaded to stable by these scripts. Do not run
+credentialed upload jobs from untrusted workflow branches. Source compilation
+runs without publication credentials.
+
+The devel repositories are not an installation channel for users. Existing
+users must disable them before switching to stable; an installed historical
+devel package may sort above a release and require an explicit downgrade.
 
 ## Stable COPR and Launchpad publication
 
@@ -155,8 +178,8 @@ signs a temporary package copy with a disposable key and runs a simulated
 `dput` upload, exercising signature checks without sending packages. It does
 not establish that all remote distribution builds work.
 
-COPR uses only the explicit `COPR_CHROOTS` list. Launchpad uses architectures
-enabled in the PPA. Publication jobs wait up to four hours: COPR must report
+COPR uses the fixed RHEL 9/10 x86_64 target list. Both PPAs must have only
+amd64 enabled; the uploader checks this before submitting packages. Publication jobs wait up to four hours: COPR must report
 success, and Launchpad must complete every scheduled architecture build and
 publish its `vmango` binary. Upload acceptance alone is not success. A timeout
 fails the job but does not cancel remote builds; rerun to resume checking.
@@ -217,23 +240,21 @@ set:
 | Variable | Value |
 | --- | --- |
 | `PPA_GPG_FINGERPRINT` | Full fingerprint of the uploaded signing key |
-| `COPR_CHROOTS` | `rhel-9-x86_64 rhel-10-x86_64` |
 
 ### Prepare stable repositories before the first upload
 
-Stable publication targets RHEL 9 and RHEL 10 on x86_64 only:
-`rhel-9-x86_64 rhel-10-x86_64`. These chroots were enabled in stable
-`subuk/vmango` on 2026-10-29. Historical EPEL repositories remain available,
-but the release workflow does not submit new builds to them. Development
-project targets are configured independently. Each selected target needs
-Go >= 1.26; verify completed builds and configure bootstrap/dependencies as
-needed. Preserve package signature checks.
+Stable and devel publication target RHEL 9 and RHEL 10 on x86_64 only:
+`rhel-9-x86_64 rhel-10-x86_64`. Both projects must have these chroots enabled.
+Each target needs Go >= 1.26; verify completed builds and configure
+bootstrap/dependencies as needed. Preserve package signature checks.
 
-For stable PPA, verify Jammy/Noble/Resolute availability, enabled architectures
-and build dependencies, particularly `golang-1.26-go`. Add the appropriate trusted
-compiler PPA dependency where Ubuntu does not provide it. Development recipe
-settings do not automatically configure the stable PPA. The existing
-`master-daily` recipe and `make publish-devel` remain unchanged.
+Both PPAs target Ubuntu 22.04 (Jammy), 24.04 (Noble), and 26.04 (Resolute),
+on amd64 only. Verify build dependencies, particularly `golang-1.26-go`, and
+keep stable/devel compiler dependencies aligned. PPA does not build packages for Debian distribution suites. Instead, the
+publication workflow installs the Ubuntu Jammy package on Debian 12/13 amd64
+and checks startup, login and a libvirt test node. Keep the explicit Jammy
+source in Debian instructions; do not substitute a Debian suite name in the
+Ubuntu PPA URL. This check does not cover real KVM operations.
 
 See [COPR submission methods](https://docs.copr.fedorainfracloud.org/user_documentation.html)
 and [Launchpad source upload/signing](https://ubuntu.com/docs/launchpad/user/how-to/packaging/build-deb-packages-in-launchpad/).

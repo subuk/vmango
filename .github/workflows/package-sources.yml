@@ -33,6 +33,9 @@ jobs:
           PACKAGE_REVISION: ${{ inputs.revision }}
         run: bash scripts/release/package-sources.sh
       - name: Verify signing and simulated PPA upload with a disposable key
+        env:
+          VERSION: ${{ inputs.version }}
+          PACKAGE_REVISION: ${{ inputs.revision }}
         run: python3 scripts/release/test-ppa-signing.py
       - uses: actions/upload-artifact@v4
         with:

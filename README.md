@@ -32,34 +32,37 @@ release workflow, its inputs and verification scope.
 
 ## Installation
 
-There are two RPM repositories:
+Stable packages are published from tagged releases.
 
-* `vmango` for the latest tagged release, it may be considered stable
-* `vmango-devel` contains packages built automatically from the latest commit in master branch
+### RHEL 9 and 10 (x86_64)
 
-### CentOS 7 and 8
+Enable the [release COPR repository](https://copr.fedorainfracloud.org/coprs/subuk/vmango/)
+and install the package:
 
-1. Enable copr reposotory, use `subuk/vmango-devel` for the latest version, `subuk/vmango` for stable
-1. Install package
-1. Edit configuration file `/etc/vmango.conf`
-1. Start and enable systemd service `vmango`
-
-```
-yum install -y yum-plugin-copr && yum copr -y enable subuk/vmango
-yum install -y vmango
-systemctl enable --now vmango
+```sh
+sudo dnf install -y dnf-plugins-core
+sudo dnf copr enable subuk/vmango
+sudo dnf install vmango
 ```
 
-### Ubuntu 18.04
+Edit `/etc/vmango.conf`, then enable the service:
 
-1. Follow instructions on vmango or vmango-devel ppa page https://launchpad.net/~subuk/+archive/ubuntu/vmango
-1. Install package
-1. Edit configuration file `/etc/vmango.conf`
-
+```sh
+sudo systemctl enable --now vmango
 ```
+
+### Ubuntu 22.04, 24.04 and 26.04 LTS (amd64)
+
+Use the [release PPA](https://launchpad.net/~subuk/+archive/ubuntu/vmango):
+
+```sh
 sudo add-apt-repository ppa:subuk/vmango
+sudo apt-get update
 sudo apt-get install vmango
 ```
+
+Edit `/etc/vmango.conf` before starting the service. The PPA packages target
+Ubuntu; they are not Debian distribution builds.
 
 ## Hypervisor configuration
 
@@ -187,19 +190,8 @@ compiler through their standard repositories with updates/security enabled.
 RPM and DEB builds use vendored modules and `GOTOOLCHAIN=local`, so the compiler
 must be installed before building. Both package builds run `make test`.
 
-## Publishing development packages
+## Package validation and releases
 
-COPR watches GitHub `master`. The Launchpad `master-daily` recipe reads a
-separate hosted repository, `lp:~subuk/+git/vmango`; pushing to GitHub alone
-does not update it. Configure the `lp` remote once:
-
-    git remote add lp git+ssh://subuk@git.launchpad.net/~subuk/+git/vmango
-
-After committing changes on `master`, publish to both repositories:
-
-    make publish-devel
-
-This pushes `master` without force to `origin` and then `lp`. Launchpad's daily
-recipe can also be triggered with **Request build(s)** on its recipe page.
-Select Ubuntu releases that provide Go 1.26 (Jammy, Noble and Resolute).
-Stable repositories are updated separately when publishing a release.
+Maintainer instructions for manual package validation and release publication
+are in [HOWTO-RELEASE.md](HOWTO-RELEASE.md). Pushing a branch does not publish
+distribution packages.

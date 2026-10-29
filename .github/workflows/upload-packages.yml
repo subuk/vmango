@@ -1,0 +1,107 @@
+name: Upload distribution packages
+
+on:
+  workflow_call:
+    inputs:
+      channel:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      revision:
+        type: string
+        default: '1'
+      copr:
+        type: boolean
+        default: false
+      ppa:
+        type: boolean
+        default: false
+    secrets:
+      COPR_CONFIG:
+        required: false
+      PPA_GPG_PRIVATE_KEY:
+        required: false
+      PPA_GPG_PASSPHRASE:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  copr:
+    if: inputs.copr
+    runs-on: ubuntu-24.04
+    timeout-minutes: 260
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: distribution-sources
+          path: dist/packages
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install copr==2.7
+      - name: Submit SRPM and wait for COPR
+        env:
+          PUBLICATION_CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ inputs.version }}
+          PACKAGE_REVISION: ${{ inputs.revision }}
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+        run: python scripts/release/publish-packages.py copr
+  ppa:
+    if: inputs.ppa
+    strategy:
+      fail-fast: false
+      matrix:
+        series: [jammy, noble, resolute]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 260
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: distribution-sources
+          path: dist/packages
+      - name: Install upload tools
+        run: sudo apt-get update && sudo apt-get install -y devscripts dput gnupg
+      - name: Sign, upload and wait for Launchpad publication
+        env:
+          PUBLICATION_CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ inputs.version }}
+          PACKAGE_REVISION: ${{ inputs.revision }}
+          SERIES: ${{ matrix.series }}
+          PPA_GPG_PRIVATE_KEY: ${{ secrets.PPA_GPG_PRIVATE_KEY }}
+          PPA_GPG_PASSPHRASE: ${{ secrets.PPA_GPG_PASSPHRASE }}
+          PPA_GPG_FINGERPRINT: ${{ vars.PPA_GPG_FINGERPRINT }}
+        run: python3 scripts/release/publish-packages.py ppa
+  debian-compatibility:
+    if: inputs.ppa
+    needs: ppa
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [bookworm, trixie]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install the Jammy package and test startup on Debian amd64
+        env:
+          PUBLICATION_CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ inputs.version }}
+          PACKAGE_REVISION: ${{ inputs.revision }}
+          SUITE: ${{ matrix.suite }}
+        run: |
+          docker run --rm --platform linux/amd64 \
+            -e PUBLICATION_CHANNEL -e VERSION -e PACKAGE_REVISION \
+            -v "$PWD:/src:ro" "debian:$SUITE-slim" \
+            bash /src/scripts/release/test-debian-compatibility.sh

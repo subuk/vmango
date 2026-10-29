@@ -62,6 +62,12 @@ class VersionTest(unittest.TestCase):
         self.assertEqual(self.version(), '1.2.3')
 
     def test_package_source_archive_preserves_requested_version(self):
+        self.check_package_archive('6.7.8')
+
+    def test_package_source_archive_preserves_test_version(self):
+        self.check_package_archive('6.7.8~test.123.g' + 'a' * 40)
+
+    def check_package_archive(self, version):
         shutil.copy(ROOT / 'scripts/release/package-sources.sh', self.root / 'package-sources.sh')
         (self.root / 'vmango.spec.in').write_text('Version: @@_VERSION_@@\n')
         self.run_command('git', 'add', '.')
@@ -72,13 +78,13 @@ class VersionTest(unittest.TestCase):
         docker = fake_bin / 'docker'
         docker.write_text('#!/bin/sh\nexit 42\n')
         docker.chmod(0o755)
-        self.env.update(VERSION='6.7.8', PACKAGE_REVISION='1',
+        self.env.update(VERSION=version, PACKAGE_REVISION='1',
                         PATH=str(fake_bin) + os.pathsep + self.env['PATH'])
         result = subprocess.run(['bash', 'package-sources.sh'], cwd=self.root, env=self.env)
         self.assertEqual(result.returncode, 42)
-        value = self.run_command('tar', '-xOf', 'dist/packages/vmango-6.7.8.tar.gz',
-                                 'vmango-6.7.8/VERSION')
-        self.assertEqual(value, '6.7.8')
+        value = self.run_command('tar', '-xOf', f'dist/packages/vmango-{version}.tar.gz',
+                                 f'vmango-{version}/VERSION')
+        self.assertEqual(value, version)
 
     def test_tarball_preserves_override_without_git(self):
         tar = shutil.which('gtar') or shutil.which('tar')
