@@ -100,8 +100,16 @@ jobs:
                   "vmango-$VERSION-macos-arm64.tar.gz")
           sha256sum "${assets[@]}" > SHA256SUMS
           # Recheck the tag immediately before publication; never move a tag.
-          tag_sha=$(gh api "repos/$GH_REPO/commits/v$VERSION" --jq .sha 2>/dev/null || true)
-          if [ -n "$tag_sha" ]; then test "$tag_sha" = "$SOURCE_SHA"; fi
+          # An absent tag produces an empty list; API failures must remain failures.
+          tag_ref=$(gh api "repos/$GH_REPO/git/matching-refs/tags/v$VERSION" \
+            --jq ".[] | select(.ref == \"refs/tags/v$VERSION\") | .ref")
+          if [ -n "$tag_ref" ]; then
+            tag_sha=$(gh api "repos/$GH_REPO/commits/v$VERSION" --jq .sha)
+            if [ "$tag_sha" != "$SOURCE_SHA" ]; then
+              echo "Release tag v$VERSION points to $tag_sha, expected $SOURCE_SHA" >&2
+              exit 1
+            fi
+          fi
           args=()
           if [[ "$VERSION" == *-* ]]; then args+=(--prerelease); fi
           gh release create "v$VERSION" \
