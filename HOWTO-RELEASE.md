@@ -199,17 +199,17 @@ set:
 | Variable | Value |
 | --- | --- |
 | `PPA_GPG_FINGERPRINT` | Full fingerprint of the uploaded signing key |
-| `COPR_CHROOTS` | Space-separated supported chroots enabled in stable `subuk/vmango` |
+| `COPR_CHROOTS` | `rhel-9-x86_64 rhel-10-x86_64` |
 
 ### Prepare stable repositories before the first upload
 
-On 2026-10-29 the stable COPR project still advertised only `epel-7-x86_64` and
-`epel-8-x86_64`, with bootstrap disabled. Do not copy this obsolete configuration
-into CI. Enable the intended supported chroots in the stable project, configure
-bootstrap/dependencies as needed, and put that exact selection in `COPR_CHROOTS`.
-The development project currently includes EPEL 8/9, RHEL 9/10 and RHEL 10 + EPEL,
-for x86_64/aarch64; these are candidates to validate, not a claim of successful
-stable builds. Each target needs Go >= 1.26. Preserve package signature checks.
+Stable publication targets RHEL 9 and RHEL 10 on x86_64 only:
+`rhel-9-x86_64 rhel-10-x86_64`. These chroots were enabled in stable
+`subuk/vmango` on 2026-10-29. Historical EPEL repositories remain available,
+but the release workflow does not submit new builds to them. Development
+project targets are configured independently. Each selected target needs
+Go >= 1.26; verify completed builds and configure bootstrap/dependencies as
+needed. Preserve package signature checks.
 
 For stable PPA, verify Jammy/Noble/Resolute availability, enabled architectures
 and build dependencies, particularly `golang-1.26-go`. Add the appropriate trusted
