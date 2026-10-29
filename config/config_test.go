@@ -37,3 +37,19 @@ web {
 		t.Fatalf("libvirt defaults were not applied: %+v", cfg.Libvirts)
 	}
 }
+
+func TestQuickStartConfig(t *testing.T) {
+	cfg, err := Parse("../vmango.quickstart.conf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Web.Listen != "127.0.0.1:8080" || cfg.Web.MediaUploadTmp != "." {
+		t.Fatalf("quick start must use loopback and a portable upload directory: %+v", cfg.Web)
+	}
+	if len(cfg.Libvirts) != 1 || cfg.Libvirts[0].Uri != "qemu:///system" {
+		t.Fatalf("quick start needs an explicit libvirt node: %+v", cfg.Libvirts)
+	}
+	if len(cfg.Web.Users) != 1 || cfg.Web.Users[0].Id != "admin" {
+		t.Fatalf("quick start needs an explicit admin user: %+v", cfg.Web.Users)
+	}
+}

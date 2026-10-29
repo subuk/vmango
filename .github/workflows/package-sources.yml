@@ -1,0 +1,41 @@
+name: Build distribution sources
+
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      revision:
+        type: string
+        default: '1'
+
+permissions:
+  contents: read
+
+jobs:
+  sources:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+      - name: Install source packaging tools
+        run: sudo apt-get update && sudo apt-get install -y devscripts dpkg-dev dput gnupg
+      - name: Build SRPM and Ubuntu source packages
+        env:
+          VERSION: ${{ inputs.version }}
+          PACKAGE_REVISION: ${{ inputs.revision }}
+        run: bash scripts/release/package-sources.sh
+      - name: Verify signing and simulated PPA upload with a disposable key
+        run: python3 scripts/release/test-ppa-signing.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distribution-sources
+          path: dist/packages/
+          if-no-files-found: error

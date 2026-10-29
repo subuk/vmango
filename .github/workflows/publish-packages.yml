@@ -1,0 +1,129 @@
+name: Publish distribution packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Existing published stable release version without v'
+        type: string
+        required: true
+      revision:
+        description: 'Package revision; increase for a corrected package upload'
+        type: string
+        default: '1'
+      copr:
+        description: 'Publish to stable COPR subuk/vmango'
+        type: boolean
+        default: true
+      ppa:
+        description: 'Publish to stable ppa:subuk/vmango'
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      revision:
+        type: string
+        default: '1'
+      copr:
+        type: boolean
+        default: false
+      ppa:
+        type: boolean
+        default: false
+    secrets:
+      COPR_CONFIG:
+        required: false
+      PPA_GPG_PRIVATE_KEY:
+        required: false
+      PPA_GPG_PASSPHRASE:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: distribution-packages-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.check.outputs.sha }}
+    steps:
+      - name: Validate published release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+          REVISION: ${{ inputs.revision }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$REVISION" =~ ^[1-9][0-9]*$ ]]
+          gh release view "v$VERSION" --json isDraft,isPrerelease \
+            --jq 'if .isDraft or .isPrerelease then error("Expected a published stable release") else . end'
+          sha=$(gh api "repos/$GH_REPO/commits/v$VERSION" --jq .sha)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+  sources:
+    needs: prepare
+    uses: ./.github/workflows/package-sources.yml
+    with:
+      source_ref: ${{ needs.prepare.outputs.sha }}
+      version: ${{ inputs.version }}
+      revision: ${{ inputs.revision }}
+  copr:
+    if: inputs.copr
+    needs: [prepare, sources]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 260
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: distribution-sources
+          path: dist/packages
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install copr==2.7
+      - name: Submit SRPM and wait for COPR
+        env:
+          VERSION: ${{ inputs.version }}
+          PACKAGE_REVISION: ${{ inputs.revision }}
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+          COPR_CHROOTS: ${{ vars.COPR_CHROOTS }}
+        run: python scripts/release/publish-packages.py copr
+  ppa:
+    if: inputs.ppa
+    needs: [prepare, sources]
+    strategy:
+      fail-fast: false
+      matrix:
+        series: [jammy, noble, resolute]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 260
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: distribution-sources
+          path: dist/packages
+      - name: Install upload tools
+        run: sudo apt-get update && sudo apt-get install -y devscripts dput gnupg
+      - name: Sign, upload and wait for Launchpad publication
+        env:
+          VERSION: ${{ inputs.version }}
+          PACKAGE_REVISION: ${{ inputs.revision }}
+          SERIES: ${{ matrix.series }}
+          PPA_GPG_PRIVATE_KEY: ${{ secrets.PPA_GPG_PRIVATE_KEY }}
+          PPA_GPG_PASSPHRASE: ${{ secrets.PPA_GPG_PASSPHRASE }}
+          PPA_GPG_FINGERPRINT: ${{ vars.PPA_GPG_FINGERPRINT }}
+        run: python3 scripts/release/publish-packages.py ppa

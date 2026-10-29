@@ -17,6 +17,19 @@ Current features:
 * Custom userdata for cloud-init
 * Bridged network
 
+## Binary quick start
+
+Download a ready-built archive for **Linux x64**, **Windows x64** or
+**macOS arm64** from [GitHub Releases](https://github.com/subuk/vmango/releases),
+then follow the [binary quick-start guide](docs/content/en/docs/start.md)
+([website](https://vmango.org/docs/start/)). It covers runtime dependencies,
+checksums, libvirt connectivity, an administrator password and zero-node
+troubleshooting. No Docker or Go compiler is needed. Windows includes libvirt
+DLLs for remote hosts; ISO tools are separate.
+
+See [HOWTO-RELEASE.md](HOWTO-RELEASE.md) for CI and the manually triggered
+release workflow, its inputs and verification scope.
+
 ## Installation
 
 There are two RPM repositories:
