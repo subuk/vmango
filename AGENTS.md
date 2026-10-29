@@ -25,6 +25,36 @@ libvirt. Keep business logic separate from HTTP handlers and libvirt calls.
 - `vmango.spec.in`, `Makefile.RPM.mk`, `.copr/`: RPM packaging and COPR entry point.
 - `debian/`, `Makefile.DEB.mk`, `dockerbuild/`: DEB packaging and build containers.
 
+## Architecture
+
+Virtual machines, networks, volumes, storage pools and nodes are distinct parts
+of the domain, currently grouped in the `compute/` Go package. This package owns
+their models, repository interfaces and services. Repository contracts belong
+to the domain; implementations depend on those contracts, not the other way
+around. Keep domain code independent of libvirt APIs and XML types.
+
+`VirtualMachineManager` coordinates operations across domain services, including
+disk creation and cloning, VM creation, config drive provisioning and events.
+Put shared business rules, defaults and validation in domain services or the
+manager so that all callers use the same behavior.
+
+`libvirt/` implements the domain repository interfaces and translates domain
+models to and from libvirt XML. It owns connections, hypervisor calls and checks
+that require backend capabilities. Expose capabilities through domain contracts
+when business rules need them. Backend details such as emulator paths and XML
+construction belong in the implementation.
+
+`filesystem/` provides filesystem-backed implementations such as key storage
+and scripted event hooks. `bootstrap/` constructs implementations, injects them
+into domain services and wires those services into `web/`. HTTP handlers should
+parse requests, call domain operations and render responses; keep shared
+business rules out of handlers and templates.
+
+When adding features such as image settings or resource profiles, define their
+meaning and application rules in the domain first. Let backend implementations
+translate the resulting configuration into supported operations. Configuration
+files and UI forms expose these concepts without owning their business logic.
+
 ## Build and verification
 
 The application requires Go 1.26 or newer, a C compiler, pkg-config and libvirt
