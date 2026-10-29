@@ -25,7 +25,7 @@ def destination(channel, version):
 
 
 def ppa_url(project):
-    return f'https://api.launchpad.net/1.0/~subuk/+archive/ubuntu/{project}'
+    return f'https://api.launchpad.net/devel/~subuk/+archive/ubuntu/{project}'
 
 
 def validate_changes(path, version, revision, series):
@@ -58,7 +58,7 @@ def entries(url, **params):
 def sources(version, series, project):
     return entries(ppa_url(project), **{'ws.op': 'getPublishedSources', 'source_name': 'vmango',
                           'exact_match': 'true', 'version': version,
-                          'distro_series': f'https://api.launchpad.net/1.0/ubuntu/{series}'})
+                          'distro_series': f'https://api.launchpad.net/devel/ubuntu/{series}'})
 
 
 def ppa_state(source, builds, binaries):
