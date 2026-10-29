@@ -24,7 +24,7 @@ for series in jammy noble resolute; do
   tar -xzf "$work/vmango_$VERSION.orig.tar.gz" -C "$work"
   (
     cd "$work/vmango-$VERSION"
-    DEBFULLNAME='Matvey Kruglov' DEBEMAIL='kubuzzzz@gmail.com' \
+    DEBFULLNAME='Vmango release CI' DEBEMAIL='admin@vmango.org' \
       dch --force-distribution --distribution "$series" \
       --newversion "$VERSION-${PACKAGE_REVISION}ppa1~$series" \
       "Release $VERSION from $(git -C "$OLDPWD" rev-parse HEAD)."

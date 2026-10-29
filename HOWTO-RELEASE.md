@@ -166,10 +166,10 @@ configuration verbatim. Track its expiration and replace the secret when renewin
 
 For Launchpad, use a dedicated password-protected signing key whose email is
 verified on the uploader's Launchpad account. The packaging identity currently
-uses `Matvey Kruglov <kubuzzzz@gmail.com>`. On your own machine:
+uses `Vmango release CI <admin@vmango.org>`. On your own machine:
 
 ```sh
-gpg --quick-generate-key 'Vmango release CI <kubuzzzz@gmail.com>' rsa4096 sign 1y
+gpg --quick-generate-key 'Vmango release CI <admin@vmango.org>' rsa4096 sign 1y
 gpg --list-secret-keys --keyid-format LONG
 # Replace FINGERPRINT with the complete fingerprint of this new key.
 # Launchpad sends an encrypted ownership-verification email.
