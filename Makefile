@@ -7,9 +7,15 @@ INSTALL = install
 GO_SOURCES = $(shell find . -name '*.go')
 ASSETS_SOURCES = $(shell find templates static)
 UNAME_S := $(shell uname -s)
-TARBALL_SOURCES = $(GO_SOURCES) Makefile README.md vmango.dist.conf vmango.service static/ templates/ vendor/ go.mod go.sum
+TARBALL_SOURCES = $(GO_SOURCES) Makefile README.md vmango.dist.conf vmango.service static/ templates/ vendor/ go.mod go.sum scripts/version.sh
 
-VERSION = 0.12.1
+# Release workflows can override this before the release tag exists.
+.DEFAULT_GOAL := default
+VERSION ?= $(shell sh scripts/version.sh)
+
+.PHONY: print-version
+print-version:
+	@printf '%s\n' '$(VERSION)'
 
 BUILD_LDFLAGS = -X subuk/vmango/web.AppVersion=$(VERSION)
 
@@ -26,7 +32,10 @@ BIN_DIR = $(DESTDIR)/$(PREFIX)/bin
 
 default: bin/vmango
 
-bin/vmango: $(GO_SOURCES) web/assets_generated.go Makefile go.mod go.sum
+.PHONY: FORCE
+FORCE:
+
+bin/vmango: FORCE $(GO_SOURCES) web/assets_generated.go Makefile go.mod go.sum
 	$(GO) build -ldflags='$(BUILD_LDFLAGS)' -o bin/vmango
 
 bin/go-bindata: go.mod go.sum
@@ -43,7 +52,9 @@ install: bin/vmango vmango.dist.conf
 
 tarball: vmango-$(VERSION).tar.gz
 vmango-$(VERSION).tar.gz: $(TARBALL_SOURCES)
-	$(TAR) --transform "s,,vmango-$(VERSION)/," -czf vmango-$(VERSION).tar.gz $^
+	@set -eu; metadata=$$(mktemp -d); trap 'rm -rf "$$metadata"' EXIT; \
+	printf '%s\n' '$(VERSION)' > "$$metadata/VERSION"; \
+	$(TAR) --transform "s,,vmango-$(VERSION)/," -czf $@ $(TARBALL_SOURCES) -C "$$metadata" VERSION
 
 .PHONY: vendor
 vendor:

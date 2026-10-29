@@ -52,8 +52,10 @@ jobs:
           }
           sha=$(git rev-parse HEAD)
           if [ "$PUBLISH_PACKAGES" = true ]; then
-            [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-            test "$(sed -n 's/^VERSION = //p' Makefile)" = "$VERSION"
+            [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo 'Package publication requires a stable X.Y.Z version' >&2
+              exit 1
+            }
           fi
           if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
             test "$(git rev-parse "v$VERSION^{commit}")" = "$sha" || {

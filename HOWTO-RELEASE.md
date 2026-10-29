@@ -36,9 +36,9 @@ The workflow must first exist on the repository's default branch for the
 **Run workflow** button to be available. No personal access token is needed;
 only the final publication job receives `contents: write`.
 
-1. Prepare the intended release commit. Update `VERSION` in `Makefile` and
-   changelogs in `vmango.spec.in` and `debian/changelog`. Commit and push the
-   source; normal maintenance does not bump versions or create tags.
+1. Prepare, commit and push the intended source changes. The version is chosen
+   in the release form; no manual version update in the Makefile or package
+   changelogs is required. Historical changelog entries remain unchanged.
 2. Open **Actions → Release binaries → Run workflow**. Run the workflow from
    the maintained `master` branch. Enter `version` without `v`, for example
    `0.13.0`, and `source_ref` as a branch, tag or commit SHA containing the build
@@ -74,6 +74,20 @@ publication leaves a draft, inspect it and either complete publication manually
 or delete the incomplete draft before rerunning. Investigate a tag mismatch
 instead of force-pushing. Concurrent runs for the same version are serialized.
 The publication job builds no code and uses only artifacts from its own run.
+
+## Automatic build versions
+
+`make print-version` shows the version used by a local build. An exact `vX.Y.Z`
+tag produces `X.Y.Z`; subsequent commits produce `X.Y.Z.N.gSHA`. Prerelease tags
+are supported too. A checkout without reachable release tags uses `0.0.0.gSHA`.
+Fetch tags and history in shallow checkouts to recover the release-based version.
+
+`make VERSION=X.Y.Z` (or the `VERSION` environment variable) overrides discovery,
+as the release workflow must build before publishing its tag. Generated source
+archives include a `VERSION` file, which takes precedence over Git discovery.
+Sources without either metadata source report `0.0.0-unknown`. CI source-package
+checks use the most recent stable tag's base version, or `0.0.0` before the first
+tag; these packages are not published.
 
 ## Reproduce an archive locally
 
@@ -120,8 +134,10 @@ The release form has `publish_copr` and `publish_ppa` switches, disabled by
 default until credentials and repository settings are ready. After publishing
 GitHub assets, selected jobs build distribution source packages from the exact
 published tag and upload them to `subuk/vmango` and `ppa:subuk/vmango`.
-Only stable `X.Y.Z` versions are accepted. The Makefile and package changelogs
-must already contain that version; the workflow does not edit release commits.
+Only stable `X.Y.Z` versions are accepted. The requested version is embedded in
+a generated `VERSION` file in the source archive. Debian upload changelog entries
+are generated automatically; the RPM spec version is substituted during packaging.
+The workflow does not edit release commits.
 
 `Publish distribution packages` can also be run directly for an existing
 published release. Select either destination and a positive package `revision`

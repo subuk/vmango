@@ -3,12 +3,16 @@ set -euo pipefail
 : "${VERSION:?}" "${PACKAGE_REVISION:?}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 [[ "$PACKAGE_REVISION" =~ ^[1-9][0-9]*$ ]]
-test "$(sed -n 's/^VERSION = //p' Makefile)" = "$VERSION"
-[[ "$(head -1 debian/changelog)" == "vmango ($VERSION-"* ]]
-grep -Eq "^\* .* $VERSION-[0-9]+$" vmango.spec.in
 mkdir -p dist/packages/rpm dist/packages/ppa
 # Archive the exact checkout, including vendored dependencies and test fixtures.
-git archive --format=tar --prefix="vmango-$VERSION/" HEAD | gzip -n > "dist/packages/vmango-$VERSION.tar.gz"
+# Persist the requested version for builders without Git metadata.
+metadata=$(mktemp -d)
+trap 'rm -rf "$metadata"' EXIT
+mkdir -p "$metadata/vmango-$VERSION"
+printf '%s\n' "$VERSION" > "$metadata/vmango-$VERSION/VERSION"
+git archive --format=tar --prefix="vmango-$VERSION/" HEAD > "$metadata/source.tar"
+tar -rf "$metadata/source.tar" -C "$metadata" "vmango-$VERSION/VERSION"
+gzip -n < "$metadata/source.tar" > "dist/packages/vmango-$VERSION.tar.gz"
 mkdir -p dist/packages/rpmbuild/{SOURCES,SPECS,SRPMS}
 cp "dist/packages/vmango-$VERSION.tar.gz" dist/packages/rpmbuild/SOURCES/
 sed -e "s/@@_VERSION_@@/$VERSION/g" -e "s/@@_RELEASE_@@/$PACKAGE_REVISION/g" vmango.spec.in > dist/packages/rpmbuild/SPECS/vmango.spec
