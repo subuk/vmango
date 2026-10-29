@@ -11,7 +11,8 @@ import time
 import urllib.parse
 import urllib.request
 
-CHROOTS = ['rhel-8-x86_64', 'rhel-9-x86_64', 'rhel-10-x86_64']
+CHROOTS = ['rhel-8-x86_64', 'rhel-9-x86_64', 'rhel-10-x86_64',
+           'epel-8-x86_64', 'epel-9-x86_64', 'epel-10-x86_64']
 SERIES = ('jammy', 'noble', 'resolute')
 
 

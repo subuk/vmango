@@ -59,21 +59,39 @@ Keep `Suites: jammy` on both Debian versions. Do not replace it with
 `bookworm` or `trixie`, and do not add Ubuntu's main repositories to Debian.
 The Go compiler and compiler PPA are not needed to install binary packages.
 
-## RHEL 8, 9 and 10 (x86_64)
+## RHEL 8/9/10 and CentOS Stream 10 (x86_64)
 
-Specify the matching RHEL target explicitly. For RHEL 8:
+On RHEL 8/9 or CentOS Stream 10, enable the release repository and install
+the package:
 
 ```sh
 sudo dnf install -y dnf-plugins-core
-sudo dnf copr enable subuk/vmango rhel-8-x86_64
+sudo dnf copr enable subuk/vmango
 sudo dnf install vmango
 ```
 
-For RHEL 9 or 10, use `rhel-9-x86_64` or `rhel-10-x86_64` instead.
-Some versions of the COPR plugin select `epel-8` or `epel-9` by default.
-An error that an `epel-*` repository does not exist can therefore occur even
-when the corresponding `rhel-*` repository is available. Use the explicit
-target above; no manual change to the generated repository file is needed.
+On RHEL 10, use an explicit target when enabling the repository:
+
+```sh
+sudo dnf copr enable subuk/vmango rhel-10-x86_64
+sudo dnf install vmango
+```
+
+The EPEL 10 build uses CentOS Stream and requires a newer libvirt than the
+RHEL 10 build. Select `rhel-10-x86_64` on RHEL 10 to use its matching dependencies.
+
+The COPR plugin normally selects an `epel-*` repository. Both EPEL and RHEL
+repositories are published for versions 8, 9 and 10 on x86_64.
+
+| Target | Build environment |
+| --- | --- |
+| `rhel-8-x86_64`, `rhel-9-x86_64`, `rhel-10-x86_64` | RHEL without EPEL build dependencies |
+| `epel-8-x86_64`, `epel-9-x86_64` | RHEL + EPEL |
+| `epel-10-x86_64` | CentOS Stream + EPEL |
+
+To use a RHEL build explicitly, append the matching target to the enable
+command, for example `sudo dnf copr enable subuk/vmango rhel-8-x86_64`.
+Use `rhel-9-x86_64` or `rhel-10-x86_64` for RHEL 9 or 10 respectively.
 
 See the [release COPR project](https://copr.fedorainfracloud.org/coprs/subuk/vmango/)
 for completed builds and repository setup for your system.

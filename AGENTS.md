@@ -110,8 +110,10 @@ sync. Application and documentation dependencies are separate.
 ## Packaging and publication
 
 Stable distribution packages are published only from existing stable GitHub
-releases by `.github/workflows/publish-packages.yml`. COPR targets RHEL 8, RHEL 9 and
-RHEL 10 on x86_64; PPA targets Ubuntu Jammy, Noble and Resolute on amd64.
+releases by `.github/workflows/publish-packages.yml`. COPR targets both RHEL and
+EPEL 8, 9 and 10 on x86_64; PPA targets Ubuntu Jammy, Noble and Resolute on amd64.
+COPR's EPEL 10 target uses CentOS Stream and can require newer libvirt symbols.
+Keep the explicit `rhel-10-x86_64` installation command for RHEL 10.
 
 The existing `vmango-devel` COPR/PPA repositories are for manual maintainer
 validation via `.github/workflows/test-packages.yml`. No webhook, daily recipe

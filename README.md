@@ -34,20 +34,21 @@ release workflow, its inputs and verification scope.
 
 Stable packages are published from tagged releases.
 
-### RHEL 8, 9 and 10 (x86_64)
+### RHEL 8/9/10 and CentOS Stream 10 (x86_64)
 
 Enable the [release COPR repository](https://copr.fedorainfracloud.org/coprs/subuk/vmango/)
-and install the package. For RHEL 8:
+and install the package. On RHEL 8/9 or CentOS Stream 10:
 
 ```sh
 sudo dnf install -y dnf-plugins-core
-sudo dnf copr enable subuk/vmango rhel-8-x86_64
+sudo dnf copr enable subuk/vmango
 sudo dnf install vmango
 ```
 
-For RHEL 9 or 10, use `rhel-9-x86_64` or `rhel-10-x86_64` instead.
-Specify the target explicitly: some versions of the COPR plugin select
-`epel-8` or `epel-9` by default, while these packages use the `rhel-*` repositories.
+On RHEL 10, enable `sudo dnf copr enable subuk/vmango rhel-10-x86_64` instead:
+the default EPEL 10 build uses CentOS Stream and requires a newer libvirt.
+Both `epel-*` and `rhel-*` repositories are available for versions 8, 9 and 10.
+See the [package guide](https://vmango.org/docs/packages/) for explicit targets.
 
 Edit `/etc/vmango.conf`, then enable the service:
 
