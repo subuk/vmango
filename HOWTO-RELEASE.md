@@ -172,6 +172,8 @@ uses `Matvey Kruglov <kubuzzzz@gmail.com>`. On your own machine:
 gpg --quick-generate-key 'Vmango release CI <kubuzzzz@gmail.com>' rsa4096 sign 1y
 gpg --list-secret-keys --keyid-format LONG
 # Replace FINGERPRINT with the complete fingerprint of this new key.
+# Launchpad sends an encrypted ownership-verification email.
+gpg --quick-add-key FINGERPRINT rsa4096 encr 1y
 gpg --keyserver hkps://keyserver.ubuntu.com --send-keys FINGERPRINT
 ```
 
