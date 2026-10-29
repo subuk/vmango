@@ -7,7 +7,8 @@ menu:
     weight: 10
 ---
 
-Vmango manages virtual machines on existing libvirt hosts. Configure your
+Vmango manages virtual machines across multiple local or remote libvirt hosts
+from one web interface. Configure your
 hypervisor, storage pools and networking first, then connect Vmango to launch
 and manage machines from your browser.
 
@@ -15,6 +16,8 @@ and manage machines from your browser.
 
 - [Binary quick start](/docs/start/): download a release, connect a host and
   configure your web login.
+- [Multiple hosts](/docs/start/#manage-multiple-hosts): connect several
+  hypervisors to one Vmango instance.
 - [Package installation](/docs/packages/): install release packages on Ubuntu,
   Debian or RHEL.
 - [Cloud images and provisioning](/docs/images/): choose an OS image, register

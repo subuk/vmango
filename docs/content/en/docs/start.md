@@ -155,6 +155,32 @@ Replace `uri` with the verified URI. The name `local` is just a label; you can
 rename it to describe a remote host. Use an existing, active storage pool for
 `config_drive_pool`. For example, check `virsh -c URI pool-list --all`.
 
+### Manage multiple hosts
+
+One Vmango instance can manage virtual machines across multiple local or remote
+libvirt hosts from the same web interface. Add one `libvirt` block per host in
+`vmango.conf`, giving each block a unique name:
+
+```hcl
+libvirt "local" {
+    uri = "qemu:///system"
+    config_drive_pool = "default"
+}
+
+libvirt "remote" {
+    uri = "qemu+ssh://libvirt@hypervisor.example.com/system"
+    config_drive_pool = "default"
+}
+```
+
+This example connects a Linux Vmango server to its local KVM host and a remote
+host over SSH. Use the connection types supported by your server platform;
+Windows requires remote hosts with authenticated TLS, as described above.
+Verify each URI and its storage pool as the user running Vmango. Pool names
+refer to pools on each respective host; they do not create shared storage.
+Restart Vmango after changing the configuration, then select the target node
+when creating a VM.
+
 ## Set a password and start
 
 Run `./vmango genpw` (PowerShell: `.\vmango.exe genpw`), enter your administrator
