@@ -140,6 +140,22 @@ jobs:
               if ($LASTEXITCODE -ne 0) { throw "Tests failed: $_" }
             }
           } finally { Pop-Location }
+      - name: Report Windows SSH transport availability
+        shell: python
+        run: |
+          import pathlib
+          import subprocess
+
+          virsh = next(pathlib.Path('runtime').glob('*/virsh.exe')).resolve()
+          for transport in ('ssh', 'libssh', 'libssh2'):
+              # Loopback only: distinguish unavailable transports from connection errors.
+              uri = f'qemu+{transport}://probe@127.0.0.1:1/system'
+              result = subprocess.run(
+                  [str(virsh), '-c', uri, 'list', '--all'],
+                  capture_output=True, text=True, timeout=15,
+              )
+              print(f'{transport}: exit {result.returncode}', flush=True)
+              print(result.stdout + result.stderr, flush=True)
       - uses: actions/upload-artifact@v4
         with:
           name: binary-windows-x64
