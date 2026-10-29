@@ -17,6 +17,7 @@
     <nav aria-label="Main navigation">
       <a href="#images">Images</a>
       <a href="#install">Install</a>
+      <a href="/docs/start/">Quick start</a>
       <a href="https://github.com/subuk/vmango">Source</a>
       <a href="https://github.com/subuk/vmango/issues">Issues</a>
     </nav>
@@ -95,9 +96,12 @@
 
     <section id="install" aria-labelledby="install-title">
       <h2 id="install-title">Getting started</h2>
-      <p>You will need a configured libvirt host, a storage pool and a cloud-init-enabled OS image.
-        Choose a package repository below, then configure <code>/etc/vmango.conf</code>
-        for your environment.</p>
+      <p><a href="https://github.com/subuk/vmango/releases">Download a release binary</a>
+        for Linux x64, Windows x64 or macOS arm64, then follow the
+        <a href="/docs/start/">binary quick-start guide</a>. No Docker or Go compiler
+        is needed. The guide covers runtime libraries, passwords and connecting a libvirt host.</p>
+      <p>To launch VMs, you will also need a configured libvirt host, a storage pool
+        and a cloud-init-enabled OS image. Distribution packages are available below.</p>
       <dl class="packages">
         <div><dt>Ubuntu</dt><dd><a href="https://launchpad.net/~subuk/+archive/ubuntu/vmango">Release PPA</a><span aria-hidden="true"> · </span><a href="https://launchpad.net/~subuk/+archive/ubuntu/vmango-devel">Development PPA</a></dd></div>
         <div><dt>RPM</dt><dd><a href="https://copr.fedorainfracloud.org/coprs/subuk/vmango/">Release COPR</a><span aria-hidden="true"> · </span><a href="https://copr.fedorainfracloud.org/coprs/subuk/vmango-devel/">Development COPR</a></dd></div>

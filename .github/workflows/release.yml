@@ -1,0 +1,96 @@
+name: Release binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version without v (for example 0.13.0 or 0.13.0-rc.1)'
+        required: true
+        type: string
+      source_ref:
+        description: 'Source branch, tag or commit SHA'
+        required: true
+        default: master
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate version and resolve source
+        id: source
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || {
+            echo 'Expected X.Y.Z or X.Y.Z-prerelease, without v' >&2
+            exit 1
+          }
+          sha=$(git rev-parse HEAD)
+          if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
+            test "$(git rev-parse "v$VERSION^{commit}")" = "$sha" || {
+              echo 'Existing release tag points to a different commit' >&2
+              exit 1
+            }
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    uses: ./.github/workflows/build.yml
+    with:
+      source_ref: ${{ needs.prepare.outputs.sha }}
+      version: ${{ inputs.version }}
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          merge-multiple: true
+          path: dist
+      - name: Create checksums and publish complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+        working-directory: dist
+        run: |
+          test -f "vmango-$VERSION-linux-x64.tar.gz"
+          test -f "vmango-$VERSION-windows-x64.zip"
+          test -f "vmango-$VERSION-macos-arm64.tar.gz"
+          assets=("vmango-$VERSION-linux-x64.tar.gz"
+                  "vmango-$VERSION-windows-x64.zip"
+                  "vmango-$VERSION-macos-arm64.tar.gz")
+          sha256sum "${assets[@]}" > SHA256SUMS
+          # Recheck the tag immediately before publication; never move a tag.
+          tag_sha=$(gh api "repos/$GH_REPO/commits/v$VERSION" --jq .sha 2>/dev/null || true)
+          if [ -n "$tag_sha" ]; then test "$tag_sha" = "$SOURCE_SHA"; fi
+          args=()
+          if [[ "$VERSION" == *-* ]]; then args+=(--prerelease); fi
+          gh release create "v$VERSION" \
+            --target "$SOURCE_SHA" --title "Vmango $VERSION" \
+            --draft --generate-notes "${args[@]}" \
+            "${assets[@]}" SHA256SUMS
+          gh release edit "v$VERSION" --draft=false

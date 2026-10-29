@@ -1,0 +1,147 @@
+name: Build binaries
+
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+  GOFLAGS: -mod=vendor
+  CGO_ENABLED: '1'
+
+jobs:
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: linux-x64
+          - runner: macos-15
+            target: macos-arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvirt-dev libvirt-clients genisoimage
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install libvirt dvdrtools
+      - name: Build and test
+        env:
+          VERSION: ${{ inputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          case "$TARGET" in
+            linux-x64) test "$(go env GOOS)/$(go env GOARCH)" = linux/amd64 ;;
+            macos-arm64) test "$(go env GOOS)/$(go env GOARCH)" = darwin/arm64 ;;
+          esac
+          make VERSION="$VERSION"
+          make test
+          if [ "$TARGET" = linux-x64 ]; then
+            ldd bin/vmango | tee runtime-libraries.txt
+            if grep -q 'not found' runtime-libraries.txt; then exit 1; fi
+          else
+            otool -L bin/vmango
+          fi
+          python3 scripts/release/package.py "$VERSION" "$TARGET" bin/vmango
+          python3 scripts/release/smoke.py "dist/vmango-$VERSION-$TARGET.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  windows-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Cross-compile with Fedora MinGW libvirt
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          docker run --rm \
+            -v "$PWD:/src" -w /src \
+            -v "$(go env GOROOT):/opt/go:ro" \
+            -e VERSION -e GOTOOLCHAIN=local -e GOFLAGS=-mod=vendor \
+            fedora:44 bash scripts/release/windows.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-candidate
+          path: |
+            dist/*.zip
+            result/windows-tests/
+          if-no-files-found: error
+
+  windows-test:
+    needs: windows-build
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-candidate
+          path: candidate
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test packaged Windows runtime
+        shell: pwsh
+        run: |
+          $archive = (Get-ChildItem candidate/dist/*.zip).FullName
+          python scripts/release/smoke.py $archive
+          if ($LASTEXITCODE -ne 0) { throw 'Archive smoke test failed' }
+          Expand-Archive $archive runtime
+          $runtime = (Get-ChildItem runtime -Directory).FullName
+          Copy-Item candidate/result/windows-tests/*.exe $runtime
+          Copy-Item vmango.quickstart.conf runtime/vmango.quickstart.conf
+          Push-Location $runtime
+          try {
+            Get-ChildItem *.test.exe | ForEach-Object {
+              & $_.FullName -test.v
+              if ($LASTEXITCODE -ne 0) { throw "Tests failed: $_" }
+            }
+          } finally { Pop-Location }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-windows-x64
+          path: candidate/dist/*.zip
+          if-no-files-found: error
