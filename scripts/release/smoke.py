@@ -3,6 +3,7 @@
 import http.cookiejar
 import os
 import pathlib
+import shutil
 import socket
 import subprocess
 import sys
@@ -17,7 +18,9 @@ import zipfile
 def smoke(archive):
     archive = pathlib.Path(archive).resolve()
     with tempfile.TemporaryDirectory() as tmp:
-        if archive.suffix == ".zip":
+        if archive.is_dir():
+            shutil.copytree(archive, tmp, dirs_exist_ok=True)
+        elif archive.suffix == ".zip":
             with zipfile.ZipFile(archive) as source:
                 source.extractall(tmp)
         else:

@@ -15,6 +15,7 @@ BuildRequires: make
 BuildRequires: gcc
 BuildRequires: pkgconfig
 BuildRequires: libvirt-devel
+BuildRequires: systemd-rpm-macros
 Requires(pre): shadow-utils
 %{?systemd_requires}
 

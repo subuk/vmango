@@ -25,5 +25,4 @@ dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' vmango
 mkdir -p /tmp/vmango-package-smoke/vmango
 cp /usr/bin/vmango /tmp/vmango-package-smoke/vmango/
 cp /src/vmango.quickstart.conf /tmp/vmango-package-smoke/vmango/
-tar -czf /tmp/vmango-package-smoke.tar.gz -C /tmp/vmango-package-smoke vmango
-python3 /src/scripts/release/smoke.py /tmp/vmango-package-smoke.tar.gz
+python3 /src/scripts/release/smoke.py /tmp/vmango-package-smoke
