@@ -129,7 +129,7 @@ Run **Test distribution packages** in GitHub Actions:
 
 1. Select a trusted source branch, tag or commit and the next stable version
    without `v`, for example `0.13.0`.
-2. Select COPR, PPA, or both. COPR builds RHEL 9/10 on x86_64; PPA builds
+2. Select COPR, PPA, or both. COPR builds RHEL 8/9/10 on x86_64; PPA builds
    Jammy/Noble/Resolute on amd64 only.
 3. The workflow resolves the source to a commit SHA and generates
    `0.13.0~test.RUN_ID.gFULL_SHA`. This sorts below `0.13.0` in RPM and Debian
@@ -178,7 +178,7 @@ signs a temporary package copy with a disposable key and runs a simulated
 `dput` upload, exercising signature checks without sending packages. It does
 not establish that all remote distribution builds work.
 
-COPR uses the fixed RHEL 9/10 x86_64 target list. Both PPAs must have only
+COPR uses the fixed RHEL 8/9/10 x86_64 target list. Both PPAs must have only
 amd64 enabled; the uploader checks this before submitting packages. Publication jobs wait up to four hours: COPR must report
 success, and Launchpad must complete every scheduled architecture build and
 publish its `vmango` binary. Upload acceptance alone is not success. A timeout
@@ -243,8 +243,8 @@ set:
 
 ### Prepare stable repositories before the first upload
 
-Stable and devel publication target RHEL 9 and RHEL 10 on x86_64 only:
-`rhel-9-x86_64 rhel-10-x86_64`. Both projects must have these chroots enabled.
+Stable and devel publication target RHEL 8, RHEL 9 and RHEL 10 on x86_64 only:
+`rhel-8-x86_64 rhel-9-x86_64 rhel-10-x86_64`. Both projects must have these chroots enabled.
 Each target needs Go >= 1.26; verify completed builds and configure
 bootstrap/dependencies as needed. Preserve package signature checks.
 

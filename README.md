@@ -34,7 +34,7 @@ release workflow, its inputs and verification scope.
 
 Stable packages are published from tagged releases.
 
-### RHEL 9 and 10 (x86_64)
+### RHEL 8, 9 and 10 (x86_64)
 
 Enable the [release COPR repository](https://copr.fedorainfracloud.org/coprs/subuk/vmango/)
 and install the package:

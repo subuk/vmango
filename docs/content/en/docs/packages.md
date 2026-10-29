@@ -59,7 +59,7 @@ Keep `Suites: jammy` on both Debian versions. Do not replace it with
 `bookworm` or `trixie`, and do not add Ubuntu's main repositories to Debian.
 The Go compiler and compiler PPA are not needed to install binary packages.
 
-## RHEL 9 and 10 (x86_64)
+## RHEL 8, 9 and 10 (x86_64)
 
 ```sh
 sudo dnf install -y dnf-plugins-core

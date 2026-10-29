@@ -110,7 +110,7 @@ sync. Application and documentation dependencies are separate.
 ## Packaging and publication
 
 Stable distribution packages are published only from existing stable GitHub
-releases by `.github/workflows/publish-packages.yml`. COPR targets RHEL 9 and
+releases by `.github/workflows/publish-packages.yml`. COPR targets RHEL 8, RHEL 9 and
 RHEL 10 on x86_64; PPA targets Ubuntu Jammy, Noble and Resolute on amd64.
 
 The existing `vmango-devel` COPR/PPA repositories are for manual maintainer
