@@ -137,6 +137,7 @@ jobs:
           Expand-Archive $archive runtime
           $runtime = (Get-ChildItem runtime -Directory).FullName
           Copy-Item candidate/result/windows-tests/*.exe $runtime
+          Copy-Item candidate/result/windows-tests/testdata $runtime -Recurse
           Copy-Item vmango.quickstart.conf runtime/vmango.quickstart.conf
           Push-Location $runtime
           try {

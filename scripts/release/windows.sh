@@ -10,5 +10,6 @@ export CC=x86_64-w64-mingw32-gcc PKG_CONFIG=x86_64-w64-mingw32-pkg-config
 go build -trimpath -ldflags="-X subuk/vmango/web.AppVersion=$VERSION" -o bin/vmango.exe .
 mkdir -p result/windows-tests
 go test -c -o "$PWD/result/windows-tests/" ./...
+cp -R web/testdata result/windows-tests/
 python3 scripts/release/package.py "$VERSION" windows-x64 bin/vmango.exe \
   /usr/x86_64-w64-mingw32/sys-root/mingw/bin
