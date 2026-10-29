@@ -37,13 +37,17 @@ Stable packages are published from tagged releases.
 ### RHEL 8, 9 and 10 (x86_64)
 
 Enable the [release COPR repository](https://copr.fedorainfracloud.org/coprs/subuk/vmango/)
-and install the package:
+and install the package. For RHEL 8:
 
 ```sh
 sudo dnf install -y dnf-plugins-core
-sudo dnf copr enable subuk/vmango
+sudo dnf copr enable subuk/vmango rhel-8-x86_64
 sudo dnf install vmango
 ```
+
+For RHEL 9 or 10, use `rhel-9-x86_64` or `rhel-10-x86_64` instead.
+Specify the target explicitly: some versions of the COPR plugin select
+`epel-8` or `epel-9` by default, while these packages use the `rhel-*` repositories.
 
 Edit `/etc/vmango.conf`, then enable the service:
 

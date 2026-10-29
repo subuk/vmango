@@ -61,11 +61,19 @@ The Go compiler and compiler PPA are not needed to install binary packages.
 
 ## RHEL 8, 9 and 10 (x86_64)
 
+Specify the matching RHEL target explicitly. For RHEL 8:
+
 ```sh
 sudo dnf install -y dnf-plugins-core
-sudo dnf copr enable subuk/vmango
+sudo dnf copr enable subuk/vmango rhel-8-x86_64
 sudo dnf install vmango
 ```
+
+For RHEL 9 or 10, use `rhel-9-x86_64` or `rhel-10-x86_64` instead.
+Some versions of the COPR plugin select `epel-8` or `epel-9` by default.
+An error that an `epel-*` repository does not exist can therefore occur even
+when the corresponding `rhel-*` repository is available. Use the explicit
+target above; no manual change to the generated repository file is needed.
 
 See the [release COPR project](https://copr.fedorainfracloud.org/coprs/subuk/vmango/)
 for completed builds and repository setup for your system.
