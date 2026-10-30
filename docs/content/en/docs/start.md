@@ -154,7 +154,8 @@ api {
 ```
 
 Replace `uri` with the verified URI. The name `local` is just a label; you can
-rename it to describe a remote host. Use an existing, active storage pool for
+rename it to describe a remote host only if you also update the corresponding
+`host` binding inside the cloud. Use an existing, active storage pool for
 `config_drive_pool`. For example, check `virsh -c URI pool-list --all`.
 
 ### Manage multiple hosts
@@ -224,9 +225,12 @@ foreground server with Ctrl+C.
 
 To create a VM, first check the [cloud catalog and host bindings](/docs/clouds/),
 then follow the [cloud images and provisioning guide](/docs/images/)
-to configure lazy downloadable images or register a manually prepared source **on the hypervisor** and
-register it in `vmango.conf`. Configure networking on the hypervisor first.
-The binary archive does not configure KVM, pools, networks or guest images for you.
+to use the shipped lazy downloadable catalog or register a manually prepared
+source volume **on the hypervisor** in `vmango.conf`. Administrators prepare the
+hypervisor's pools and networking and configure private host bindings. Users
+then create machines from catalog references; they do not select raw pools or
+image paths. The binary archive does not configure KVM, pools or networks for you;
+a missing downloadable image is prepared when an accepted create task needs it.
 
 For remote browser access, serve Vmango through HTTPS, set `api.base_url` to
 that public URL and enable `api.session_secure`. Preserve `Host`, `Origin` and

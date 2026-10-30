@@ -25,11 +25,27 @@ def package(version, target, binary, runtime=None):
         shutil.copy2(binary, stage / ("vmango.exe" if target == "windows-x64" else "vmango"))
         for filename in ("LICENSE", "vmango.quickstart.conf", "vmango.dist.conf"):
             shutil.copy2(root / filename, stage)
-        shutil.copy2(root / "docs/content/en/docs/start.md", stage / "QUICKSTART.md")
-        shutil.copy2(root / "docs/UI-MIGRATION.md", stage / "MIGRATION.md")
-        shutil.copy2(root / "docs/API.md", stage / "API.md")
-        shutil.copy2(root / "docs/CLOUDS.md", stage / "CLOUDS.md")
-        shutil.copy2(root / "docs/content/en/docs/images.md", stage / "IMAGES.md")
+        guides = {
+            "docs/content/en/docs/start.md": "QUICKSTART.md",
+            "docs/UI-MIGRATION.md": "MIGRATION.md",
+            "docs/API.md": "API.md",
+            "docs/TASKS.md": "TASKS.md",
+            "docs/CLOUDS.md": "CLOUDS.md",
+            "docs/content/en/docs/images.md": "IMAGES.md",
+        }
+        guide_links = {
+            "UI-MIGRATION.md": "MIGRATION.md",
+            "content/en/docs/images.md": "IMAGES.md",
+            "/docs/start/": "QUICKSTART.md",
+            "/docs/clouds/": "CLOUDS.md",
+            "/docs/images/": "IMAGES.md",
+        }
+        for source, destination in guides.items():
+            text = (root / source).read_text(encoding="utf-8")
+            for old, new in guide_links.items():
+                text = text.replace(f"]({old})", f"]({new})")
+                text = text.replace(f"]({old}#", f"]({new}#")
+            (stage / destination).write_text(text, encoding="utf-8")
         provenance = stage / "docs/data"
         provenance.mkdir(parents=True)
         shutil.copy2(root / "docs/data/image-sources.json", provenance)

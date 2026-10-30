@@ -157,11 +157,20 @@ inspect its outcome first. No rollback is performed on hook or start failure.
 
 ## Create a VM
 
-Discover the node's images, pools, networks and capabilities first. Image defaults,
-minimum RAM/disk sizes, config-drive creation and event hooks use the same domain
-manager as the UI. `defaults` overrides image settings explicitly. Set
-`defaults.initialization` to `none` to disable cloud-init. User-data is literal
-text; key fingerprints refer to `/api/v1/keys`.
+Administrators first prepare the hypervisors and configure the cloud catalog,
+image requirements and private host bindings; see [configured clouds](CLOUDS.md)
+and the [image guide](content/en/docs/images.md). Users discover a cloud's catalog
+with `GET /api/v1/clouds` or `GET /api/v1/clouds/{cloud}` and select compatible
+image, instance type, zone, logical network and storage class IDs. The scheduler
+chooses the host; `/hosts/...` discovery is administrative diagnostics, not the
+source of creation inputs.
+
+Creation uses the same domain manager as the UI for image requirements, resource
+admission, image preparation, config drives and event hooks. There is no `defaults`
+input or `defaults.initialization` override. To offer a machine without cloud-init,
+an administrator defines an image entry with `initialization = "none"`; the user
+selects that image ID. User-data is literal text for images with guest initialization;
+optional `keys` contains fingerprints returned by `/api/v1/keys`.
 
 ```sh
 curl --config ~/.config/vmango/curl.conf https://vmango.example/api/v1/clouds/local
@@ -186,7 +195,15 @@ Example `vm.json` (replace the image, instance type, zone, storage class and net
 }
 ```
 
-See [configured clouds](CLOUDS.md) for placement, local disk ownership, adoption and API migration rules.
+The response is 202 Accepted with a task and `status_url`. Poll that authenticated
+URL to confirm completion; acceptance alone does not mean the VM exists or has
+started. `start` requests a one-time start after provisioning, independently of
+the instance type's `autostart` policy.
+
+See [configured clouds](CLOUDS.md) for placement, local disk ownership, adoption
+and API migration rules. Binary archives include this reference as `API.md`,
+alongside `CLOUDS.md`, `IMAGES.md`, `TASKS.md` and `MIGRATION.md`; in an extracted
+archive use `IMAGES.md` for the image guide.
 
 ## Consoles
 

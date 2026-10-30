@@ -244,10 +244,13 @@ clone shrinks the source. Additional data disks have independent sizes. Changing
 a stopped VM's instance type stays on its current host and preserves all existing
 disk sizes; insufficient host capacity produces an error.
 
-These settings are launch defaults, not ongoing restrictions. Editing the
-catalog affects future VMs only. Existing VMs can still have devices added or
-changed and their guest agent enabled or disabled through supported VM operations.
-Restart Vmango after changing the configuration to reload the read-only catalog.
+Editing image policy affects future creations, not existing VMs. There is no
+per-machine policy override or PATCH endpoint for changing guest-agent, graphics
+or video settings. Explicit instance type changes apply CPU, RAM, hugepages and
+autostart while preserving existing guest devices, graphics listener and disk
+sizes. Adoption also preserves the existing VM configuration. Accepted tasks
+retain their policy and private binding snapshots. Restart Vmango after changing
+the configuration to reload the read-only catalog.
 
 ### Legacy configuration and volume policies
 
