@@ -659,3 +659,118 @@ func TestMissingVerifiedArtifactIsPreparedByANewExplicitCreate(t *testing.T) {
 		t.Fatal("missing artifact was not prepared again", state, requests.Load(), backend.creates)
 	}
 }
+
+func TestCloudCreateRetriesCleanedUpImageFailure(t *testing.T) {
+	for _, failure := range []string{"http", "upload"} {
+		t.Run(failure, func(t *testing.T) {
+			data := []byte(strings.Repeat("disk", 4096))
+			var requests atomic.Int32
+			var restored atomic.Bool
+			source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if failure == "http" && !restored.Load() {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				w.Header().Set("Content-Length", fmt.Sprint(len(data)))
+				w.Write(data)
+			}))
+			defer source.Close()
+			managed, backend, _, image := imageSetup(t, source.URL, data)
+			image.Defaults.Initialization = "none"
+			backend.uploadFail = failure == "upload"
+			images := compute.NewImageService(&mutableImageCatalog{image})
+			images.ManagedSources = managed
+			vmBackend := &cloudVMBackend{machines: map[string]compute.VirtualMachine{}}
+			vms := compute.NewVirtualMachineService(vmBackend)
+			volumes := compute.NewVolumeService(&managedVolumes{backend: backend})
+			manager := compute.NewVirtualMachineManager(vms, volumes, cloudEvents{}, nil, images)
+			cloud := compute.Cloud{ID: "c", Zones: []compute.CatalogEntry{{ID: "z"}}, Images: []string{image.ID}, InstanceTypes: []compute.InstanceType{{ID: "small", VCPUs: 1, CPURequest: 1, MemoryBytes: 1 << 30, MemoryRequestBytes: 1 << 30, BootDiskBytes: 1 << 30}}, Networks: []compute.CatalogEntry{{ID: "lan"}}, StorageClasses: []compute.CatalogEntry{{ID: "fast"}}, Hosts: []compute.CloudHost{{Node: "one", Zone: "z", Networks: map[string]compute.NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]compute.StorageBinding{"fast": {Pool: "pool", Format: compute.VolumeFormatRaw}}}}}
+			clouds := &compute.CloudService{Definitions: []compute.Cloud{cloud}, Manager: manager, VMs: vms, Volumes: volumes, Nodes: compute.NewNodeService(cloudNodeBackend{cpus: 4}), Pools: compute.NewVolumePoolService(retryImagePools{})}
+			manager.Clouds = clouds
+			repo, err := filesystem.NewTaskRepository(filepath.Join(t.TempDir(), "tasks"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { repo.Close() })
+			service := tasks.New(repo, &compute.CommandHandler{Clouds: clouds, Manager: manager, VMs: vms, Volumes: volumes, Nodes: clouds.Nodes}, zerolog.Nop())
+			runCloudService(t, service)
+			command := compute.InfrastructureCommand{CloudID: "c", CreateSpec: &compute.MachineCreateSpec{ID: "new", Image: image.ID, InstanceType: "small", Zone: "z", Network: "lan", StorageClass: "fast"}}
+			first := submitCloud(t, service, "failed-image-create", "machine.create", command)
+			if result := waitImage(t, service, first.ID); result.State != tasks.Failed {
+				t.Fatal(result)
+			}
+			restored.Store(true)
+			backend.mu.Lock()
+			backend.uploadFail = false
+			backend.mu.Unlock()
+			offers, err := clouds.Offers(cloud)
+			if err != nil || len(offers) != 1 || offers[0].Image != image.ID {
+				t.Fatalf("retryable image missing from UI offers: %+v %v", offers, err)
+			}
+			if requests.Load() != 1 {
+				t.Fatal("discovery retried the source")
+			}
+			duplicate := submitCloud(t, service, "failed-image-create", "machine.create", command)
+			if duplicate.ID != first.ID || duplicate.State != tasks.Failed || requests.Load() != 1 {
+				t.Fatal("failed creation automatically replayed", duplicate)
+			}
+			if failure == "upload" {
+				// Cleanup confirms artifact absence but does not release uncertain task effects.
+				if _, err := service.Submit(tasks.Identity{ID: "admin"}, "blocked-image-retry", compute.NewCommand("machine.create", command)); err == nil {
+					t.Fatal("uncertain failed task lock was silently released")
+				}
+				binding, _ := managed.Bind("one", image)
+				if _, _, err := backend.InspectImage(binding); !errors.Is(err, compute.ErrNotFound) {
+					t.Fatal("staging cleanup was not confirmed", err)
+				}
+				if _, err := service.Release(first.ID, tasks.Identity{ID: "admin"}, "Inspected backend; owned staging is absent and transfer has stopped"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			retry := submitCloud(t, service, "explicit-image-retry", "machine.create", command)
+			if result := waitImage(t, service, retry.ID); result.State != tasks.Succeeded {
+				t.Fatal(result)
+			}
+			binding, _ := managed.Bind("one", image)
+			if state, _ := managed.Status(binding, image); state != "ready" || requests.Load() != 2 {
+				t.Fatal("new creation did not verify the retry", state, requests.Load())
+			}
+		})
+	}
+}
+
+type retryImagePools struct{ compute.VolumePoolRepository }
+
+func (retryImagePools) List(o compute.VolumePoolListOptions) ([]*compute.VolumePool, error) {
+	return []*compute.VolumePool{{NodeId: o.NodeIds[0], Name: "pool", Free: compute.NewSize(100, compute.SizeUnitG)}, {NodeId: o.NodeIds[0], Name: "images-one", Free: compute.NewSize(100, compute.SizeUnitG)}}, nil
+}
+
+func TestCleanedUpImageStatusStillRejectsUnsafeStorage(t *testing.T) {
+	for _, state := range []string{"absent", "incomplete", "failed", "unknown"} {
+		t.Run(state, func(t *testing.T) {
+			images, backend, artifacts, image := imageSetup(t, "https://example.invalid/image", []byte("raw"))
+			binding, _ := images.Bind("one", image)
+			if err := backend.CreateImage(binding, 3); err != nil {
+				t.Fatal(err)
+			}
+			if state != "unknown" {
+				hash := sha256.Sum256([]byte(binding.Scope + "\x00" + binding.PoolID + "\x00" + binding.Path))
+				if err := artifacts.Put(hex.EncodeToString(hash[:]), compute.ImageArtifact{Binding: binding, State: state, Error: "prior transfer failure", FailedAt: time.Now()}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if status, _ := images.Status(binding, image); status != "failed" {
+				t.Fatal("unsafe image offered for retry", status)
+			}
+			service, _ := imageTasks(t, images)
+			task := submitImage(t, service, images, image, "one", "unsafe-create")
+			if result := waitImage(t, service, task.ID); result.State != tasks.Failed {
+				t.Fatal(result)
+			}
+			if backend.creates != 1 || backend.uploads != 0 || backend.deletes != 0 {
+				t.Fatal("unsafe image mutated")
+			}
+		})
+	}
+}

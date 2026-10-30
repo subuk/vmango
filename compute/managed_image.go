@@ -127,9 +127,8 @@ func (s *ManagedImageService) Status(b ImageBinding, i Image) (string, string) {
 	if f != nil {
 		return "preparing", ""
 	}
-	if a, err := s.store.Get(artifactKey(b)); err == nil && a.State == "absent" && a.Error != "" {
-		return "failed", a.Error + " A new creation can retry the transfer."
-	}
+	// A cleaned-up failure is downloadable only after confirming that no
+	// unverified destination remains. Failed tasks retain their own diagnostics.
 	if _, err := s.ready(b, i); err == nil {
 		return "ready", ""
 	} else if !errors.Is(err, ErrArtifactNotFound) {
