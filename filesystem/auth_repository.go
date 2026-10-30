@@ -103,7 +103,7 @@ func (r *AuthRepository) write(rec auth.Record) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(r.dir, ".pending-")
+	f, err := createAuthTemp(r.dir)
 	if err != nil {
 		return err
 	}

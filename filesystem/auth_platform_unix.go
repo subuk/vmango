@@ -36,8 +36,9 @@ func openAuthFile(path string, create bool) (*os.File, error) {
 	}
 	return os.NewFile(uintptr(fd), path), nil
 }
-func lockAuthFile(f *os.File) error         { return unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB) }
-func replaceAuthFile(old, new string) error { return os.Rename(old, new) }
+func createAuthTemp(dir string) (*os.File, error) { return os.CreateTemp(dir, ".pending-") }
+func lockAuthFile(f *os.File) error               { return unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB) }
+func replaceAuthFile(old, new string) error       { return os.Rename(old, new) }
 func syncAuthDirectory(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
