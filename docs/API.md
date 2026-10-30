@@ -100,6 +100,11 @@ and invalid types are rejected. Paths below are relative to `/api/v1`.
 | `/keys` | GET list, POST add a public key |
 | `/keys/{fingerprint}` | GET, DELETE |
 
+`GET /hosts/{node}/images` and `GET /hosts/{node}/capabilities` are intentional
+API-only diagnostics. The bundled UI does not call them; the acceptance suite
+exercises both routes. `GET /clouds/{cloud}` also remains available to API
+clients and acceptance tests, while the UI fetches the full cloud catalog.
+
 `GET /clouds/{cloud}/volumes` accepts `host` to filter by observed locality and
 `usage=attachable` to exclude attached disks and image sources. Neither changes
 placement. Standalone disk creation uses `name`, `zone`, `storage_class` and

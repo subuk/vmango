@@ -42,13 +42,6 @@ type VirtualMachineManagerCreatedVolumeParams struct {
 	DeviceBus           DeviceBus
 }
 
-type VirtualMachineManagerCreateParams struct {
-	Vm            *VirtualMachine
-	CloneVolumes  []VolumeCloneParams
-	CreateVolumes []VolumeCreateParams
-	Start         bool
-}
-
 type VirtualMachineManager struct {
 	Clouds   *CloudService
 	createMu sync.Mutex

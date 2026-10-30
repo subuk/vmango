@@ -109,9 +109,6 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 			return nil, nil, fmt.Errorf("image %q source format is unsupported", i.ID)
 		}
 		p.OriginalPath = source.Path
-		if p.NewName == "__magic_root_suffix__" {
-			p.NewName = vm.Id + "_root"
-		}
 		if p.NewName == "" || p.NewPool == "" {
 			return nil, nil, fmt.Errorf("image %q needs a destination name and pool", i.ID)
 		}
