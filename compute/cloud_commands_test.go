@@ -18,12 +18,14 @@ import (
 
 type cloudVMBackend struct {
 	compute.VirtualMachineRepository
-	mu        sync.Mutex
-	machines  map[string]compute.VirtualMachine
-	inventory []string
-	failHost  string
-	mutations int
-	listeners map[string]string
+	mu                 sync.Mutex
+	machines           map[string]compute.VirtualMachine
+	inventory          []string
+	failHost           string
+	mutations          int
+	starts             int
+	unsupportedDisplay bool
+	listeners          map[string]string
 }
 
 func (r *cloudVMBackend) Get(id, node string) (*compute.VirtualMachine, error) {
@@ -61,6 +63,9 @@ func (r *cloudVMBackend) ValidateNew(v *compute.VirtualMachine) error {
 	return nil
 }
 func (r *cloudVMBackend) Capabilities(node string, arch compute.Arch) (compute.VirtualMachineCapabilities, error) {
+	if r.unsupportedDisplay {
+		return compute.VirtualMachineCapabilities{Arch: arch, DiskBuses: []compute.DeviceBus{compute.DeviceBusVirtio}, NICModels: []string{"virtio"}, Graphics: []compute.GraphicType{compute.GraphicTypeNone}, VideoModels: []compute.VideoModel{compute.VideoModelNone}}, nil
+	}
 	return compute.VirtualMachineCapabilities{Arch: arch, MaxVCPUs: 16, Firmwares: []string{"bios"}, DiskBuses: []compute.DeviceBus{compute.DeviceBusVirtio}, NICModels: []string{"virtio"}, Graphics: []compute.GraphicType{compute.GraphicTypeVnc, compute.GraphicTypeSpice, compute.GraphicTypeNone}, VideoModels: []compute.VideoModel{compute.VideoModelNone, compute.VideoModelQxl}}, nil
 }
 func (r *cloudVMBackend) Save(v *compute.VirtualMachine) error {
@@ -445,3 +450,51 @@ func TestTypeChangePinsAutostartAndDoesNotRewriteOnCatalogEdit(t *testing.T) {
 }
 
 func (r *cloudVMBackend) SaveResources(vm *compute.VirtualMachine) error { return r.Save(vm) }
+
+func (r *cloudVMBackend) Start(id, node string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	vm := r.machines[node+"/"+id]
+	vm.State = compute.StateRunning
+	r.machines[node+"/"+id] = vm
+	r.starts++
+	return nil
+}
+
+func TestCreateStartIsIndependentOfAutostart(t *testing.T) {
+	s, backend, _, cloud := cloudFixture(t, 4)
+	cloud.InstanceTypes[0].Autostart = false
+	spec := createSpec("start-once")
+	spec.Start = true
+	task := submitCloud(t, s, "one-time-start", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: spec})
+	runCloudService(t, s)
+	if result := awaitCloudTask(t, s, task.ID); result.State != tasks.Succeeded {
+		t.Fatal(result)
+	}
+	vm, _ := backend.Get("start-once", "a")
+	if vm.Autostart || vm.State != compute.StateRunning || backend.starts != 1 {
+		t.Fatalf("one-time start replaced persistent policy: %+v", vm)
+	}
+}
+
+func TestUnsupportedDisplayIsNotOfferedOrProvisioned(t *testing.T) {
+	s, backend, volumes, cloud := cloudFixture(t, 4)
+	backend.unsupportedDisplay = true
+	repo, err := catalog.NewImageRepository([]compute.Image{{ID: "image", Arch: compute.ArchAmd64, SourcePath: "/source", Defaults: compute.ImageDefaults{Graphics: "spice", VideoModel: "qxl", Initialization: "none"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	vms := compute.NewVirtualMachineService(backend)
+	volumeService := compute.NewVolumeService(volumes)
+	manager := compute.NewVirtualMachineManager(vms, volumeService, cloudEvents{}, nil, compute.NewImageService(repo))
+	service := &compute.CloudService{VMs: vms, Volumes: volumeService, Nodes: compute.NewNodeService(cloudNodeBackend{cpus: 4}), Pools: compute.NewVolumePoolService(cloudPoolBackend{}), Manager: manager}
+	offers, err := service.Offers(cloud)
+	if err != nil || len(offers) != 0 {
+		t.Fatalf("unsupported display offered: %+v %v", offers, err)
+	}
+	task := submitCloud(t, s, "unsupported-display", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: createSpec("no-display")})
+	runCloudService(t, s)
+	if result := awaitCloudTask(t, s, task.ID); result.State != tasks.Failed || result.OutcomeUncertain || volumes.created != 0 || backend.mutations != 0 {
+		t.Fatalf("unsupported display caused side effects: %+v", result)
+	}
+}

@@ -272,7 +272,7 @@ export function MachineActions({
                     to={`${machineURL(vm.node, vm.id)}update/`}
                     disabled={conflict}
                 >
-                    Edit
+                    Change instance type
                 </Button>
             )}
             {confirm && (

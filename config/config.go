@@ -284,6 +284,11 @@ func Parse(filename string) (*Config, error) {
 			}
 		}
 	}
+	if list, ok := parsed.Node.(*ast.ObjectList); ok {
+		if err := validatePolicyOwners(list, ""); err != nil {
+			return nil, err
+		}
+	}
 	if err := hcl.Unmarshal(content, config); err != nil {
 		return nil, util.NewError(err, "invalid configuration format")
 	}
@@ -382,4 +387,28 @@ func Parse(filename string) (*Config, error) {
 		return nil, fmt.Errorf("image_transfers needs max_bytes in 1..1TiB and timeout_seconds/idle_timeout_seconds in 1..86400, idle <= total")
 	}
 	return config, nil
+}
+
+// Policy options have exactly one configuration owner; misplaced fields must
+// not be silently ignored by the permissive HCL decoder.
+func validatePolicyOwners(list *ast.ObjectList, owner string) error {
+	owners := map[string]string{"guest_agent": "image", "graphics": "image", "video_model": "image", "autostart": "instance_type", "graphics_listen": "libvirt"}
+	for _, item := range list.Items {
+		if len(item.Keys) == 0 {
+			continue
+		}
+		key, _ := item.Keys[0].Token.Value().(string)
+		if required, exists := owners[key]; exists && owner != required {
+			return fmt.Errorf("%s belongs only in %s configuration", key, required)
+		}
+		if object, ok := item.Val.(*ast.ObjectType); ok {
+			switch key {
+			case "image", "libvirt", "cloud", "host", "instance_type":
+				if err := validatePolicyOwners(object.List, key); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }

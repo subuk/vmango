@@ -55,3 +55,36 @@ func TestInvalidCloudConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestAdministratorPolicyOwnershipAndDefaults(t *testing.T) {
+	cfg, err := parseCloudTest(t, cloudConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clouds, _ := cfg.CloudDefinitions()
+	images, _, _ := cfg.ImageDefinitions()
+	g, v := images[0].Defaults.Display()
+	if clouds[0].InstanceTypes[0].Autostart || images[0].Defaults.GuestAgent != nil || g.String() != "vnc" || v.String() != "none" || cfg.Libvirts[0].GraphicsListen != "" {
+		t.Fatal("omission defaults changed")
+	}
+	cfg, err = parseCloudTest(t, strings.Replace(cloudConfig, "cpu=2 cpu_request=1", "autostart=true cpu=2 cpu_request=1", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	clouds, _ = cfg.CloudDefinitions()
+	if !clouds[0].InstanceTypes[0].Autostart {
+		t.Fatal("explicit type autostart lost")
+	}
+	for _, tt := range []struct{ old, new, field string }{
+		{`os_arch="x86_64"`, `os_arch="x86_64" autostart=true`, "autostart"},
+		{`os_arch="x86_64"`, `os_arch="x86_64" graphics_listen="127.0.0.1"`, "graphics_listen"},
+		{`cpu=2 cpu_request=1`, `cpu=2 cpu_request=1 guest_agent=true`, "guest_agent"},
+		{`cpu=2 cpu_request=1`, `cpu=2 cpu_request=1 graphics="vnc"`, "graphics"},
+		{`uri="qemu:///session"`, `uri="qemu:///session" video_model="qxl"`, "video_model"},
+	} {
+		_, err := parseCloudTest(t, strings.Replace(cloudConfig, tt.old, tt.new, 1))
+		if err == nil || !strings.Contains(err.Error(), tt.field+" belongs only") {
+			t.Fatalf("misplaced %s accepted: %v", tt.field, err)
+		}
+	}
+}
