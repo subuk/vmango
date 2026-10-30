@@ -1,0 +1,16 @@
+
+/* Soften bright screenshots while preserving their original colors. */
+[data-bs-theme="dark"] img[src^="/screenshots/"] {
+  filter: brightness(0.78);
+}
+
+/* Hugo's inline Tango colors need explicit overrides on dark surfaces. */
+[data-bs-theme="dark"] .highlight pre {
+  background-color: #22272e !important;
+  color: #dce3eb;
+}
+[data-bs-theme="dark"] .highlight span[style*="color:"] { color: #dce3eb !important; }
+[data-bs-theme="dark"] .highlight span[style*="color:#8f5902"] { color: #a4afbc !important; }
+[data-bs-theme="dark"] .highlight span[style*="color:#204a87"] { color: #8bbcf0 !important; }
+[data-bs-theme="dark"] .highlight span[style*="color:#4e9a06"] { color: #add58a !important; }
+[data-bs-theme="dark"] .highlight span[style*="color:#ce5c00"] { color: #efb478 !important; }

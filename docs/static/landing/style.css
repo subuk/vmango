@@ -60,3 +60,35 @@ p code { font-size: .9em; overflow-wrap: anywhere; }
   .example-heading { padding: 10px 14px; }
   .example-code .highlight pre { padding: 14px; }
 }
+
+nav select { font: inherit; color: inherit; background: transparent; border: 1px solid #87919c; border-radius: 4px; padding: 2px 5px; }
+:root[data-bs-theme="dark"] { color-scheme: dark; color: #dee2e6; background: #181b20; }
+[data-bs-theme="dark"] a, [data-bs-theme="dark"] summary { color: #8bbcf0; }
+[data-bs-theme="dark"] a:hover { color: #bddaff; }
+[data-bs-theme="dark"] .title { color: #dee2e6; }
+[data-bs-theme="dark"] header, [data-bs-theme="dark"] footer,
+[data-bs-theme="dark"] figure img, [data-bs-theme="dark"] .creation-preview,
+[data-bs-theme="dark"] .config-example, [data-bs-theme="dark"] .example-heading { border-color: #49515b; }
+[data-bs-theme="dark"] footer, [data-bs-theme="dark"] figcaption { color: #adb5bd; }
+[data-bs-theme="dark"] .example-heading, [data-bs-theme="dark"] .skip { background: #252a31; }
+[data-bs-theme="dark"] .primary-link { color: #fff; }
+
+/* Soften bright screenshots while preserving their original colors. */
+[data-bs-theme="dark"] img[src^="/screenshots/"] {
+  filter: brightness(0.78);
+}
+
+/* Hugo's inline Tango colors need explicit overrides on dark surfaces. */
+[data-bs-theme="dark"] .highlight pre {
+  background-color: #22272e !important;
+  color: #dce3eb;
+}
+[data-bs-theme="dark"] .highlight span[style*="color:"] { color: #dce3eb !important; }
+[data-bs-theme="dark"] .highlight span[style*="color:#8f5902"] { color: #a4afbc !important; }
+[data-bs-theme="dark"] .highlight span[style*="color:#204a87"] { color: #8bbcf0 !important; }
+[data-bs-theme="dark"] .highlight span[style*="color:#4e9a06"] { color: #add58a !important; }
+[data-bs-theme="dark"] .highlight span[style*="color:#ce5c00"] { color: #efb478 !important; }
+
+.theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin: -5px 0; padding: 5px; border: 0; border-radius: 6px; color: inherit; background: transparent; cursor: pointer; }
+.theme-toggle:hover { background: #8882; }
+.theme-toggle:focus-visible { outline: 2px solid #6b9ed3; outline-offset: 3px; }
