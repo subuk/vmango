@@ -20,7 +20,6 @@ import {
     esc,
     useResource,
     useMachine,
-    vmPath,
     type Key,
     type VM,
     type Volume,
@@ -778,7 +777,17 @@ function EditForm({ vm }: { vm: VM }) {
     }, [clouds.data, selectedType]);
     return (
         <Stack spacing={3} sx={{ maxWidth: 760 }}>
-            <PageTitle title={`Change instance type for ${vm.name}`} />
+            <PageTitle
+                title={`Change instance type for ${vm.name}`}
+                action={
+                    <Button
+                        component={RouterLink}
+                        to={`/machines/${esc(vm.cloud)}/${esc(vm.id)}/`}
+                    >
+                        Back to machine
+                    </Button>
+                }
+            />
             <Typography>
                 Host: {vm.node} · Cloud: {vm.cloud} · AZ: {vm.zone}
             </Typography>

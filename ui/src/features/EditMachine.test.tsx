@@ -101,6 +101,14 @@ function show() {
         },
     };
 }
+it("links back to the machine", () => {
+    show();
+    expect(
+        screen
+            .getByRole("link", { name: "Back to machine" })
+            .getAttribute("href"),
+    ).toBe("/machines/local/demo/");
+});
 it("submits an explicit type change and retains backend errors", async () => {
     state.request.mockRejectedValueOnce(
         new Error("Insufficient resources on host a"),
