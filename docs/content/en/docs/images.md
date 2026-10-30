@@ -36,7 +36,8 @@ libvirt "remote" {
 to `default`. The pool must be active, writable through libvirt, and have enough
 free space for the artifact. Vmango does not create, start or mount pools.
 Other pool types, including `fs`, `netfs`, LVM and RBD, are not supported for
-managed image storage. VM destination disks retain their existing pool selection.
+managed image storage. VM destination disks use a logical storage class mapped
+to a pool on the selected host.
 The same catalog entry can use different pool paths on different nodes. Adding
 a node needs only its connection and pool binding, without copied image definitions.
 
@@ -219,20 +220,18 @@ The backend checks capabilities for the selected architecture and node. A listed
 option is not necessarily supported by every backend. For example, built-in
 QEMU user networking and socket-vmnet support only virtio NICs.
 
-Explicit creation options take precedence over image defaults, which take
-precedence over the existing fallback behavior. The simple form uses image
-defaults. The advanced form offers **Image default** for the clone bus, NIC model
-and guest agent, while retaining explicit choices. Other image settings are
-configured in HCL; this feature does not add a full settings editor to the UI.
-An explicit `false` or `none` is never treated as an omitted value.
+The simplified cloud form resolves launch settings from the selected image,
+instance type, network and storage class. It does not expose device, firmware,
+guest-agent or initialization overrides. Administrators configure these settings
+in HCL; explicit `false` and initialization `none` remain distinct from omitted
+values. Conflicting requirements are rejected rather than silently overridden.
 
-Minimum memory and disk capacity are checked before any disks are created or
-cloned. A clone cannot shrink the source volume. If the advanced form leaves the
-clone size empty, Vmango uses the larger of the source capacity and the image's
-minimum. If several images are cloned into one VM, each disk uses its own image's
-bus default. Conflicting explicit image defaults for VM-wide settings (firmware,
-initialization, NIC model, guest agent or the SCSI controller) require a common
-override or compatible catalog definitions before creation can proceed.
+Instance types set CPU, RAM and the size of a newly provisioned boot disk. Image
+minimum memory, minimum disk size and actual source virtual capacity are checked
+before cloning. An instance type with an undersized boot disk is rejected; no
+clone shrinks the source. Additional data disks have independent sizes. Changing
+a stopped VM's instance type stays on its current host and preserves all existing
+disk sizes; insufficient host capacity produces an error.
 
 These settings are launch defaults, not ongoing restrictions. Editing the
 catalog affects future VMs only. Existing VMs can still have devices added or
@@ -278,13 +277,15 @@ protection and hiding are combined (any `true` applies to that volume).
 
 ## Launch a machine
 
-1. **Choose an image.** Select a registered cloud-init-enabled OS image from
-   your storage pool.
-2. **Make it yours.** Set CPU, memory and disk size, select your SSH keys and
-   optionally provide cloud-init userdata to install packages or run setup
-   commands.
-3. **Create and start.** Vmango clones the disk and supplies the configuration
-   to the guest. The OS boots from the image and configures itself on first boot.
+1. **Choose a configuration.** In the selected cloud, choose an image, instance
+   type, availability zone, logical network and storage class. Valid single
+   choices are selected automatically.
+2. **Make it yours.** Select SSH keys and optionally provide cloud-init user data.
+   Optional placement labels express required constraints or soft preferences.
+3. **Create and follow progress.** The durable task inventories the cloud and
+   schedules a compatible host, prepares a missing downloadable image, clones
+   the boot disk and supplies guest initialization. The assigned host is visible
+   read-only in machine details. The OS configures itself on first boot.
 
 Once your hosts and images are set up, launching another machine is a single
 form and a click. Your infrastructure stays on your own hardware.

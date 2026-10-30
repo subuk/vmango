@@ -32,6 +32,7 @@ export function ResourceTable<T>({
     node,
     state,
     pool,
+    poolLabel = "Pool",
     actions,
     empty = "No resources yet.",
 }: {
@@ -42,6 +43,7 @@ export function ResourceTable<T>({
     node?: (row: T) => string;
     state?: (row: T) => string;
     pool?: (row: T) => string;
+    poolLabel?: string;
     actions?: (row: T) => ReactNode;
     empty?: string;
 }) {
@@ -101,7 +103,7 @@ export function ResourceTable<T>({
                 {node && (
                     <TextField
                         select
-                        label="Node"
+                        label="Host"
                         slotProps={{
                             select: { displayEmpty: true },
                             inputLabel: { shrink: true },
@@ -110,7 +112,7 @@ export function ResourceTable<T>({
                         onChange={(e) => update("node", e.target.value)}
                         sx={{ width: 210 }}
                     >
-                        <MenuItem value="">All nodes</MenuItem>
+                        <MenuItem value="">All hosts</MenuItem>
                         {[
                             ...new Set([
                                 ...(nodes.data || []).map((n) => n.id),
@@ -146,7 +148,7 @@ export function ResourceTable<T>({
                 {pool && (
                     <TextField
                         select
-                        label="Pool"
+                        label={poolLabel}
                         slotProps={{
                             select: { displayEmpty: true },
                             inputLabel: { shrink: true },
@@ -155,7 +157,12 @@ export function ResourceTable<T>({
                         onChange={(e) => update("pool", e.target.value)}
                         sx={{ width: 180 }}
                     >
-                        <MenuItem value="">All pools</MenuItem>
+                        <MenuItem value="">
+                            All{" "}
+                            {poolLabel === "Storage class"
+                                ? "storage classes"
+                                : "pools"}
+                        </MenuItem>
                         {[...new Set(rows.map(pool))].map((p) => (
                             <MenuItem key={p} value={p}>
                                 {p}

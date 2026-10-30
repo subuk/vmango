@@ -328,7 +328,7 @@ func (s *Service) claim() (Record, bool) {
 	var next *Record
 	activeGroups := map[string]bool{}
 	for _, rec := range store.Records {
-		if rec.Task.State == Running {
+		if rec.Task.State == Running || (rec.Task.OutcomeUncertain && rec.Task.BlocksResources) {
 			for _, group := range rec.ExecutionGroups {
 				activeGroups[group] = true
 			}

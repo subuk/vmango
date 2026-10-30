@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button, Link, Menu, MenuItem } from "@mui/material";
+import { Button, Link, Menu, MenuItem, TextField } from "@mui/material";
 import { Link as RouterLink, useSearchParams } from "react-router";
 import {
     machineURL,
@@ -8,6 +8,7 @@ import {
     useNetworks,
     useNodes,
     useOperation,
+    useResource,
     vmPath,
     type VM,
 } from "../api/hooks";
@@ -23,12 +24,14 @@ import {
     QueryState,
     State,
 } from "../components/common";
+import type { Cloud } from "./MachineForm";
 import { ResourceTable } from "../components/ResourceTable";
 
 export function Machines() {
-    const q = useMachines();
-    const [params] = useSearchParams();
-    const node = params.get("node");
+    const [params, setParams] = useSearchParams();
+    const clouds = useResource<Cloud[]>("/api/v1/clouds");
+    const cloudID = params.get("cloud") || clouds.data?.[0]?.id || "";
+    const q = useMachines(cloudID);
     return (
         <>
             <PageTitle
@@ -37,17 +40,34 @@ export function Machines() {
                 action={
                     <Button
                         component={RouterLink}
-                        to={`/machines/add/${node ? `?node=${encodeURIComponent(node)}` : ""}`}
+                        to={`/machines/add/${cloudID ? `?cloud=${encodeURIComponent(cloudID)}` : ""}`}
                         variant="contained"
                     >
                         Create machine
                     </Button>
                 }
             />
+            {clouds.data && clouds.data.length > 1 && (
+                <TextField
+                    select
+                    label="Cloud"
+                    value={cloudID}
+                    onChange={(e) => setParams({ cloud: e.target.value })}
+                >
+                    {clouds.data.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>
+                            {c.name}
+                        </MenuItem>
+                    ))}
+                </TextField>
+            )}
+            <ErrorMessage error={clouds.error} />
             <QueryState query={q}>
                 {(rows) => (
                     <ResourceTable
-                        rows={rows}
+                        rows={rows.filter(
+                            (v) => !cloudID || v.cloud === cloudID,
+                        )}
                         rowKey={(v) => `${v.node}/${v.id}`}
                         search={(v) =>
                             `${v.id} ${v.node} ${v.ip_addresses.join(" ")}`
@@ -68,7 +88,7 @@ export function Machines() {
                                     </Link>
                                 ),
                             },
-                            { id: "node", label: "Node", value: (v) => v.node },
+                            { id: "node", label: "Host", value: (v) => v.node },
                             {
                                 id: "state",
                                 label: "State",
@@ -136,7 +156,8 @@ export function MachineActions({
         scope: vm.node,
         id: vm.id,
     });
-    const conflict = !!blocked.task || blocked.unavailable;
+    const conflict =
+        !!blocked.task || blocked.unavailable || vm.managed === false;
     const queries = useQueryClient();
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const [confirm, setConfirm] = useState<string>();
@@ -147,6 +168,14 @@ export function MachineActions({
     return (
         <>
             <ErrorMessage error={op.error} />
+            {vm.managed === false && (
+                <Button
+                    disabled={!!blocked.task || blocked.unavailable}
+                    onClick={() => setConfirm("adopt")}
+                >
+                    Adopt machine
+                </Button>
+            )}
             {uncertain && (
                 <Button href={location.pathname + location.search}>
                     Reload resource state
@@ -170,6 +199,7 @@ export function MachineActions({
             ) : (
                 vm.state === "running" && (
                     <Button
+                        disabled={vm.managed === false}
                         component={RouterLink}
                         to={`${machineURL(vm.node, vm.id)}console/`}
                     >
@@ -234,13 +264,15 @@ export function MachineActions({
             )}
             {confirm && (
                 <Confirm
-                    title={`${confirm === "delete" ? "Delete" : confirm === "poweroff" ? "Hard power-off" : "Reboot"} ${vm.id}?`}
+                    title={`${confirm === "adopt" ? "Adopt" : confirm === "delete" ? "Delete" : confirm === "poweroff" ? "Hard power-off" : "Reboot"} ${vm.id}?`}
                     action={
-                        confirm === "delete"
-                            ? "Delete machine"
-                            : confirm === "poweroff"
-                              ? "Hard power-off"
-                              : "Reboot"
+                        confirm === "adopt"
+                            ? "Adopt machine"
+                            : confirm === "delete"
+                              ? "Delete machine"
+                              : confirm === "poweroff"
+                                ? "Hard power-off"
+                                : "Reboot"
                     }
                     extra={
                         confirm === "delete"
@@ -249,7 +281,13 @@ export function MachineActions({
                     }
                     onClose={() => setConfirm(undefined)}
                     run={async (deleteVolumes) => {
-                        if (confirm === "delete")
+                        if (confirm === "adopt")
+                            await request(
+                                `/api/v1/clouds/${encodeURIComponent(vm.cloud)}/machines/${encodeURIComponent(vm.node)}/${encodeURIComponent(vm.id)}/adopt`,
+                                "POST",
+                                {},
+                            );
+                        else if (confirm === "delete")
                             await request(
                                 `${vmPath(vm.node, vm.id)}?delete_volumes=${deleteVolumes}`,
                                 "DELETE",
@@ -263,11 +301,13 @@ export function MachineActions({
                         await queries.invalidateQueries();
                     }}
                 >
-                    {confirm === "delete"
-                        ? `Permanently remove ${vm.node}/${vm.id}. Attached disks are kept unless you explicitly choose to delete them.`
-                        : confirm === "poweroff"
-                          ? `Immediately cut power to ${vm.node}/${vm.id}. Unsaved guest data may be lost.`
-                          : `Reboot ${vm.node}/${vm.id}.`}
+                    {confirm === "adopt"
+                        ? "Take this machine under management without changing its configuration or claiming ownership of its existing disks."
+                        : confirm === "delete"
+                          ? `Permanently remove ${vm.node}/${vm.id}. Attached disks are kept unless you explicitly choose to delete them.`
+                          : confirm === "poweroff"
+                            ? `Immediately cut power to ${vm.node}/${vm.id}. Unsaved guest data may be lost.`
+                            : `Reboot ${vm.node}/${vm.id}.`}
                 </Confirm>
             )}
         </>

@@ -19,7 +19,7 @@ type apiTaskInput struct {
 }
 type apiTaskListInput struct {
 	State         string `query:"state" doc:"Comma-separated lifecycle states."`
-	ResourceKind  string `query:"resource_kind" enum:"machine,volume"`
+	ResourceKind  string `query:"resource_kind" enum:"machine,volume,cloud,machine-request"`
 	ResourceScope string `query:"resource_scope"`
 	ResourceID    string `query:"resource_id" doc:"Machine identifier or backend volume path, matching task resource references."`
 	Blocking      bool   `query:"blocking"`

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"subuk/vmango/compute"
 	"subuk/vmango/filesystem"
 	"subuk/vmango/tasks"
 	"testing"
@@ -33,7 +34,7 @@ func TestTaskAPIIdempotentAcceptanceCancellationAndRestartHistory(t *testing.T) 
 	authentication := testAuthService(t, cfg)
 	newAPI := func(s *tasks.Service) http.Handler {
 		t.Helper()
-		h, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, authentication, s)
+		h, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, &compute.VirtualMachineManager{Clouds: &compute.CloudService{}}, nil, authentication, s)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -44,7 +45,7 @@ func TestTaskAPIIdempotentAcceptanceCancellationAndRestartHistory(t *testing.T) 
 		t.Helper()
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		r := httptest.NewRequest("POST", "https://vmango.test/api/v1/nodes/n/vms", strings.NewReader(body)).WithContext(ctx)
+		r := httptest.NewRequest("POST", "https://vmango.test/api/v1/clouds/local/machines", strings.NewReader(body)).WithContext(ctx)
 		r.Header.Set("Authorization", "Bearer "+testWebToken())
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Idempotency-Key", key)
@@ -52,7 +53,7 @@ func TestTaskAPIIdempotentAcceptanceCancellationAndRestartHistory(t *testing.T) 
 		h.ServeHTTP(w, r)
 		return w
 	}
-	body := `{"id":"v","arch":"x86_64","vcpus":2,"memory_bytes":1073741824,"cloud_init":{"user_data":"private-bootstrap-secret"}}`
+	body := `{"id":"v","image":"ubuntu","instance_type":"small","zone":"z","network":"lan","storage_class":"fast","start":false,"user_data":"private-bootstrap-secret"}`
 	first := submit("recoverable-submission", body)
 	if first.Code != 202 || first.Header().Get("Location") == "" || strings.Contains(first.Body.String(), "private-bootstrap-secret") {
 		t.Fatalf("acceptance: %d %s", first.Code, first.Body)
@@ -67,7 +68,7 @@ func TestTaskAPIIdempotentAcceptanceCancellationAndRestartHistory(t *testing.T) 
 	if second.Code != 202 || duplicate.Task.ID != accepted.Task.ID {
 		t.Fatal("duplicate submission", second.Body)
 	}
-	if response := submit("recoverable-submission", strings.Replace(body, `"vcpus":2`, `"vcpus":3`, 1)); response.Code != 409 {
+	if response := submit("recoverable-submission", strings.Replace(body, `"instance_type":"small"`, `"instance_type":"large"`, 1)); response.Code != 409 {
 		t.Fatal(response.Code, response.Body)
 	}
 	if response := submit("conflicting-submission", body); response.Code != 409 || !strings.Contains(response.Body.String(), accepted.Task.ID) {
@@ -125,7 +126,7 @@ func TestTaskAPIIdempotentAcceptanceCancellationAndRestartHistory(t *testing.T) 
 	if response := submit("interrupted-after-restart", strings.Replace(body, `"id":"v"`, `"id":"stale"`, 1)); response.Code != 202 || !strings.Contains(response.Body.String(), stale.Task.ID) {
 		t.Fatal(response.Code, response.Body)
 	}
-	page := apiRequest(h, "GET", "/api/v1/tasks?limit=1&resource_kind=machine&resource_scope=n", "", true)
+	page := apiRequest(h, "GET", "/api/v1/tasks?limit=1&resource_kind=machine-request&resource_scope=local", "", true)
 	var history tasks.Page
 	if err := json.Unmarshal(page.Body.Bytes(), &history); err != nil {
 		t.Fatal(err)

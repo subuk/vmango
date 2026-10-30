@@ -241,3 +241,24 @@ it("shows overlapping image transfer progress with speed and remaining time afte
         screen.getByText(/64 KiB\/s.*8s.*remaining in transfer/),
     ).toBeTruthy();
 });
+
+it("does not turn placement requests and cloud capacity into volume links", async () => {
+    request.mockResolvedValue({
+        ...base,
+        resources: [
+            { kind: "machine-request", scope: "local", id: "new-machine" },
+            { kind: "cloud", scope: "local", id: "capacity" },
+        ],
+    });
+    show();
+    expect(
+        await screen.findByText("Requested machine: new-machine"),
+    ).toBeTruthy();
+    expect(
+        screen.queryByRole("link", { name: "local/new-machine" }),
+    ).toBeNull();
+    expect(
+        screen.getByRole("link", { name: "Cloud local" }).getAttribute("href"),
+    ).toBe("/machines/?cloud=local");
+    expect(screen.queryByRole("link", { name: "local/capacity" })).toBeNull();
+});

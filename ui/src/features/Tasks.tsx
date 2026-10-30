@@ -449,6 +449,19 @@ function ResourceLink({
     available?: boolean;
 }) {
     const label = `${resource.scope}/${resource.id}`;
+    if (resource.kind === "machine-request")
+        return <span>Requested machine: {resource.id}</span>;
+    if (resource.kind === "cloud")
+        return (
+            <Link
+                component={RouterLink}
+                to={`/machines/?cloud=${encodeURIComponent(resource.scope)}`}
+            >
+                Cloud {resource.scope}
+            </Link>
+        );
+    if (resource.kind !== "machine" && resource.kind !== "volume")
+        return <span>{label}</span>;
     if (!available && !deleted)
         return <span>{label} (existence not confirmed)</span>;
     if (deleted) return <span>{label} (deleted)</span>;

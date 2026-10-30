@@ -83,6 +83,9 @@ func VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig libvirtxml.Doma
 
 func VirtualMachineAttachedInterfaceFromInterfaceConfig(ifaceConfig libvirtxml.DomainInterface) *compute.VirtualMachineAttachedInterface {
 	iface := &compute.VirtualMachineAttachedInterface{}
+	if ifaceConfig.Alias != nil {
+		iface.LogicalNetwork = networkFromAlias(ifaceConfig.Alias.Name)
+	}
 	iface.Mac = ifaceConfig.MAC.Address
 	if ifaceConfig.Model != nil {
 		iface.Model = ifaceConfig.Model.Type
@@ -93,6 +96,7 @@ func VirtualMachineAttachedInterfaceFromInterfaceConfig(ifaceConfig libvirtxml.D
 		}
 		if ifaceConfig.Source.Bridge != nil {
 			iface.NetworkName = ifaceConfig.Source.Bridge.Bridge
+			iface.Bridge = true
 		}
 	}
 
@@ -106,6 +110,11 @@ func VirtualMachineAttachedInterfaceFromInterfaceConfig(ifaceConfig libvirtxml.D
 
 func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo *libvirt.DomainInfo) (*compute.VirtualMachine, error) {
 	vm := &compute.VirtualMachine{}
+	metadata, err := readSchedulerMetadata(domainConfig)
+	if err != nil {
+		return nil, err
+	}
+	vm.Metadata = metadata
 	vm.Id = domainConfig.Name
 	vm.VCpus = int(domainConfig.VCPU.Value)
 	vm.Memory = ComputeSizeFromLibvirtSize(domainConfig.Memory.Unit, uint64(domainConfig.Memory.Value))
@@ -128,15 +137,15 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	case libvirt.DOMAIN_RUNNING:
 		vm.State = compute.StateRunning
 	case libvirt.DOMAIN_BLOCKED:
-		vm.State = compute.StateStopped
+		vm.State = compute.StateUnknown
 	case libvirt.DOMAIN_PAUSED:
-		vm.State = compute.StateStopped
+		vm.State = compute.StateUnknown
 	case libvirt.DOMAIN_SHUTDOWN:
-		vm.State = compute.StateStopped
+		vm.State = compute.StateUnknown
 	case libvirt.DOMAIN_CRASHED:
 		vm.State = compute.StateStopped
 	case libvirt.DOMAIN_PMSUSPENDED:
-		vm.State = compute.StateStopped
+		vm.State = compute.StateUnknown
 	case libvirt.DOMAIN_SHUTOFF:
 		vm.State = compute.StateStopped
 	}
@@ -262,9 +271,10 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 				}
 			}
 			iface := &compute.VirtualMachineAttachedInterface{
-				NetworkName: network,
-				Model:       model,
-				Mac:         netdev["mac"],
+				NetworkName:    network,
+				LogicalNetwork: networkFromAlias(netdev["id"]),
+				Model:          model,
+				Mac:            netdev["mac"],
 			}
 			vm.Interfaces = append(vm.Interfaces, iface)
 		}

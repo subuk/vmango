@@ -31,7 +31,7 @@ func (e *Environ) registerGlobalLists(api huma.API) {
 		}
 		out := []apiVM{}
 		for _, v := range items {
-			out = append(out, vmDTO(v))
+			out = append(out, e.machineDTO(v))
 		}
 		return &apiResult[[]apiVM]{Body: out}, nil
 	})
@@ -50,7 +50,7 @@ func (e *Environ) registerGlobalLists(api huma.API) {
 		out := []apiVolume{}
 		for _, v := range items {
 			if !v.Metadata.Hidden {
-				out = append(out, volumeDTO(v))
+				out = append(out, e.volumeDTO(v))
 			}
 		}
 		return &apiResult[[]apiVolume]{Body: out}, nil

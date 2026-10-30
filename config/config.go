@@ -197,6 +197,7 @@ type LibvirtConfig struct {
 }
 
 type Config struct {
+	Clouds         []CloudConfig       `hcl:"cloud"`
 	ImageTransfers ImageTransferConfig `hcl:"image_transfers"`
 	Tasks          TaskConfig          `hcl:"tasks"`
 	LogLevel       string              `hcl:"log_level"`
@@ -342,6 +343,10 @@ func Parse(filename string) (*Config, error) {
 	if util.ExpandHomeDir(config.Tasks.Directory) == util.ExpandHomeDir(config.API.SessionDir) || util.ExpandHomeDir(config.Tasks.Directory) == util.ExpandHomeDir(config.API.TokenDir) {
 		return nil, fmt.Errorf("task and credential stores must use separate directories")
 	}
+	volumeMetadata := util.ExpandHomeDir(config.Tasks.Directory) + "-volumes"
+	if volumeMetadata == util.ExpandHomeDir(config.API.SessionDir) || volumeMetadata == util.ExpandHomeDir(config.API.TokenDir) {
+		return nil, fmt.Errorf("volume metadata and credential stores must use separate directories")
+	}
 	imageMetadata := util.ExpandHomeDir(config.Tasks.Directory) + "-images"
 	if imageMetadata == util.ExpandHomeDir(config.API.SessionDir) || imageMetadata == util.ExpandHomeDir(config.API.TokenDir) {
 		return nil, fmt.Errorf("image metadata and credential stores must use separate directories")
@@ -361,6 +366,9 @@ func Parse(filename string) (*Config, error) {
 		}
 	}
 	if _, _, err := config.ImageDefinitions(); err != nil {
+		return nil, err
+	}
+	if _, err := config.CloudDefinitions(); err != nil {
 		return nil, err
 	}
 	if config.ImageTransfers.MaxBytes <= 0 || config.ImageTransfers.MaxBytes > 1<<40 || config.ImageTransfers.TimeoutSeconds < 1 || config.ImageTransfers.TimeoutSeconds > 86400 || config.ImageTransfers.IdleTimeoutSeconds < 1 || config.ImageTransfers.IdleTimeoutSeconds > config.ImageTransfers.TimeoutSeconds {

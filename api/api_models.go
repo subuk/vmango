@@ -43,6 +43,14 @@ type apiConfiguredKey struct {
 }
 
 type apiVM struct {
+	Cloud              string `json:"cloud"`
+	Zone               string `json:"zone"`
+	InstanceType       string `json:"instance_type"`
+	Image              string `json:"image"`
+	Managed            bool   `json:"managed"`
+	CPURequest         int    `json:"cpu_request"`
+	MemoryRequestBytes uint64 `json:"memory_request_bytes"`
+
 	Node           string              `json:"node"`
 	ID             string              `json:"id"`
 	Arch           string              `json:"arch"`
@@ -84,7 +92,11 @@ func vmDTO(vm *compute.VirtualMachine) apiVM {
 		v.Disks = append(v.Disks, apiDisk{volumeID(d.Path), d.Alias, d.DeviceType.String(), d.DeviceBus.String()})
 	}
 	for _, n := range vm.Interfaces {
-		v.Interfaces = append(v.Interfaces, apiReadInterface{n.NetworkName, n.Mac, n.Model, n.AccessVlan, append([]string{}, n.IpAddressList...)})
+		logical := n.LogicalNetwork
+		if logical == "" {
+			logical = n.NetworkName
+		}
+		v.Interfaces = append(v.Interfaces, apiReadInterface{logical, n.Mac, n.Model, n.AccessVlan, append([]string{}, n.IpAddressList...)})
 	}
 	return v
 }
@@ -109,6 +121,11 @@ func (n apiInterface) domain() *compute.VirtualMachineAttachedInterface {
 }
 
 type apiVolume struct {
+	Cloud        string `json:"cloud"`
+	Zone         string `json:"zone"`
+	StorageClass string `json:"storage_class"`
+	Owned        bool   `json:"owned"`
+
 	ID         string `json:"id"`
 	Node       string `json:"node"`
 	Name       string `json:"name"`
@@ -120,7 +137,7 @@ type apiVolume struct {
 }
 
 func volumeDTO(v *compute.Volume) apiVolume {
-	return apiVolume{volumeID(v.Path), v.NodeId, v.Name, v.Pool, v.Size.Bytes(), v.Format.String(), v.AttachedTo, v.Metadata.Protected}
+	return apiVolume{ID: volumeID(v.Path), Node: v.NodeId, Name: v.Name, Pool: v.Pool, SizeBytes: v.Size.Bytes(), Format: v.Format.String(), AttachedTo: v.AttachedTo, Protected: v.Metadata.Protected}
 }
 
 type apiImageDefaults struct {
@@ -134,4 +151,47 @@ type apiImageDefaults struct {
 
 func (d apiImageDefaults) domain() compute.ImageDefaults {
 	return compute.ImageDefaults{Firmware: d.Firmware, DiskBus: compute.NewDeviceBus(d.DiskBus), DiskController: d.DiskController, NICModel: d.NICModel, GuestAgent: d.GuestAgent, Initialization: d.Initialization}
+}
+
+func (e *Environ) machineDTO(vm *compute.VirtualMachine) apiVM {
+	d := vmDTO(vm)
+	d.Managed = e.clouds == nil || vm.Metadata != nil
+	if vm.Metadata != nil {
+		m := vm.Metadata
+		d.Cloud = m.Cloud
+		d.Zone = m.Zone
+		d.InstanceType = m.InstanceType
+		d.Image = m.Image
+		d.CPURequest = m.CPURequest
+		d.MemoryRequestBytes = m.MemoryRequestBytes
+	} else {
+		d.CPURequest = vm.VCpus
+		d.MemoryRequestBytes = vm.Memory.Bytes()
+	}
+	if e.clouds != nil && d.Cloud == "" {
+		if c, h, err := e.clouds.ForNode(vm.NodeId); err == nil {
+			d.Cloud = c.ID
+			d.Zone = h.Zone
+		}
+	}
+	return d
+}
+func (e *Environ) volumeDTO(v *compute.Volume) apiVolume {
+	d := volumeDTO(v)
+	if e.clouds == nil {
+		d.Owned = true
+		return d
+	}
+	d.Owned = e.volumes.Owned(v)
+	if o, ok := e.volumes.OwnershipFor(v); ok {
+		d.Cloud = o.Cloud
+		d.StorageClass = o.StorageClass
+	}
+	if c, h, err := e.clouds.ForNode(v.NodeId); err == nil {
+		if d.Cloud == "" {
+			d.Cloud = c.ID
+		}
+		d.Zone = h.Zone
+	}
+	return d
 }

@@ -46,6 +46,9 @@ func ValidateInterface(v *VirtualMachineAttachedInterface) error {
 }
 
 func (s *VirtualMachineService) Save(vm *VirtualMachine) error {
+	if s.CloudMode && vm.Metadata == nil {
+		return fmt.Errorf("%w: explicit adoption is required", ErrConflict)
+	}
 	if err := ValidateVM(vm); err != nil {
 		return err
 	}
@@ -53,6 +56,9 @@ func (s *VirtualMachineService) Save(vm *VirtualMachine) error {
 }
 
 func (s *VirtualMachineService) AttachVolume(id, node string, v *VirtualMachineAttachedVolume) error {
+	if err := s.RequireManaged(id, node); err != nil {
+		return err
+	}
 	if err := ValidateVolumeAttachment(v); err != nil {
 		return err
 	}
@@ -60,6 +66,12 @@ func (s *VirtualMachineService) AttachVolume(id, node string, v *VirtualMachineA
 }
 
 func (s *VirtualMachineService) AttachInterface(id, node string, v *VirtualMachineAttachedInterface) error {
+	if err := s.ValidateNetwork(node, v); err != nil {
+		return err
+	}
+	if err := s.RequireManaged(id, node); err != nil {
+		return err
+	}
 	if err := ValidateInterface(v); err != nil {
 		return err
 	}
@@ -84,7 +96,14 @@ func (s *VolumeService) Create(p VolumeCreateParams) (*Volume, error) {
 	if err := s.ValidateCreate(p); err != nil {
 		return nil, err
 	}
-	return s.VolumeRepository.Create(p)
+	v, err := s.VolumeRepository.Create(p)
+	if err != nil {
+		return v, err
+	}
+	if err = s.recordOwnership(v, p.Cloud, p.StorageClass); err != nil {
+		return v, ownershipFailure(v, err)
+	}
+	return v, nil
 }
 
 func (s *VolumeService) Clone(p VolumeCloneParams) (*Volume, error) {
@@ -120,7 +139,14 @@ func (s *VolumeService) clone(p VolumeCloneParams, verifiedManaged bool) (*Volum
 	if err := s.ValidateCreate(create); err != nil {
 		return nil, err
 	}
-	return s.VolumeRepository.Clone(p)
+	v, err := s.VolumeRepository.Clone(p)
+	if err != nil {
+		return v, err
+	}
+	if err = s.recordOwnership(v, p.Cloud, p.StorageClass); err != nil {
+		return v, ownershipFailure(v, err)
+	}
+	return v, nil
 }
 
 func (s *VolumeService) Resize(path, node string, size Size) error {
@@ -130,6 +156,9 @@ func (s *VolumeService) Resize(path, node string, size Size) error {
 	}
 	if v.Metadata.Hidden {
 		return ErrVolumeNotFound
+	}
+	if s.Ownership != nil && !s.Owned(v) {
+		return fmt.Errorf("%w: volume ownership is not confirmed", ErrConflict)
 	}
 	if v.Metadata.Protected {
 		return fmt.Errorf("%w: volume is protected", ErrConflict)
@@ -149,8 +178,18 @@ func (s *VolumeService) Delete(path, node string) error {
 	if v.Metadata.Hidden {
 		return ErrVolumeNotFound
 	}
+	if s.Ownership != nil && !s.Owned(v) {
+		return fmt.Errorf("%w: volume ownership is not confirmed", ErrConflict)
+	}
 	if v.Metadata.Protected || v.AttachedTo != "" {
 		return fmt.Errorf("%w: volume is protected or attached", ErrConflict)
+	}
+	// Revoke before deletion so a later disk recreated at the same backend
+	// path/key cannot inherit stale ownership, including after interruption.
+	if s.Ownership != nil {
+		if err := s.Ownership.Put(ownershipKey(node, path), VolumeOwnership{}); err != nil {
+			return fmt.Errorf("cannot revoke volume ownership before deletion: %w", err)
+		}
 	}
 	return s.VolumeRepository.Delete(path, node)
 }

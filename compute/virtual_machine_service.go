@@ -4,6 +4,7 @@ import "fmt"
 
 type VirtualMachineListOptions struct {
 	NodeIds []string
+	Strict  bool
 }
 
 type VirtualMachineRepository interface {
@@ -24,15 +25,27 @@ type VirtualMachineRepository interface {
 	Start(id, node string) error
 }
 
+// MachineAdoptionRepository records management metadata without reconfiguring a VM.
+type MachineAdoptionRepository interface {
+	Adopt(id, node string, metadata *MachineMetadata) error
+}
+type NetworkValidator interface {
+	ValidateNetwork(node string, nic *VirtualMachineAttachedInterface) error
+}
+
 type VirtualMachineService struct {
 	VirtualMachineRepository
+	CloudMode bool
 }
 
 func NewVirtualMachineService(repo VirtualMachineRepository) *VirtualMachineService {
-	return &VirtualMachineService{repo}
+	return &VirtualMachineService{VirtualMachineRepository: repo}
 }
 
 func (service *VirtualMachineService) Action(id string, node, action string) error {
+	if err := service.RequireManaged(id, node); err != nil {
+		return err
+	}
 	switch action {
 	default:
 		return fmt.Errorf("unknown action %s", action)

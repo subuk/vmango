@@ -149,7 +149,7 @@ func TestAPISpecificationContract(t *testing.T) {
 			}
 		}
 	}
-	for _, id := range []string{"create-vm", "update-vm", "get-vm", "list-vms", "delete-vm", "vm-action", "attach-disk", "detach-disk", "attach-interface", "detach-interface", "create-volume", "clone-volume", "resize-volume", "delete-volume", "get-volume", "list-volumes", "list-keys", "get-key", "add-key", "delete-key", "list-nodes", "get-node", "list-networks", "list-pools", "list-images", "get-capabilities", "create-console-link", "connect-console"} {
+	for _, id := range []string{"create-cloud-machine", "list-clouds", "get-cloud", "list-cloud-machines", "change-instance-type", "adopt-machine", "create-machine-disk", "update-vm", "get-vm", "list-vms", "delete-vm", "vm-action", "attach-disk", "detach-disk", "attach-interface", "detach-interface", "create-volume", "clone-volume", "resize-volume", "delete-volume", "get-volume", "list-volumes", "list-keys", "get-key", "add-key", "delete-key", "list-nodes", "get-node", "list-networks", "list-pools", "list-images", "get-capabilities", "create-console-link", "connect-console"} {
 		if !ids[id] {
 			t.Errorf("missing operation %s", id)
 		}
@@ -429,7 +429,7 @@ func TestBridgeRejectsTextAndClosesOnBackendEOF(t *testing.T) {
 
 func TestAPIValidationDoesNotEchoCloudInit(t *testing.T) {
 	h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil)
-	w := apiRequest(h, "POST", "/api/v1/nodes/n/vms", `{"cloud_init":{"user_data":"private-bootstrap-secret"}}`, true)
+	w := apiRequest(h, "POST", "/api/v1/clouds/local/machines", `{"user_data":"private-bootstrap-secret"}`, true)
 	if w.Code != 422 || strings.Contains(w.Body.String(), "private-bootstrap-secret") {
 		t.Fatalf("validation echoed input: %d %s", w.Code, w.Body)
 	}

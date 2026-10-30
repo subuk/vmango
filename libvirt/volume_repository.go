@@ -2,6 +2,8 @@ package libvirt
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -75,6 +77,16 @@ func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.Sto
 	}
 
 	volume := &compute.Volume{}
+	key, err := virVolume.GetKey()
+	if err != nil {
+		return nil, err
+	}
+	poolID, err := pool.GetUUIDString()
+	if err != nil {
+		return nil, err
+	}
+	scope := sha256.Sum256([]byte(repo.pool.nodeUri[nodeId]))
+	volume.Identity = hex.EncodeToString(scope[:]) + "\x00" + poolID + "\x00" + key
 	volume.NodeId = nodeId
 	volume.Path = virVolumeConfig.Target.Path
 	volume.Name = virVolumeConfig.Name

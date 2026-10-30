@@ -49,7 +49,7 @@ For an explicitly selected remote libvirt connection, use the downloadable-image
 The test logs in through the JSON endpoint, loads the SPA creation shell and
 rejects an insufficient
 RAM request before creating a disk, and exercises two catalog IDs referencing
-one source disk. It creates and deletes a VM with initialization disabled, then
+one source disk through the configured cloud. It creates and deletes a VM with initialization disabled, then
 clones the image and
 creates the VM and config drive through the JWT Bearer-authenticated JSON API. Mutations assert 202 acceptance,
 then poll the durable task until success before inspecting the real backend.
@@ -121,6 +121,7 @@ Local Apple Silicon example using the pinned shipped Alpine image:
 ```sh
 ACCEPTANCE_IMAGE_URL=https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/cloud/alpine-3.24.3-aarch64-cloudinit-r0.qcow2 \
 ACCEPTANCE_IMAGE_SHA256=e83922eefe35a28eb5380fdb2ea0845c6a33c83be44a688ad08932014ceac3d2 \
+ACCEPTANCE_IMAGE_SIZE_BYTES=191823872 \
 make acceptance
 ```
 
@@ -132,6 +133,7 @@ ACCEPTANCE_ARCH=x86_64 \
 ACCEPTANCE_URI=qemu+ssh://root@your-test-host/system \
 ACCEPTANCE_IMAGE_URL=https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/cloud/alpine-3.24.3-x86_64-cloudinit-r0.qcow2 \
 ACCEPTANCE_IMAGE_SHA256=946677073fbd8e6345a8f150ce4e1848e10bbb3daef8f05f6c26dcea0d82db23 \
+ACCEPTANCE_IMAGE_SIZE_BYTES=157810688 \
 make acceptance
 ```
 
@@ -162,3 +164,27 @@ from macOS/HVF. Publisher checksum/header/HTTP validation covered all twelve
 shipped artifacts; real guest boot/provisioning covered only these Alpine variants.
 No package build, package installation, other distribution guest, or other
 architecture/backend combination is established by these checks.
+
+## Cloud scheduling verification
+
+Creation now uses `/api/v1/clouds/acceptance/machines`, an instance type,
+logical network and storage class. The harness configures its own cloud, zone
+and host bindings. It also verifies stopped-machine type changes preserve boot
+disk size, explicit adoption preserves resources, and unmanaged commands are
+rejected before mutation. Existing user domains remain part of fresh capacity
+accounting, including inactive domains.
+
+On a shared host whose existing requests already exceed physical capacity,
+`ACCEPTANCE_CAPACITY_REJECTION=1` runs a separate negative admission check.
+Use it with the pinned downloadable-image settings above and the chosen URI.
+It expects a failed task without uncertain effects, no VM/root disk/image
+provisioning, and cleans its own random test pool. It does not run or establish
+a successful VM lifecycle. Never reduce existing workloads or bypass accounting
+to make this test pass.
+
+KRG-54 verification on 2026-10-30: the local macOS/HVF cloud lifecycle passed.
+On `lanst.net.krglv.com`, real Linux/KVM admission correctly rejected placement:
+12 host CPUs versus 26 configured legacy vCPUs across running and inactive VMs.
+Only the negative admission check passed there; a successful Linux cloud
+lifecycle still requires a host with sufficient allocatable capacity. Logs are
+retained under `result/krg54-linux/`; original workloads were preserved.

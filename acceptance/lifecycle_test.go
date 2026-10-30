@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"subuk/vmango/compute"
 	"subuk/vmango/tasks"
@@ -37,6 +38,15 @@ func TestLifecycle(t *testing.T) {
 	image := os.Getenv("ACCEPTANCE_IMAGE")
 	imageURL := os.Getenv("ACCEPTANCE_IMAGE_URL")
 	imageSHA := os.Getenv("ACCEPTANCE_IMAGE_SHA256")
+	var sourceBytes uint64
+	if value := os.Getenv("ACCEPTANCE_IMAGE_SIZE_BYTES"); value != "" {
+		var err error
+		sourceBytes, err = strconv.ParseUint(value, 10, 64)
+		if err != nil || sourceBytes == 0 {
+			t.Fatal("ACCEPTANCE_IMAGE_SIZE_BYTES must be a positive byte count")
+		}
+	}
+
 	if image == "" && imageURL == "" {
 		t.Fatal("set ACCEPTANCE_IMAGE to a local Ubuntu cloud image (see README.md)")
 	}
@@ -292,11 +302,27 @@ api {
  user "acceptance" { hashed_password = %q }
 }
 `, filepath.Join(root, "keys"), uri, name, name, base, arch, firmware, initialization, base, arch, firmware, filepath.Join(root, "tasks"), address, uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString(), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
+
+	configuration += fmt.Sprintf(`
+cloud "acceptance" {
+ images=["boot","no-init"]
+ zone "test" {}
+ instance_type "small" { cpu=2 memory_mib=2048 boot_disk_gib=8 }
+ instance_type "too-small" { cpu=2 memory_mib=512 boot_disk_gib=8 }
+ instance_type "larger" { cpu=2 memory_mib=3072 boot_disk_gib=16 }
+ network "lan" {}
+ storage_class "standard" {}
+ host "acceptance" { zone="test" labels={rack="test"} network "lan" { network="qemu-usernet" } storage_class "standard" {pool=%q format="qcow2"} }
+}
+`, name)
 	if imageURL != "" {
 		if strings.Contains(imageURL, "alpinelinux.org/") {
 			configuration = strings.ReplaceAll(configuration, `os_name = "Ubuntu"`, `os_name = "Alpine Linux"`)
 		}
 		configuration = strings.ReplaceAll(configuration, fmt.Sprintf("path = %q", base), fmt.Sprintf("url = %q sha256 = %q source_format = \"qcow2\"", imageURL, imageSHA))
+		if sourceBytes > 0 {
+			configuration = strings.ReplaceAll(configuration, `source_format = "qcow2"`, fmt.Sprintf(`source_format = "qcow2" source_size_bytes = %d`, sourceBytes))
+		}
 	}
 	write(config, configuration)
 	log, err := os.Create(filepath.Join(root, "vmango.log"))
@@ -357,7 +383,7 @@ api {
 			t.Fatal(err)
 		}
 		req.Header.Set("Content-Type", "application/json")
-		if method != "GET" && strings.Contains(path, "/nodes/") && !strings.Contains(path, "/consoles/") {
+		if method != "GET" && (strings.Contains(path, "/nodes/") || strings.Contains(path, "/clouds/")) && !strings.Contains(path, "/consoles/") {
 			req.Header.Set("Idempotency-Key", uuid.NewString())
 		}
 		if access != "" {
@@ -421,7 +447,7 @@ api {
 		t.Fatal(err)
 	}
 	access = credentials.AccessToken
-	for _, resource := range []string{"nodes", "nodes/acceptance", "nodes/acceptance/images", "nodes/acceptance/pools", "nodes/acceptance/networks", "nodes/acceptance/capabilities", "keys", "vms", "volumes", "networks"} {
+	for _, resource := range []string{"clouds", "clouds/acceptance", "clouds/acceptance/machines", "nodes", "nodes/acceptance", "nodes/acceptance/images", "nodes/acceptance/pools", "nodes/acceptance/networks", "nodes/acceptance/capabilities", "keys", "vms", "volumes", "networks"} {
 		apiRequest("GET", "/api/v1/"+resource, nil, 200)
 	}
 	if imageURL != "" {
@@ -437,7 +463,7 @@ api {
 			t.Fatalf("missing managed image unavailable: %+v", catalog)
 		}
 	}
-	request("/machines/add/?node=acceptance&arch="+arch, 200)
+	request("/machines/add/?cloud=acceptance", 200)
 	marker := "VMANGO_BOOT_OK_" + uuid.NewString()
 	serialDevice := "/dev/ttyS0"
 	if arch == "aarch64" {
@@ -445,14 +471,46 @@ api {
 	}
 	userdata := fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, 'test \"$(hostname)\" = %s && echo %s > %s']\n", name, marker, serialDevice)
 	// Check image constraints and the no-init alias through the same JSON API.
-	aliasBody := map[string]any{"id": name, "arch": arch, "vcpus": 2, "memory_bytes": uint64(512 << 20), "clone_disks": []any{map[string]any{"image_id": "boot", "name": name + "_root", "pool": name, "size_bytes": uint64(8 << 30)}}, "interfaces": []any{map[string]any{"network": "qemu-usernet"}}}
-	apiRequest("POST", "/api/v1/nodes/acceptance/vms", aliasBody, 422)
+	aliasBody := map[string]any{"id": name, "image": "boot", "instance_type": "too-small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false}
+	apiRequest("POST", "/api/v1/clouds/acceptance/machines", aliasBody, 422)
 	if _, err := vir("vol-info", "--pool", name, name+"_root"); err == nil {
 		t.Fatal("invalid request created a disk")
 	}
-	aliasBody["memory_bytes"] = uint64(2 << 30)
-	aliasBody["clone_disks"] = []any{map[string]any{"image_id": "no-init", "name": name + "_root", "pool": name, "size_bytes": uint64(8 << 30)}}
-	apiCommand("POST", "/api/v1/nodes/acceptance/vms", aliasBody)
+	aliasBody["instance_type"] = "small"
+	aliasBody["image"] = "no-init"
+
+	if os.Getenv("ACCEPTANCE_CAPACITY_REJECTION") == "1" {
+		raw := apiRequest("POST", "/api/v1/clouds/acceptance/machines", aliasBody, 202)
+		var accepted struct {
+			StatusURL string `json:"status_url"`
+		}
+		json.Unmarshal(raw, &accepted)
+		for deadline := time.Now().Add(30 * time.Second); ; {
+			var task tasks.Task
+			json.Unmarshal(apiRequest("GET", accepted.StatusURL, nil, 200), &task)
+			if task.State.Terminal() {
+				if task.State != tasks.Failed || task.OutcomeUncertain || len(task.Effects) != 0 || task.Error == nil || !strings.Contains(task.Error.Message, "capacity") {
+					t.Fatalf("unexpected admission result: %+v", task)
+				}
+				data, _ := json.MarshalIndent(task, "", "  ")
+				write(filepath.Join(root, "capacity-rejection.json"), string(data))
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("capacity rejection did not finish")
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if _, err := vir("dominfo", name); err == nil {
+			t.Fatal("rejected placement created a VM")
+		}
+		if _, err := vir("vol-info", "--pool", name, name+"_root"); err == nil {
+			t.Fatal("rejected placement created a root disk")
+		}
+		t.Log("PASS: overcommitted real host rejected placement before provisioning; lifecycle was not run")
+		return
+	}
+	apiCommand("POST", "/api/v1/clouds/acceptance/machines", aliasBody)
 	if imageURL != "" {
 		if _, err := vir("vol-info", base); err != nil {
 			t.Fatal("verified image missing", err)
@@ -463,12 +521,55 @@ api {
 	if strings.Contains(noInitXML, "_config.iso") || !strings.Contains(noInitXML, "org.qemu.guest_agent.0") {
 		t.Fatal("no-init alias defaults were not applied")
 	}
+
+	apiCommand("POST", "/api/v1/clouds/acceptance/machines/acceptance/"+name+"/instance-type", map[string]any{"instance_type": "larger"})
+	changedXML := mustVir("dumpxml", name)
+	if !strings.Contains(changedXML, "3145728") {
+		t.Fatal("instance type RAM change missing from domain XML")
+	}
+	info := mustVir("vol-info", "--pool", name, name+"_root", "--bytes")
+	if !strings.Contains(info, "8589934592") {
+		t.Fatal("instance type change resized the boot disk", info)
+	}
+	// Simulate an unmanaged domain without changing any resources or claiming disks.
+	mustVir("metadata", name, "--config", "--uri", "https://vmango.org/xmlns/scheduler/1", "--remove")
+	var observed struct {
+		Managed bool `json:"managed"`
+	}
+	json.Unmarshal(apiRequest("GET", "/api/v1/nodes/acceptance/vms/"+name, nil, 200), &observed)
+	if observed.Managed {
+		t.Fatal("unmanaged machine was inferred from its name")
+	}
+	apiRequest("POST", "/api/v1/nodes/acceptance/vms/"+name+"/actions", map[string]string{"action": "start"}, 409)
+	apiCommand("POST", "/api/v1/clouds/acceptance/machines/acceptance/"+name+"/adopt", map[string]any{})
+	if !strings.Contains(mustVir("dumpxml", name), "3145728") {
+		t.Fatal("adoption changed resource configuration")
+	}
 	apiCommand("DELETE", "/api/v1/nodes/acceptance/vms/"+name+"?delete_volumes=true", nil)
 	domainUUID = ""
 	apiVMPath := "/api/v1/nodes/acceptance/vms/" + name
-	createBody := map[string]any{"id": name, "arch": arch, "vcpus": 2, "memory_bytes": uint64(2 << 30), "cloud_init": map[string]any{"user_data": userdata}, "clone_disks": []any{map[string]any{"image_id": "boot", "name": name + "_root", "pool": name, "size_bytes": uint64(8 << 30)}}, "interfaces": []any{map[string]any{"network": "qemu-usernet"}}}
-	apiCommand("POST", "/api/v1/nodes/acceptance/vms", createBody)
-	apiRequest("POST", "/api/v1/nodes/acceptance/vms", createBody, 409)
+	createBody := map[string]any{"id": name, "image": "boot", "instance_type": "small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false, "user_data": userdata}
+	apiCommand("POST", "/api/v1/clouds/acceptance/machines", createBody)
+	// A duplicate name fails during the asynchronous fresh inventory stage.
+	duplicate := apiRequest("POST", "/api/v1/clouds/acceptance/machines", createBody, 202)
+	var duplicateAccepted struct {
+		StatusURL string `json:"status_url"`
+	}
+	json.Unmarshal(duplicate, &duplicateAccepted)
+	for deadline := time.Now().Add(10 * time.Second); ; {
+		var task tasks.Task
+		json.Unmarshal(apiRequest("GET", duplicateAccepted.StatusURL, nil, 200), &task)
+		if task.State.Terminal() {
+			if task.State != tasks.Failed || task.OutcomeUncertain {
+				t.Fatalf("duplicate create: %+v", task)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("duplicate create did not fail")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	apiCommand("PATCH", apiVMPath, map[string]any{"autostart": false})
 	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
 	write(filepath.Join(root, "resources.txt"), "pool="+name+"\npool_uuid="+poolUUID+"\npool_path="+poolDir+"\nvm_uuid="+domainUUID+"\n")
@@ -585,7 +686,7 @@ api {
 	var disk struct {
 		ID string `json:"id"`
 	}
-	rawDisk := apiCommand("POST", volumeBase, map[string]any{"name": "extra", "pool": name, "format": "qcow2", "size_bytes": 16 << 20})
+	rawDisk := apiCommand("POST", "/api/v1/clouds/acceptance/volumes", map[string]any{"name": "extra", "zone": "test", "storage_class": "standard", "size_bytes": 16 << 20})
 	if err := json.Unmarshal(rawDisk, &disk); err != nil {
 		t.Fatal(err)
 	}
@@ -594,7 +695,7 @@ api {
 	var clone struct {
 		ID string `json:"id"`
 	}
-	rawClone := apiCommand("POST", volumeBase+"/"+disk.ID+"/clone", map[string]any{"name": "extra-clone", "pool": name, "format": "qcow2", "size_bytes": 32 << 20})
+	rawClone := apiCommand("POST", volumeBase+"/"+disk.ID+"/clone", map[string]any{"name": "extra-clone", "storage_class": "standard", "size_bytes": 32 << 20})
 	if err := json.Unmarshal(rawClone, &clone); err != nil {
 		t.Fatal(err)
 	}
@@ -608,7 +709,7 @@ api {
 	} else {
 		apiRequest("DELETE", volumeBase+"/"+base64.RawURLEncoding.EncodeToString([]byte(base)), nil, 404)
 	}
-	apiCommand("POST", apiVMPath+"/interfaces", map[string]any{"network": "qemu-usernet", "mac": "52:54:00:ab:cd:01", "model": "virtio"})
+	apiCommand("POST", apiVMPath+"/interfaces", map[string]any{"network": "lan", "mac": "52:54:00:ab:cd:01", "model": "virtio"})
 	apiCommand("DELETE", apiVMPath+"/interfaces/52:54:00:ab:cd:01", nil)
 	public, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

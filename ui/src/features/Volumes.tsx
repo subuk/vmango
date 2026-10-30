@@ -1,14 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Menu, MenuItem, TextField, Typography } from "@mui/material";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
 import {
     esc,
-    useNodes,
     useResource,
     useVolumes,
     volumePath,
-    type Pool,
     type Volume,
 } from "../api/hooks";
 import { useResourceBusy, volumeResource } from "../api/tasks";
@@ -16,6 +14,7 @@ import { ResourceTasks } from "./Tasks";
 import { request } from "../api/client";
 import { bytes, Confirm, PageTitle, QueryState } from "../components/common";
 import { ResourceTable } from "../components/ResourceTable";
+import type { Cloud, HostCatalog } from "./MachineForm";
 import { fieldError, OperationDialog } from "../components/OperationDialog";
 
 export function Volumes() {
@@ -42,7 +41,8 @@ export function Volumes() {
                             `${v.name} ${v.node} ${v.pool} ${v.attached_to || ""}`
                         }
                         node={(v) => v.node}
-                        pool={(v) => v.pool}
+                        pool={(v) => v.storage_class || "Unmanaged"}
+                        poolLabel="Storage class"
                         columns={[
                             {
                                 id: "name",
@@ -61,8 +61,12 @@ export function Volumes() {
                                     </>
                                 ),
                             },
-                            { id: "node", label: "Node", value: (v) => v.node },
-                            { id: "pool", label: "Pool", value: (v) => v.pool },
+                            { id: "node", label: "Host", value: (v) => v.node },
+                            {
+                                id: "pool",
+                                label: "Storage class",
+                                value: (v) => v.storage_class || "Unmanaged",
+                            },
                             {
                                 id: "format",
                                 label: "Format",
@@ -128,6 +132,7 @@ function VolumeActions({ volume: v }: { volume: Volume }) {
                         key={action}
                         disabled={
                             conflict ||
+                            (action !== "clone" && v.owned === false) ||
                             (action === "delete" &&
                                 (v.protected || !!v.attached_to))
                         }
@@ -185,7 +190,7 @@ function VolumeActions({ volume: v }: { volume: Volume }) {
     );
 }
 
-function VolumeDialog({
+export function VolumeDialog({
     mode,
     volume,
     nodeContext = "",
@@ -196,22 +201,44 @@ function VolumeDialog({
     nodeContext?: string;
     onClose: () => void;
 }) {
-    const nodes = useNodes();
-    const [node, setNode] = useState(volume?.node || nodeContext);
-    const [pool, setPool] = useState(volume?.pool || "");
+    const clouds = useResource<Cloud[]>("/api/v1/clouds");
+    const host = useResource<HostCatalog>(
+        `/api/v1/nodes/${esc(volume?.node || nodeContext)}/catalog`,
+        !!(volume?.node || nodeContext),
+    );
+    const [cloudID, setCloud] = useState(volume?.cloud || "");
+    const cloud =
+        clouds.data?.find((c) => c.id === cloudID) || clouds.data?.[0];
+    const [zone, setZone] = useState(volume?.zone || "");
+    const [storage, setStorage] = useState(volume?.storage_class || "");
     const [name, setName] = useState(
         mode === "clone" ? `${volume!.name}-copy` : "",
     );
-    const [format, setFormat] = useState(volume?.format || "qcow2");
     const [size, setSize] = useState(
         volume ? String(volume.size_bytes / 2 ** 30) : "10",
     );
-    const pools = useResource<Pool[]>(
-        `/api/v1/nodes/${esc(node)}/pools`,
-        !!node,
-        false,
-    );
-    const selected = pools.data?.find((p) => p.name === pool);
+    const classes = volume
+        ? host.data?.storage_classes || []
+        : cloud?.storage_classes.filter((s) =>
+              (cloud.storage_availability || []).some(
+                  (o) =>
+                      o.zone === zone &&
+                      (o.storage_classes || []).includes(s.id),
+              ),
+          ) || [];
+    useEffect(() => {
+        if (cloud)
+            setZone((old) =>
+                cloud.zones.some((z) => z.id === old)
+                    ? old
+                    : cloud.zones[0]?.id || "",
+            );
+    }, [cloud?.id]);
+    useEffect(() => {
+        setStorage((old) =>
+            classes.some((s) => s.id === old) ? old : classes[0]?.id || "",
+        );
+    }, [JSON.stringify(classes)]);
     return (
         <OperationDialog
             title={
@@ -229,104 +256,90 @@ function VolumeDialog({
                       : "Create volume"
             }
             onClose={onClose}
-            run={() => {
-                if (mode === "resize")
-                    return request(
-                        `${volumePath(volume!.node, volume!.id)}/resize`,
-                        "POST",
-                        { size_bytes: Math.round(Number(size) * 2 ** 30) },
-                    );
-                return request(
-                    mode === "clone"
-                        ? `${volumePath(volume!.node, volume!.id)}/clone`
-                        : `/api/v1/nodes/${esc(node)}/volumes`,
-                    "POST",
-                    {
-                        name,
-                        pool,
-                        format,
-                        size_bytes: Math.round(Number(size) * 2 ** 30),
-                    },
-                );
-            }}
+            disabled={mode !== "resize" && (!cloud || !storage || !zone)}
+            run={() =>
+                mode === "resize"
+                    ? request(
+                          `${volumePath(volume!.node, volume!.id)}/resize`,
+                          "POST",
+                          { size_bytes: Math.round(Number(size) * 2 ** 30) },
+                      )
+                    : request(
+                          mode === "clone"
+                              ? `${volumePath(volume!.node, volume!.id)}/clone`
+                              : `/api/v1/clouds/${esc(cloud!.id)}/volumes`,
+                          "POST",
+                          {
+                              name,
+                              zone: mode === "create" ? zone : undefined,
+                              storage_class: storage,
+                              size_bytes: Math.round(Number(size) * 2 ** 30),
+                          },
+                      )
+            }
         >
             {(error) => (
                 <>
                     {mode !== "resize" && (
                         <>
                             <TextField
-                                select
-                                label="Node"
-                                value={node}
                                 required
-                                disabled={!!volume}
-                                onChange={(e) => setNode(e.target.value)}
-                            >
-                                <MenuItem value="">Choose a node</MenuItem>
-                                {nodes.data?.map((n) => (
-                                    <MenuItem key={n.id} value={n.id}>
-                                        {n.id}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                            <TextField
                                 label="Name"
-                                name="name"
-                                required
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 {...fieldError(error, "name")}
                             />
+                            {!volume && (
+                                <>
+                                    <TextField
+                                        select
+                                        label="Cloud"
+                                        value={cloud?.id || ""}
+                                        onChange={(e) =>
+                                            setCloud(e.target.value)
+                                        }
+                                    >
+                                        {clouds.data?.map((c) => (
+                                            <MenuItem key={c.id} value={c.id}>
+                                                {c.name}
+                                            </MenuItem>
+                                        ))}
+                                    </TextField>
+                                    <TextField
+                                        select
+                                        label="Availability zone"
+                                        value={zone}
+                                        onChange={(e) =>
+                                            setZone(e.target.value)
+                                        }
+                                    >
+                                        {cloud?.zones.map((z) => (
+                                            <MenuItem key={z.id} value={z.id}>
+                                                {z.name}
+                                            </MenuItem>
+                                        ))}
+                                    </TextField>
+                                </>
+                            )}
                             <TextField
                                 select
-                                label="Storage pool"
-                                name="pool"
                                 required
-                                value={pool}
-                                onChange={(e) => setPool(e.target.value)}
-                                helperText={
-                                    pools.isError
-                                        ? "Could not load storage pools."
-                                        : selected
-                                          ? `${bytes(selected.free_bytes)} free`
-                                          : "Choose a pool on the selected node."
-                                }
-                                error={
-                                    pools.isError ||
-                                    (!!pool && !!pools.data && !selected)
-                                }
+                                label="Storage class"
+                                value={storage}
+                                onChange={(e) => setStorage(e.target.value)}
                             >
-                                <MenuItem value="">Choose a pool</MenuItem>
-                                {pool && !selected && (
-                                    <MenuItem value={pool} disabled>
-                                        {pool} (unavailable)
-                                    </MenuItem>
-                                )}
-                                {pools.data?.map((p) => (
-                                    <MenuItem key={p.name} value={p.name}>
-                                        {p.name}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                            <TextField
-                                select
-                                label="Format"
-                                value={format}
-                                onChange={(e) => setFormat(e.target.value)}
-                            >
-                                {["qcow2", "raw"].map((f) => (
-                                    <MenuItem key={f} value={f}>
-                                        {f}
+                                {classes.map((s) => (
+                                    <MenuItem key={s.id} value={s.id}>
+                                        {s.name}
                                     </MenuItem>
                                 ))}
                             </TextField>
                         </>
                     )}
                     <TextField
-                        label="Size (GiB)"
-                        name="size_bytes"
-                        type="number"
                         required
+                        type="number"
+                        label="Size (GiB)"
                         value={size}
                         onChange={(e) => setSize(e.target.value)}
                         slotProps={{
@@ -339,13 +352,15 @@ function VolumeDialog({
                         }}
                         {...fieldError(error, "size_bytes")}
                     />
-                    {mode === "resize" && (
-                        <Typography variant="body2">
-                            Current size: {bytes(volume!.size_bytes)}. Only
-                            growing is supported. Extend the guest partition and
-                            filesystem separately.
-                        </Typography>
-                    )}
+                    <Typography>
+                        {volume
+                            ? `Host: ${volume.node}. `
+                            : "Placement is automatic within the zone. "}
+                        Disks remain bound to their host.{" "}
+                        {mode === "resize" &&
+                            "Extend the guest partition and filesystem separately."}
+                    </Typography>
+                    <QueryState query={clouds}>{() => null}</QueryState>
                 </>
             )}
         </OperationDialog>

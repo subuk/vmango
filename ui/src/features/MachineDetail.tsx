@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Alert,
     Box,
@@ -22,8 +22,6 @@ import {
     volumePath,
     type VM,
     type Volume,
-    type Network,
-    type Capabilities,
 } from "../api/hooks";
 import { useResourceBusy } from "../api/tasks";
 import { ResourceTasks } from "./Tasks";
@@ -39,6 +37,7 @@ import {
 import { OperationDialog, fieldError } from "../components/OperationDialog";
 import { ResourceTable } from "../components/ResourceTable";
 import { MachineActions } from "./Lists";
+import type { HostCatalog } from "./MachineForm";
 
 export function MachineDetail() {
     const { node = "", id = "" } = useParams();
@@ -70,7 +69,14 @@ export function MachineDetail() {
                             spacing={3}
                             sx={{ flexWrap: "wrap", mb: 3 }}
                         >
-                            <Typography>Node: {node}</Typography>
+                            <Typography>Host: {node}</Typography>
+                            <Typography>
+                                Cloud: {vm.cloud} · AZ: {vm.zone}
+                            </Typography>
+                            <Typography>
+                                Instance type:{" "}
+                                {vm.instance_type || "Unassigned"}
+                            </Typography>
                             <State value={vm.state} />
                             <Typography>
                                 {vm.vcpus} vCPU · {bytes(vm.memory_bytes)}
@@ -138,6 +144,13 @@ export function MachineDetail() {
                                 id="panel-overview"
                                 aria-labelledby="tab-overview"
                             >
+                                {vm.managed === false && (
+                                    <Alert severity="info">
+                                        This machine is read-only until
+                                        explicitly adopted. Its resources are
+                                        included in capacity accounting.
+                                    </Alert>
+                                )}
                                 <Overview vm={vm} />
                             </Box>
                         )}
@@ -214,11 +227,13 @@ function Disks({ vm }: { vm: VM }) {
         scope: vm.node,
         id: vm.id,
     });
-    const conflict = !!blocked.task || blocked.unavailable;
+    const conflict =
+        !!blocked.task || blocked.unavailable || vm.managed === false;
     const volumes = useResource<Volume[]>(
         `/api/v1/nodes/${esc(vm.node)}/volumes`,
     );
     const [add, setAdd] = useState(false);
+    const [createDisk, setCreateDisk] = useState(false);
     const [remove, setRemove] = useState<string>();
     const queries = useQueryClient();
     // A visible list omits hidden disks; authorized detail reads retain their labels.
@@ -235,6 +250,16 @@ function Disks({ vm }: { vm: VM }) {
             >
                 Attach disk
             </Button>
+            <Button
+                disabled={conflict || vm.state !== "stopped"}
+                onClick={() => setCreateDisk(true)}
+                sx={{ mb: 2 }}
+            >
+                Create and attach disk
+            </Button>
+            {createDisk && (
+                <CreateDisk vm={vm} onClose={() => setCreateDisk(false)} />
+            )}
             {vm.state !== "stopped" && (
                 <Typography color="text.secondary" sx={{ mb: 2 }}>
                     Stop the machine before attaching or detaching disks.
@@ -330,6 +355,82 @@ function DiskLabel({
         </>
     );
 }
+function CreateDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
+    const catalog = useResource<HostCatalog>(
+        `/api/v1/nodes/${esc(vm.node)}/catalog`,
+    );
+    const [name, setName] = useState("");
+    const [storage, setStorage] = useState("");
+    const [size, setSize] = useState("10");
+    useEffect(() => {
+        setStorage((old) =>
+            catalog.data?.storage_classes.some((s) => s.id === old)
+                ? old
+                : catalog.data?.storage_classes[0]?.id || "",
+        );
+    }, [catalog.data]);
+    return (
+        <OperationDialog
+            title={`Create disk for ${vm.id}`}
+            action="Create and attach disk"
+            onClose={onClose}
+            disabled={
+                !storage || vm.managed === false || vm.state !== "stopped"
+            }
+            run={() =>
+                request(
+                    `/api/v1/clouds/${esc(vm.cloud)}/machines/${esc(vm.node)}/${esc(vm.id)}/disks`,
+                    "POST",
+                    {
+                        name,
+                        storage_class: storage,
+                        size_bytes: Math.round(Number(size) * 2 ** 30),
+                    },
+                )
+            }
+        >
+            {(error) => (
+                <>
+                    <TextField
+                        required
+                        label="Disk name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                    />
+                    <TextField
+                        required
+                        label="Size (GiB)"
+                        type="number"
+                        slotProps={{ htmlInput: { min: 0.001, step: "any" } }}
+                        value={size}
+                        onChange={(e) => setSize(e.target.value)}
+                        {...fieldError(error, "size_bytes")}
+                    />
+                    <QueryState query={catalog}>
+                        {(c) => (
+                            <TextField
+                                select
+                                required
+                                label="Storage class"
+                                value={storage}
+                                onChange={(e) => setStorage(e.target.value)}
+                            >
+                                {c.storage_classes.map((s) => (
+                                    <MenuItem key={s.id} value={s.id}>
+                                        {s.name}
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                        )}
+                    </QueryState>
+                    <Typography>
+                        The disk will be created on the machine's current host.
+                    </Typography>
+                </>
+            )}
+        </OperationDialog>
+    );
+}
 function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
     const blocked = useResourceBusy({
         kind: "machine",
@@ -376,8 +477,7 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
                                 <MenuItem value="">Choose a volume</MenuItem>
                                 {volumes.map((v) => (
                                     <MenuItem key={v.id} value={v.id}>
-                                        {v.pool}/{v.name} ·{" "}
-                                        {bytes(v.size_bytes)}
+                                        {v.name} · {bytes(v.size_bytes)}
                                     </MenuItem>
                                 ))}
                             </TextField>
@@ -423,7 +523,8 @@ function Interfaces({ vm }: { vm: VM }) {
         scope: vm.node,
         id: vm.id,
     });
-    const conflict = !!blocked.task || blocked.unavailable;
+    const conflict =
+        !!blocked.task || blocked.unavailable || vm.managed === false;
     const [add, setAdd] = useState(false);
     const [remove, setRemove] = useState<string>();
     const queries = useQueryClient();
@@ -508,91 +609,57 @@ function AttachInterface({ vm, onClose }: { vm: VM; onClose: () => void }) {
         scope: vm.node,
         id: vm.id,
     });
-    const networks = useResource<Network[]>(
-        `/api/v1/nodes/${esc(vm.node)}/networks`,
-        true,
-        false,
-    );
-    const capabilities = useResource<Capabilities>(
-        `/api/v1/nodes/${esc(vm.node)}/capabilities?arch=${esc(vm.arch)}`,
-        true,
-        false,
+    const choices = useResource<HostCatalog>(
+        `/api/v1/nodes/${esc(vm.node)}/catalog`,
     );
     const [network, setNetwork] = useState("");
-    const [model, setModel] = useState("virtio");
-    const [mac, setMAC] = useState("");
-    const [vlan, setVLAN] = useState("0");
-    const options = [
-        ...new Set([
-            ...(networks.data || []).map((n) => n.name),
-            ...Object.keys(capabilities.data?.network_models || {}),
-        ]),
-    ];
+    useEffect(() => {
+        const entries = choices.data?.networks || [];
+        setNetwork((old) =>
+            entries.some((n) => n.id === old) ? old : entries[0]?.id || "",
+        );
+    }, [choices.data]);
     return (
         <OperationDialog
-            disabled={!!blocked.task || blocked.unavailable}
             title={`Attach interface to ${vm.id}`}
             action="Attach interface"
+            disabled={
+                vm.managed === false ||
+                !!blocked.task ||
+                blocked.unavailable ||
+                !network ||
+                choices.isError
+            }
             onClose={onClose}
             run={() =>
                 request(`${vmPath(vm.node, vm.id)}/interfaces`, "POST", {
                     network,
-                    model,
-                    mac: mac || undefined,
-                    vlan: Number(vlan),
                 })
             }
         >
             {(error) => (
                 <>
-                    <TextField
-                        select
-                        label="Network"
-                        name="network"
-                        required
-                        value={network}
-                        onChange={(e) => setNetwork(e.target.value)}
-                        {...fieldError(error, "network")}
-                    >
-                        <MenuItem value="">Choose a network</MenuItem>
-                        {options.map((n) => (
-                            <MenuItem key={n} value={n}>
-                                {n}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    {(networks.isError || capabilities.isError) && (
-                        <Alert severity="error">
-                            Network choices could not be loaded.
-                        </Alert>
-                    )}
-                    <TextField
-                        select
-                        label="Model"
-                        value={model}
-                        onChange={(e) => setModel(e.target.value)}
-                    >
-                        {(
-                            capabilities.data?.network_models[network] ||
-                            capabilities.data?.nic_models || ["virtio"]
-                        ).map((m) => (
-                            <MenuItem key={m} value={m}>
-                                {m}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        label="MAC address (optional)"
-                        value={mac}
-                        onChange={(e) => setMAC(e.target.value)}
-                    />
-                    <TextField
-                        label="VLAN"
-                        type="number"
-                        value={vlan}
-                        onChange={(e) => setVLAN(e.target.value)}
-                        slotProps={{ htmlInput: { min: 0, max: 4094 } }}
-                    />
+                    <QueryState query={choices}>
+                        {(catalog) => (
+                            <TextField
+                                select
+                                label="Network"
+                                required
+                                value={network}
+                                onChange={(e) => setNetwork(e.target.value)}
+                                {...fieldError(error, "network")}
+                            >
+                                {catalog.networks.map((n) => (
+                                    <MenuItem key={n.id} value={n.id}>
+                                        {n.name}
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                        )}
+                    </QueryState>
+                    <Typography>
+                        The logical network is resolved on this machine's host.
+                    </Typography>
                 </>
             )}
         </OperationDialog>

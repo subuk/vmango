@@ -152,7 +152,10 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId s
 		if !strings.HasSuffix(volume.Path, settings.CdSuffix) {
 			continue
 		}
-		if config := repo.configCache[volume.Path]; config != nil {
+		repo.configCacheMu.Lock()
+		cachedConfig := repo.configCache[nodeId+"\x00"+volume.Path]
+		repo.configCacheMu.Unlock()
+		if config := cachedConfig; config != nil {
 			vm.Config = config
 			continue
 		}
@@ -164,7 +167,7 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId s
 		}
 		vm.Config = config
 		repo.configCacheMu.Lock()
-		repo.configCache[volume.Path] = config
+		repo.configCache[nodeId+"\x00"+volume.Path] = config
 		repo.configCacheMu.Unlock()
 	}
 
@@ -172,7 +175,7 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId s
 }
 
 func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxml.Domain, attachedIface *compute.VirtualMachineAttachedInterface) error {
-	if attachedIface.NetworkName == "macos-socket-vmnet" || attachedIface.NetworkName == "qemu-usernet" {
+	if !attachedIface.Bridge && (attachedIface.NetworkName == "macos-socket-vmnet" || attachedIface.NetworkName == "qemu-usernet") {
 		if virDomainConfig.QEMUCommandline == nil {
 			virDomainConfig.QEMUCommandline = &libvirtxml.DomainQEMUCommandline{}
 		}
@@ -200,6 +203,10 @@ func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxm
 		}
 		ifaceNum++
 		ifaceName := fmt.Sprintf("vmngmcos%d", ifaceNum)
+		deviceID := ""
+		if alias := logicalNetworkAlias(attachedIface.LogicalNetwork); alias != "" {
+			deviceID = ",id=" + alias
+		}
 		deviceModel := "virtio-net-device"
 		if virDomainConfig.OS.Type.Arch == "x86_64" {
 			deviceModel = "virtio-net-pci"
@@ -211,12 +218,12 @@ func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxm
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-netdev"})
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "socket,id=" + ifaceName + ",fd=3"})
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-device"})
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: deviceModel + ",netdev=" + ifaceName + ",mac=" + attachedIface.Mac})
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: deviceModel + ",netdev=" + ifaceName + ",mac=" + attachedIface.Mac + deviceID})
 		case "qemu-usernet":
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-netdev"})
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "user,id=" + ifaceName})
 			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-device"})
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: deviceModel + ",netdev=" + ifaceName + ",mac=" + attachedIface.Mac})
+			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: deviceModel + ",netdev=" + ifaceName + ",mac=" + attachedIface.Mac + deviceID})
 		}
 
 		return nil
@@ -226,13 +233,18 @@ func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxm
 		attachedIface.Model = "virtio"
 	}
 	domainIface := libvirtxml.DomainInterface{}
+	if alias := logicalNetworkAlias(attachedIface.LogicalNetwork); alias != "" {
+		domainIface.Alias = &libvirtxml.DomainAlias{Name: alias}
+	}
 	if attachedIface.Mac != "" {
 		domainIface.MAC = &libvirtxml.DomainInterfaceMAC{Address: attachedIface.Mac}
 	}
 	domainIface.Source = &libvirtxml.DomainInterfaceSource{}
 	domainIface.Model = &libvirtxml.DomainInterfaceModel{Type: attachedIface.Model}
-	domainIface.Source.Network = &libvirtxml.DomainInterfaceSourceNetwork{
-		Network: attachedIface.NetworkName,
+	if attachedIface.Bridge {
+		domainIface.Source.Bridge = &libvirtxml.DomainInterfaceSourceBridge{Bridge: attachedIface.NetworkName}
+	} else {
+		domainIface.Source.Network = &libvirtxml.DomainInterfaceSourceNetwork{Network: attachedIface.NetworkName}
 	}
 	if attachedIface.AccessVlan > 0 {
 		domainIface.VLan = &libvirtxml.DomainInterfaceVLan{
@@ -496,6 +508,7 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) (err erro
 
 	virDomainConfig.VCPU = &libvirtxml.DomainVCPU{Placement: "static", Value: uint(vm.VCpus)}
 	virDomainConfig.Memory = &libvirtxml.DomainMemory{Unit: "bytes", Value: uint(vm.Memory.Bytes())}
+	virDomainConfig.CurrentMemory = &libvirtxml.DomainCurrentMemory{Unit: "bytes", Value: uint(vm.Memory.Bytes())}
 
 	if vm.Hugepages {
 		virDomainConfig.MemoryBacking = &libvirtxml.DomainMemoryBacking{
@@ -595,6 +608,9 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) (err erro
 			}
 		}
 	}
+	if err := writeSchedulerMetadata(virDomainConfig, vm.Metadata); err != nil {
+		return err
+	}
 	virDomainXml, err := virDomainConfig.Marshal()
 	if err != nil {
 		return repositoryError(err, "cannot marshal domain xml")
@@ -667,6 +683,9 @@ func (repo *VirtualMachineRepository) nodeList(nodeId string) ([]*compute.Virtua
 	vms := []*compute.VirtualMachine{}
 	settings := repo.settings[nodeId]
 	domains, err := conn.ListAllDomains(0)
+	if err != nil {
+		return nil, repositoryError(err, "cannot list all domains")
+	}
 	for _, domain := range domains {
 		vm, err := repo.domainToVm(conn, nodeId, &domain, settings)
 		if err != nil {
@@ -679,6 +698,7 @@ func (repo *VirtualMachineRepository) nodeList(nodeId string) ([]*compute.Virtua
 
 func (repo *VirtualMachineRepository) List(options compute.VirtualMachineListOptions) ([]*compute.VirtualMachine, error) {
 	result := []*compute.VirtualMachine{}
+	var inventoryError error
 	nodes := repo.pool.Nodes(options.NodeIds)
 	wg := &sync.WaitGroup{}
 	mu := &sync.Mutex{}
@@ -691,6 +711,9 @@ func (repo *VirtualMachineRepository) List(options compute.VirtualMachineListOpt
 			vms, err := repo.nodeList(nodeId)
 			if err != nil {
 				repo.logger.Warn().Err(err).Str("node", nodeId).Msg("cannot list vms")
+				mu.Lock()
+				inventoryError = fmt.Errorf("inventory for host %s: %w", nodeId, err)
+				mu.Unlock()
 				return
 			}
 			repo.logger.Debug().Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("node vm list done")
@@ -701,6 +724,9 @@ func (repo *VirtualMachineRepository) List(options compute.VirtualMachineListOpt
 	}
 	wg.Wait()
 	repo.logger.Debug().TimeDiff("took", time.Now(), start).Msg("full vm list done")
+	if options.Strict && inventoryError != nil {
+		return nil, inventoryError
+	}
 	return result, nil
 }
 

@@ -125,6 +125,20 @@ func Web(configFilename string) {
 	vms := libcompute.NewVirtualMachineService(vmRepo)
 
 	vmanager := libcompute.NewVirtualMachineManager(vms, volumes, epub, vmManSettings, images)
+	cloudDefinitions, err := cfg.CloudDefinitions()
+	if err != nil {
+		logger.Fatal().Err(err).Msg("invalid cloud catalog")
+	}
+	clouds := &compute.CloudService{Definitions: cloudDefinitions, Nodes: nodes, VMs: vms, Pools: volpools, Volumes: volumes, Manager: vmanager}
+	vmanager.Clouds = clouds
+	vms.CloudMode = true
+	ownershipRepo, err := filesystem.NewVolumeOwnershipRepository(util.ExpandHomeDir(cfg.Tasks.Directory) + "-volumes")
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cannot initialize volume ownership")
+	}
+	defer ownershipRepo.Close()
+	volumes.Ownership = ownershipRepo
+
 	artifactRepo, err := filesystem.NewImageArtifactRepository(util.ExpandHomeDir(cfg.Tasks.Directory) + "-images")
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot initialize image verification metadata")
@@ -164,7 +178,7 @@ func Web(configFilename string) {
 		logger.Fatal().Err(err).Msg("cannot initialize durable task storage")
 	}
 	defer taskRepo.Close()
-	taskService := tasks.New(taskRepo, &compute.CommandHandler{Manager: vmanager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys, Scopes: nodeScopes}, logger.With().Str("component", "tasks").Logger())
+	taskService := tasks.New(taskRepo, &compute.CommandHandler{Clouds: clouds, Manager: vmanager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys, Scopes: nodeScopes}, logger.With().Str("component", "tasks").Logger())
 	executionContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := taskService.Start(executionContext, cfg.Tasks.Workers); err != nil {

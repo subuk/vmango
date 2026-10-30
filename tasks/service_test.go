@@ -436,3 +436,45 @@ func TestSharedPreparationFollowersDoNotOccupyWorkers(t *testing.T) {
 		t.Fatal("serialized commands did not finish")
 	}
 }
+
+func TestUncertainExecutionGroupFencesAlreadyQueuedCapacityWork(t *testing.T) {
+	repo, _ := repository(t)
+	service := tasks.New(repo, handler{}, zerolog.Nop())
+	first := command("uncertain")
+	first.ExecutionGroups = []string{"cloud:one"}
+	accepted, err := service.Submit(identity, "uncertain-cloud-command", first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	follower := command("waiting")
+	follower.ExecutionGroups = []string{"cloud:one"}
+	queued, err := service.Submit(identity, "waiting-cloud-command", follower)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.Update(func(store *tasks.Store) error {
+		rec := store.Records[accepted.ID]
+		rec.Task.State = tasks.Running
+		store.Records[accepted.ID] = rec
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	start(t, service)
+	independent, err := service.Submit(identity, "independent-cloud-command", command("independent"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waitTask(t, service, independent.ID).State != tasks.Succeeded {
+		t.Fatal("unrelated work blocked")
+	}
+	if task, _ := service.Get(queued.ID); task.State != tasks.Queued {
+		t.Fatal("uncertain cloud capacity reused", task)
+	}
+	if _, err := service.Release(accepted.ID, identity, "Inspected backend and capacity"); err != nil {
+		t.Fatal(err)
+	}
+	if waitTask(t, service, queued.ID).State != tasks.Succeeded {
+		t.Fatal("explicit release did not unblock capacity group")
+	}
+}

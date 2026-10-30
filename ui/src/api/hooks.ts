@@ -11,7 +11,6 @@ export type Pool = components["schemas"]["ApiPool"];
 export type Image = components["schemas"]["ApiImage"];
 export type Capabilities = components["schemas"]["ApiCapabilities"];
 export type Token = components["schemas"]["TokenMetadata"];
-export type CreateVM = components["schemas"]["ApiCreateVM"];
 export type PatchVM = components["schemas"]["ApiPatchVM"];
 export type Disk = components["schemas"]["ApiDisk"];
 export type Interface = components["schemas"]["ApiInterface"];
@@ -46,10 +45,19 @@ export function useNodes(enabled = true) {
         queryFn: async () => unwrap(await api.GET("/api/v1/nodes")),
     });
 }
-export function useMachines() {
+export function useMachines(cloud?: string) {
     return useQuery({
-        queryKey: ["/api/v1/vms"],
-        queryFn: async () => unwrap(await api.GET("/api/v1/vms")),
+        queryKey: [
+            cloud ? `/api/v1/clouds/${esc(cloud)}/machines` : "/api/v1/vms",
+        ],
+        queryFn: async () =>
+            unwrap(
+                cloud
+                    ? await api.GET("/api/v1/clouds/{cloud}/machines", {
+                          params: { path: { cloud } },
+                      })
+                    : await api.GET("/api/v1/vms"),
+            ),
     });
 }
 export function useVolumes() {

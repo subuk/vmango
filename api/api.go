@@ -190,6 +190,7 @@ func (e *Environ) registerAPI() {
 	api := humamux.New(router, cfg)
 	e.registerAuth(api)
 	e.registerTasks(api)
+	e.registerClouds(api)
 	e.registerGlobalLists(api)
 	e.registerDiscovery(api)
 	e.registerVMOperations(api)

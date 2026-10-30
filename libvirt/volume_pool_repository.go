@@ -1,6 +1,7 @@
 package libvirt
 
 import (
+	"fmt"
 	"subuk/vmango/compute"
 	"time"
 
@@ -30,6 +31,15 @@ func (repo *VolumePoolRepository) listNode(nodeId string) ([]*compute.VolumePool
 		return nil, repositoryError(err, "cannot list storage pools")
 	}
 	for _, virPool := range virPools {
+		activeForRefresh, refreshErr := virPool.IsActive()
+		if refreshErr != nil {
+			return nil, refreshErr
+		}
+		if activeForRefresh {
+			if refreshErr = virPool.Refresh(0); refreshErr != nil {
+				return nil, refreshErr
+			}
+		}
 		virPoolXml, err := virPool.GetXMLDesc(0)
 		if err != nil {
 			return nil, repositoryError(err, "cannot get pool name")
@@ -58,6 +68,32 @@ func (repo *VolumePoolRepository) listNode(nodeId string) ([]*compute.VolumePool
 		if virPoolConfig.Available != nil {
 			volumePool.Free = ComputeSizeFromLibvirtSize(virPoolConfig.Available.Unit, virPoolConfig.Available.Value)
 		}
+		// Bound logical capacity as well as physical free space. Sparse QCOW2
+		// creation must not allow sequential admissions to overbook the pool.
+		stored, err := virPool.ListAllStorageVolumes(0)
+		if err != nil {
+			return nil, err
+		}
+		committed := uint64(0)
+		for _, v := range stored {
+			info, err := v.GetInfo()
+			v.Free()
+			if err != nil {
+				return nil, err
+			}
+			size := max(info.Capacity, info.Allocation)
+			if size > ^uint64(0)-committed {
+				return nil, fmt.Errorf("storage commitment overflow")
+			}
+			committed += size
+		}
+		logicalFree := uint64(0)
+		if committed < volumePool.Size.Bytes() {
+			logicalFree = volumePool.Size.Bytes() - committed
+		}
+		if logicalFree < volumePool.Free.Bytes() {
+			volumePool.Free = compute.NewSize(logicalFree, compute.SizeUnitB)
+		}
 		volumePools = append(volumePools, volumePool)
 	}
 	return volumePools, nil
@@ -72,7 +108,7 @@ func (repo *VolumePoolRepository) List(options compute.VolumePoolListOptions) ([
 		nodeVolumePools, err := repo.listNode(nodeId)
 		if err != nil {
 			repo.logger.Warn().Err(err).Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("cannot list volume pools")
-			continue
+			return nil, err
 		}
 		volumePools = append(volumePools, nodeVolumePools...)
 	}

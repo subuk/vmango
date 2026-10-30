@@ -10,6 +10,7 @@ type VolumeMetadata struct {
 }
 
 type Volume struct {
+	Identity   string
 	NodeId     string
 	Path       string
 	Name       string

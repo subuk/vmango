@@ -19,6 +19,7 @@ import (
 var AppVersion string
 
 type Environ struct {
+	clouds   *compute.CloudService
 	logger   zerolog.Logger
 	router   *mux.Router
 	networks *compute.NetworkService
@@ -60,6 +61,9 @@ func New(cfg *config.Config, logger zerolog.Logger,
 		return nil, fmt.Errorf("console_signing_key must differ from jwt_signing_key")
 	}
 	env := &Environ{cfg: &cfg.API, logger: logger, router: mux.NewRouter(), networks: networks, keys: keys, volpools: volpools, nodes: nodes, volumes: volumes, vms: vms, vmanager: vmanager, images: images, auth: authentication, tasks: taskService}
+	if vmanager != nil {
+		env.clouds = vmanager.Clouds
+	}
 	if cfg.API.Oidc.ClientId != "" {
 		provider, err := oidc.NewProvider(context.Background(), cfg.API.Oidc.IssuerUrl)
 		if err != nil {

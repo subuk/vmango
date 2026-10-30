@@ -70,8 +70,8 @@ const ApiDocs = lazy(() =>
     import("../features/ApiDocs").then((m) => ({ default: m.ApiDocs })),
 );
 const sections = [
-    ["Nodes", "/nodes/"],
     ["Machines", "/machines/"],
+    ["Hosts", "/nodes/"],
     ["Volumes", "/volumes/"],
     ["Networks", "/networks/"],
     ["Keys", "/keys/"],
@@ -159,7 +159,7 @@ function Shell() {
             >
                 <Link
                     component={RouterLink}
-                    to="/nodes/"
+                    to="/machines/"
                     className="wordmark"
                     color="text.primary"
                     underline="none"
@@ -292,11 +292,11 @@ function Shell() {
                     <Routes>
                         <Route
                             path="/"
-                            element={<Navigate to="/nodes/" replace />}
+                            element={<Navigate to="/machines/" replace />}
                         />
                         <Route
                             path="/login/"
-                            element={<Navigate to="/nodes/" replace />}
+                            element={<Navigate to="/machines/" replace />}
                         />
                         <Route path="/nodes/" element={<Nodes />} />
                         <Route path="/nodes/:node/" element={<NodeDetail />} />
@@ -343,7 +343,10 @@ function Shell() {
                                     <Typography variant="h1">
                                         Page not found
                                     </Typography>
-                                    <Button component={RouterLink} to="/nodes/">
+                                    <Button
+                                        component={RouterLink}
+                                        to="/machines/"
+                                    >
                                         Open nodes
                                     </Button>
                                 </>

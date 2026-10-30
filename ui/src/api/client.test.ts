@@ -55,53 +55,64 @@ describe("credential and mutation behavior", () => {
             ),
         ).toBeNull();
     });
-    it("recovers an uncertain infrastructure submission with the same key and private command", async () => {
-        await loggedIn();
-        const accepted = vi.fn();
-        const stop = client.onTaskAccepted(accepted);
-        const path = "http://localhost/api/v1/nodes/n/vms";
-        const body = {
-            id: "pending",
-            cloud_init: { user_data: "private-bootstrap-secret" },
-        };
-        fetchMock.mockRejectedValueOnce(new TypeError("Response lost"));
-        let failure: InstanceType<typeof client.APIError> | undefined;
-        try {
-            await client.request(path, "POST", body);
-        } catch (error) {
-            failure = error as typeof failure;
-        }
-        expect(failure?.problem.code).toBe("task_submission_uncertain");
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-        const first = fetchMock.mock.calls[0][0] as Request;
-        const key = first.headers.get("Idempotency-Key");
-        expect(key).toBeTruthy();
-        const stored = Array.from({ length: sessionStorage.length }, (_, i) => {
-            const name = sessionStorage.key(i)!;
-            return name + sessionStorage.getItem(name);
-        }).join(" ");
-        expect(stored).not.toContain("private-bootstrap-secret");
-        expect(stored).not.toContain("cloud_init");
-        fetchMock.mockResolvedValueOnce(
-            response(
-                {
-                    task: { id: "saved-task", state: "running" },
-                    status_url: "/api/v1/tasks/saved-task",
+    it.each([
+        "/api/v1/clouds/local/machines",
+        "/api/v1/clouds/local/volumes",
+        "/api/v1/clouds/local/machines/a/v/instance-type",
+        "/api/v1/nodes/n/volumes",
+    ])(
+        "recovers an uncertain infrastructure submission at %s with the same key",
+        async (route) => {
+            await loggedIn();
+            const accepted = vi.fn();
+            const stop = client.onTaskAccepted(accepted);
+            const path = "http://localhost" + route;
+            const body = {
+                id: "pending",
+                cloud_init: { user_data: "private-bootstrap-secret" },
+            };
+            fetchMock.mockRejectedValueOnce(new TypeError("Response lost"));
+            let failure: InstanceType<typeof client.APIError> | undefined;
+            try {
+                await client.request(path, "POST", body);
+            } catch (error) {
+                failure = error as typeof failure;
+            }
+            expect(failure?.problem.code).toBe("task_submission_uncertain");
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            const first = fetchMock.mock.calls[0][0] as Request;
+            const key = first.headers.get("Idempotency-Key");
+            expect(key).toBeTruthy();
+            const stored = Array.from(
+                { length: sessionStorage.length },
+                (_, i) => {
+                    const name = sessionStorage.key(i)!;
+                    return name + sessionStorage.getItem(name);
                 },
-                202,
-            ),
-        );
-        await failure?.recover?.();
-        const recovered = fetchMock.mock.calls[1][0] as Request;
-        expect(recovered.headers.get("Idempotency-Key")).toBe(key);
-        expect(await recovered.json()).toEqual(body);
-        expect(accepted).toHaveBeenCalledWith(
-            expect.objectContaining({
-                task: expect.objectContaining({ id: "saved-task" }),
-            }),
-        );
-        stop();
-    });
+            ).join(" ");
+            expect(stored).not.toContain("private-bootstrap-secret");
+            expect(stored).not.toContain("cloud_init");
+            fetchMock.mockResolvedValueOnce(
+                response(
+                    {
+                        task: { id: "saved-task", state: "running" },
+                        status_url: "/api/v1/tasks/saved-task",
+                    },
+                    202,
+                ),
+            );
+            await failure?.recover?.();
+            const recovered = fetchMock.mock.calls[1][0] as Request;
+            expect(recovered.headers.get("Idempotency-Key")).toBe(key);
+            expect(await recovered.json()).toEqual(body);
+            expect(accepted).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    task: expect.objectContaining({ id: "saved-task" }),
+                }),
+            );
+            stop();
+        },
+    );
     it("requires a new login after losing a refresh response", async () => {
         const signedOut = vi.fn();
         const stop = client.onLogout(signedOut);

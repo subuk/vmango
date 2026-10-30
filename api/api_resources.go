@@ -22,10 +22,9 @@ type apiVolumeListInput struct {
 	Usage string `query:"usage" enum:"attachable"`
 }
 type apiVolumeCreate struct {
-	Name      string `json:"name" pattern:"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"`
-	Pool      string `json:"pool" minLength:"1"`
-	Format    string `json:"format,omitempty" enum:"raw,qcow2" default:"qcow2"`
-	SizeBytes uint64 `json:"size_bytes" minimum:"1"`
+	Name         string `json:"name" pattern:"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"`
+	StorageClass string `json:"storage_class" minLength:"1"`
+	SizeBytes    uint64 `json:"size_bytes" minimum:"1"`
 }
 type apiVolumeCreateInput struct {
 	SubmissionInput
@@ -70,7 +69,7 @@ func (e *Environ) registerVolumeOperations(api huma.API) {
 		out := []apiVolume{}
 		for _, v := range vs {
 			if !v.Metadata.Hidden {
-				out = append(out, volumeDTO(v))
+				out = append(out, e.volumeDTO(v))
 			}
 		}
 		return &apiResult[[]apiVolume]{Body: out}, nil
@@ -84,12 +83,12 @@ func (e *Environ) registerVolumeOperations(api huma.API) {
 		if err != nil {
 			return nil, apiError(err)
 		}
-		return &apiResult[apiVolume]{Body: volumeDTO(v)}, nil
+		return &apiResult[apiVolume]{Body: e.volumeDTO(v)}, nil
 	})
 	registerAPI(api, "POST", path, "create-volume", "Queue volume creation", func(ctx context.Context, in *apiVolumeCreateInput) (*apiAccepted, error) {
 		b := in.Body
-		p := compute.VolumeCreateParams{NodeId: in.Node, Name: b.Name, Pool: b.Pool, Format: compute.NewVolumeFormat(b.Format), Size: compute.NewSize(b.SizeBytes, compute.SizeUnitB)}
-		return e.submitTask(ctx, in.IdempotencyKey, "volume.create", compute.InfrastructureCommand{Node: in.Node, CreateVolume: &p})
+		p := compute.VolumeCreateParams{NodeId: in.Node, Name: b.Name, Size: compute.NewSize(b.SizeBytes, compute.SizeUnitB)}
+		return e.submitTask(ctx, in.IdempotencyKey, "volume.create", compute.InfrastructureCommand{Node: in.Node, StorageClass: b.StorageClass, CreateVolume: &p})
 	})
 	registerAPI(api, "POST", path+"/{volume}/clone", "clone-volume", "Queue volume cloning", func(ctx context.Context, in *apiVolumeCloneInput) (*apiAccepted, error) {
 		path, err := volumePath(in.Volume)
@@ -97,8 +96,8 @@ func (e *Environ) registerVolumeOperations(api huma.API) {
 			return nil, apiError(err)
 		}
 		b := in.Body
-		p := compute.VolumeCloneParams{NodeId: in.Node, OriginalPath: path, NewName: b.Name, NewPool: b.Pool, Format: compute.NewVolumeFormat(b.Format), NewSize: compute.NewSize(b.SizeBytes, compute.SizeUnitB)}
-		return e.submitTask(ctx, in.IdempotencyKey, "volume.clone", compute.InfrastructureCommand{Node: in.Node, Path: path, CloneVolume: &p})
+		p := compute.VolumeCloneParams{NodeId: in.Node, OriginalPath: path, NewName: b.Name, NewSize: compute.NewSize(b.SizeBytes, compute.SizeUnitB)}
+		return e.submitTask(ctx, in.IdempotencyKey, "volume.clone", compute.InfrastructureCommand{Node: in.Node, StorageClass: b.StorageClass, Path: path, CloneVolume: &p})
 	})
 	registerAPI(api, "POST", path+"/{volume}/resize", "resize-volume", "Queue volume growth", func(ctx context.Context, in *apiVolumeResizeInput) (*apiAccepted, error) {
 		path, err := volumePath(in.Volume)

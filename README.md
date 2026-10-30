@@ -239,3 +239,5 @@ intentionally rejected. Existing resource API URLs are retained.
 Use `make ui`, `make test` and `make ui-test` for frontend/Go verification.
 See [frontend development](docs/UI-MIGRATION.md#development) for the Vite proxy,
 OpenAPI generation and source-archive validation workflow.
+
+Configured clouds, instance types, placement and local disk rules are documented in [docs/CLOUDS.md](docs/CLOUDS.md).

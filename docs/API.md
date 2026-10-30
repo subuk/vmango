@@ -78,7 +78,12 @@ Enums are strings. Unknown fields and invalid types are rejected.
 | `/nodes/{node}/pools` | GET list |
 | `/nodes/{node}/images` | GET available images, optional `arch` |
 | `/nodes/{node}/capabilities` | GET supported settings, optional `arch` |
-| `/nodes/{node}/vms` | GET list, POST create |
+| `/clouds` | GET cloud catalogs and compatible offers |
+| `/clouds/{cloud}/machines` | GET inventory, POST scheduled create |
+| `/clouds/{cloud}/volumes` | GET volumes (`usage=attachable` excludes image sources), POST scheduled create |
+| `/clouds/{cloud}/machines/{node}/{vm}/instance-type` | POST explicit type change on the current host |
+| `/clouds/{cloud}/machines/{node}/{vm}/adopt` | POST adopt unmanaged VM |
+| `/nodes/{node}/vms` | GET diagnostic list |
 | `/nodes/{node}/vms/{vm}` | GET, PATCH configuration, DELETE |
 | `/nodes/{node}/vms/{vm}/actions` | POST `start`, `reboot`, `poweroff` |
 | `/nodes/{node}/vms/{vm}/disks` | POST attach existing volume |
@@ -132,27 +137,29 @@ manager as the UI. `defaults` overrides image settings explicitly. Set
 text; key fingerprints refer to `/api/v1/keys`.
 
 ```sh
-curl --config ~/.config/vmango/curl.conf https://vmango.example/api/v1/nodes/local/images
-curl --config ~/.config/vmango/curl.conf -H "Idempotency-Key: demo-create-001" --json @vm.json https://vmango.example/api/v1/nodes/local/vms
+curl --config ~/.config/vmango/curl.conf https://vmango.example/api/v1/clouds/local
+curl --config ~/.config/vmango/curl.conf -H "Idempotency-Key: demo-create-001" --json @vm.json https://vmango.example/api/v1/clouds/local/machines
 ```
 
 The protected curl configuration (mode 0600) contains
 `header = "Authorization: Bearer YOUR_PERSONAL_JWT"`. Do not commit it.
 
-Example `vm.json` (replace the image, pool and network with discovered values):
+Example `vm.json` (replace the image, instance type, zone, storage class and network with discovered values):
 
 ```json
 {
   "id": "demo",
-  "vcpus": 2,
-  "memory_bytes": 2147483648,
+  "image": "ubuntu-24.04-x86_64-bios",
+  "instance_type": "small",
+  "zone": "local",
+  "storage_class": "standard",
+  "network": "lan",
   "start": true,
-  "graphics": "vnc",
-  "clone_disks": [{"image_id": "ubuntu", "name": "demo-root", "pool": "default"}],
-  "interfaces": [{"network": "default"}],
-  "cloud_init": {"user_data": "#cloud-config\npackages: [curl]\n"}
+  "user_data": "#cloud-config\npackages: [curl]\n"
 }
 ```
+
+See [configured clouds](CLOUDS.md) for placement, local disk ownership, adoption and API migration rules.
 
 ## Consoles
 

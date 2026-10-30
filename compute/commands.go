@@ -57,6 +57,17 @@ func (p MachinePatch) Apply(vm *VirtualMachine) {
 // InfrastructureCommand is a private, versioned desired command. Read models
 // and command payloads are deliberately separate from the public task schema.
 type InfrastructureCommand struct {
+	CloudID        string
+	Catalog        *Cloud             `json:",omitempty"`
+	CreateSpec     *MachineCreateSpec `json:",omitempty"`
+	VolumeSpec     *CloudVolumeSpec   `json:",omitempty"`
+	InstanceType   string
+	StorageClass   string
+	AcceptedScopes map[string]string `json:",omitempty"`
+	AcceptedKeys   []*Key            `json:",omitempty"`
+	SelectedType   *InstanceType     `json:",omitempty"`
+	Adoption       *MachineMetadata  `json:",omitempty"`
+	NewDisk        *DataDiskSpec     `json:",omitempty"`
 	Version        int
 	Node           string
 	VM             string
@@ -99,6 +110,12 @@ func NewCommand(kind string, c InfrastructureCommand) tasks.Command {
 
 	payload, _ := json.Marshal(c)
 	refs := []tasks.ResourceRef{}
+	if c.CreateSpec != nil {
+		refs = append(refs, tasks.ResourceRef{Kind: "machine-request", Scope: c.CloudID, ID: c.CreateSpec.ID})
+	}
+	if c.CloudID != "" {
+		refs = append(refs, tasks.ResourceRef{Kind: "cloud", Scope: c.CloudID, ID: "capacity", ReadOnly: true})
+	}
 	if c.VM != "" {
 		refs = append(refs, VMRef(c.Node, c.VM))
 	}
@@ -112,6 +129,7 @@ func NewCommand(kind string, c InfrastructureCommand) tasks.Command {
 }
 
 type CommandHandler struct {
+	Clouds  *CloudService
 	Manager *VirtualMachineManager
 	VMs     *VirtualMachineService
 	Volumes *VolumeService
@@ -123,7 +141,7 @@ type CommandHandler struct {
 func (h *CommandHandler) LockRefs(refs []tasks.ResourceRef) []tasks.ResourceRef {
 	result := append([]tasks.ResourceRef(nil), refs...)
 	for i := range result {
-		if canonical := h.Scopes[result[i].Scope]; canonical != "" {
+		if canonical := h.Scopes[result[i].Scope]; canonical != "" && (result[i].Kind == "machine" || result[i].Kind == "volume") {
 			result[i].Scope = canonical
 		}
 	}
@@ -137,7 +155,20 @@ func (h *CommandHandler) destination(node, pool, name string) (tasks.ResourceRef
 
 func (h *CommandHandler) Prepare(command tasks.Command) (tasks.Command, error) {
 	var c InfrastructureCommand
-	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 1 || c.Node == "" {
+	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 1 {
+		return command, ErrInvalid
+	}
+	if h.Clouds != nil {
+		var err error
+		command, c, err = h.prepareCloud(command, c)
+		if err != nil {
+			return command, err
+		}
+		if c.CreateSpec != nil || c.VolumeSpec != nil || c.NewDisk != nil || command.Kind == "machine.adopt" || command.Kind == "machine.change-type" {
+			return command, nil
+		}
+	}
+	if c.Node == "" {
 		return command, ErrInvalid
 	}
 	add := func(ref tasks.ResourceRef) { command.Resources = append(command.Resources, ref) }
@@ -395,6 +426,14 @@ func (h *CommandHandler) Execute(ctx context.Context, command tasks.Command, pro
 	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 1 {
 		return ErrInvalid
 	}
+	if h.Clouds != nil {
+		if c.CreateSpec != nil || c.VolumeSpec != nil || c.NewDisk != nil || command.Kind == "machine.adopt" || command.Kind == "machine.change-type" {
+			return h.executeCloud(ctx, command, c, progress)
+		}
+		if err := h.checkCloudMutation(command.Kind, &c); err != nil {
+			return err
+		}
+	}
 	if command.Kind == "machine.create" {
 		if len(c.Images) > 0 {
 			manager := h.Manager.withImages(h.Manager.images.Snapshot(c.Images, c.ImageBindings, false))
@@ -417,6 +456,29 @@ func (h *CommandHandler) Execute(ctx context.Context, command tasks.Command, pro
 			var err error
 			if err = progress.Stage("validate-image-creation", nil, false, func() error {
 				c.Machine, c.Clones, err = manager.PrepareCreation(c.Machine, c.Clones, c.NewVolumes, c.Defaults)
+				if err == nil && h.Clouds != nil {
+					pools, poolErr := h.Clouds.Pools.List(VolumePoolListOptions{NodeIds: []string{c.Node}})
+					if poolErr != nil {
+						return poolErr
+					}
+					required := map[string]uint64{}
+					for _, d := range c.Clones {
+						if e := addStorage(required, d.NewPool, d.NewSize.Bytes()); e != nil {
+							return e
+						}
+					}
+					for _, d := range c.NewVolumes {
+						if e := addStorage(required, d.Pool, d.Size.Bytes()); e != nil {
+							return e
+						}
+					}
+					if c.Machine.Config != nil {
+						if e := addStorage(required, c.Settings.CdPool, 8<<20); e != nil {
+							return e
+						}
+					}
+					return storageFits(HostInventory{Pools: pools}, required)
+				}
 				return err
 			}); err != nil {
 				return err
@@ -500,6 +562,15 @@ func (h *CommandHandler) Execute(ctx context.Context, command tasks.Command, pro
 		}
 		if c.DeleteVolumes {
 			for _, disk := range c.Disks {
+				if h.Clouds != nil {
+					volume, err := h.Volumes.Get(disk.Path, c.Node)
+					if err != nil {
+						return err
+					}
+					if !h.Volumes.Owned(volume) {
+						continue
+					}
+				}
 				diskRef := VolumeRef(c.Node, disk.Path)
 				if err := progress.Stage("delete-attached-volume", &diskRef, true, func() error {
 					if err := h.Volumes.Delete(disk.Path, c.Node); err != nil {

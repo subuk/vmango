@@ -9,20 +9,22 @@ import (
 var ErrVolumeNotFound = errors.New("volume not found")
 
 type VolumeCloneParams struct {
-	NodeId       string
-	Format       VolumeFormat
-	OriginalPath string
-	NewName      string
-	NewPool      string
-	NewSize      Size
+	Cloud, StorageClass string
+	NodeId              string
+	Format              VolumeFormat
+	OriginalPath        string
+	NewName             string
+	NewPool             string
+	NewSize             Size
 }
 
 type VolumeCreateParams struct {
-	NodeId string
-	Name   string
-	Pool   string
-	Format VolumeFormat
-	Size   Size
+	Cloud, StorageClass string
+	NodeId              string
+	Name                string
+	Pool                string
+	Format              VolumeFormat
+	Size                Size
 }
 
 type VolumeListOptions struct {
@@ -46,10 +48,11 @@ type VolumeRepository interface {
 
 type VolumeService struct {
 	VolumeRepository
+	Ownership VolumeOwnershipRepository
 }
 
 func NewVolumeService(repo VolumeRepository) *VolumeService {
-	return &VolumeService{repo}
+	return &VolumeService{VolumeRepository: repo}
 }
 
 // Attachable excludes catalog sources independently of image architecture.
@@ -59,9 +62,12 @@ func (s *VolumeService) Attachable(options VolumeListOptions, images *ImageServi
 	if err != nil {
 		return nil, err
 	}
-	sources, err := images.SourcePaths()
-	if err != nil {
-		return nil, err
+	sources := map[string]bool{}
+	if images != nil {
+		sources, err = images.SourcePaths()
+		if err != nil {
+			return nil, err
+		}
 	}
 	out := []*Volume{}
 	for _, v := range volumes {

@@ -50,6 +50,7 @@ func (g VirtualMachineGraphic) Vnc() bool {
 }
 
 type VirtualMachine struct {
+	Metadata       *MachineMetadata
 	Id             string
 	Firmware       string
 	DiskController string
@@ -98,9 +99,11 @@ type VirtualMachineAttachedVolume struct {
 }
 
 type VirtualMachineAttachedInterface struct {
-	NetworkName   string
-	Mac           string
-	Model         string
-	IpAddressList []string
-	AccessVlan    uint
+	LogicalNetwork string
+	Bridge         bool
+	NetworkName    string
+	Mac            string
+	Model          string
+	IpAddressList  []string
+	AccessVlan     uint
 }

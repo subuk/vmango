@@ -21,7 +21,34 @@ type Execution struct {
 	persistenceFailed bool
 }
 
-func (e *Execution) ID() string            { return e.id }
+func (e *Execution) ID() string { return e.id }
+
+// Protect durably acquires concrete resource locks after scheduling, before
+// provisioning. A failed lock/history write must prevent all backend mutations.
+func (e *Execution) Protect(refs []ResourceRef) error {
+	e.service.mu.Lock()
+	defer e.service.mu.Unlock()
+	store, err := e.service.repo.Read()
+	if err != nil {
+		e.persistenceFailed = true
+		return err
+	}
+	delete(store.Records, e.id)
+	locks := e.service.lockRefs(refs)
+	if c := conflict(store, locks); c != nil {
+		return c
+	}
+	err = e.service.change(e.id, func(rec *Record) error {
+		rec.Task.Resources = unique(append(rec.Task.Resources, refs...))
+		rec.Locks = unique(append(rec.Locks, locks...))
+		return nil
+	})
+	if err != nil {
+		e.persistenceFailed = true
+	}
+	return err
+}
+
 func (e *Execution) AcceptedAt() time.Time { return e.acceptedAt }
 
 // Transfer updates the currently running stage. Callers throttle persistence

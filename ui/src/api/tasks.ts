@@ -12,6 +12,9 @@ export const taskLabel = (kind: string) => {
     const [resource, action] = kind.split(".");
     const labels: Record<string, string> = {
         create: "Create",
+        adopt: "Adopt",
+        "change-type": "Change instance type for",
+        "create-disk": "Create and attach disk to",
         update: "Update",
         delete: "Delete",
         start: "Start",
@@ -27,6 +30,11 @@ export const taskLabel = (kind: string) => {
     return `${labels[action] || action || kind} ${resource === "machine" ? "machine" : resource === "volume" ? "volume" : resource || ""}`;
 };
 const stageNames: Record<string, string> = {
+    "cloud-inventory": "Collect cloud inventory",
+    "schedule-machine": "Choose machine placement",
+    "admit-instance-type": "Check instance type capacity",
+    "change-instance-type": "Apply instance type",
+    "adopt-machine": "Adopt machine",
     "prepare-image": "Check image readiness",
     "wait-image": "Wait for shared image preparation",
     "inspect-image-source": "Inspect image source",
