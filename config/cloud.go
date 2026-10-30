@@ -44,6 +44,7 @@ type CloudHostConfig struct {
 	Cache                  bool                   `hcl:"cache"`
 	Zone                   string                 `hcl:"zone"`
 	Labels                 map[string]string      `hcl:"labels"`
+	CPUOvercommit          *int                   `hcl:"cpu_overcommit"`
 	CPUReserve             int                    `hcl:"cpu_reserve"`
 	MemoryReserveMiB       int64                  `hcl:"memory_reserve_mib"`
 	Networks               []NetworkBindingConfig `hcl:"network"`
@@ -141,7 +142,14 @@ func (cfg *Config) CloudDefinitions() ([]compute.Cloud, error) {
 			if err != nil {
 				return nil, err
 			}
-			host := compute.CloudHost{Node: h.Node, Zone: h.Zone, Labels: h.Labels, CPUReserve: h.CPUReserve, MemoryReserveBytes: reserve, Networks: map[string]compute.NetworkBinding{}, Storage: map[string]compute.StorageBinding{}}
+			overcommit := 4
+			if h.CPUOvercommit != nil {
+				overcommit = *h.CPUOvercommit
+				if overcommit < 1 {
+					return nil, fmt.Errorf("host %s: cpu_overcommit must be at least 1", h.Node)
+				}
+			}
+			host := compute.CloudHost{CPUOvercommit: overcommit, Node: h.Node, Zone: h.Zone, Labels: h.Labels, CPUReserve: h.CPUReserve, MemoryReserveBytes: reserve, Networks: map[string]compute.NetworkBinding{}, Storage: map[string]compute.StorageBinding{}}
 			for _, b := range h.Networks {
 				if _, ok := host.Networks[b.ID]; ok {
 					return nil, fmt.Errorf("duplicate network binding %s", b.ID)

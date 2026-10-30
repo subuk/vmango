@@ -48,6 +48,7 @@ type CloudHost struct {
 	Node               string
 	Zone               string
 	Labels             map[string]string
+	CPUOvercommit      int
 	CPUReserve         int
 	MemoryReserveBytes uint64
 	Networks           map[string]NetworkBinding
@@ -185,7 +186,7 @@ func (c Cloud) Validate() error {
 	}
 	seen = map[string]bool{}
 	for _, h := range c.Hosts {
-		if seen[h.Node] || h.Node == "" || !hasEntry(c.Zones, h.Zone) || h.CPUReserve < 0 {
+		if seen[h.Node] || h.Node == "" || !hasEntry(c.Zones, h.Zone) || h.CPUReserve < 0 || h.CPUOvercommit < 0 {
 			return fmt.Errorf("cloud %s: invalid host %q", c.ID, h.Node)
 		}
 		seen[h.Node] = true
@@ -236,7 +237,15 @@ func Fit(i HostInventory, t InstanceType, replacing string) (PlacementCandidate,
 	if i.Node == nil {
 		return r, fmt.Errorf("host inventory is unavailable")
 	}
-	cpuBudget := len(i.Node.Cpus) - i.Host.CPUReserve
+	overcommit := i.Host.CPUOvercommit
+	if overcommit == 0 {
+		overcommit = 4
+	}
+	physicalCPU := len(i.Node.Cpus) - i.Host.CPUReserve
+	if physicalCPU < 0 || overcommit < 1 || physicalCPU > int(^uint(0)>>1)/overcommit {
+		return r, fmt.Errorf("invalid host CPU capacity")
+	}
+	cpuBudget := physicalCPU * overcommit
 	memory := i.Node.Memory().Bytes()
 	if i.Host.MemoryReserveBytes > memory {
 		return r, fmt.Errorf("host memory reserve exceeds capacity")

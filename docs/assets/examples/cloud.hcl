@@ -26,6 +26,7 @@ cloud "local" {
         config_drive_pool = "default"
         zone = "local"
         cpu_reserve = 1
+        cpu_overcommit = 4
         memory_reserve_mib = 1024
         network "lan" { network = "default" }
         storage_class "standard" { pool = "default" }

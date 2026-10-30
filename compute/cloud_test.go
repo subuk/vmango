@@ -11,7 +11,7 @@ func testType() InstanceType {
 	return InstanceType{ID: "small", Name: "Small", VCPUs: 4, CPURequest: 2, MemoryBytes: 2 << 30, MemoryRequestBytes: 2 << 30, BootDiskBytes: 10 << 30}
 }
 func testInventory() HostInventory {
-	return HostInventory{Host: CloudHost{Node: "a", CPUReserve: 1, MemoryReserveBytes: 1 << 30}, Node: &Node{Cpus: make([]NodeCpu, 8), Numas: []NodeNuma{{Memory: NewSize(16, SizeUnitG)}}}}
+	return HostInventory{Host: CloudHost{Node: "a", CPUOvercommit: 1, CPUReserve: 1, MemoryReserveBytes: 1 << 30}, Node: &Node{Cpus: make([]NodeCpu, 8), Numas: []NodeNuma{{Memory: NewSize(16, SizeUnitG)}}}}
 }
 func TestSchedulingAccountsInactiveLegacyAndAppliedRequests(t *testing.T) {
 	i := testInventory()
@@ -250,5 +250,26 @@ func TestDeletedVolumeDoesNotTransferOwnershipToRecreatedPath(t *testing.T) {
 	}
 	if !backend.deleted || s.Owned(&backend.volume) {
 		t.Fatal("recreated backend path inherited deleted disk ownership")
+	}
+}
+
+func TestCPUOvercommit(t *testing.T) {
+	for _, ratio := range []int{0, 1, 4} {
+		i := testInventory()
+		i.Host.CPUOvercommit = ratio
+		effective := ratio
+		if effective == 0 {
+			effective = 4
+		}
+		typ := testType()
+		typ.CPURequest = 7 * effective
+		typ.VCPUs = typ.CPURequest
+		if fit, err := Fit(i, typ, ""); err != nil || fit.FreeCPU != 0 {
+			t.Fatalf("ratio %d: %+v %v", ratio, fit, err)
+		}
+		typ.CPURequest++
+		if _, err := Fit(i, typ, ""); err == nil {
+			t.Fatalf("ratio %d exceeded capacity", ratio)
+		}
 	}
 }

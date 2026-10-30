@@ -40,6 +40,7 @@ cloud "local" {
         zone = "local"
         labels = { rack = "rack-a" }
         cpu_reserve = 1
+        cpu_overcommit = 4
         memory_reserve_mib = 1024
         network "lan" { network = "default" }
         storage_class "standard" {

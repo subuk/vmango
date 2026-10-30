@@ -39,6 +39,7 @@ host "local" {
     config_drive_pool = "default"
     zone = "local"
     cpu_reserve = 1
+        cpu_overcommit = 4
     memory_reserve_mib = 1024
     network "lan" { network = "default" }
     storage_class "standard" { pool = "default" }
@@ -238,3 +239,5 @@ an arbitrary machine. There is no periodic refresh or persistent index.
 Queued commands accepted with the former name-based identity are rejected before
 execution. Inspect old tasks and resubmit through the new API. New commands retain
 the resolved host and UUID, and idempotent recovery happens before backend reads.
+
+Host `cpu_overcommit` is an integer multiplier (default `4`, minimum `1`). CPU request capacity is `(host CPUs - cpu_reserve) * cpu_overcommit`; this applies to creation, adoption and instance type changes. Memory is not overcommitted.
