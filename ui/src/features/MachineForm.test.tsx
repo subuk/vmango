@@ -124,7 +124,7 @@ it("uses compatible catalog defaults without low-level host or disk controls", a
             "/api/v1/clouds/local/machines",
             "POST",
             expect.objectContaining({
-                id: "demo",
+                name: "demo",
                 image: "ubuntu",
                 instance_type: "small",
                 zone: "z",

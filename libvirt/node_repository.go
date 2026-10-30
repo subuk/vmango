@@ -178,7 +178,7 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 			for cpuId := range node.Cpus {
 				node.Cpus[cpuId].Pins = append(node.Cpus[cpuId].Pins, compute.NodeCpuPin{
 					Desc: "all",
-					VmId: virDomainConfig.Name,
+					VmId: virDomainConfig.UUID,
 				})
 			}
 			continue
@@ -187,7 +187,7 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 			for cpuId := range node.Cpus {
 				node.Cpus[cpuId].Pins = append(node.Cpus[cpuId].Pins, compute.NodeCpuPin{
 					Desc: "vcpus",
-					VmId: virDomainConfig.Name,
+					VmId: virDomainConfig.UUID,
 				})
 			}
 			continue
@@ -197,7 +197,7 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 			for cpuId := range node.Cpus {
 				node.Cpus[cpuId].Pins = append(node.Cpus[cpuId].Pins, compute.NodeCpuPin{
 					Desc: "emulator",
-					VmId: virDomainConfig.Name,
+					VmId: virDomainConfig.UUID,
 				})
 			}
 			continue
@@ -207,7 +207,7 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 		for _, cpuId := range affinity {
 			node.Cpus[cpuId].Pins = append(node.Cpus[cpuId].Pins, compute.NodeCpuPin{
 				Desc: "emulator",
-				VmId: virDomainConfig.Name,
+				VmId: virDomainConfig.UUID,
 			})
 		}
 
@@ -216,7 +216,7 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 			for _, cpuId := range vcpuAffinity {
 				node.Cpus[cpuId].Pins = append(node.Cpus[cpuId].Pins, compute.NodeCpuPin{
 					Desc: fmt.Sprintf("vcpu-%d", vcpupin.VCPU),
-					VmId: virDomainConfig.Name,
+					VmId: virDomainConfig.UUID,
 				})
 			}
 		}

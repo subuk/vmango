@@ -14,6 +14,7 @@ import { Link as RouterLink, useParams } from "react-router";
 import {
     esc,
     machineURL,
+    useHostCloud,
     useResource,
     type Network,
     type Node,
@@ -24,6 +25,7 @@ import { bytes, PageTitle, QueryState } from "../components/common";
 
 export function NodeDetail() {
     const { node = "" } = useParams();
+    const cloud = useHostCloud(node);
     const q = useResource<Node>(`/api/v1/hosts/${esc(node)}`);
     const pools = useResource<Pool[]>(`/api/v1/hosts/${esc(node)}/pools`);
     const networks = useResource<Network[]>(
@@ -94,17 +96,23 @@ export function NodeDetail() {
                                                 <TableCell>
                                                     {cpu.pins.map((pin, i) => (
                                                         <div key={i}>
-                                                            <Link
-                                                                component={
-                                                                    RouterLink
-                                                                }
-                                                                to={machineURL(
-                                                                    node,
-                                                                    pin.vm,
-                                                                )}
-                                                            >
-                                                                {pin.vm}
-                                                            </Link>{" "}
+                                                            {cloud.data ? (
+                                                                <Link
+                                                                    component={
+                                                                        RouterLink
+                                                                    }
+                                                                    to={machineURL(
+                                                                        cloud
+                                                                            .data
+                                                                            .cloud,
+                                                                        pin.vm,
+                                                                    )}
+                                                                >
+                                                                    {pin.vm}
+                                                                </Link>
+                                                            ) : (
+                                                                pin.vm
+                                                            )}{" "}
                                                             {pin.description}
                                                         </div>
                                                     ))}

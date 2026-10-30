@@ -222,7 +222,7 @@ export function CreateMachine() {
                                               `/api/v1/clouds/${esc(cloud.id)}/machines`,
                                               "POST",
                                               {
-                                                  id: name,
+                                                  name,
                                                   zone,
                                                   image,
                                                   instance_type: instanceType,
@@ -699,11 +699,11 @@ export function CreateMachine() {
 }
 
 export function EditMachine() {
-    const { node = "", id = "" } = useParams();
-    const machine = useMachine(node, id);
+    const { cloud = "", id = "" } = useParams();
+    const machine = useMachine(cloud, id);
     return (
         <QueryState query={machine}>
-            {(vm) => <EditForm key={`${node}/${id}`} vm={vm} />}
+            {(vm) => <EditForm key={`${cloud}/${id}`} vm={vm} />}
         </QueryState>
     );
 }
@@ -730,7 +730,7 @@ function EditForm({ vm }: { vm: VM }) {
     }, [clouds.data, selectedType]);
     return (
         <Stack spacing={3} sx={{ maxWidth: 760 }}>
-            <PageTitle title={`Change instance type for ${vm.id}`} />
+            <PageTitle title={`Change instance type for ${vm.name}`} />
             <Typography>
                 Host: {vm.node} · Cloud: {vm.cloud} · AZ: {vm.zone}
             </Typography>
@@ -773,7 +773,7 @@ function EditForm({ vm }: { vm: VM }) {
                     onClose={() => setOpen(false)}
                     run={() =>
                         request(
-                            `/api/v1/clouds/${esc(vm.cloud)}/machines/${esc(vm.node)}/${esc(vm.id)}/instance-type`,
+                            `/api/v1/clouds/${esc(vm.cloud)}/machines/${esc(vm.id)}/instance-type`,
                             "POST",
                             { instance_type: selectedType },
                         )
@@ -781,7 +781,7 @@ function EditForm({ vm }: { vm: VM }) {
                 >
                     {() => (
                         <Typography>
-                            Apply {selectedType} to {vm.id} on {vm.node}. Disk
+                            Apply {selectedType} to {vm.name} on {vm.node}. Disk
                             sizes remain unchanged.
                         </Typography>
                     )}

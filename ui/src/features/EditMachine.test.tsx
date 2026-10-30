@@ -22,6 +22,7 @@ const state = vi.hoisted(() => ({
     vm: {
         node: "a",
         id: "demo",
+        name: "Demo machine",
         cloud: "local",
         zone: "z",
         instance_type: "small",
@@ -78,11 +79,11 @@ function show() {
     const router = createMemoryRouter(
         [
             {
-                path: "/machines/:node/:id/update/",
+                path: "/machines/:cloud/:id/update/",
                 element: <RefreshEditMachine />,
             },
         ],
-        { initialEntries: ["/machines/a/demo/update/"] },
+        { initialEntries: ["/machines/local/demo/update/"] },
     );
     let revision = 0;
     const tree = () => (
@@ -119,7 +120,7 @@ it("submits an explicit type change and retains backend errors", async () => {
         await screen.findByText("Insufficient resources on host a"),
     ).toBeTruthy();
     expect(state.request).toHaveBeenCalledWith(
-        "/api/v1/clouds/local/machines/a/demo/instance-type",
+        "/api/v1/clouds/local/machines/demo/instance-type",
         "POST",
         { instance_type: "large" },
     );
@@ -157,7 +158,7 @@ async function submitType(expected: string) {
         screen.getAllByRole("button", { name: "Change instance type" }).at(-1)!,
     );
     expect(state.request).toHaveBeenCalledWith(
-        "/api/v1/clouds/local/machines/a/demo/instance-type",
+        "/api/v1/clouds/local/machines/demo/instance-type",
         "POST",
         { instance_type: expected },
     );

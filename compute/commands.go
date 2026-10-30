@@ -57,7 +57,7 @@ type InfrastructureCommand struct {
 }
 
 func NewCommand(kind string, c InfrastructureCommand) tasks.Command {
-	c.Version = 1
+	c.Version = 2
 	if len(c.KeyIDs) == 0 {
 		c.KeyIDs = nil
 	}
@@ -73,12 +73,12 @@ func NewCommand(kind string, c InfrastructureCommand) tasks.Command {
 	payload, _ := json.Marshal(c)
 	refs := []tasks.ResourceRef{}
 	if c.CreateSpec != nil {
-		refs = append(refs, tasks.ResourceRef{Kind: "machine-request", Scope: c.CloudID, ID: c.CreateSpec.ID})
+		refs = append(refs, tasks.ResourceRef{Kind: "machine-request", Scope: c.CloudID, ID: c.CreateSpec.Name})
 	}
 	if c.CloudID != "" && usesCloudCapacity(kind) {
 		refs = append(refs, tasks.ResourceRef{Kind: "cloud", Scope: c.CloudID, ID: "capacity", ReadOnly: true})
 	}
-	if c.VM != "" {
+	if c.VM != "" && c.Node != "" {
 		refs = append(refs, VMRef(c.Node, c.VM))
 	}
 	if c.Path != "" {
@@ -117,7 +117,7 @@ func (h *CommandHandler) destination(node, pool, name string) (tasks.ResourceRef
 
 func (h *CommandHandler) Prepare(command tasks.Command) (tasks.Command, error) {
 	var c InfrastructureCommand
-	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 1 {
+	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 2 {
 		return command, ErrInvalid
 	}
 	if h.Clouds != nil {
@@ -222,7 +222,7 @@ func (h *CommandHandler) Prepare(command tasks.Command) (tasks.Command, error) {
 			add(VolumeRef(c.Node, disk.Path))
 		}
 		if vm.Config != nil {
-			if err := destination(c.Settings.CdPool, vm.Id+c.Settings.CdSuffix); err != nil {
+			if err := destination(c.Settings.CdPool, vm.Name+c.Settings.CdSuffix); err != nil {
 				return command, err
 			}
 		}
@@ -374,7 +374,7 @@ func (h *CommandHandler) Prepare(command tasks.Command) (tasks.Command, error) {
 
 func (h *CommandHandler) Execute(ctx context.Context, command tasks.Command, progress *tasks.Execution) error {
 	var c InfrastructureCommand
-	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 1 {
+	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 2 {
 		return ErrInvalid
 	}
 	if h.Clouds != nil {

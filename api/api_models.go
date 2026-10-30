@@ -51,6 +51,7 @@ type apiVM struct {
 
 	Node           string              `json:"node"`
 	ID             string              `json:"id"`
+	Name           string              `json:"name"`
 	Arch           string              `json:"arch"`
 	State          string              `json:"state" enum:"unknown,stopped,running"`
 	VCPUs          int                 `json:"vcpus"`
@@ -71,7 +72,7 @@ type apiVM struct {
 }
 
 func vmDTO(vm *compute.VirtualMachine) apiVM {
-	v := apiVM{Node: vm.NodeId, ID: vm.Id, Arch: vm.Arch.String(), State: vm.State.String(), VCPUs: vm.VCpus, MemoryBytes: vm.Memory.Bytes(), Firmware: vm.Firmware, DiskController: vm.DiskController, GuestAgent: vm.GuestAgent, Autostart: vm.Autostart, Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), GraphicsListen: vm.Graphic.Listen, VideoModel: vm.VideoModel.String(), Disks: []apiDisk{}, Interfaces: []apiReadInterface{}, IPAddresses: vm.IpAddressList()}
+	v := apiVM{Node: vm.NodeId, ID: vm.Id, Name: vm.Name, Arch: vm.Arch.String(), State: vm.State.String(), VCPUs: vm.VCpus, MemoryBytes: vm.Memory.Bytes(), Firmware: vm.Firmware, DiskController: vm.DiskController, GuestAgent: vm.GuestAgent, Autostart: vm.Autostart, Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), GraphicsListen: vm.Graphic.Listen, VideoModel: vm.VideoModel.String(), Disks: []apiDisk{}, Interfaces: []apiReadInterface{}, IPAddresses: vm.IpAddressList()}
 	if vm.Cpupin != nil {
 		v.CPUPinning = &apiCPUPinning{Emulator: append([]uint{}, vm.Cpupin.Emulator...), VCPUs: []apiVCPUPin{}}
 		for id, cpus := range vm.Cpupin.Vcpus {

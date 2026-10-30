@@ -472,7 +472,7 @@ cloud "acceptance" {
 	}
 	userdata := fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, 'test \"$(hostname)\" = %s && echo %s > %s']\n", name, marker, serialDevice)
 	// Check image constraints and the no-init alias through the same JSON API.
-	aliasBody := map[string]any{"id": name, "image": "boot", "instance_type": "too-small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false}
+	aliasBody := map[string]any{"name": name, "image": "boot", "instance_type": "too-small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false}
 	apiRequest("POST", "/api/v1/clouds/acceptance/machines", aliasBody, 422)
 	if _, err := vir("vol-info", "--pool", name, name+"_root"); err == nil {
 		t.Fatal("invalid request created a disk")
@@ -523,7 +523,7 @@ cloud "acceptance" {
 		t.Fatal("no-init alias defaults were not applied")
 	}
 
-	apiCommand("POST", "/api/v1/clouds/acceptance/machines/acceptance/"+name+"/instance-type", map[string]any{"instance_type": "larger"})
+	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/instance-type", map[string]any{"instance_type": "larger"})
 	changedXML := mustVir("dumpxml", name)
 	if !strings.Contains(mustVir("dominfo", name), "enable") || !strings.Contains(mustVir("domstate", name), "shut off") || !strings.Contains(changedXML, "org.qemu.guest_agent.0") || !strings.Contains(changedXML, "127.0.0.1") {
 		t.Fatal("type change did not apply autostart or preserve power/devices/listener")
@@ -540,20 +540,22 @@ cloud "acceptance" {
 	var observed struct {
 		Managed bool `json:"managed"`
 	}
-	json.Unmarshal(apiRequest("GET", "/api/v1/clouds/acceptance/machines/acceptance/"+name, nil, 200), &observed)
+	json.Unmarshal(apiRequest("GET", "/api/v1/clouds/acceptance/machines/"+domainUUID, nil, 200), &observed)
 	if observed.Managed {
 		t.Fatal("unmanaged machine was inferred from its name")
 	}
-	apiRequest("POST", "/api/v1/clouds/acceptance/machines/acceptance/"+name+"/actions", map[string]string{"action": "start"}, 409)
-	apiCommand("POST", "/api/v1/clouds/acceptance/machines/acceptance/"+name+"/adopt", map[string]any{})
+	apiRequest("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/actions", map[string]string{"action": "start"}, 409)
+	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/adopt", map[string]any{})
 	if !strings.Contains(mustVir("dumpxml", name), "3145728") {
 		t.Fatal("adoption changed resource configuration")
 	}
-	apiCommand("DELETE", "/api/v1/clouds/acceptance/machines/acceptance/"+name+"?delete_volumes=true", nil)
+	apiCommand("DELETE", "/api/v1/clouds/acceptance/machines/"+domainUUID+"?delete_volumes=true", nil)
 	domainUUID = ""
-	apiVMPath := "/api/v1/clouds/acceptance/machines/acceptance/" + name
-	createBody := map[string]any{"id": name, "image": "boot", "instance_type": "small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false, "user_data": userdata}
+	apiVMPath := ""
+	createBody := map[string]any{"name": name, "image": "boot", "instance_type": "small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false, "user_data": userdata}
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines", createBody)
+	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
+	apiVMPath = "/api/v1/clouds/acceptance/machines/" + domainUUID
 	// A duplicate name fails during the asynchronous fresh inventory stage.
 	duplicate := apiRequest("POST", "/api/v1/clouds/acceptance/machines", createBody, 202)
 	var duplicateAccepted struct {
@@ -577,7 +579,7 @@ cloud "acceptance" {
 	apiRequest("PATCH", apiVMPath, map[string]any{"autostart": true}, 405)
 	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
 	write(filepath.Join(root, "resources.txt"), "pool="+name+"\npool_uuid="+poolUUID+"\npool_path="+poolDir+"\nvm_uuid="+domainUUID+"\n")
-	path := "/machines/acceptance/" + name + "/"
+	path := "/machines/acceptance/" + domainUUID + "/"
 	xml := mustVir("dumpxml", name)
 	write(filepath.Join(root, "domain.xml"), xml)
 	if !strings.Contains(xml, "type='"+expectedType+"'") {

@@ -119,19 +119,19 @@ func TestAuthOriginsAndProxyTLS(t *testing.T) {
 
 func TestFrontendRoutingAndRuntimeAssets(t *testing.T) {
 	h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil)
-	for _, path := range []string{"/machines/", "/tasks/", "/tasks/22d9e017-9379-4f6f-95ab-9823dbd1cc35/", "/machines/node/vm/update/", "/console/n/v/vnc", "/api/docs", "/vendor/novnc.html", "/vendor/vnc-client.js", "/vendor/noVNC-1.7.0/app/ui.js", "/vendor/noVNC-1.7.0/package.json", "/vendor/swagger-ui-5.34.0/swagger-ui-bundle.js"} {
+	for _, path := range []string{"/machines/", "/tasks/", "/tasks/22d9e017-9379-4f6f-95ab-9823dbd1cc35/", "/machines/node/vm/update/", "/console/local/v/vnc", "/api/docs", "/vendor/novnc.html", "/vendor/vnc-client.js", "/vendor/noVNC-1.7.0/app/ui.js", "/vendor/noVNC-1.7.0/package.json", "/vendor/swagger-ui-5.34.0/swagger-ui-bundle.js"} {
 		w := apiRequest(h, "GET", path, "", false)
 		if w.Code != 200 || w.Body.Len() == 0 {
 			t.Fatalf("%s: %d", path, w.Code)
 		}
 	}
-	for _, path := range []string{"/assets/missing.js", "/vendor/missing.css", "/unknown", "/console/n/v/serial/ws/", "/api/missing"} {
+	for _, path := range []string{"/assets/missing.js", "/vendor/missing.css", "/unknown", "/console/local/v/serial/ws/", "/api/missing"} {
 		w := apiRequest(h, "GET", path, "", true)
 		if w.Code != 404 || strings.Contains(w.Body.String(), "<html") {
 			t.Fatalf("fallback swallowed %s: %d %s", path, w.Code, w.Body)
 		}
 	}
-	if w := apiRequest(h, "POST", "/machines/n/v/delete/", "", false); w.Code != 405 {
+	if w := apiRequest(h, "POST", "/machines/v/delete/", "", false); w.Code != 405 {
 		t.Fatal("legacy HTML mutation route survived", w.Code)
 	}
 	if w := apiRequest(h, "POST", "/api/v1/hosts", "", true); w.Code != 405 || !strings.Contains(w.Header().Get("Content-Type"), "problem+json") {
@@ -144,7 +144,7 @@ func TestFrontendRoutingAndRuntimeAssets(t *testing.T) {
 		}
 	}
 	vnc := apiRequest(h, "GET", "/vendor/vnc-client.js", "", false).Body.String()
-	for _, required := range []string{"mandatory:", "host: ''", "port: ''", "vmango.token.", "event.origin !== location.origin", "encodeURIComponent(data.node)"} {
+	for _, required := range []string{"mandatory:", "host: ''", "port: ''", "vmango.token.", "event.origin !== location.origin", "encodeURIComponent(data.cloud)"} {
 		if !strings.Contains(vnc, required) {
 			t.Fatal("VNC connection pinning missing", required)
 		}

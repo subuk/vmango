@@ -67,7 +67,7 @@ func TestProvisioningFailureReportsEffectsWithoutRollback(t *testing.T) {
 				vols.failAt = 1
 			}
 			manager := NewVirtualMachineManager(NewVirtualMachineService(vms), NewVolumeService(vols), failingEvent{}, nil, nil)
-			vm := &VirtualMachine{Id: "test", NodeId: "node", VCpus: 2, Memory: NewSize(1, SizeUnitG), Graphic: VirtualMachineGraphic{Type: GraphicTypeNone}, VideoModel: VideoModelNone}
+			vm := &VirtualMachine{Id: "test", Name: "test", NodeId: "node", VCpus: 2, Memory: NewSize(1, SizeUnitG), Graphic: VirtualMachineGraphic{Type: GraphicTypeNone}, VideoModel: VideoModelNone}
 			disks := []VirtualMachineManagerCreatedVolumeParams{{Name: "one", Pool: "pool", Format: VolumeFormatRaw, Size: NewSize(1, SizeUnitG), DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio}, {Name: "two", Pool: "pool", Format: VolumeFormatRaw, Size: NewSize(1, SizeUnitG), DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio}}
 			err := manager.Create(vm, nil, disks, false)
 			var partial *ProvisioningError
@@ -84,7 +84,7 @@ func TestDuplicateCreateRejectedBeforeDiskMutation(t *testing.T) {
 	vms := &provisioningVMs{exists: true}
 	vols := &provisioningVolumes{failAt: -1}
 	manager := NewVirtualMachineManager(NewVirtualMachineService(vms), NewVolumeService(vols), failingEvent{}, nil, nil)
-	if err := manager.Create(&VirtualMachine{Id: "existing", NodeId: "node"}, nil, nil, false); !errors.Is(err, ErrConflict) {
+	if err := manager.Create(&VirtualMachine{Id: "existing", Name: "existing", NodeId: "node"}, nil, nil, false); !errors.Is(err, ErrConflict) {
 		t.Fatal(err)
 	}
 	if len(vols.created) != 0 || vms.saved {

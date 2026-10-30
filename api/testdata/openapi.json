@@ -254,6 +254,12 @@
             },
             "type": "array"
           },
+          "unavailable_hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "zones": {
             "items": {
               "$ref": "#/components/schemas/CatalogEntry"
@@ -262,6 +268,7 @@
           }
         },
         "required": [
+          "unavailable_hosts",
           "storage_availability",
           "id",
           "name",
@@ -477,6 +484,18 @@
         ],
         "type": "object"
       },
+      "ApiHostCloud": {
+        "additionalProperties": false,
+        "properties": {
+          "cloud": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cloud"
+        ],
+        "type": "object"
+      },
       "ApiImage": {
         "additionalProperties": false,
         "properties": {
@@ -684,6 +703,28 @@
         "required": [
           "username",
           "password"
+        ],
+        "type": "object"
+      },
+      "ApiMachineList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiVM"
+            },
+            "type": "array"
+          },
+          "unavailable_hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "unavailable_hosts"
         ],
         "type": "object"
       },
@@ -1188,6 +1229,9 @@
             "minimum": 0,
             "type": "integer"
           },
+          "name": {
+            "type": "string"
+          },
           "node": {
             "type": "string"
           },
@@ -1220,6 +1264,7 @@
           "memory_request_bytes",
           "node",
           "id",
+          "name",
           "arch",
           "state",
           "vcpus",
@@ -1666,9 +1711,6 @@
               "null"
             ]
           },
-          "id": {
-            "type": "string"
-          },
           "image": {
             "type": "string"
           },
@@ -1683,6 +1725,9 @@
               "array",
               "null"
             ]
+          },
+          "name": {
+            "type": "string"
           },
           "network": {
             "type": "string"
@@ -1713,7 +1758,7 @@
           }
         },
         "required": [
-          "id",
+          "name",
           "image",
           "instance_type",
           "zone",
@@ -2496,10 +2541,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ApiVM"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/ApiMachineList"
                 }
               }
             },
@@ -2730,7 +2772,7 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}": {
+    "/api/v1/clouds/{cloud}/machines/{vm}": {
       "delete": {
         "operationId": "delete-vm",
         "parameters": [
@@ -2751,14 +2793,6 @@
               "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
               "maxLength": 200,
               "minLength": 8,
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
               "type": "string"
             }
           },
@@ -2899,15 +2933,6 @@
           },
           {
             "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
-              "minLength": 1,
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
             "name": "vm",
             "required": true,
             "schema": {
@@ -3014,7 +3039,7 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/actions": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/actions": {
       "post": {
         "operationId": "vm-action",
         "parameters": [
@@ -3035,14 +3060,6 @@
               "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
               "maxLength": 200,
               "minLength": 8,
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
               "type": "string"
             }
           },
@@ -3170,7 +3187,7 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/adopt": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/adopt": {
       "post": {
         "operationId": "adopt-machine",
         "parameters": [
@@ -3189,14 +3206,6 @@
           {
             "in": "path",
             "name": "cloud",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
             "required": true,
             "schema": {
               "type": "string"
@@ -3316,21 +3325,13 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/consoles/{kind}/links": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/consoles/{kind}/links": {
       "post": {
         "operationId": "create-console-link",
         "parameters": [
           {
             "in": "path",
             "name": "cloud",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
             "required": true,
             "schema": {
               "type": "string"
@@ -3465,22 +3466,14 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/consoles/{kind}/ws": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/consoles/{kind}/ws": {
       "get": {
-        "description": "Console protocol v1\nNative clients: GET /api/v1/clouds/{cloud}/machines/{node}/{vm}/consoles/{serial|vnc}/ws\nSend Authorization: Bearer TOKEN on the WebSocket handshake over WSS.\nAccess-token expiry closes the stream; reconnect with a valid token.\nRevoking a personal token through the API closes its active streams.\nThe optional WebSocket subprotocol is binary. Each binary message carries raw\nserial bytes or VNC/RFB bytes; message boundaries are not protocol boundaries.\nMessages are limited to 1 MiB. Text messages close with code 1003. EOF or either\nside disconnecting closes both transports. A slow WebSocket writer is closed\nafter 15 seconds. Errors before upgrade use application/problem+json.\nSerial returns 409 when occupied; ?force=true explicitly takes over. VNC uses\nshared-client mode in the browser; the backend controls shared-client support.\nBrowser links use /console/{node}/{vm}/{kind}#TOKEN. The public page is an empty\nclient shell. TOKEN is sent only as a vmango.token.TOKEN WebSocket subprotocol,\nalongside binary; only binary is selected by the server. Never log that header.\nThe token authorizes only its bound console. It cannot access the API or UI.\nLinks are reusable until their absolute expiry; existing streams close then\n(code 1008 when deliverable). Reconnection does not extend the expiry.\nKey rotation rejects subsequent handshakes; it does not terminate active streams\nbefore their original expiry. Individual link revocation is not supported.\n",
+        "description": "Console protocol v1\nNative clients: GET /api/v1/clouds/{cloud}/machines/{vm}/consoles/{serial|vnc}/ws\nSend Authorization: Bearer TOKEN on the WebSocket handshake over WSS.\nAccess-token expiry closes the stream; reconnect with a valid token.\nRevoking a personal token through the API closes its active streams.\nThe optional WebSocket subprotocol is binary. Each binary message carries raw\nserial bytes or VNC/RFB bytes; message boundaries are not protocol boundaries.\nMessages are limited to 1 MiB. Text messages close with code 1003. EOF or either\nside disconnecting closes both transports. A slow WebSocket writer is closed\nafter 15 seconds. Errors before upgrade use application/problem+json.\nSerial returns 409 when occupied; ?force=true explicitly takes over. VNC uses\nshared-client mode in the browser; the backend controls shared-client support.\nBrowser links use /console/{cloud}/{vm}/{kind}#TOKEN. The public page is an empty\nclient shell. TOKEN is sent only as a vmango.token.TOKEN WebSocket subprotocol,\nalongside binary; only binary is selected by the server. Never log that header.\nThe token authorizes only its bound console. It cannot access the API or UI.\nLinks are reusable until their absolute expiry; existing streams close then\n(code 1008 when deliverable). Reconnection does not extend the expiry.\nKey rotation rejects subsequent handshakes; it does not terminate active streams\nbefore their original expiry. Individual link revocation is not supported.\n",
         "operationId": "connect-console",
         "parameters": [
           {
             "in": "path",
             "name": "cloud",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
             "required": true,
             "schema": {
               "type": "string"
@@ -3576,7 +3569,7 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/disks": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/disks": {
       "post": {
         "operationId": "create-machine-disk",
         "parameters": [
@@ -3595,14 +3588,6 @@
           {
             "in": "path",
             "name": "cloud",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
             "required": true,
             "schema": {
               "type": "string"
@@ -3732,7 +3717,7 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/disks/attach": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/disks/attach": {
       "post": {
         "operationId": "attach-disk",
         "parameters": [
@@ -3753,14 +3738,6 @@
               "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
               "maxLength": 200,
               "minLength": 8,
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
               "type": "string"
             }
           },
@@ -3888,7 +3865,7 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/disks/{volume}": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/disks/{volume}": {
       "delete": {
         "operationId": "detach-disk",
         "parameters": [
@@ -3909,14 +3886,6 @@
               "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
               "maxLength": 200,
               "minLength": 8,
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
               "type": "string"
             }
           },
@@ -4044,7 +4013,7 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/instance-type": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/instance-type": {
       "post": {
         "operationId": "change-instance-type",
         "parameters": [
@@ -4063,14 +4032,6 @@
           {
             "in": "path",
             "name": "cloud",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
             "required": true,
             "schema": {
               "type": "string"
@@ -4200,7 +4161,7 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/interfaces": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/interfaces": {
       "post": {
         "operationId": "attach-interface",
         "parameters": [
@@ -4221,14 +4182,6 @@
               "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
               "maxLength": 200,
               "minLength": 8,
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
               "type": "string"
             }
           },
@@ -4356,7 +4309,7 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/interfaces/{mac}": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/interfaces/{mac}": {
       "delete": {
         "operationId": "detach-interface",
         "parameters": [
@@ -4377,14 +4330,6 @@
               "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
               "maxLength": 200,
               "minLength": 8,
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
               "type": "string"
             }
           },
@@ -5813,6 +5758,117 @@
           }
         },
         "summary": "Discover logical storage classes and networks supported on a host",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{node}/cloud": {
+      "get": {
+        "operationId": "get-host-cloud",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiHostCloud"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Resolve a configured host's cloud without contacting the backend",
         "tags": [
           "hosts"
         ]

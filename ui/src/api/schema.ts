@@ -120,7 +120,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}": {
+    "/api/v1/clouds/{cloud}/machines/{vm}": {
         parameters: {
             query?: never;
             header?: never;
@@ -138,7 +138,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/actions": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/actions": {
         parameters: {
             query?: never;
             header?: never;
@@ -155,7 +155,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/adopt": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/adopt": {
         parameters: {
             query?: never;
             header?: never;
@@ -172,7 +172,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/consoles/{kind}/links": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/consoles/{kind}/links": {
         parameters: {
             query?: never;
             header?: never;
@@ -189,7 +189,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/consoles/{kind}/ws": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/consoles/{kind}/ws": {
         parameters: {
             query?: never;
             header?: never;
@@ -199,7 +199,7 @@ export interface paths {
         /**
          * Binary serial or VNC WebSocket; Bearer JWT on handshake
          * @description Console protocol v1
-         *     Native clients: GET /api/v1/clouds/{cloud}/machines/{node}/{vm}/consoles/{serial|vnc}/ws
+         *     Native clients: GET /api/v1/clouds/{cloud}/machines/{vm}/consoles/{serial|vnc}/ws
          *     Send Authorization: Bearer TOKEN on the WebSocket handshake over WSS.
          *     Access-token expiry closes the stream; reconnect with a valid token.
          *     Revoking a personal token through the API closes its active streams.
@@ -210,7 +210,7 @@ export interface paths {
          *     after 15 seconds. Errors before upgrade use application/problem+json.
          *     Serial returns 409 when occupied; ?force=true explicitly takes over. VNC uses
          *     shared-client mode in the browser; the backend controls shared-client support.
-         *     Browser links use /console/{node}/{vm}/{kind}#TOKEN. The public page is an empty
+         *     Browser links use /console/{cloud}/{vm}/{kind}#TOKEN. The public page is an empty
          *     client shell. TOKEN is sent only as a vmango.token.TOKEN WebSocket subprotocol,
          *     alongside binary; only binary is selected by the server. Never log that header.
          *     The token authorizes only its bound console. It cannot access the API or UI.
@@ -228,7 +228,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/disks": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/disks": {
         parameters: {
             query?: never;
             header?: never;
@@ -245,7 +245,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/disks/attach": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/disks/attach": {
         parameters: {
             query?: never;
             header?: never;
@@ -262,7 +262,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/disks/{volume}": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/disks/{volume}": {
         parameters: {
             query?: never;
             header?: never;
@@ -279,7 +279,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/instance-type": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/instance-type": {
         parameters: {
             query?: never;
             header?: never;
@@ -296,7 +296,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/interfaces": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/interfaces": {
         parameters: {
             query?: never;
             header?: never;
@@ -313,7 +313,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clouds/{cloud}/machines/{node}/{vm}/interfaces/{mac}": {
+    "/api/v1/clouds/{cloud}/machines/{vm}/interfaces/{mac}": {
         parameters: {
             query?: never;
             header?: never;
@@ -460,6 +460,23 @@ export interface paths {
         };
         /** Discover logical storage classes and networks supported on a host */
         get: operations["get-host-catalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hosts/{node}/cloud": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve a configured host's cloud without contacting the backend */
+        get: operations["get-host-cloud"];
         put?: never;
         post?: never;
         delete?: never;
@@ -741,6 +758,7 @@ export interface components {
             placement: components["schemas"]["ApiPlacementCapabilities"];
             storage_availability: components["schemas"]["StorageAvailability"][];
             storage_classes: components["schemas"]["CatalogEntry"][];
+            unavailable_hosts: string[];
             zones: components["schemas"]["CatalogEntry"][];
         };
         ApiCloudImage: {
@@ -805,6 +823,9 @@ export interface components {
             storage_classes: components["schemas"]["CatalogEntry"][];
             zone: string;
         };
+        ApiHostCloud: {
+            cloud: string;
+        };
         ApiImage: {
             arch: string;
             defaults: components["schemas"]["ApiImageDefaults"];
@@ -856,6 +877,10 @@ export interface components {
         ApiLoginInputBody: {
             password: string;
             username: string;
+        };
+        ApiMachineList: {
+            items: components["schemas"]["ApiVM"][];
+            unavailable_hosts: string[];
         };
         ApiMe: {
             email: string;
@@ -1015,6 +1040,7 @@ export interface components {
             memory_bytes: number;
             /** Format: int64 */
             memory_request_bytes: number;
+            name: string;
             node: string;
             /** @enum {string} */
             state: "unknown" | "stopped" | "running";
@@ -1139,10 +1165,10 @@ export interface components {
         };
         MachineCreateSpec: {
             existing_disks?: components["schemas"]["LocalDiskRef"][] | null;
-            id: string;
             image: string;
             instance_type: string;
             keys?: string[] | null;
+            name: string;
             network: string;
             new_disks?: components["schemas"]["DataDiskSpec"][] | null;
             placement?: components["schemas"]["Placement"];
@@ -1587,7 +1613,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiVM"][];
+                    "application/json": components["schemas"]["ApiMachineList"];
                 };
             };
             /** @description Bad Request */
@@ -1772,7 +1798,6 @@ export interface operations {
             header?: never;
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
             };
             cookie?: never;
@@ -1874,7 +1899,6 @@ export interface operations {
             };
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
             };
             cookie?: never;
@@ -1974,7 +1998,6 @@ export interface operations {
             };
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
             };
             cookie?: never;
@@ -2078,7 +2101,6 @@ export interface operations {
             };
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
             };
             cookie?: never;
@@ -2175,7 +2197,6 @@ export interface operations {
             header?: never;
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
                 kind: "serial" | "vnc";
             };
@@ -2278,7 +2299,6 @@ export interface operations {
             header?: never;
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
                 kind: "serial" | "vnc";
             };
@@ -2349,7 +2369,6 @@ export interface operations {
             };
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
             };
             cookie?: never;
@@ -2453,7 +2472,6 @@ export interface operations {
             };
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
             };
             cookie?: never;
@@ -2557,7 +2575,6 @@ export interface operations {
             };
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
                 /** @description Volume ID, not the guest device name. */
                 volume: string;
@@ -2659,7 +2676,6 @@ export interface operations {
             };
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
             };
             cookie?: never;
@@ -2763,7 +2779,6 @@ export interface operations {
             };
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
             };
             cookie?: never;
@@ -2867,7 +2882,6 @@ export interface operations {
             };
             path: {
                 cloud: string;
-                node: string;
                 vm: string;
                 mac: string;
             };
@@ -3864,6 +3878,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiHostChoices"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "get-host-cloud": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiHostCloud"];
                 };
             };
             /** @description Bad Request */

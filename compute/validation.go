@@ -11,7 +11,7 @@ var resourceName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
 func ValidateVM(vm *VirtualMachine) error {
 	if vm.Id == "" || vm.NodeId == "" || vm.VCpus < 1 || vm.VCpus > 65535 {
-		return fmt.Errorf("%w: VM name, node and 1..65535 vCPUs are required", ErrInvalid)
+		return fmt.Errorf("%w: VM ID, node and 1..65535 vCPUs are required", ErrInvalid)
 	}
 	b, err := sizeBytes(vm.Memory)
 	if err != nil || b == 0 {

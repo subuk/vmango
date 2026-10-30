@@ -212,7 +212,7 @@ func submitCloud(t *testing.T, s *tasks.Service, key, kind string, c compute.Inf
 	return task
 }
 func createSpec(name string) *compute.MachineCreateSpec {
-	return &compute.MachineCreateSpec{ID: name, Image: "image", InstanceType: "small", Zone: "z", Network: "lan", StorageClass: "fast", Placement: compute.Placement{Required: map[string]string{"rack": "one"}}}
+	return &compute.MachineCreateSpec{Name: name, Image: "image", InstanceType: "small", Zone: "z", Network: "lan", StorageClass: "fast", Placement: compute.Placement{Required: map[string]string{"rack": "one"}}}
 }
 func TestConcurrentCloudAdmissionUsesFreshInventory(t *testing.T) {
 	s, backend, volumes, _ := cloudFixture(t, 2)
@@ -232,23 +232,23 @@ func TestConcurrentCloudAdmissionUsesFreshInventory(t *testing.T) {
 		t.Fatalf("capacity used twice: machines=%d disks=%d inventory=%v", len(backend.machines), volumes.created, backend.inventory)
 	}
 }
-func TestCloudInventoryFailurePreventsProvisioning(t *testing.T) {
+func TestCloudInventoryFailureDoesNotBlockHealthyHost(t *testing.T) {
 	s, backend, volumes, _ := cloudFixture(t, 4)
 	backend.failHost = "b"
 	task := submitCloud(t, s, "failed-inventory", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: createSpec("one")})
 	runCloudService(t, s)
 	result := awaitCloudTask(t, s, task.ID)
-	if result.State != tasks.Failed || result.OutcomeUncertain || backend.mutations != 0 || volumes.created != 0 {
-		t.Fatalf("failed inventory mutated backend: %+v", result)
+	if result.State != tasks.Succeeded || result.OutcomeUncertain || backend.mutations != 1 || volumes.created != 1 {
+		t.Fatalf("healthy host was not used: %+v", result)
 	}
 }
 func TestTypeChangeStaysOnHostAndPreservesDisks(t *testing.T) {
 	for _, sufficient := range []bool{true, false} {
 		t.Run(fmt.Sprint(sufficient), func(t *testing.T) {
 			s, backend, _, _ := cloudFixture(t, 2)
-			backend.machines["a/v"] = compute.VirtualMachine{Id: "v", NodeId: "a", Arch: compute.ArchAmd64, VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), State: compute.StateStopped, GuestAgent: true, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc, Listen: "127.0.0.9"}, VideoModel: compute.VideoModelQxl, Volumes: []*compute.VirtualMachineAttachedVolume{{Path: "/existing"}}, Metadata: &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 1, MemoryRequestBytes: 1 << 30}}
+			backend.machines["a/v"] = compute.VirtualMachine{Id: "v", Name: "v", NodeId: "a", Arch: compute.ArchAmd64, VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), State: compute.StateStopped, GuestAgent: true, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc, Listen: "127.0.0.9"}, VideoModel: compute.VideoModelQxl, Volumes: []*compute.VirtualMachineAttachedVolume{{Path: "/existing"}}, Metadata: &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 1, MemoryRequestBytes: 1 << 30}}
 			if !sufficient {
-				backend.machines["a/other"] = compute.VirtualMachine{Id: "other", NodeId: "a", VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG)}
+				backend.machines["a/other"] = compute.VirtualMachine{Id: "other", Name: "other", NodeId: "a", VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG)}
 			}
 			task := submitCloud(t, s, "change-instance-type", "machine.change-type", compute.InfrastructureCommand{CloudID: "c", Node: "a", VM: "v", InstanceType: "small"})
 			runCloudService(t, s)
@@ -266,7 +266,7 @@ func TestTypeChangeStaysOnHostAndPreservesDisks(t *testing.T) {
 }
 func TestAdoptionDoesNotClaimDisksOrChangeMachine(t *testing.T) {
 	s, backend, volumes, _ := cloudFixture(t, 4)
-	backend.machines["a/external"] = compute.VirtualMachine{Id: "external", NodeId: "a", VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), State: compute.StateRunning, Autostart: true, GuestAgent: true, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc, Listen: "::1"}, VideoModel: compute.VideoModelCirrus, Volumes: []*compute.VirtualMachineAttachedVolume{{Path: "/external-disk"}}}
+	backend.machines["a/external"] = compute.VirtualMachine{Id: "external", Name: "external", NodeId: "a", VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), State: compute.StateRunning, Autostart: true, GuestAgent: true, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc, Listen: "::1"}, VideoModel: compute.VideoModelCirrus, Volumes: []*compute.VirtualMachineAttachedVolume{{Path: "/external-disk"}}}
 	if _, err := s.Submit(tasks.Identity{ID: "admin"}, "delete-before-adoption", compute.NewCommand("machine.delete", compute.InfrastructureCommand{Node: "a", VM: "external"})); err == nil {
 		t.Fatal("unmanaged deletion accepted")
 	}
@@ -303,7 +303,7 @@ func TestLocalDiskConstraintsOverridePreferencesAndRejectConflicts(t *testing.T)
 					t.Fatalf("conflict provisioned resources: %+v", result)
 				}
 			} else {
-				vm, err := backend.Get("local", "a")
+				vm, err := backend.Get(taskMachineID(t, result), "a")
 				if result.State != tasks.Succeeded || err != nil || vm.Volumes[0].Path != "/existing" {
 					t.Fatalf("locality ignored: %+v %v", result, err)
 				}
@@ -314,7 +314,7 @@ func TestLocalDiskConstraintsOverridePreferencesAndRejectConflicts(t *testing.T)
 
 func TestTypeChangeDoesNotSilentlyRewriteExplicitPinning(t *testing.T) {
 	s, backend, _, _ := cloudFixture(t, 8)
-	backend.machines["a/pinned"] = compute.VirtualMachine{Id: "pinned", NodeId: "a", Arch: compute.ArchAmd64, VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), State: compute.StateStopped, Cpupin: &compute.VirtualMachineCpuPin{Vcpus: map[uint][]uint{0: {0}}}, Metadata: &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 1, MemoryRequestBytes: 1 << 30}}
+	backend.machines["a/pinned"] = compute.VirtualMachine{Id: "pinned", Name: "pinned", NodeId: "a", Arch: compute.ArchAmd64, VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), State: compute.StateStopped, Cpupin: &compute.VirtualMachineCpuPin{Vcpus: map[uint][]uint{0: {0}}}, Metadata: &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 1, MemoryRequestBytes: 1 << 30}}
 	task := submitCloud(t, s, "change-pinned-machine", "machine.change-type", compute.InfrastructureCommand{CloudID: "c", Node: "a", VM: "pinned", InstanceType: "small"})
 	runCloudService(t, s)
 	result := awaitCloudTask(t, s, task.ID)
@@ -366,8 +366,10 @@ func TestCloudProvisioningDoesNotBlockIndependentPower(t *testing.T) {
 				t.Fatal("competing admission ran during clone", got)
 			}
 			checkProtected := func() {
+				current, _ := s.Get(create.ID)
+				id := taskMachineID(t, current)
 				for _, command := range []tasks.Command{
-					compute.NewCommand("machine.start", compute.InfrastructureCommand{CloudID: "c", Node: "a", VM: "one"}),
+					compute.NewCommand("machine.start", compute.InfrastructureCommand{CloudID: "c", Node: "a", VM: id}),
 					compute.NewCommand("volume.resize", compute.InfrastructureCommand{CloudID: "c", Node: "a", Path: "/pool/one_root", Size: compute.NewSize(3, compute.SizeUnitG)}),
 				} {
 					if _, err := s.Submit(tasks.Identity{ID: "admin"}, "protected-resource", command); !isTaskConflict(err) {
@@ -421,7 +423,7 @@ func TestCloudCreatePinsPolicyAndSelectedHostBinding(t *testing.T) {
 	cloud.InstanceTypes[0].Autostart = false
 	runCloudService(t, s)
 	result := awaitCloudTask(t, s, task.ID)
-	vm, err := backend.Get("pinned", "a")
+	vm, err := backend.Get(taskMachineID(t, result), "a")
 	if err != nil || result.State != tasks.Succeeded {
 		t.Fatalf("creation failed: %+v %v", result, err)
 	}
@@ -432,7 +434,7 @@ func TestCloudCreatePinsPolicyAndSelectedHostBinding(t *testing.T) {
 
 func TestTypeChangePinsAutostartAndDoesNotRewriteOnCatalogEdit(t *testing.T) {
 	s, backend, _, cloud := cloudFixture(t, 4)
-	backend.machines["a/v"] = compute.VirtualMachine{Id: "v", NodeId: "a", Arch: compute.ArchAmd64, State: compute.StateStopped, VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), Metadata: &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 1, MemoryRequestBytes: 1 << 30}, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
+	backend.machines["a/v"] = compute.VirtualMachine{Id: "v", Name: "v", NodeId: "a", Arch: compute.ArchAmd64, State: compute.StateStopped, VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), Metadata: &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 1, MemoryRequestBytes: 1 << 30}, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
 	task := submitCloud(t, s, "accepted-type-policy", "machine.change-type", compute.InfrastructureCommand{CloudID: "c", Node: "a", VM: "v", InstanceType: "small"})
 	cloud.InstanceTypes[0].Autostart = false
 	before, _ := backend.Get("v", "a")
@@ -468,10 +470,11 @@ func TestCreateStartIsIndependentOfAutostart(t *testing.T) {
 	spec.Start = true
 	task := submitCloud(t, s, "one-time-start", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: spec})
 	runCloudService(t, s)
-	if result := awaitCloudTask(t, s, task.ID); result.State != tasks.Succeeded {
+	result := awaitCloudTask(t, s, task.ID)
+	if result.State != tasks.Succeeded {
 		t.Fatal(result)
 	}
-	vm, _ := backend.Get("start-once", "a")
+	vm, _ := backend.Get(taskMachineID(t, result), "a")
 	if vm.Autostart || vm.State != compute.StateRunning || backend.starts != 1 {
 		t.Fatalf("one-time start replaced persistent policy: %+v", vm)
 	}
@@ -496,5 +499,38 @@ func TestUnsupportedDisplayIsNotOfferedOrProvisioned(t *testing.T) {
 	runCloudService(t, s)
 	if result := awaitCloudTask(t, s, task.ID); result.State != tasks.Failed || result.OutcomeUncertain || volumes.created != 0 || backend.mutations != 0 {
 		t.Fatalf("unsupported display caused side effects: %+v", result)
+	}
+}
+
+func taskMachineID(t *testing.T, task tasks.Task) string {
+	t.Helper()
+	for _, ref := range task.Resources {
+		if ref.Kind == "machine" {
+			return ref.ID
+		}
+	}
+	t.Fatal("task has no machine identity")
+	return ""
+}
+
+func TestCloudCreationNamesAreHostLocal(t *testing.T) {
+	s, backend, volumes, _ := cloudFixture(t, 8)
+	backend.machines["a/existing"] = compute.VirtualMachine{Id: "existing", Name: "same", NodeId: "a", VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG)}
+	spec := createSpec("same")
+	spec.Placement.Required["rack"] = "two"
+	first := submitCloud(t, s, "same-name-other-host", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: spec})
+	runCloudService(t, s)
+	created := awaitCloudTask(t, s, first.ID)
+	if created.State != tasks.Succeeded {
+		t.Fatalf("cloud-wide name constraint remains: %+v", created)
+	}
+	vm, err := backend.Get(taskMachineID(t, created), "b")
+	if err != nil || vm.Id == "same" || vm.Name != "same" {
+		t.Fatalf("name and identity conflated: %+v %v", vm, err)
+	}
+	second := submitCloud(t, s, "same-name-same-host", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: spec})
+	rejected := awaitCloudTask(t, s, second.ID)
+	if rejected.State != tasks.Failed || rejected.OutcomeUncertain || volumes.created != 1 {
+		t.Fatalf("host-local collision provisioned resources: %+v", rejected)
 	}
 }

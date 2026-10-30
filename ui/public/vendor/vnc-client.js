@@ -8,10 +8,10 @@ window.addEventListener('message', async (event) => {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
   if (started) return;
-  if (typeof data.node !== 'string' || typeof data.vm !== 'string' || typeof data.token !== 'string' || !data.token || data.token.length > 8192) return;
+  if (typeof data.cloud !== 'string' || typeof data.vm !== 'string' || typeof data.token !== 'string' || !data.token || data.token.length > 8192) return;
   started = true;
   // No query, fragment, localStorage setting or parent-provided URL chooses a host.
-  const path = '/console/' + encodeURIComponent(data.node) + '/' + encodeURIComponent(data.vm) + '/vnc/ws';
+  const path = '/console/' + encodeURIComponent(data.cloud) + '/' + encodeURIComponent(data.vm) + '/vnc/ws';
   UI.vmangoProtocols = ['binary', 'vmango.token.' + data.token];
   await UI.start({ settings: { mandatory: { host: '', port: '', path, encrypt: location.protocol === 'https:', password: '', repeaterID: '', shared: true, autoconnect: true }, defaults: { resize: 'scale' } } });
 });

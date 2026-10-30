@@ -3,6 +3,7 @@ package compute
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -14,8 +15,8 @@ func testInventory() HostInventory {
 }
 func TestSchedulingAccountsInactiveLegacyAndAppliedRequests(t *testing.T) {
 	i := testInventory()
-	legacy := &VirtualMachine{Id: "legacy", VCpus: 4, Memory: NewSize(4, SizeUnitG), State: StateStopped}
-	managed := &VirtualMachine{Id: "managed", VCpus: 4, Memory: NewSize(4, SizeUnitG), Metadata: &MachineMetadata{CPURequest: 1, MemoryRequestBytes: 4 << 30}}
+	legacy := &VirtualMachine{Id: "legacy", Name: "legacy", VCpus: 4, Memory: NewSize(4, SizeUnitG), State: StateStopped}
+	managed := &VirtualMachine{Id: "managed", Name: "managed", VCpus: 4, Memory: NewSize(4, SizeUnitG), Metadata: &MachineMetadata{CPURequest: 1, MemoryRequestBytes: 4 << 30}}
 	i.Machines = []*VirtualMachine{legacy, managed}
 	fit, err := Fit(i, testType(), "")
 	if err != nil || fit.FreeCPU != 0 || fit.FreeMemory != 5<<30 {
@@ -77,12 +78,15 @@ func TestInstanceTypeRejectsMemoryOverselling(t *testing.T) {
 }
 
 type inventoryNodes struct {
+	mu sync.Mutex
 	NodeRepository
 	reads []string
 	fail  string
 }
 
 func (r *inventoryNodes) Get(node string, _ NodeGetOptions) (*Node, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.reads = append(r.reads, node)
 	if node == r.fail {
 		return nil, fmt.Errorf("connection lost")
@@ -91,12 +95,15 @@ func (r *inventoryNodes) Get(node string, _ NodeGetOptions) (*Node, error) {
 }
 
 type inventoryVMs struct {
+	mu sync.Mutex
 	VirtualMachineRepository
 	strict []bool
 	nodes  []string
 }
 
 func (r *inventoryVMs) List(o VirtualMachineListOptions) ([]*VirtualMachine, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.strict = append(r.strict, o.Strict)
 	r.nodes = append(r.nodes, o.NodeIds...)
 	return []*VirtualMachine{{Id: "inactive", State: StateStopped, VCpus: 2, Memory: NewSize(2, SizeUnitG)}}, nil
@@ -113,7 +120,7 @@ func (r inventoryPools) List(VolumePoolListOptions) ([]*VolumePool, error) {
 	}
 	return []*VolumePool{{Name: "pool", Free: NewSize(100, SizeUnitG)}}, nil
 }
-func TestCloudInventoryReadsEveryZoneAndFailsClosed(t *testing.T) {
+func TestCloudInventoryExcludesFailedHostsEntirely(t *testing.T) {
 	c := Cloud{Hosts: []CloudHost{{Node: "one", Zone: "z1"}, {Node: "two", Zone: "z2"}}}
 	nodes := &inventoryNodes{}
 	vms := &inventoryVMs{}
@@ -123,7 +130,7 @@ func TestCloudInventoryReadsEveryZoneAndFailsClosed(t *testing.T) {
 		t.Fatalf("incomplete inventory: %+v %v", result, err)
 	}
 	nodes.fail = "two"
-	if inv, err := s.Inventory(c); err == nil || inv != nil {
+	if inv, err := s.Inventory(c); err != nil || len(inv) != 1 || inv[0].Host.Node != "one" || len(inv[0].Machines) == 0 {
 		t.Fatal("failed host treated as empty")
 	}
 	nodes.fail = ""
@@ -182,7 +189,7 @@ func TestMissingRetrievableImageCanBePlacedAndSharesStorageBudget(t *testing.T) 
 	i.Host = host
 	i.Node.CpuArch = ArchAmd64
 	i.Pools = []*VolumePool{{Name: "pool", Free: NewSize(100, SizeUnitG)}}
-	spec := MachineCreateSpec{ID: "new", Image: "image", InstanceType: "small", Zone: "z", Network: "lan", StorageClass: "fast"}
+	spec := MachineCreateSpec{Name: "new", Image: "image", InstanceType: "small", Zone: "z", Network: "lan", StorageClass: "fast"}
 	command, err := s.ResolveCreate(cloud, spec, images, []HostInventory{i})
 	if err != nil || command.Node != "a" || len(volumes.created) != 0 {
 		t.Fatalf("missing downloadable image rejected or provisioned early: %+v %v", command, err)

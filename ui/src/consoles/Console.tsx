@@ -22,8 +22,8 @@ import { useAppearance } from "../app/theme";
 
 type LinkResponse = { url: string; expires_at: string };
 export function Console({ standalone = false }: { standalone?: boolean }) {
-    const { node = "", id = "", kind: pathKind } = useParams();
-    const vm = useMachine(node, id, !standalone, false);
+    const { cloud = "", id = "", kind: pathKind } = useParams();
+    const vm = useMachine(cloud, id, !standalone, false);
     const [kind, setKind] = useState(
         pathKind || (location.pathname.endsWith("/vnc/") ? "vnc" : "serial"),
     );
@@ -49,7 +49,7 @@ export function Console({ standalone = false }: { standalone?: boolean }) {
         try {
             setLink(
                 await request<LinkResponse>(
-                    `${vmPath(node, id, vm.data!.cloud)}/consoles/${currentKind}/links`,
+                    `${vmPath(cloud, id)}/consoles/${currentKind}/links`,
                     "POST",
                     { force },
                 ),
@@ -78,11 +78,11 @@ export function Console({ standalone = false }: { standalone?: boolean }) {
                         Vmango
                     </Typography>
                     <Typography component="span" sx={{ ml: 2 }}>
-                        {node}/{id}
+                        {cloud}/{id}
                     </Typography>
                 </Box>
                 {!standalone && (
-                    <Link component={RouterLink} to={machineURL(node, id)}>
+                    <Link component={RouterLink} to={machineURL(cloud, id)}>
                         Back to machine
                     </Link>
                 )}
@@ -162,14 +162,14 @@ export function Console({ standalone = false }: { standalone?: boolean }) {
                 currentKind === "vnc" ? (
                     <VNC
                         key={`${credential}/${attempt}`}
-                        node={node}
+                        cloud={cloud}
                         id={id}
                         token={credential}
                     />
                 ) : (
                     <Serial
                         key={`${credential}/${attempt}`}
-                        node={node}
+                        cloud={cloud}
                         id={id}
                         token={credential}
                     />
@@ -186,7 +186,7 @@ export function Console({ standalone = false }: { standalone?: boolean }) {
                     onClose={() => setTakeover(false)}
                     run={() => issue(true)}
                 >
-                    Disconnect any existing serial client for {node}/{id}. The
+                    Disconnect any existing serial client for {cloud}/{id}. The
                     issued link will permit takeover on every connection until
                     it expires.
                 </Confirm>
@@ -195,12 +195,20 @@ export function Console({ standalone = false }: { standalone?: boolean }) {
     );
 }
 
-function VNC({ node, id, token }: { node: string; id: string; token: string }) {
+function VNC({
+    cloud,
+    id,
+    token,
+}: {
+    cloud: string;
+    id: string;
+    token: string;
+}) {
     const frame = useRef<HTMLIFrameElement>(null);
     const { mode } = useAppearance();
     const send = () =>
         frame.current?.contentWindow?.postMessage(
-            { type: "vmango-console", node, vm: id, token, theme: mode },
+            { type: "vmango-console", cloud, vm: id, token, theme: mode },
             location.origin,
         );
     useEffect(() => {
@@ -215,12 +223,12 @@ function VNC({ node, id, token }: { node: string; id: string; token: string }) {
         };
         window.addEventListener("message", ready);
         return () => window.removeEventListener("message", ready);
-    }, [mode, node, id, token]);
+    }, [mode, cloud, id, token]);
     return (
         <iframe
             ref={frame}
             src="/vendor/novnc.html"
-            title={`VNC console for ${node}/${id}`}
+            title={`VNC console for ${cloud}/${id}`}
             onLoad={send}
             allow="fullscreen; clipboard-read; clipboard-write"
             className="vnc-frame"
@@ -229,11 +237,11 @@ function VNC({ node, id, token }: { node: string; id: string; token: string }) {
 }
 
 function Serial({
-    node,
+    cloud,
     id,
     token,
 }: {
-    node: string;
+    cloud: string;
     id: string;
     token: string;
 }) {
@@ -256,7 +264,7 @@ function Serial({
         fit.fit();
         term.current = terminal;
         const endpoint = new URL(
-            `/console/${encodeURIComponent(node)}/${encodeURIComponent(id)}/serial/ws`,
+            `/console/${encodeURIComponent(cloud)}/${encodeURIComponent(id)}/serial/ws`,
             location.origin,
         );
         endpoint.protocol = location.protocol === "https:" ? "wss:" : "ws:";
@@ -295,7 +303,7 @@ function Serial({
             data.dispose();
             terminal.dispose();
         };
-    }, [node, id, token]);
+    }, [cloud, id, token]);
     useEffect(() => {
         if (term.current) term.current.options.theme = terminalTheme(mode);
     }, [mode]);

@@ -12,12 +12,12 @@ export type Token = components["schemas"]["TokenMetadata"];
 export type Disk = components["schemas"]["ApiDisk"];
 export type Interface = components["schemas"]["ApiInterface"];
 export const esc = encodeURIComponent;
-export const vmPath = (node: string, id: string, cloud: string) =>
-    `/api/v1/clouds/${esc(cloud)}/machines/${esc(node)}/${esc(id)}`;
+export const vmPath = (cloud: string, id: string) =>
+    `/api/v1/clouds/${esc(cloud)}/machines/${esc(id)}`;
 export const volumePath = (node: string, id: string, cloud: string) =>
     `/api/v1/clouds/${esc(cloud)}/volumes/${esc(node)}/${esc(id)}`;
-export const machineURL = (node: string, id: string) =>
-    `/machines/${esc(node)}/${esc(id)}/`;
+export const machineURL = (cloud: string, id: string) =>
+    `/machines/${esc(cloud)}/${esc(id)}/`;
 export function useResource<T>(path: string, enabled = true, poll = true) {
     return useQuery({
         queryKey: [path],
@@ -30,25 +30,27 @@ export function useNodes(enabled = true) {
     return useResource<Node[]>("/api/v1/hosts", enabled);
 }
 export function useMachine(
-    node: string,
+    cloud: string,
     id: string,
     enabled = true,
     poll = true,
 ) {
     return useQuery<VM>({
-        queryKey: ["machine", node, id],
+        queryKey: ["machine", cloud, id],
         enabled,
-        queryFn: async () => {
-            const host = await request<{ cloud: string }>(
-                `/api/v1/hosts/${esc(node)}/catalog`,
-            );
-            return request<VM>(vmPath(node, id, host.cloud));
-        },
+        queryFn: () => request<VM>(vmPath(cloud, id)),
         refetchInterval: poll ? 15000 : false,
     });
 }
+export function useHostCloud(node: string, enabled = true) {
+    return useResource<{ cloud: string }>(
+        `/api/v1/hosts/${esc(node)}/cloud`,
+        enabled,
+        false,
+    );
+}
 export function useMachines(cloud?: string) {
-    return useResource<VM[]>(
+    return useResource<components["schemas"]["ApiMachineList"]>(
         `/api/v1/clouds/${esc(cloud || "")}/machines`,
         !!cloud,
     );

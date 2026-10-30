@@ -19,6 +19,7 @@ type apiPlacementCapabilities struct {
 	Operators  []string `json:"operators" nullable:"false"`
 }
 type apiCloud struct {
+	UnavailableHosts    []string                      `json:"unavailable_hosts" nullable:"false"`
 	StorageAvailability []compute.StorageAvailability `json:"storage_availability" nullable:"false"`
 	ID                  string                        `json:"id"`
 	Name                string                        `json:"name"`
@@ -30,6 +31,11 @@ type apiCloud struct {
 	Placement           apiPlacementCapabilities      `json:"placement"`
 	Offers              []compute.CloudOffer          `json:"offers" nullable:"false"`
 }
+type apiMachineList struct {
+	Items            []apiVM  `json:"items" nullable:"false"`
+	UnavailableHosts []string `json:"unavailable_hosts" nullable:"false"`
+}
+
 type apiCloudInput struct {
 	Cloud string `path:"cloud"`
 }
@@ -52,13 +58,11 @@ type apiCloudVolumeInput struct {
 type apiCloudMachineInput struct {
 	SubmissionInput
 	Cloud string `path:"cloud"`
-	Node  string `path:"node"`
 	VM    string `path:"vm"`
 }
 type apiChangeTypeInput struct {
 	SubmissionInput
 	Cloud string `path:"cloud"`
-	Node  string `path:"node"`
 	VM    string `path:"vm"`
 	Body  struct {
 		InstanceType string `json:"instance_type" minLength:"1"`
@@ -67,6 +71,10 @@ type apiChangeTypeInput struct {
 type apiHostChoicesInput struct {
 	Node string `path:"node"`
 }
+type apiHostCloud struct {
+	Cloud string `json:"cloud"`
+}
+
 type apiHostChoices struct {
 	Cloud          string                 `json:"cloud"`
 	Zone           string                 `json:"zone"`
@@ -83,13 +91,8 @@ func (e *Environ) cloudDTO(c compute.Cloud) (apiCloud, error) {
 		}
 		d.Images = append(d.Images, apiCloudImage{ID: i.ID, Name: i.Name, Arch: i.Arch.String(), MinimumMemoryBytes: i.MinimumMemoryBytes, MinimumDiskBytes: i.MinimumDiskBytes})
 	}
-	var err error
-	d.StorageAvailability, err = e.clouds.StorageAvailability(c)
-	if err != nil {
-		return d, err
-	}
-	d.Offers, err = e.clouds.Offers(c)
-	return d, err
+	d.Offers, d.StorageAvailability, d.UnavailableHosts = e.clouds.Discover(c)
+	return d, nil
 }
 func (e *Environ) registerClouds(api huma.API) {
 	registerAPI(api, "GET", "/clouds/{cloud}/volumes", "list-cloud-volumes", "List cloud volumes, optionally excluding attached disks and image sources", func(ctx context.Context, in *apiCloudVolumesInput) (*apiResult[[]apiVolume], error) {
@@ -137,7 +140,7 @@ func (e *Environ) registerClouds(api huma.API) {
 		d, err := e.cloudDTO(c)
 		return &apiResult[apiCloud]{Body: d}, apiError(err)
 	})
-	registerAPI(api, "GET", "/clouds/{cloud}/machines", "list-cloud-machines", "List managed and unmanaged machines in a cloud", func(ctx context.Context, in *apiCloudInput) (*apiResult[[]apiVM], error) {
+	registerAPI(api, "GET", "/clouds/{cloud}/machines", "list-cloud-machines", "List managed and unmanaged machines in a cloud", func(ctx context.Context, in *apiCloudInput) (*apiResult[apiMachineList], error) {
 		if e.clouds == nil {
 			return nil, apiError(compute.ErrNotFound)
 		}
@@ -145,19 +148,15 @@ func (e *Environ) registerClouds(api huma.API) {
 		if err != nil {
 			return nil, apiError(err)
 		}
-		nodes := []string{}
-		for _, h := range c.Hosts {
-			nodes = append(nodes, h.Node)
-		}
-		vms, err := e.vms.List(compute.VirtualMachineListOptions{NodeIds: nodes, Strict: true})
+		result, err := e.clouds.ListMachines(ctx, c.ID)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		out := []apiVM{}
-		for _, vm := range vms {
-			out = append(out, e.machineDTO(vm))
+		out := apiMachineList{Items: []apiVM{}, UnavailableHosts: result.UnavailableHosts}
+		for _, vm := range result.Machines {
+			out.Items = append(out.Items, e.machineDTO(vm))
 		}
-		return &apiResult[[]apiVM]{Body: out}, nil
+		return &apiResult[apiMachineList]{Body: out}, nil
 	})
 	registerAPI(api, "POST", "/clouds/{cloud}/machines", "create-cloud-machine", "Queue cloud inventory, automatic placement and machine provisioning", func(ctx context.Context, in *apiCloudCreateInput) (*apiAccepted, error) {
 		if e.clouds == nil {
@@ -178,22 +177,31 @@ func (e *Environ) registerClouds(api huma.API) {
 		}
 		return e.submitTask(ctx, in.IdempotencyKey, "volume.create", compute.InfrastructureCommand{CloudID: in.Cloud, VolumeSpec: &in.Body})
 	})
-	registerAPI(api, "POST", "/clouds/{cloud}/machines/{node}/{vm}/adopt", "adopt-machine", "Explicitly adopt a machine without claiming its existing disks", func(ctx context.Context, in *apiCloudMachineInput) (*apiAccepted, error) {
-		return e.submitTask(ctx, in.IdempotencyKey, "machine.adopt", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, VM: in.VM})
+	registerAPI(api, "POST", "/clouds/{cloud}/machines/{vm}/adopt", "adopt-machine", "Explicitly adopt a machine without claiming its existing disks", func(ctx context.Context, in *apiCloudMachineInput) (*apiAccepted, error) {
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.adopt", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM})
 	})
-	registerAPI(api, "POST", "/clouds/{cloud}/machines/{node}/{vm}/instance-type", "change-instance-type", "Change a stopped machine's instance type on its current host", func(ctx context.Context, in *apiChangeTypeInput) (*apiAccepted, error) {
-		return e.submitTask(ctx, in.IdempotencyKey, "machine.change-type", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, VM: in.VM, InstanceType: in.Body.InstanceType})
+	registerAPI(api, "POST", "/clouds/{cloud}/machines/{vm}/instance-type", "change-instance-type", "Change a stopped machine's instance type on its current host", func(ctx context.Context, in *apiChangeTypeInput) (*apiAccepted, error) {
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.change-type", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, InstanceType: in.Body.InstanceType})
 	})
 
+	registerAPI(api, "GET", "/hosts/{node}/cloud", "get-host-cloud", "Resolve a configured host's cloud without contacting the backend", func(ctx context.Context, in *apiHostChoicesInput) (*apiResult[apiHostCloud], error) {
+		if e.clouds == nil {
+			return nil, apiError(compute.ErrNotFound)
+		}
+		c, _, err := e.clouds.ForNode(in.Node)
+		if err != nil {
+			return nil, apiError(compute.ErrNotFound)
+		}
+		return &apiResult[apiHostCloud]{Body: apiHostCloud{Cloud: c.ID}}, nil
+	})
 	type createDiskInput struct {
 		SubmissionInput
 		Cloud string `path:"cloud"`
-		Node  string `path:"node"`
 		VM    string `path:"vm"`
 		Body  compute.DataDiskSpec
 	}
-	registerAPI(api, "POST", "/clouds/{cloud}/machines/{node}/{vm}/disks", "create-machine-disk", "Create and attach a local disk through a storage class", func(ctx context.Context, in *createDiskInput) (*apiAccepted, error) {
-		return e.submitTask(ctx, in.IdempotencyKey, "machine.create-disk", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, VM: in.VM, NewDisk: &in.Body})
+	registerAPI(api, "POST", "/clouds/{cloud}/machines/{vm}/disks", "create-machine-disk", "Create and attach a local disk through a storage class", func(ctx context.Context, in *createDiskInput) (*apiAccepted, error) {
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.create-disk", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, NewDisk: &in.Body})
 	})
 	registerAPI(api, "GET", "/hosts/{node}/catalog", "get-host-catalog", "Discover logical storage classes and networks supported on a host", func(ctx context.Context, in *apiHostChoicesInput) (*apiResult[apiHostChoices], error) {
 		if e.clouds == nil {

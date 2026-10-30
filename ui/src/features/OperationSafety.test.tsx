@@ -23,6 +23,9 @@ vi.mock("../api/client", async (original) => ({
 vi.mock("../api/hooks", async (original) => ({
     ...(await original<typeof import("../api/hooks")>()),
     useResource: () => ({ data: { graphics: "vnc" } }),
+    useMachine: () => ({
+        data: { graphics: "vnc", cloud: "local", name: "example" },
+    }),
 }));
 vi.mock("../api/tasks", async (original) => ({
     ...(await original<typeof import("../api/tasks")>()),
@@ -36,9 +39,9 @@ afterEach(() => {
     cleanup();
     request.mockClear();
 });
-function show(element: React.ReactNode, path = "/machines/node-a/example/") {
+function show(element: React.ReactNode, path = "/machines/local/example/") {
     const router = createMemoryRouter(
-        [{ path: "/machines/:node/:id/*", element }],
+        [{ path: "/machines/:cloud/:id/*", element }],
         { initialEntries: [path] },
     );
     render(
@@ -55,6 +58,7 @@ it.each([false, true])(
                 vm={
                     {
                         id: "example",
+                        name: "example",
                         node: "node-a",
                         cloud: "local",
                         state: "stopped",
@@ -86,14 +90,14 @@ it.each([false, true])(
         );
         await waitFor(() =>
             expect(request).toHaveBeenCalledWith(
-                `/api/v1/clouds/local/machines/node-a/example?delete_volumes=${deleteDisks}`,
+                `/api/v1/clouds/local/machines/example?delete_volumes=${deleteDisks}`,
                 "DELETE",
             ),
         );
     },
 );
 it("requires explicit serial takeover and permits cancelling without issuing a link", async () => {
-    show(<Console />, "/machines/node-a/example/console/");
+    show(<Console />, "/machines/local/example/console/");
     await userEvent.click(
         screen.getByRole("button", { name: "Force takeover…" }),
     );
@@ -104,7 +108,7 @@ it("requires explicit serial takeover and permits cancelling without issuing a l
     ).toBeTruthy();
     expect(
         screen.getByText(
-            /Disconnect any existing serial client for node-a\/example/,
+            /Disconnect any existing serial client for local\/example/,
         ),
     ).toBeTruthy();
     expect(

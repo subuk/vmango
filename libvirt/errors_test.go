@@ -73,7 +73,7 @@ func TestLibvirtCauseSurvivesServiceProvisioningAndDurableTaskHistory(t *testing
 	manager := compute.NewVirtualMachineManager(vms, nil, diagnosticEvents{}, nil, nil)
 	handler := &compute.CommandHandler{Manager: manager, VMs: vms}
 	service := tasks.New(repo, handler, zerolog.Nop())
-	vm := &compute.VirtualMachine{Id: "v", NodeId: "n", Arch: compute.ArchAmd64, VCpus: 2, Memory: compute.NewSize(1, compute.SizeUnitG), Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
+	vm := &compute.VirtualMachine{Id: "v", Name: "v", NodeId: "n", Arch: compute.ArchAmd64, VCpus: 2, Memory: compute.NewSize(1, compute.SizeUnitG), Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
 	task, err := service.Submit(tasks.Identity{ID: "admin"}, "backend-cause-submission", compute.NewCommand("machine.create", compute.InfrastructureCommand{Node: "n", VM: "v", Machine: vm, Start: true}))
 	if err != nil {
 		t.Fatal(err)
@@ -124,7 +124,7 @@ func TestSuccessfulStartDoesNotRequireRunningStateReadback(t *testing.T) {
 	vms := compute.NewVirtualMachineService(backend)
 	manager := compute.NewVirtualMachineManager(vms, nil, diagnosticEvents{}, nil, nil)
 	service := tasks.New(repo, &compute.CommandHandler{Manager: manager, VMs: vms}, zerolog.Nop())
-	vm := &compute.VirtualMachine{Id: "v", NodeId: "n", Arch: compute.ArchAmd64, VCpus: 2, Memory: compute.NewSize(1, compute.SizeUnitG), Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
+	vm := &compute.VirtualMachine{Id: "v", Name: "v", NodeId: "n", Arch: compute.ArchAmd64, VCpus: 2, Memory: compute.NewSize(1, compute.SizeUnitG), Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
 	task, err := service.Submit(tasks.Identity{ID: "admin"}, "successful-start-command", compute.NewCommand("machine.create", compute.InfrastructureCommand{Node: "n", VM: "v", Machine: vm, Start: true}))
 	if err != nil {
 		t.Fatal(err)

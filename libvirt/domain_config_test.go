@@ -21,7 +21,7 @@ func TestNewDomainConfigPlatformFeatures(t *testing.T) {
 		{"ARM KVM", "aarch64", "virt", "kvm", "efi", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			vm := &compute.VirtualMachine{Id: "test-vm", Arch: compute.NewArch(tt.arch), Firmware: tt.firmware}
+			vm := &compute.VirtualMachine{Id: "test-vm", Name: "test-vm", Arch: compute.NewArch(tt.arch), Firmware: tt.firmware}
 			caps := &libvirtxml.DomainCaps{Arch: tt.arch, Machine: tt.machine, Domain: tt.domain, Path: "/test/qemu"}
 			config := newDomainConfig(vm, caps)
 			data, err := config.Marshal()

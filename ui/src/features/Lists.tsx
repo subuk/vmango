@@ -46,7 +46,7 @@ export function Machines() {
         <>
             <PageTitle
                 title="Machines"
-                count={q.data?.length}
+                count={q.data?.items.length}
                 action={
                     <Button
                         component={RouterLink}
@@ -72,15 +72,28 @@ export function Machines() {
                 </TextField>
             )}
             <ErrorMessage error={clouds.error} />
+            {!!q.data?.unavailable_hosts.length && (
+                <Alert severity="warning">
+                    The list is incomplete. Unavailable hosts:{" "}
+                    {q.data.unavailable_hosts.join(", ")}.
+                </Alert>
+            )}
+            {!!clouds.data?.find((c) => c.id === cloudID)?.unavailable_hosts
+                .length && (
+                <Alert severity="warning">
+                    Some hosts could not be checked. Available configurations
+                    may be incomplete.
+                </Alert>
+            )}
             <QueryState query={q}>
-                {(rows) => (
+                {(result) => (
                     <ResourceTable
-                        rows={rows.filter(
+                        rows={result.items.filter(
                             (v) => !cloudID || v.cloud === cloudID,
                         )}
                         rowKey={(v) => `${v.node}/${v.id}`}
                         search={(v) =>
-                            `${v.id} ${v.node} ${v.ip_addresses.join(" ")}`
+                            `${v.name} ${v.id} ${v.node} ${v.ip_addresses.join(" ")}`
                         }
                         node={(v) => v.node}
                         state={(v) => v.state}
@@ -88,13 +101,13 @@ export function Machines() {
                             {
                                 id: "name",
                                 label: "Name",
-                                value: (v) => v.id,
+                                value: (v) => v.name,
                                 render: (v) => (
                                     <Link
                                         component={RouterLink}
-                                        to={machineURL(v.node, v.id)}
+                                        to={machineURL(v.cloud, v.id)}
                                     >
-                                        {v.id}
+                                        {v.name}
                                     </Link>
                                 ),
                             },
@@ -147,7 +160,11 @@ export function Machines() {
                             },
                         ]}
                         actions={(v) => <MachineActions vm={v} />}
-                        empty="No machines yet. Create your first machine to get started."
+                        empty={
+                            result.unavailable_hosts.length
+                                ? "No machines returned. Some hosts are unavailable."
+                                : "No machines yet. Create your first machine to get started."
+                        }
                     />
                 )}
             </QueryState>
@@ -172,7 +189,7 @@ export function MachineActions({
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const [confirm, setConfirm] = useState<string>();
     const op = useOperation<string>((action) =>
-        request(`${vmPath(vm.node, vm.id, vm.cloud)}/actions`, "POST", {
+        request(`${vmPath(vm.cloud, vm.id)}/actions`, "POST", {
             action,
         }),
     );
@@ -213,14 +230,14 @@ export function MachineActions({
                     <Button
                         disabled={vm.managed === false}
                         component={RouterLink}
-                        to={`${machineURL(vm.node, vm.id)}console/`}
+                        to={`${machineURL(vm.cloud, vm.id)}console/`}
                     >
                         Console
                     </Button>
                 )
             )}
             <Button
-                aria-label={`More actions for ${vm.id}`}
+                aria-label={`More actions for ${vm.name}`}
                 aria-haspopup="menu"
                 aria-expanded={!!anchor}
                 onClick={(e) => setAnchor(e.currentTarget)}
@@ -235,7 +252,7 @@ export function MachineActions({
                 <MenuItem
                     disabled={conflict}
                     component={RouterLink}
-                    to={`${machineURL(vm.node, vm.id)}update/`}
+                    to={`${machineURL(vm.cloud, vm.id)}update/`}
                 >
                     Change instance type
                 </MenuItem>
@@ -268,7 +285,7 @@ export function MachineActions({
             {full && (
                 <Button
                     component={RouterLink}
-                    to={`${machineURL(vm.node, vm.id)}update/`}
+                    to={`${machineURL(vm.cloud, vm.id)}update/`}
                     disabled={conflict}
                 >
                     Change instance type
@@ -276,7 +293,7 @@ export function MachineActions({
             )}
             {confirm && (
                 <Confirm
-                    title={`${confirm === "adopt" ? "Adopt" : confirm === "delete" ? "Delete" : confirm === "poweroff" ? "Hard power-off" : "Reboot"} ${vm.id}?`}
+                    title={`${confirm === "adopt" ? "Adopt" : confirm === "delete" ? "Delete" : confirm === "poweroff" ? "Hard power-off" : "Reboot"} ${vm.name}?`}
                     action={
                         confirm === "adopt"
                             ? "Adopt machine"
@@ -295,18 +312,18 @@ export function MachineActions({
                     run={async (deleteVolumes) => {
                         if (confirm === "adopt")
                             await request(
-                                `/api/v1/clouds/${encodeURIComponent(vm.cloud)}/machines/${encodeURIComponent(vm.node)}/${encodeURIComponent(vm.id)}/adopt`,
+                                `/api/v1/clouds/${encodeURIComponent(vm.cloud)}/machines/${encodeURIComponent(vm.id)}/adopt`,
                                 "POST",
                                 {},
                             );
                         else if (confirm === "delete")
                             await request(
-                                `${vmPath(vm.node, vm.id, vm.cloud)}?delete_volumes=${deleteVolumes}`,
+                                `${vmPath(vm.cloud, vm.id)}?delete_volumes=${deleteVolumes}`,
                                 "DELETE",
                             );
                         else
                             await request(
-                                `${vmPath(vm.node, vm.id, vm.cloud)}/actions`,
+                                `${vmPath(vm.cloud, vm.id)}/actions`,
                                 "POST",
                                 { action: confirm },
                             );
@@ -316,10 +333,10 @@ export function MachineActions({
                     {confirm === "adopt"
                         ? "Take this machine under management without changing its configuration or claiming ownership of its existing disks."
                         : confirm === "delete"
-                          ? `Permanently remove ${vm.node}/${vm.id}. Attached disks are kept unless you explicitly choose to delete them.`
+                          ? `Permanently remove ${vm.node}/${vm.name}. Attached disks are kept unless you explicitly choose to delete them.`
                           : confirm === "poweroff"
-                            ? `Immediately cut power to ${vm.node}/${vm.id}. Unsaved guest data may be lost.`
-                            : `Reboot ${vm.node}/${vm.id}.`}
+                            ? `Immediately cut power to ${vm.node}/${vm.name}. Unsaved guest data may be lost.`
+                            : `Reboot ${vm.node}/${vm.name}.`}
                 </Confirm>
             )}
         </>

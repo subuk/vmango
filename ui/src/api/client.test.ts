@@ -44,7 +44,7 @@ describe("credential and mutation behavior", () => {
             ),
         );
         const result = await client.request<{ url: string }>(
-            "http://localhost/api/v1/clouds/local/machines/local/v/consoles/vnc/links",
+            "http://localhost/api/v1/clouds/local/machines/v/consoles/vnc/links",
             "POST",
             {},
         );
@@ -58,7 +58,7 @@ describe("credential and mutation behavior", () => {
     it.each([
         "/api/v1/clouds/local/machines",
         "/api/v1/clouds/local/volumes",
-        "/api/v1/clouds/local/machines/a/v/instance-type",
+        "/api/v1/clouds/local/machines/v/instance-type",
         "/api/v1/clouds/local/volumes/n/dm9s/clone",
     ])(
         "recovers an uncertain infrastructure submission at %s with the same key",

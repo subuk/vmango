@@ -29,6 +29,7 @@ func (e *EventVirtualMachineCreated) Plain() map[string]string {
 	data := map[string]string{
 		"event":              e.Name(),
 		"vm_id":              e.vm.Id,
+		"vm_name":            e.vm.Name,
 		"vm_cpus":            fmt.Sprintf("%d", e.vm.VCpus),
 		"vm_memory_mib":      fmt.Sprintf("%d", e.vm.Memory.M()),
 		"vm_volume_count":    fmt.Sprintf("%d", len(e.vm.Volumes)),

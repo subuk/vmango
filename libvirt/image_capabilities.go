@@ -96,13 +96,21 @@ func (repo *VirtualMachineRepository) ValidateNew(vm *compute.VirtualMachine) er
 		return repositoryError(err, "backend validation failed")
 	}
 	defer repo.pool.Release(vm.NodeId)
-	domain, err := conn.LookupDomainByName(vm.Id)
+	domain, err := conn.LookupDomainByName(vm.Name)
 	if err == nil {
 		domain.Free()
-		return fmt.Errorf("%w: VM %q already exists", compute.ErrConflict, vm.Id)
+		return fmt.Errorf("%w: VM %q already exists", compute.ErrConflict, vm.Name)
 	}
 	if !errors.Is(err, libvirt.ERR_NO_DOMAIN) {
 		return repositoryError(err, "backend validation failed")
+	}
+	domain, err = conn.LookupDomainByUUIDString(vm.Id)
+	if err == nil {
+		domain.Free()
+		return fmt.Errorf("%w: VM identity already exists", compute.ErrConflict)
+	}
+	if !errors.Is(err, libvirt.ERR_NO_DOMAIN) {
+		return repositoryError(err, "backend identity validation failed")
 	}
 	return nil
 }

@@ -15,7 +15,7 @@ func TestImageCapabilitiesAndController(t *testing.T) {
 	if got.Arch != compute.ArchAarch64 || got.MaxVCPUs != 8 || !slices.Contains(got.Firmwares, "efi") || slices.Contains(got.Firmwares, "bios") || slices.Contains(got.DiskBuses, compute.DeviceBusUnknown) || !slices.Contains(got.DiskControllers, "virtio-scsi") {
 		t.Fatalf("capabilities: %+v", got)
 	}
-	vm := &compute.VirtualMachine{Id: "test", Arch: compute.ArchAarch64, Firmware: "efi", DiskController: "virtio-scsi"}
+	vm := &compute.VirtualMachine{Id: "test", Name: "test", Arch: compute.ArchAarch64, Firmware: "efi", DiskController: "virtio-scsi"}
 	config := newDomainConfig(vm, caps)
 	data, err := config.Marshal()
 	if err != nil {
@@ -28,7 +28,7 @@ func TestImageCapabilitiesAndController(t *testing.T) {
 
 func TestUserNetworkUsesGuestArchitecture(t *testing.T) {
 	for _, arch := range []string{"aarch64", "x86_64"} {
-		config := newDomainConfig(&compute.VirtualMachine{Id: "test"}, &libvirtxml.DomainCaps{Arch: arch})
+		config := newDomainConfig(&compute.VirtualMachine{Id: "test", Name: "test"}, &libvirtxml.DomainCaps{Arch: arch})
 		repo := &VirtualMachineRepository{}
 		if err := repo.attachInterface(config, &compute.VirtualMachineAttachedInterface{NetworkName: "qemu-usernet", Model: "virtio"}); err != nil {
 			t.Fatal(err)

@@ -160,7 +160,6 @@ type apiNodeInput struct {
 }
 type apiVMInput struct {
 	Cloud string `path:"cloud"`
-	Node  string `path:"node" minLength:"1"`
 	VM    string `path:"vm" minLength:"1"`
 }
 

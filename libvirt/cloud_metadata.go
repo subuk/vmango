@@ -123,7 +123,7 @@ func (repo *VirtualMachineRepository) Adopt(id, node string, m *compute.MachineM
 		return err
 	}
 	defer repo.pool.Release(node)
-	domain, err := conn.LookupDomainByName(id)
+	domain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return repositoryError(err, "lookup adoption target")
 	}

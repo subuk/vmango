@@ -29,6 +29,14 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 		c.Catalog = &cloud
 	}
 	cloud = *c.Catalog
+	if c.Node == "" && c.VM != "" {
+		vm, err := h.Clouds.GetMachine(context.Background(), cloud.ID, c.VM)
+		if err != nil {
+			return command, c, err
+		}
+		c.Node = vm.NodeId
+		command.Resources = append(command.Resources, VMRef(c.Node, c.VM))
+	}
 	if c.Node != "" {
 		if _, ok := cloud.Host(c.Node); !ok {
 			return command, c, ErrUnknownNode
@@ -73,7 +81,7 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 			c.AcceptedKeys = append(c.AcceptedKeys, key)
 		}
 		c.CreateSpec.KeyIDs = nil
-		command.Resources = append(command.Resources, tasks.ResourceRef{Kind: "machine-request", Scope: cloud.ID, ID: c.CreateSpec.ID})
+		command.Resources = append(command.Resources, tasks.ResourceRef{Kind: "machine-request", Scope: cloud.ID, ID: c.CreateSpec.Name})
 		for _, disk := range c.CreateSpec.ExistingDisks {
 			command.Resources = append(command.Resources, VolumeRef(disk.Host, disk.Path))
 		}
@@ -273,18 +281,15 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		return ErrInvalid
 	}
 	cloud := *c.Catalog
+	inventoryCloud := cloud
+	if c.Node != "" {
+		inventoryCloud.Hosts = []CloudHost{mustHost(cloud, c.Node)}
+	}
 	var inventory []HostInventory
-	if err := p.Stage("cloud-inventory", nil, false, func() error { var err error; inventory, err = h.Clouds.Inventory(cloud); return err }); err != nil {
+	if err := p.Stage("cloud-inventory", nil, false, func() error { var err error; inventory, err = h.Clouds.Inventory(inventoryCloud); return err }); err != nil {
 		return err
 	}
 	if c.CreateSpec != nil {
-		for _, i := range inventory {
-			for _, vm := range i.Machines {
-				if vm.Id == c.CreateSpec.ID {
-					return fmt.Errorf("%w: machine name already exists in cloud", ErrConflict)
-				}
-			}
-		}
 		images := h.Manager.images.Snapshot(c.Images, nil, true)
 		var resolved InfrastructureCommand
 		if err := p.Stage("schedule-machine", nil, false, func() error {
@@ -365,7 +370,7 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 				}
 			}
 		}
-		params := VolumeCreateParams{NodeId: c.Node, Name: c.VM + "_" + d.Name, Pool: b.Pool, Format: b.Format, Size: NewSize(d.SizeBytes, SizeUnitB), Cloud: cloud.ID, StorageClass: d.StorageClass}
+		params := VolumeCreateParams{NodeId: c.Node, Name: vm.Name + "_" + d.Name, Pool: b.Pool, Format: b.Format, Size: NewSize(d.SizeBytes, SizeUnitB), Cloud: cloud.ID, StorageClass: d.StorageClass}
 		path, err := h.Volumes.ResolvePath(c.Node, b.Pool, params.Name)
 		if err != nil {
 			return err

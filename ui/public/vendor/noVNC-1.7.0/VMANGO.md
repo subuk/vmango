@@ -13,7 +13,7 @@ Local changes:
 - `app/ui.js` resolves translations and package metadata relative to its module
   URL, since the console page lives under `/machines/`.
 - `../novnc.html` preserves the upstream full-console controls. `../vnc-client.js`
-  receives scoped credentials from its same-origin parent through postMessage.
+  receives cloud/UUID-scoped credentials from its same-origin parent through postMessage.
   It validates the message source and pins `UI.start`'s mandatory host, port,
   path, encryption and shared mode. URL parameters and saved settings cannot
   redirect the connection. The credential is held only in memory and is sent

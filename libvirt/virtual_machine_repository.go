@@ -1,6 +1,7 @@
 package libvirt
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -16,7 +17,6 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"libvirt.org/go/libvirt"
 	libvirtxml "libvirt.org/go/libvirtxml"
@@ -280,7 +280,7 @@ func (repo *VirtualMachineRepository) GetConsoleStream(id, nodeId string, force 
 	}
 	defer repo.pool.Release(nodeId)
 
-	virDomain, err := conn.LookupDomainByName(id)
+	virDomain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return nil, repositoryError(err, "cannot get vm")
 	}
@@ -338,7 +338,7 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compu
 	if err != nil {
 		return nil, repositoryError(err, "cannot parse connection uri")
 	}
-	virDomain, err := conn.LookupDomainByName(id)
+	virDomain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return nil, repositoryError(err, "cannot get vm")
 	}
@@ -426,9 +426,9 @@ func (repo *VirtualMachineRepository) generateNewDomainConfig(conn *libvirt.Conn
 // newDomainConfig builds domain XML from capabilities without contacting a hypervisor.
 func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.DomainCaps) *libvirtxml.Domain {
 	virDomainConfig := &libvirtxml.Domain{}
-	virDomainConfig.UUID = uuid.New().String()
+	virDomainConfig.UUID = vm.Id
 	virDomainConfig.Type = domCapsConfig.Domain
-	virDomainConfig.Name = vm.Id
+	virDomainConfig.Name = vm.Name
 	virDomainConfig.OS = &libvirtxml.DomainOS{
 		Type: &libvirtxml.DomainOSType{Type: "hvm", Machine: domCapsConfig.Machine, Arch: domCapsConfig.Arch},
 		BootDevices: []libvirtxml.DomainBootDevice{
@@ -493,12 +493,10 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 	var isNewVm bool
 	var virDomainConfig *libvirtxml.Domain
 
-	existingVirDomain, err := conn.LookupDomainByName(vm.Id)
+	existingVirDomain, err := conn.LookupDomainByUUIDString(vm.Id)
 	if err != nil {
-		if lErr, ok := err.(*libvirt.Error); ok {
-			if lErr.Code != libvirt.ERR_NO_DOMAIN {
-				return repositoryError(err, "cannot lookup domain")
-			}
+		if !errors.Is(err, libvirt.ERR_NO_DOMAIN) {
+			return repositoryError(err, "cannot lookup domain")
 		}
 		isNewVm = true
 	}
@@ -553,7 +551,7 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 		return repositoryError(err, "cannot define new domain")
 	}
 	effects = append(effects, confirmed(ref, "configuration-defined"))
-	virDomain, err := conn.LookupDomainByName(vm.Id)
+	virDomain, err := conn.LookupDomainByUUIDString(vm.Id)
 	if err != nil {
 		return repositoryError(err, "cannot lookup domain after define")
 	}
@@ -580,7 +578,7 @@ func (repo *VirtualMachineRepository) Delete(id, nodeId string) (err error) {
 	}
 	defer repo.pool.Release(nodeId)
 
-	virDomain, err := conn.LookupDomainByName(id)
+	virDomain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return repositoryError(err, "lookup domain failed")
 	}
@@ -622,6 +620,7 @@ func (repo *VirtualMachineRepository) nodeList(nodeId string) ([]*compute.Virtua
 	}
 	for _, domain := range domains {
 		vm, err := repo.domainToVm(conn, nodeId, &domain, settings)
+		domain.Free()
 		if err != nil {
 			return nil, repositoryError(err, "cannot convert libvirt domain to vm")
 		}
@@ -672,7 +671,7 @@ func (repo *VirtualMachineRepository) Get(id, nodeId string) (*compute.VirtualMa
 	defer repo.pool.Release(nodeId)
 
 	settings := repo.settings[nodeId]
-	domain, err := conn.LookupDomainByName(id)
+	domain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return nil, repositoryError(err, "failed to lookup vm")
 	}
@@ -690,7 +689,7 @@ func (repo *VirtualMachineRepository) Poweroff(id, nodeId string) error {
 	}
 	defer repo.pool.Release(nodeId)
 
-	domain, err := conn.LookupDomainByName(id)
+	domain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return repositoryError(err, "domain lookup failed")
 	}
@@ -705,7 +704,7 @@ func (repo *VirtualMachineRepository) Reboot(id, nodeId string) error {
 	if err != nil {
 		return repositoryError(err, "cannot acquire connection")
 	}
-	domain, err := conn.LookupDomainByName(id)
+	domain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		repo.pool.Release(nodeId)
 		return repositoryError(err, "domain lookup failed")
@@ -745,7 +744,7 @@ func (repo *VirtualMachineRepository) Start(id, nodeId string) error {
 	}
 	defer repo.pool.Release(nodeId)
 
-	domain, err := conn.LookupDomainByName(id)
+	domain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return repositoryError(err, "domain lookup failed")
 	}
@@ -774,7 +773,7 @@ func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVo
 	}
 	defer repo.pool.Release(nodeId)
 
-	virDomain, err := conn.LookupDomainByName(id)
+	virDomain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return repositoryError(err, "domain lookup failed")
 	}
@@ -816,7 +815,7 @@ func (repo *VirtualMachineRepository) DetachVolume(id, nodeId, needlePath string
 	}
 	defer repo.pool.Release(nodeId)
 
-	virDomain, err := conn.LookupDomainByName(id)
+	virDomain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return repositoryError(err, "domain lookup failed")
 	}
@@ -870,7 +869,7 @@ func (repo *VirtualMachineRepository) AttachInterface(id, nodeId string, attache
 	}
 	defer repo.pool.Release(nodeId)
 
-	virDomain, err := conn.LookupDomainByName(id)
+	virDomain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return repositoryError(err, "domain lookup failed")
 	}
@@ -909,7 +908,7 @@ func (repo *VirtualMachineRepository) detachInterfaceLibvirt(id, nodeId, needleM
 	}
 	defer repo.pool.Release(nodeId)
 
-	virDomain, err := conn.LookupDomainByName(id)
+	virDomain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return repositoryError(err, "domain lookup failed")
 	}
@@ -963,7 +962,7 @@ func (repo *VirtualMachineRepository) detachInterfaceQemuArgs(id, nodeId, needle
 	}
 	defer repo.pool.Release(nodeId)
 
-	virDomain, err := conn.LookupDomainByName(id)
+	virDomain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return repositoryError(err, "domain lookup failed")
 	}

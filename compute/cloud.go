@@ -80,7 +80,7 @@ type DataDiskSpec struct {
 	SizeBytes    uint64 `json:"size_bytes"`
 }
 type MachineCreateSpec struct {
-	ID            string         `json:"id"`
+	Name          string         `json:"name"`
 	Image         string         `json:"image"`
 	InstanceType  string         `json:"instance_type"`
 	Zone          string         `json:"zone"`

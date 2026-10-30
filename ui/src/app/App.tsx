@@ -115,7 +115,7 @@ export function App({ standalone = false }: { standalone?: boolean }) {
                     >
                         <Routes>
                             <Route
-                                path="/console/:node/:id/:kind"
+                                path="/console/:cloud/:id/:kind"
                                 element={<Console standalone />}
                             />
                             <Route
@@ -310,19 +310,19 @@ function Shell() {
                             element={<Navigate to="/machines/add/" replace />}
                         />
                         <Route
-                            path="/machines/:node/:id/"
+                            path="/machines/:cloud/:id/"
                             element={<MachineDetail />}
                         />
                         <Route
-                            path="/machines/:node/:id/update/"
+                            path="/machines/:cloud/:id/update/"
                             element={<EditMachine />}
                         />
                         <Route
-                            path="/machines/:node/:id/console/"
+                            path="/machines/:cloud/:id/console/"
                             element={<Console />}
                         />
                         <Route
-                            path="/machines/:node/:id/vnc/"
+                            path="/machines/:cloud/:id/vnc/"
                             element={<Console />}
                         />
                         <Route path="/tasks/" element={<Tasks />} />

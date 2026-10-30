@@ -207,7 +207,7 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 			vm.Config = nil
 		} else if overrides.Initialization != "" {
 			if vm.Config == nil {
-				vm.Config = &VirtualMachineConfig{Hostname: vm.Id}
+				vm.Config = &VirtualMachineConfig{Hostname: vm.Name}
 			}
 			vm.Config.Initialization = overrides.Initialization
 		}
@@ -273,11 +273,11 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 			return nil, nil, fmt.Errorf("unsupported initialization mode %q", initialization)
 		}
 		if vm.Config == nil {
-			vm.Config = &VirtualMachineConfig{Hostname: vm.Id}
+			vm.Config = &VirtualMachineConfig{Hostname: vm.Name}
 		}
 		vm.Config.Initialization = initialization
 	}
-	if !resourceName.MatchString(vm.Id) {
+	if !resourceName.MatchString(vm.Name) {
 		return nil, nil, fmt.Errorf("invalid VM name")
 	}
 	if e := ValidateVM(vm); e != nil {
@@ -371,7 +371,7 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 	}
 	if vm.Config != nil {
 		settings := m.settings[vm.NodeId]
-		name := vm.Id + settings.CdSuffix
+		name := vm.Name + settings.CdSuffix
 		if destinations[settings.CdPool+"\x00"+name] {
 			return nil, nil, fmt.Errorf("config drive conflicts with a requested disk")
 		}

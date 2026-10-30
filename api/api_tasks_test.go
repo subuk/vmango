@@ -53,7 +53,7 @@ func TestTaskAPIIdempotentAcceptanceCancellationAndRestartHistory(t *testing.T) 
 		h.ServeHTTP(w, r)
 		return w
 	}
-	body := `{"id":"v","image":"ubuntu","instance_type":"small","zone":"z","network":"lan","storage_class":"fast","start":false,"user_data":"private-bootstrap-secret"}`
+	body := `{"name":"v","image":"ubuntu","instance_type":"small","zone":"z","network":"lan","storage_class":"fast","start":false,"user_data":"private-bootstrap-secret"}`
 	first := submit("recoverable-submission", body)
 	if first.Code != 202 || first.Header().Get("Location") == "" || strings.Contains(first.Body.String(), "private-bootstrap-secret") {
 		t.Fatalf("acceptance: %d %s", first.Code, first.Body)
@@ -85,10 +85,10 @@ func TestTaskAPIIdempotentAcceptanceCancellationAndRestartHistory(t *testing.T) 
 	if response := submit("recoverable-submission", body); response.Code != 202 || !strings.Contains(response.Body.String(), `"state":"cancelled"`) {
 		t.Fatal(response.Code, response.Body)
 	}
-	queuedResponse := submit("queued-after-cancel", strings.Replace(body, `"id":"v"`, `"id":"q"`, 1))
+	queuedResponse := submit("queued-after-cancel", strings.Replace(body, `"name":"v"`, `"name":"q"`, 1))
 	var queued apiTaskReference
 	_ = json.Unmarshal(queuedResponse.Body.Bytes(), &queued)
-	staleResponse := submit("interrupted-after-restart", strings.Replace(body, `"id":"v"`, `"id":"stale"`, 1))
+	staleResponse := submit("interrupted-after-restart", strings.Replace(body, `"name":"v"`, `"name":"stale"`, 1))
 	var stale apiTaskReference
 	_ = json.Unmarshal(staleResponse.Body.Bytes(), &stale)
 	if queuedResponse.Code != 202 || staleResponse.Code != 202 {
@@ -123,7 +123,7 @@ func TestTaskAPIIdempotentAcceptanceCancellationAndRestartHistory(t *testing.T) 
 	if interrupted.Code != 200 || !strings.Contains(interrupted.Body.String(), `"state":"interrupted"`) || !strings.Contains(interrupted.Body.String(), `"outcome_uncertain":true`) || strings.Contains(interrupted.Body.String(), "private-bootstrap-secret") {
 		t.Fatal(interrupted.Body)
 	}
-	if response := submit("interrupted-after-restart", strings.Replace(body, `"id":"v"`, `"id":"stale"`, 1)); response.Code != 202 || !strings.Contains(response.Body.String(), stale.Task.ID) {
+	if response := submit("interrupted-after-restart", strings.Replace(body, `"name":"v"`, `"name":"stale"`, 1)); response.Code != 202 || !strings.Contains(response.Body.String(), stale.Task.ID) {
 		t.Fatal(response.Code, response.Body)
 	}
 	page := apiRequest(h, "GET", "/api/v1/tasks?limit=1&resource_kind=machine-request&resource_scope=local", "", true)

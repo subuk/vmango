@@ -58,7 +58,7 @@ func TestQueuedCreationRejectsVMCreatedBeforeExecution(t *testing.T) {
 	manager := compute.NewVirtualMachineManager(vms, nil, nil, nil, nil)
 	handler := &compute.CommandHandler{VMs: vms, Manager: manager}
 	service := tasks.New(repo, handler, zerolog.Nop())
-	requested := &compute.VirtualMachine{Id: "v", NodeId: "n", Arch: compute.ArchAmd64, VCpus: 2, Memory: compute.NewSize(2, compute.SizeUnitG), Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
+	requested := &compute.VirtualMachine{Id: "v", Name: "v", NodeId: "n", Arch: compute.ArchAmd64, VCpus: 2, Memory: compute.NewSize(2, compute.SizeUnitG), Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
 	accepted, err := service.Submit(tasks.Identity{ID: "admin"}, "queued-creation-submission", compute.NewCommand("machine.create", compute.InfrastructureCommand{Node: "n", VM: "v", Machine: requested}))
 	if err != nil {
 		t.Fatal(err)

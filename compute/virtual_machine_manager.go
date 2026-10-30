@@ -112,7 +112,7 @@ func (manager *VirtualMachineManager) PrepareCreation(vm *VirtualMachine, cloneV
 	if err := ValidateVM(vm); err != nil {
 		return nil, nil, err
 	}
-	if !resourceName.MatchString(vm.Id) {
+	if !resourceName.MatchString(vm.Name) {
 		return nil, nil, fmt.Errorf("%w: invalid VM name", ErrInvalid)
 	}
 	for _, v := range vm.Volumes {
@@ -204,7 +204,7 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 				}
 			}
 			if vm.Config != nil {
-				return manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Pool: settings.CdPool, Name: vm.Id + settings.CdSuffix, Format: VolumeFormatIso})
+				return manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Pool: settings.CdPool, Name: vm.Name + settings.CdSuffix, Format: VolumeFormatIso})
 			}
 			return nil
 		}); err != nil {
@@ -296,7 +296,7 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 		var cdVolume *Volume
 		if err := stage("create-config-drive", vmRef, true, func() error {
 			var err error
-			cdVolume, err = manager.volumes.Create(VolumeCreateParams{NodeId: vm.NodeId, Name: vm.Id + settings.CdSuffix, Pool: settings.CdPool, Format: VolumeFormatIso, Size: NewSize(uint64(cdLen), SizeUnitB)})
+			cdVolume, err = manager.volumes.Create(VolumeCreateParams{NodeId: vm.NodeId, Name: vm.Name + settings.CdSuffix, Pool: settings.CdPool, Format: VolumeFormatIso, Size: NewSize(uint64(cdLen), SizeUnitB)})
 			if err != nil {
 				return err
 			}

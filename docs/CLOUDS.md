@@ -25,8 +25,10 @@ a one-time start and does not override autostart. A type too small for the image
 including when the image's actual virtual disk capacity exceeds the boot disk.
 
 Host CPU and RAM reserves reduce allocatable budgets. Every create inventories
-all hosts in the cloud, including inactive and unmanaged domains. Read failures
-fail admission. Existing domains without scheduler metadata consume requests
+hosts in the cloud, including inactive and unmanaged domains. A host with any
+failed inventory read is excluded from placement entirely; it is never counted
+as empty. Operations on an existing machine require fresh inventory only on its
+current host. Existing domains without scheduler metadata consume requests
 equal to actual configured limits. Managed domains carry a namespaced applied
 snapshot in their XML; catalog edits cannot change their allocations. Host
 selection filters required constraints and compatibility, then scores preferred
@@ -125,7 +127,7 @@ part of the catalog. Create a machine with an idempotency key:
 
 ```json
 {
-  "id": "demo",
+  "name": "demo",
   "image": "ubuntu-24.04-x86_64-bios",
   "instance_type": "small",
   "zone": "local",
@@ -147,9 +149,9 @@ if they lack cloud context; inspect their history and submit a new cloud command
 All former `/api/v1/nodes/...` resource routes and global `/vms`, `/volumes` and
 `/networks` collections are removed without compatibility aliases. Read-only
 administrative diagnostics use `/api/v1/hosts/...`. CPU/RAM
-patches are replaced by `POST /api/v1/clouds/{cloud}/machines/{node}/{vm}/instance-type`
-with `{"instance_type":"medium"}`. The node in an existing-resource URL identifies
-observed placement; it cannot be used to move a machine. Adoption uses the same
+patches are replaced by `POST /api/v1/clouds/{cloud}/machines/{vm}/instance-type`
+with `{"instance_type":"medium"}`. Machine URLs use the stable machine ID (the libvirt domain UUID), independently
+of its name or observed host. Names must be unique only within a host. Adoption uses the same
 resource URL with `/adopt`. New disk creation and attachment uses `/disks` with
 `name`, `storage_class` and `size_bytes`. Attachment, power, console and deletion
 commands use that same cloud-scoped identity. Existing-disk attachment uses `/disks/attach`; `/disks` creates and
@@ -164,3 +166,35 @@ Standalone creation uses `POST /api/v1/clouds/{cloud}/volumes` with `name`, `zon
 `storage_class` and `size_bytes`. Existing-volume clone commands select
 `storage_class`, not `pool` or `format`. Read-only host and pool discovery remain
 available under `/hosts` for administrative diagnostics. See authenticated OpenAPI for the complete schema.
+
+## Machine discovery and routing
+
+Machine reads return separate `id` and `name` fields. API routes use
+`/api/v1/clouds/{cloud}/machines/{id}` and browser routes use
+`/machines/{cloud}/{id}/`. Existing libvirt UUIDs are preserved. Old host/name
+machine routes are removed; update API clients and bookmarks. Volume routes
+continue to include their owning host. Signed console links now bind the cloud
+and machine UUID; issue new links after upgrading.
+Event hooks receive the UUID in `vm_id` and the display name in `vm_name`.
+
+`GET /api/v1/clouds/{cloud}/machines` returns `items` and `unavailable_hosts`.
+Each request reads hosts afresh, with at most 20 concurrent machine-list backend
+reads. Concurrent scans of the same cloud share the in-flight read. Results from
+failed hosts are omitted and the UI explicitly marks the list incomplete. Cloud
+catalogs remain discoverable and expose `unavailable_hosts` for failed live checks.
+Reads finish according to the backend's connection and operation timeouts; the
+parallel scan does not impose a separate libvirt deadline. Fresh per-host reads
+are not an atomic snapshot across hosts.
+
+An in-memory routing index remembers only machine IDs and their observed hosts.
+A point request uses that hint and reads live state from the host. A missing hint
+or a definite not-found triggers a fresh cloud scan. Connection errors do not
+trigger retries of mutations. Successful host scans replace that host's hints;
+failed scans preserve hints without retaining or serving old machine state.
+Unknown IDs return 503 when discovery is incomplete, and 404 after a complete
+scan confirms absence. Duplicate IDs across hosts return 409 rather than choosing
+an arbitrary machine. There is no periodic refresh or persistent index.
+
+Queued commands accepted with the former name-based identity are rejected before
+execution. Inspect old tasks and resubmit through the new API. New commands retain
+the resolved host and UUID, and idempotent recovery happens before backend reads.

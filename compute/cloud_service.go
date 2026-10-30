@@ -3,8 +3,10 @@ package compute
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"slices"
 	"strings"
+	"sync"
 )
 
 type CloudService struct {
@@ -14,6 +16,8 @@ type CloudService struct {
 	Pools       *VolumePoolService
 	Volumes     *VolumeService
 	Manager     *VirtualMachineManager
+	locatorOnce sync.Once
+	locator     *machineLocator
 }
 
 type CloudOffer struct {
@@ -194,27 +198,35 @@ func (s *CloudService) ForHost(cloudID, node string) (Cloud, CloudHost, error) {
 	return c, h, nil
 }
 func (s *CloudService) Inventory(c Cloud) ([]HostInventory, error) {
-	result := []HostInventory{}
-	for _, host := range c.Hosts {
+	reads, failures := visitCloudHosts(c, func(host CloudHost) (HostInventory, error) {
 		node, err := s.Nodes.Get(host.Node, NodeGetOptions{NoPins: true})
 		if err != nil {
-			return nil, fmt.Errorf("inventory host %s: %w", host.Node, err)
+			return HostInventory{}, err
 		}
 		machines, err := s.VMs.List(VirtualMachineListOptions{NodeIds: []string{host.Node}, Strict: true})
 		if err != nil {
-			return nil, fmt.Errorf("inventory host %s: %w", host.Node, err)
+			return HostInventory{}, err
 		}
 		pools, err := s.Pools.List(VolumePoolListOptions{NodeIds: []string{host.Node}})
 		if err != nil {
-			return nil, fmt.Errorf("storage inventory host %s: %w", host.Node, err)
+			return HostInventory{}, err
 		}
-		result = append(result, HostInventory{Host: host, Node: node, Machines: machines, Pools: pools})
+		return HostInventory{Host: host, Node: node, Machines: machines, Pools: pools}, nil
+	})
+	result := []HostInventory{}
+	for n, inventory := range reads {
+		if failures[n] == nil {
+			result = append(result, inventory)
+		}
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("%w: no host inventory is available", ErrUnavailable)
 	}
 	return result, nil
 }
 func (s *CloudService) ValidateCreate(c Cloud, spec MachineCreateSpec) error {
-	if !resourceName.MatchString(spec.ID) {
-		return invalid("id", "Invalid machine name.")
+	if !resourceName.MatchString(spec.Name) {
+		return invalid("name", "Invalid machine name.")
 	}
 	if !hasEntry(c.Zones, spec.Zone) || !hasEntry(c.Networks, spec.Network) || !hasEntry(c.StorageClasses, spec.StorageClass) {
 		return invalid("zone", "Select a configured zone, network and storage class.")
@@ -308,6 +320,11 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 					return InfrastructureCommand{}, fmt.Errorf("local disks belong to another host")
 				}
 			}
+			for _, existing := range i.Machines {
+				if existing.Name == spec.Name {
+					return InfrastructureCommand{}, fmt.Errorf("machine name already exists on host")
+				}
+			}
 			fit, err := Fit(i, t, "")
 			if err != nil {
 				return InfrastructureCommand{}, err
@@ -329,8 +346,8 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 			if network.Model != "" && image.Defaults.NICModel != "" && network.Model != image.Defaults.NICModel {
 				return InfrastructureCommand{}, fmt.Errorf("network model conflicts with image requirements")
 			}
-			vm := &VirtualMachine{Id: spec.ID, NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Hugepages: t.Hugepages, Autostart: t.Autostart, Config: &VirtualMachineConfig{Hostname: spec.ID, Userdata: []byte(spec.UserData)}, Interfaces: []*VirtualMachineAttachedInterface{{NetworkName: network.Network, LogicalNetwork: spec.Network, Bridge: network.Bridge, Model: network.Model, AccessVlan: network.VLAN}}, Metadata: &MachineMetadata{Cloud: c.ID, Zone: h.Zone, InstanceType: t.ID, Image: image.ID, CPURequest: t.CPURequest, MemoryRequestBytes: t.MemoryBytes, MinimumMemoryBytes: image.MinimumMemoryBytes}}
-			clones := []VirtualMachineManagerClonedVolumeParams{{Cloud: c.ID, StorageClass: spec.StorageClass, ImageID: image.ID, NewName: spec.ID + "_root", NewPool: storage.Pool, NewSize: NewSize(t.BootDiskBytes, SizeUnitB), NewFormat: storage.Format, Alias: "root", DeviceType: DeviceTypeDisk}}
+			vm := &VirtualMachine{Id: uuid.NewString(), Name: spec.Name, NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Hugepages: t.Hugepages, Autostart: t.Autostart, Config: &VirtualMachineConfig{Hostname: spec.Name, Userdata: []byte(spec.UserData)}, Interfaces: []*VirtualMachineAttachedInterface{{NetworkName: network.Network, LogicalNetwork: spec.Network, Bridge: network.Bridge, Model: network.Model, AccessVlan: network.VLAN}}, Metadata: &MachineMetadata{Cloud: c.ID, Zone: h.Zone, InstanceType: t.ID, Image: image.ID, CPURequest: t.CPURequest, MemoryRequestBytes: t.MemoryBytes, MinimumMemoryBytes: image.MinimumMemoryBytes}}
+			clones := []VirtualMachineManagerClonedVolumeParams{{Cloud: c.ID, StorageClass: spec.StorageClass, ImageID: image.ID, NewName: vm.Name + "_root", NewPool: storage.Pool, NewSize: NewSize(t.BootDiskBytes, SizeUnitB), NewFormat: storage.Format, Alias: "root", DeviceType: DeviceTypeDisk}}
 			newDisks := []VirtualMachineManagerCreatedVolumeParams{}
 			required := map[string]uint64{storage.Pool: t.BootDiskBytes}
 			for _, d := range spec.Disks {
@@ -341,7 +358,7 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 				if err = addStorage(required, b.Pool, d.SizeBytes); err != nil {
 					return InfrastructureCommand{}, err
 				}
-				newDisks = append(newDisks, VirtualMachineManagerCreatedVolumeParams{Cloud: c.ID, StorageClass: d.StorageClass, Name: spec.ID + "_" + d.Name, Pool: b.Pool, Format: b.Format, Size: NewSize(d.SizeBytes, SizeUnitB), DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio, Alias: d.Name})
+				newDisks = append(newDisks, VirtualMachineManagerCreatedVolumeParams{Cloud: c.ID, StorageClass: d.StorageClass, Name: vm.Name + "_" + d.Name, Pool: b.Pool, Format: b.Format, Size: NewSize(d.SizeBytes, SizeUnitB), DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio, Alias: d.Name})
 			}
 			for _, d := range spec.ExistingDisks {
 				if err = s.Volumes.ValidateAttachable(d.Path, h.Node, images); err != nil {

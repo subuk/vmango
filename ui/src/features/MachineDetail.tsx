@@ -41,8 +41,8 @@ import { MachineActions } from "./Lists";
 import type { HostCatalog } from "./MachineForm";
 
 export function MachineDetail() {
-    const { node = "", id = "" } = useParams();
-    const q = useMachine(node, id);
+    const { cloud = "", id = "" } = useParams();
+    const q = useMachine(cloud, id);
     const [params, setParams] = useSearchParams();
     const tab = params.get("tab") || "overview";
     return (
@@ -50,19 +50,23 @@ export function MachineDetail() {
             <Breadcrumbs sx={{ mb: 2 }}>
                 <Link
                     component={RouterLink}
-                    to={`/machines/?node=${esc(node)}`}
+                    to={`/machines/?cloud=${esc(cloud)}`}
                 >
                     Machines
                 </Link>
-                <Typography>{node}</Typography>
+                <Typography>{cloud}</Typography>
                 <Typography>{id}</Typography>
             </Breadcrumbs>
-            <ResourceTasks resource={{ kind: "machine", scope: node, id }} />
+            {q.data && (
+                <ResourceTasks
+                    resource={{ kind: "machine", scope: q.data.node, id }}
+                />
+            )}
             <QueryState query={q}>
                 {(vm) => (
                     <>
                         <PageTitle
-                            title={id}
+                            title={vm.name}
                             action={<MachineActions vm={vm} full />}
                         />
                         <Stack
@@ -70,7 +74,7 @@ export function MachineDetail() {
                             spacing={3}
                             sx={{ flexWrap: "wrap", mb: 3 }}
                         >
-                            <Typography>Host: {node}</Typography>
+                            <Typography>Host: {vm.node}</Typography>
                             <Typography>
                                 Cloud: {vm.cloud} · AZ: {vm.zone}
                             </Typography>
@@ -326,14 +330,14 @@ function Disks({ vm }: { vm: VM }) {
                     onClose={() => setRemove(undefined)}
                     run={async () => {
                         await request(
-                            `${vmPath(vm.node, vm.id, vm.cloud)}/disks/${esc(remove)}`,
+                            `${vmPath(vm.cloud, vm.id)}/disks/${esc(remove)}`,
                             "DELETE",
                         );
                         await queries.invalidateQueries();
                     }}
                 >
-                    Detach this disk from {vm.node}/{vm.id}. The volume and its
-                    data will be kept.
+                    Detach this disk from {vm.node}/{vm.name}. The volume and
+                    its data will be kept.
                 </Confirm>
             )}
         </>
@@ -375,7 +379,7 @@ function CreateDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
     }, [catalog.data]);
     return (
         <OperationDialog
-            title={`Create disk for ${vm.id}`}
+            title={`Create disk for ${vm.name}`}
             action="Create and attach disk"
             onClose={onClose}
             disabled={
@@ -383,7 +387,7 @@ function CreateDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
             }
             run={() =>
                 request(
-                    `/api/v1/clouds/${esc(vm.cloud)}/machines/${esc(vm.node)}/${esc(vm.id)}/disks`,
+                    `/api/v1/clouds/${esc(vm.cloud)}/machines/${esc(vm.id)}/disks`,
                     "POST",
                     {
                         name,
@@ -453,20 +457,16 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
     return (
         <OperationDialog
             disabled={!!blocked.task || blocked.unavailable}
-            title={`Attach disk to ${vm.id}`}
+            title={`Attach disk to ${vm.name}`}
             action="Attach disk"
             onClose={onClose}
             run={() =>
-                request(
-                    `${vmPath(vm.node, vm.id, vm.cloud)}/disks/attach`,
-                    "POST",
-                    {
-                        volume_id: id,
-                        alias,
-                        device,
-                        bus,
-                    },
-                )
+                request(`${vmPath(vm.cloud, vm.id)}/disks/attach`, "POST", {
+                    volume_id: id,
+                    alias,
+                    device,
+                    bus,
+                })
             }
         >
             {(error) => (
@@ -598,14 +598,14 @@ function Interfaces({ vm }: { vm: VM }) {
                     onClose={() => setRemove(undefined)}
                     run={async () => {
                         await request(
-                            `${vmPath(vm.node, vm.id, vm.cloud)}/interfaces/${esc(remove)}`,
+                            `${vmPath(vm.cloud, vm.id)}/interfaces/${esc(remove)}`,
                             "DELETE",
                         );
                         await queries.invalidateQueries();
                     }}
                 >
-                    Detach {remove} from {vm.node}/{vm.id}. The guest will lose
-                    access through this interface.
+                    Detach {remove} from {vm.node}/{vm.name}. The guest will
+                    lose access through this interface.
                 </Confirm>
             )}
         </>
@@ -629,7 +629,7 @@ function AttachInterface({ vm, onClose }: { vm: VM; onClose: () => void }) {
     }, [choices.data]);
     return (
         <OperationDialog
-            title={`Attach interface to ${vm.id}`}
+            title={`Attach interface to ${vm.name}`}
             action="Attach interface"
             disabled={
                 vm.managed === false ||
@@ -640,13 +640,9 @@ function AttachInterface({ vm, onClose }: { vm: VM; onClose: () => void }) {
             }
             onClose={onClose}
             run={() =>
-                request(
-                    `${vmPath(vm.node, vm.id, vm.cloud)}/interfaces`,
-                    "POST",
-                    {
-                        network,
-                    },
-                )
+                request(`${vmPath(vm.cloud, vm.id)}/interfaces`, "POST", {
+                    network,
+                })
             }
         >
             {(error) => (

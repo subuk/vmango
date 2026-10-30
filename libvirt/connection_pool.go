@@ -87,44 +87,45 @@ func (p *ConnectionPool) Acquire(node string) (*libvirt.Connect, error) {
 	if p.cache[uri] == nil {
 		p.cache[uri] = &connection{Mu: &sync.Mutex{}}
 	}
+	entry := p.cache[uri]
 	p.cacheMu.Unlock()
-	p.cacheMu.RLock()
-	defer p.cacheMu.RUnlock()
 
-	p.cache[uri].Mu.Lock()
-	if p.cache[uri].Conn == nil {
+	entry.Mu.Lock()
+	if entry.Conn == nil {
 		p.logger.Debug().Str("node", node).Msg("establishing new connection")
 		newConn, err := libvirt.NewConnect(uri)
 		if err != nil {
-			p.cache[uri].Mu.Unlock()
+			entry.Mu.Unlock()
 			return nil, repositoryError(err, "cannot open libvirt connection")
 		}
-		p.cache[uri].Conn = newConn
+		entry.Conn = newConn
 		return newConn, nil
 	}
-	alive, err := p.cache[uri].Conn.IsAlive()
+	alive, err := entry.Conn.IsAlive()
 	if err != nil {
 		newConn, err := libvirt.NewConnect(uri)
 		if err != nil {
-			p.cache[uri].Mu.Unlock()
+			entry.Mu.Unlock()
 			return nil, repositoryError(err, "cannot reopen libvirt connection")
 		}
-		p.cache[uri].Conn = newConn
+		entry.Conn = newConn
 		return newConn, nil
 	}
 	if !alive {
 		newConn, err := libvirt.NewConnect(uri)
 		if err != nil {
-			p.cache[uri].Mu.Unlock()
+			entry.Mu.Unlock()
 			return nil, repositoryError(err, "cannot reopen libvirt connection")
 		}
-		p.cache[uri].Conn = newConn
+		entry.Conn = newConn
 		return newConn, nil
 	}
-	return p.cache[uri].Conn, nil
+	return entry.Conn, nil
 }
 
 func (p *ConnectionPool) Release(node string) {
-	uri := p.nodeUri[node]
-	p.cache[uri].Mu.Unlock()
+	p.cacheMu.RLock()
+	entry := p.cache[p.nodeUri[node]]
+	p.cacheMu.RUnlock()
+	entry.Mu.Unlock()
 }

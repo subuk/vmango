@@ -500,7 +500,7 @@ func TestDurableCreatePinsImageAndClonesHiddenVerifiedSource(t *testing.T) {
 				t.Fatal(err)
 			}
 			service := tasks.New(repo, handler, zerolog.Nop())
-			vm := &compute.VirtualMachine{Id: "pinned", NodeId: "one", Arch: compute.ArchAmd64, VCpus: 1, Memory: compute.NewSize(512, compute.SizeUnitM), Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
+			vm := &compute.VirtualMachine{Id: "pinned", Name: "pinned", NodeId: "one", Arch: compute.ArchAmd64, VCpus: 1, Memory: compute.NewSize(512, compute.SizeUnitM), Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
 			command := compute.NewCommand("machine.create", compute.InfrastructureCommand{Node: "one", VM: vm.Id, Machine: vm, Clones: []compute.VirtualMachineManagerClonedVolumeParams{{ImageID: image.ID, NewPool: "vm-disks", NewName: "root"}}})
 			accepted, err := service.Submit(tasks.Identity{ID: "admin"}, "pinned-image-request", command)
 			if err != nil {
@@ -703,7 +703,7 @@ func TestCloudCreateRetriesCleanedUpImageFailure(t *testing.T) {
 			t.Cleanup(func() { repo.Close() })
 			service := tasks.New(repo, &compute.CommandHandler{Clouds: clouds, Manager: manager, VMs: vms, Volumes: volumes, Nodes: clouds.Nodes}, zerolog.Nop())
 			runCloudService(t, service)
-			command := compute.InfrastructureCommand{CloudID: "c", CreateSpec: &compute.MachineCreateSpec{ID: "new", Image: image.ID, InstanceType: "small", Zone: "z", Network: "lan", StorageClass: "fast"}}
+			command := compute.InfrastructureCommand{CloudID: "c", CreateSpec: &compute.MachineCreateSpec{Name: "new", Image: image.ID, InstanceType: "small", Zone: "z", Network: "lan", StorageClass: "fast"}}
 			first := submitCloud(t, service, "failed-image-create", "machine.create", command)
 			if result := waitImage(t, service, first.ID); result.State != tasks.Failed {
 				t.Fatal(result)

@@ -31,7 +31,7 @@ import {
     type ResourceRef,
     type Task,
 } from "../api/tasks";
-import { machineURL } from "../api/hooks";
+import { machineURL, useHostCloud } from "../api/hooks";
 import {
     Confirm,
     Copy,
@@ -448,6 +448,10 @@ function ResourceLink({
     deleted: boolean;
     available?: boolean;
 }) {
+    const cloud = useHostCloud(
+        resource.scope,
+        resource.kind === "machine" && !deleted && available,
+    );
     const label = `${resource.scope}/${resource.id}`;
     if (resource.kind === "machine-request")
         return <span>Requested machine: {resource.id}</span>;
@@ -465,12 +469,13 @@ function ResourceLink({
     if (!available && !deleted)
         return <span>{label} (existence not confirmed)</span>;
     if (deleted) return <span>{label} (deleted)</span>;
+    if (resource.kind === "machine" && !cloud.data) return <span>{label}</span>;
     return (
         <Link
             component={RouterLink}
             to={
                 resource.kind === "machine"
-                    ? machineURL(resource.scope, resource.id)
+                    ? machineURL(cloud.data!.cloud, resource.id)
                     : `/volumes/?node=${encodeURIComponent(resource.scope)}`
             }
         >

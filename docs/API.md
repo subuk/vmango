@@ -65,11 +65,17 @@ contract changes run `make api-types`, review the snapshot/type diff and run
 
 All machine and volume operations live under `/api/v1/clouds/{cloud}`.
 Create commands select catalog entries and an availability zone; the scheduler
-selects the host. Existing resource URLs contain their observed `{node}` host
-identity because local disks and existing VM names are host-bound. Copy these
-identities from discovery: they are not a placement input and cannot move a VM.
-The API verifies that the addressed host belongs to the requested cloud before
-reads, mutation submission and native console connections.
+selects the host. Machine URLs contain the stable `id` returned by discovery
+(the libvirt domain UUID); `name` is a separate display field. Volume URLs retain
+`{node}` because disks are host-local. Copy identities from discovery; they are
+not placement inputs. Cloud membership is checked before reads, mutations and
+console connections.
+
+Machine lists return `{ "items": [...], "unavailable_hosts": [...] }`. Every list
+request reads fresh backend state; failed hosts are omitted and explicitly named.
+The routing index stores only IDs and locations, not machine state. Point reads
+use the known host, or discover it after a miss. An unknown ID returns 503 if the
+search is incomplete and 404 after all hosts confirm absence.
 
 Volume IDs are opaque URL-safe identifiers returned by discovery; clients should
 not construct or interpret them. SSH keys are application-wide and identified by
@@ -80,15 +86,15 @@ and invalid types are rejected. Paths below are relative to `/api/v1`.
 | --- | --- |
 | `/clouds`, `/clouds/{cloud}` | GET catalogs, compatible offers and placement capabilities |
 | `/clouds/{cloud}/machines` | GET managed/unmanaged inventory, POST scheduled creation |
-| `/clouds/{cloud}/machines/{node}/{vm}` | GET, DELETE |
-| `/clouds/{cloud}/machines/{node}/{vm}/actions` | POST `start`, `reboot`, `poweroff` |
-| `/clouds/{cloud}/machines/{node}/{vm}/instance-type` | POST explicit stopped, same-host type change |
-| `/clouds/{cloud}/machines/{node}/{vm}/adopt` | POST explicit adoption |
-| `/clouds/{cloud}/machines/{node}/{vm}/disks` | POST create and attach a disk using storage class and size |
-| `/clouds/{cloud}/machines/{node}/{vm}/disks/attach` | POST attach an existing local volume |
-| `/clouds/{cloud}/machines/{node}/{vm}/disks/{volume}` | DELETE attachment without deleting the disk |
-| `/clouds/{cloud}/machines/{node}/{vm}/interfaces` | POST attach a configured logical network |
-| `/clouds/{cloud}/machines/{node}/{vm}/interfaces/{mac}` | DELETE attachment |
+| `/clouds/{cloud}/machines/{vm}` | GET, DELETE |
+| `/clouds/{cloud}/machines/{vm}/actions` | POST `start`, `reboot`, `poweroff` |
+| `/clouds/{cloud}/machines/{vm}/instance-type` | POST explicit stopped, same-host type change |
+| `/clouds/{cloud}/machines/{vm}/adopt` | POST explicit adoption |
+| `/clouds/{cloud}/machines/{vm}/disks` | POST create and attach a disk using storage class and size |
+| `/clouds/{cloud}/machines/{vm}/disks/attach` | POST attach an existing local volume |
+| `/clouds/{cloud}/machines/{vm}/disks/{volume}` | DELETE attachment without deleting the disk |
+| `/clouds/{cloud}/machines/{vm}/interfaces` | POST attach a configured logical network |
+| `/clouds/{cloud}/machines/{vm}/interfaces/{mac}` | DELETE attachment |
 | `/clouds/{cloud}/volumes` | GET visible volumes, POST scheduled creation |
 | `/clouds/{cloud}/volumes/{node}/{volume}` | GET, DELETE |
 | `/clouds/{cloud}/volumes/{node}/{volume}/clone` | POST host-local clone to a storage class |
@@ -97,6 +103,7 @@ and invalid types are rejected. Paths below are relative to `/api/v1`.
 | `/hosts/{node}/networks`, `/hosts/{node}/pools` | GET backend diagnostics |
 | `/hosts/{node}/images`, `/hosts/{node}/capabilities` | GET backend diagnostics, optional `arch` |
 | `/hosts/{node}/catalog` | GET logical networks/storage classes supported on an observed host, plus its cloud and AZ |
+| `/hosts/{node}/cloud` | GET configured cloud membership without a backend read |
 | `/keys` | GET list, POST add a public key |
 | `/keys/{fingerprint}` | GET, DELETE |
 
@@ -184,7 +191,7 @@ Example `vm.json` (replace the image, instance type, zone, storage class and net
 
 ```json
 {
-  "id": "demo",
+  "name": "demo",
   "image": "ubuntu-24.04-x86_64-bios",
   "instance_type": "small",
   "zone": "local",
@@ -210,7 +217,7 @@ archive use `IMAGES.md` for the image guide.
 The full stream protocol is also served at `/api/console-protocol` and included
 in OpenAPI. Native clients send Bearer JWTs on the WebSocket handshake:
 
-`/api/v1/clouds/{cloud}/machines/{node}/{vm}/consoles/{serial|vnc}/ws`
+`/api/v1/clouds/{cloud}/machines/{vm}/consoles/{serial|vnc}/ws`
 
 Serial bytes and VNC/RFB bytes use **binary** WebSocket messages. Message boundaries
 are not byte-stream boundaries. Maximum message size is 1 MiB; text messages close
@@ -227,10 +234,10 @@ Run the native example with a protected file containing your personal JWT:
 
 ```sh
 go run -mod=vendor ./examples/console -token-file ~/.config/vmango/token \
-  -url wss://vmango.example/api/v1/clouds/local/machines/local/demo/consoles/serial/ws
+  -url wss://vmango.example/api/v1/clouds/local/machines/550e8400-e29b-41d4-a716-446655440000/consoles/serial/ws
 
 go run -mod=vendor ./examples/console -token-file ~/.config/vmango/token -listen 127.0.0.1:5901 \
-  -url wss://vmango.example/api/v1/clouds/local/machines/local/demo/consoles/vnc/ws
+  -url wss://vmango.example/api/v1/clouds/local/machines/550e8400-e29b-41d4-a716-446655440000/consoles/vnc/ws
 ```
 
 For VNC, connect a native viewer to the local forwarding port. Backend graphics
@@ -241,7 +248,7 @@ viewer connection and exits when it disconnects.
 
 ```sh
 curl --config ~/.config/vmango/web-curl.conf --json '{}' \
-  https://vmango.example/api/v1/clouds/local/machines/local/demo/consoles/vnc/links
+  https://vmango.example/api/v1/clouds/local/machines/550e8400-e29b-41d4-a716-446655440000/consoles/vnc/links
 ```
 
 This operation requires a short-lived interactive web JWT; a personal JWT
@@ -252,7 +259,7 @@ page provides the same issuance/sharing flow.
 The response contains `url` and `expires_at`. Serial issuance accepts
 `{"force":true}` to authorize explicit takeover for connections using that link.
 Links use HS256 JWTs with a distinct `vmango-console` audience,
-binding purpose, issuing user, node, VM, console type, force permission and
+binding purpose, issuing user, cloud, machine UUID, console type, force permission and
 absolute expiry. The payload is not encrypted and contains no account password.
 A link grants only console access; the public page is an empty client shell.
 

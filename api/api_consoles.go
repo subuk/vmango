@@ -22,7 +22,7 @@ type consoleClaim struct {
 	Version int    `json:"v"`
 	Purpose string `json:"purpose"`
 	User    string `json:"user"`
-	Node    string `json:"node"`
+	Cloud   string `json:"cloud"`
 	VM      string `json:"vm"`
 	Kind    string `json:"kind"`
 	Force   bool   `json:"force,omitempty"`
@@ -40,9 +40,9 @@ func (e *Environ) signConsole(c consoleClaim) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"v": c.Version, "iss": auth.Issuer, "aud": "vmango-console", "sub": c.User, "purpose": c.Purpose, "node": c.Node, "vm": c.VM, "kind": c.Kind, "force": c.Force, "iat": time.Now().Unix(), "exp": c.Expires}).SignedString(key)
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"v": c.Version, "iss": auth.Issuer, "aud": "vmango-console", "sub": c.User, "purpose": c.Purpose, "cloud": c.Cloud, "vm": c.VM, "kind": c.Kind, "force": c.Force, "iat": time.Now().Unix(), "exp": c.Expires}).SignedString(key)
 }
-func (e *Environ) verifyConsole(raw, node, vm, kind string, now time.Time) (consoleClaim, error) {
+func (e *Environ) verifyConsole(raw, cloud, vm, kind string, now time.Time) (consoleClaim, error) {
 	var c consoleClaim
 	if len(raw) > 8192 {
 		return c, auth.ErrInvalid
@@ -61,16 +61,15 @@ func (e *Environ) verifyConsole(raw, node, vm, kind string, now time.Time) (cons
 	}
 	sub, _ := m.GetSubject()
 	exp, _ := m.GetExpirationTime()
-	if m["purpose"] != "console" || m["v"] != float64(1) || sub == "" || m["node"] != node || m["vm"] != vm || m["kind"] != kind || (kind != "serial" && kind != "vnc") || exp == nil {
+	if m["purpose"] != "console" || m["v"] != float64(2) || sub == "" || m["cloud"] != cloud || m["vm"] != vm || m["kind"] != kind || (kind != "serial" && kind != "vnc") || exp == nil {
 		return c, auth.ErrInvalid
 	}
 	force, _ := m["force"].(bool)
-	return consoleClaim{1, "console", sub, node, vm, kind, force, exp.Unix()}, nil
+	return consoleClaim{2, "console", sub, cloud, vm, kind, force, exp.Unix()}, nil
 }
 
 type apiConsoleLinkInput struct {
 	Cloud string `path:"cloud"`
-	Node  string `path:"node"`
 	VM    string `path:"vm"`
 	Kind  string `path:"kind" enum:"serial,vnc"`
 	Body  struct {
@@ -83,12 +82,12 @@ type apiConsoleLink struct {
 }
 
 func (e *Environ) registerConsoles(api huma.API, router *mux.Router) {
-	const path = "/clouds/{cloud}/machines/{node}/{vm}/consoles/{kind}"
+	const path = "/clouds/{cloud}/machines/{vm}/consoles/{kind}"
 	registerAPI(api, "POST", path+"/links", "create-console-link", "Issue reusable signed browser console link", func(ctx context.Context, in *apiConsoleLinkInput) (*apiResult[apiConsoleLink], error) {
 		if claims(ctx).Kind != "web" {
 			return nil, authError(auth.ErrForbidden)
 		}
-		vm, err := e.vms.Get(in.VM, in.Node)
+		vm, err := e.clouds.GetMachine(ctx, in.Cloud, in.VM)
 		if err != nil {
 			return nil, apiError(err)
 		}
@@ -103,11 +102,11 @@ func (e *Environ) registerConsoles(api huma.API, router *mux.Router) {
 			ttl = 3600
 		}
 		expires := time.Now().Add(time.Duration(ttl) * time.Second).Truncate(time.Second)
-		token, err := e.signConsole(consoleClaim{1, "console", claims(ctx).Subject, in.Node, in.VM, in.Kind, in.Body.Force, expires.Unix()})
+		token, err := e.signConsole(consoleClaim{2, "console", claims(ctx).Subject, in.Cloud, in.VM, in.Kind, in.Body.Force, expires.Unix()})
 		if err != nil {
 			return nil, apiError(err)
 		}
-		link := "/console/" + url.PathEscape(in.Node) + "/" + url.PathEscape(in.VM) + "/" + in.Kind + "#" + token
+		link := "/console/" + url.PathEscape(in.Cloud) + "/" + url.PathEscape(in.VM) + "/" + in.Kind + "#" + token
 		if e.cfg.BaseUrl != "" {
 			link = strings.TrimRight(e.cfg.BaseUrl, "/") + link
 		}
@@ -127,14 +126,14 @@ func (e *Environ) registerConsoles(api huma.API, router *mux.Router) {
 			writeAPIProblem(w, 422, "force must be true or false.")
 			return
 		}
-		e.serveConsole(w, r, v["node"], v["vm"], v["kind"], force == "true", claims(r.Context()).ExpiresAt.Time)
+		e.serveConsole(w, r, v["cloud"], v["vm"], v["kind"], force == "true", claims(r.Context()).ExpiresAt.Time)
 	}).Methods("GET")
-	api.OpenAPI().AddOperation(&huma.Operation{Method: "GET", Path: native, OperationID: "connect-console", Tags: []string{"clouds"}, Summary: "Binary serial or VNC WebSocket; Bearer JWT on handshake", Description: consoleProtocol, Parameters: []*huma.Param{{Name: "cloud", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "node", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "vm", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "kind", In: "path", Required: true, Schema: &huma.Schema{Type: "string", Enum: []any{"serial", "vnc"}}}, {Name: "force", In: "query", Schema: &huma.Schema{Type: "boolean", Default: false}}}, Responses: map[string]*huma.Response{"101": {Description: "Switching protocols; binary messages only"}, "401": {Description: "Invalid Bearer credential"}, "403": {Description: "Origin or transport rejected"}, "404": {Description: "Missing resource"}, "409": {Description: "Console busy or VM state conflict"}, "503": {Description: "Backend unavailable"}}})
+	api.OpenAPI().AddOperation(&huma.Operation{Method: "GET", Path: native, OperationID: "connect-console", Tags: []string{"clouds"}, Summary: "Binary serial or VNC WebSocket; Bearer JWT on handshake", Description: consoleProtocol, Parameters: []*huma.Param{{Name: "cloud", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "vm", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "kind", In: "path", Required: true, Schema: &huma.Schema{Type: "string", Enum: []any{"serial", "vnc"}}}, {Name: "force", In: "query", Schema: &huma.Schema{Type: "boolean", Default: false}}}, Responses: map[string]*huma.Response{"101": {Description: "Switching protocols; binary messages only"}, "401": {Description: "Invalid Bearer credential"}, "403": {Description: "Origin or transport rejected"}, "404": {Description: "Missing resource"}, "409": {Description: "Console busy or VM state conflict"}, "503": {Description: "Backend unavailable"}}})
 	router.HandleFunc("/api/console-protocol", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		io.WriteString(w, consoleProtocol)
 	}).Methods("GET")
-	e.router.Handle("/console/{node}/{vm}/{kind}/ws", e.apiGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	e.router.Handle("/console/{cloud}/{vm}/{kind}/ws", e.apiGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.RawQuery != "" {
 			writeAPIProblem(w, 422, "Console WebSocket credentials belong in the scoped subprotocol, never URL queries.")
 			return
@@ -150,17 +149,17 @@ func (e *Environ) registerConsoles(api huma.API, router *mux.Router) {
 				token = strings.TrimPrefix(p, "vmango.token.")
 			}
 		}
-		c, err := e.verifyConsole(token, v["node"], v["vm"], v["kind"], time.Now())
+		c, err := e.verifyConsole(token, v["cloud"], v["vm"], v["kind"], time.Now())
 		if err != nil {
 			writeAPIProblem(w, 401, "Invalid or expired console link.")
 			return
 		}
-		e.serveConsole(w, r, c.Node, c.VM, c.Kind, c.Force, time.Unix(c.Expires, 0))
+		e.serveConsole(w, r, c.Cloud, c.VM, c.Kind, c.Force, time.Unix(c.Expires, 0))
 	}), false)).Methods("GET")
 
 }
 
-func (e *Environ) serveConsole(w http.ResponseWriter, r *http.Request, node, id, kind string, force bool, expires time.Time) {
+func (e *Environ) serveConsole(w http.ResponseWriter, r *http.Request, cloud, id, kind string, force bool, expires time.Time) {
 	if !e.apiOriginAllowed(r) {
 		writeAPIProblem(w, 403, "Cross-origin requests are disabled.")
 		return
@@ -183,7 +182,11 @@ func (e *Environ) serveConsole(w http.ResponseWriter, r *http.Request, node, id,
 		writeAPIProblem(w, 401, "Console link expired.")
 		return
 	}
-	vm, err := e.vms.Get(id, node)
+	vm, err := e.clouds.GetMachine(r.Context(), cloud, id)
+	node := ""
+	if vm != nil {
+		node = vm.NodeId
+	}
 	if err == nil && (!vm.IsRunning() || kind == "vnc" && !vm.Graphic.Vnc()) {
 		err = compute.ErrConflict
 	}
@@ -281,7 +284,7 @@ func bridgeConsole(ws *websocket.Conn, stream io.ReadWriteCloser, expires time.T
 }
 
 const consoleProtocol = `Console protocol v1
-Native clients: GET /api/v1/clouds/{cloud}/machines/{node}/{vm}/consoles/{serial|vnc}/ws
+Native clients: GET /api/v1/clouds/{cloud}/machines/{vm}/consoles/{serial|vnc}/ws
 Send Authorization: Bearer TOKEN on the WebSocket handshake over WSS.
 Access-token expiry closes the stream; reconnect with a valid token.
 Revoking a personal token through the API closes its active streams.
@@ -292,7 +295,7 @@ side disconnecting closes both transports. A slow WebSocket writer is closed
 after 15 seconds. Errors before upgrade use application/problem+json.
 Serial returns 409 when occupied; ?force=true explicitly takes over. VNC uses
 shared-client mode in the browser; the backend controls shared-client support.
-Browser links use /console/{node}/{vm}/{kind}#TOKEN. The public page is an empty
+Browser links use /console/{cloud}/{vm}/{kind}#TOKEN. The public page is an empty
 client shell. TOKEN is sent only as a vmango.token.TOKEN WebSocket subprotocol,
 alongside binary; only binary is selected by the server. Never log that header.
 The token authorizes only its bound console. It cannot access the API or UI.

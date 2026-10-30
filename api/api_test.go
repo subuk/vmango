@@ -58,7 +58,7 @@ func apiRequest(h http.Handler, method, path, body string, auth bool) *httptest.
 func TestAPIAuthenticationAndOrigins(t *testing.T) {
 	cfg := apiTestConfig(t)
 	h := newTestAPI(t, cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil)
-	for _, path := range []string{"/api/openapi.json", "/api/v1/hosts", "/api/v1/clouds/local/machines/n/v/consoles/serial/ws"} {
+	for _, path := range []string{"/api/openapi.json", "/api/v1/hosts", "/api/v1/clouds/local/machines/v/consoles/serial/ws"} {
 		w := apiRequest(h, "GET", path, "", false)
 		if w.Code != 401 || !strings.HasPrefix(w.Header().Get("WWW-Authenticate"), "Bearer") || w.Header().Get("Location") != "" {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
@@ -196,6 +196,26 @@ type apiVMRepo struct {
 	stream func(bool) (compute.VirtualMachineConsoleStream, error)
 }
 
+func (r *apiVMRepo) List(o compute.VirtualMachineListOptions) ([]*compute.VirtualMachine, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v := r.vm
+	if v.Id == "" {
+		v.Id = "v"
+	}
+	if v.Name == "" {
+		v.Name = "example"
+	}
+	if v.NodeId == "" {
+		v.NodeId = "n"
+	}
+	for _, node := range o.NodeIds {
+		if node == v.NodeId {
+			return []*compute.VirtualMachine{&v}, nil
+		}
+	}
+	return []*compute.VirtualMachine{}, nil
+}
 func (r *apiVMRepo) Get(id, node string) (*compute.VirtualMachine, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -214,6 +234,12 @@ func (r *apiVMRepo) Save(v *compute.VirtualMachine) error {
 	r.saves++
 	return nil
 }
+func (r *apiVMRepo) Start(id, node string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.vm.State = compute.StateRunning
+	return nil
+}
 func (r *apiVMRepo) GetConsoleStream(id, node string, force bool) (compute.VirtualMachineConsoleStream, error) {
 	return r.stream(force)
 }
@@ -226,7 +252,7 @@ func TestAPIPatchAndErrors(t *testing.T) {
 	repo := &apiVMRepo{vm: compute.VirtualMachine{VCpus: 4, Memory: compute.NewSize(2, compute.SizeUnitG), GuestAgent: true, Autostart: true, Hugepages: true, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc}, VideoModel: compute.VideoModelNone}}
 	h := newTestAPI(t, cfg, zerolog.Nop(), nil, nil, nil, nil, nil, compute.NewVirtualMachineService(repo), nil, nil)
 	for _, body := range []string{`{"autostart":false}`, `{"guest_agent":false}`, `{"graphics":"vnc","graphics_listen":"0.0.0.0","video_model":"qxl"}`} {
-		w := apiRequest(h, "PATCH", "/api/v1/clouds/local/machines/n/v", body, true)
+		w := apiRequest(h, "PATCH", "/api/v1/clouds/local/machines/v", body, true)
 		if w.Code != 405 {
 			t.Fatalf("removed PATCH accepted: %d %s", w.Code, w.Body)
 		}
@@ -239,7 +265,7 @@ func TestAPIPatchAndErrors(t *testing.T) {
 		status int
 	}{{compute.ErrNotFound, 404}, {compute.ErrConflict, 409}, {compute.ErrUnavailable, 503}, {fmt.Errorf("secret backend data"), 500}} {
 		repo.getErr = tt.err
-		w := apiRequest(h, "GET", "/api/v1/clouds/local/machines/n/v", "", true)
+		w := apiRequest(h, "GET", "/api/v1/clouds/local/machines/v", "", true)
 		if w.Code != tt.status || !strings.Contains(w.Header().Get("Content-Type"), "problem+json") || strings.Contains(w.Body.String(), "secret backend") {
 			t.Fatalf("%d %s", w.Code, w.Body)
 		}
@@ -250,7 +276,7 @@ func TestConsoleTokenBinding(t *testing.T) {
 	cfg := apiTestConfig(t)
 	e := &Environ{cfg: &cfg.API}
 	now := time.Now()
-	base := consoleClaim{1, "console", "admin", "node", "vm", "serial", false, now.Add(time.Hour).Unix()}
+	base := consoleClaim{2, "console", "admin", "node", "vm", "serial", false, now.Add(time.Hour).Unix()}
 	token, err := e.signConsole(base)
 	if err != nil {
 		t.Fatal(err)
@@ -260,7 +286,7 @@ func TestConsoleTokenBinding(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, change := range []func(*consoleClaim){func(c *consoleClaim) { c.Version = 2 }, func(c *consoleClaim) { c.Purpose = "login" }, func(c *consoleClaim) { c.Node = "other" }, func(c *consoleClaim) { c.VM = "other" }, func(c *consoleClaim) { c.Kind = "vnc" }, func(c *consoleClaim) { c.User = "" }, func(c *consoleClaim) { c.Expires = now.Unix() }} {
+	for _, change := range []func(*consoleClaim){func(c *consoleClaim) { c.Version = 1 }, func(c *consoleClaim) { c.Purpose = "login" }, func(c *consoleClaim) { c.Cloud = "other" }, func(c *consoleClaim) { c.VM = "other" }, func(c *consoleClaim) { c.Kind = "vnc" }, func(c *consoleClaim) { c.User = "" }, func(c *consoleClaim) { c.Expires = now.Unix() }} {
 		c := base
 		change(&c)
 		token, _ := e.signConsole(c)
@@ -304,8 +330,8 @@ func TestConsoleStreamsAndExpiry(t *testing.T) {
 	}()
 	e := &Environ{cfg: &cfg.API}
 	expires := time.Now().Add(3 * time.Second).Truncate(time.Second)
-	token, _ := e.signConsole(consoleClaim{1, "console", "admin", "n", "v", "serial", true, expires.Unix()})
-	endpoint := "ws" + strings.TrimPrefix(srv.URL, "http") + "/console/n/v/serial/ws"
+	token, _ := e.signConsole(consoleClaim{2, "console", "admin", "local", "v", "serial", true, expires.Unix()})
+	endpoint := "ws" + strings.TrimPrefix(srv.URL, "http") + "/console/local/v/serial/ws"
 	dial := websocket.Dialer{Subprotocols: []string{"binary", "vmango.token." + token}}
 	for i := 0; i < 2; i++ {
 		ws, res, err := dial.Dial(endpoint, nil)
@@ -472,7 +498,8 @@ func newTestAPI(t *testing.T, cfg *config.Config, logger zerolog.Logger, network
 	if manager.Clouds == nil {
 		manager.Clouds = &compute.CloudService{Definitions: []compute.Cloud{{ID: "local", Hosts: []compute.CloudHost{{Node: "n"}, {Node: "local"}, {Node: "a"}, {Node: "b"}}}}}
 	}
-	h, err := New(cfg, logger, networks, keys, pools, nodes, volumes, vms, manager, images, testAuthService(t, cfg), newTestTaskService(t, &compute.CommandHandler{Manager: manager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys}))
+	manager.Clouds.VMs = vms
+	h, err := New(cfg, logger, networks, keys, pools, nodes, volumes, vms, manager, images, testAuthService(t, cfg), newTestTaskService(t, &compute.CommandHandler{Clouds: manager.Clouds, Manager: manager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -522,7 +549,7 @@ func TestAttachInterfaceRejectsUnsupportedFields(t *testing.T) {
 	h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil)
 	for _, field := range []string{`"model":"e1000"`, `"vlan":42`, `"vlan":0`, `"unexpected":true`} {
 		t.Run(field, func(t *testing.T) {
-			w := apiRequest(h, "POST", "/api/v1/clouds/local/machines/n/v/interfaces", `{"network":"lan",`+field+`}`, true)
+			w := apiRequest(h, "POST", "/api/v1/clouds/local/machines/v/interfaces", `{"network":"lan",`+field+`}`, true)
 			if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "unexpected property") {
 				t.Fatalf("unsupported input was not rejected: %d %s", w.Code, w.Body)
 			}
@@ -542,13 +569,42 @@ func TestCatalogOperationsRejectPolicyOverrides(t *testing.T) {
 	h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil)
 	for _, field := range []string{`"autostart":true`, `"guest_agent":false`, `"graphics":"none"`, `"graphics_listen":"127.0.0.2"`, `"video_model":"qxl"`} {
 		for _, input := range []struct{ path, body string }{
-			{"/api/v1/clouds/local/machines", `{"id":"v","image":"image","instance_type":"small","zone":"z","network":"lan","storage_class":"fast","start":false,` + field + `}`},
-			{"/api/v1/clouds/local/machines/n/v/instance-type", `{"instance_type":"small",` + field + `}`},
+			{"/api/v1/clouds/local/machines", `{"name":"v","image":"image","instance_type":"small","zone":"z","network":"lan","storage_class":"fast","start":false,` + field + `}`},
+			{"/api/v1/clouds/local/machines/v/instance-type", `{"instance_type":"small",` + field + `}`},
 		} {
 			w := apiRequest(h, "POST", input.path, input.body, true)
 			if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "unexpected property") {
 				t.Fatalf("policy override accepted: %s %s: %d %s", input.path, field, w.Code, w.Body)
 			}
 		}
+	}
+}
+
+func TestMachineSubmissionRecoveryDoesNotRequireRouting(t *testing.T) {
+	repo := &apiVMRepo{vm: compute.VirtualMachine{Id: "v", Name: "display-name", NodeId: "n", State: compute.StateStopped, VCpus: 2, Memory: compute.NewSize(1, compute.SizeUnitG), Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc}, VideoModel: compute.VideoModelNone}}
+	h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nil, nil, compute.NewVirtualMachineService(repo), nil, nil)
+	submit := func(key string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "https://vmango.test/api/v1/clouds/local/machines/v/actions", strings.NewReader(`{"action":"start"}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Authorization", "Bearer "+testWebToken())
+		r.Header.Set("Idempotency-Key", key)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	first := submit("recover-uuid-operation")
+	if first.Code != 202 {
+		t.Fatal(first.Code, first.Body)
+	}
+	task := awaitAPITask(t, h, first)
+	repo.mu.Lock()
+	repo.getErr = compute.ErrUnavailable
+	repo.mu.Unlock()
+	recovered := submit("recover-uuid-operation")
+	if recovered.Code != 202 || !strings.Contains(recovered.Body.String(), task.ID) {
+		t.Fatalf("idempotent recovery performed a backend read: %d %s", recovered.Code, recovered.Body)
+	}
+	if newRequest := submit("new-uuid-operation"); newRequest.Code != 503 {
+		t.Fatalf("new operation ignored host failure: %d %s", newRequest.Code, newRequest.Body)
 	}
 }
