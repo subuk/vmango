@@ -119,7 +119,7 @@ func TestAuthOriginsAndProxyTLS(t *testing.T) {
 
 func TestFrontendRoutingAndRuntimeAssets(t *testing.T) {
 	h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil)
-	for _, path := range []string{"/machines/", "/machines/node/vm/update/", "/console/n/v/vnc", "/api/docs", "/vendor/novnc.html", "/vendor/vnc-client.js", "/vendor/noVNC-1.7.0/app/ui.js", "/vendor/noVNC-1.7.0/package.json", "/vendor/swagger-ui-5.34.0/swagger-ui-bundle.js"} {
+	for _, path := range []string{"/machines/", "/tasks/", "/tasks/22d9e017-9379-4f6f-95ab-9823dbd1cc35/", "/machines/node/vm/update/", "/console/n/v/vnc", "/api/docs", "/vendor/novnc.html", "/vendor/vnc-client.js", "/vendor/noVNC-1.7.0/app/ui.js", "/vendor/noVNC-1.7.0/package.json", "/vendor/swagger-ui-5.34.0/swagger-ui-bundle.js"} {
 		w := apiRequest(h, "GET", path, "", false)
 		if w.Code != 200 || w.Body.Len() == 0 {
 			t.Fatalf("%s: %d", path, w.Code)

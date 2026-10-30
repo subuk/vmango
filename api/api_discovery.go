@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/danielgtaylor/huma/v2"
 	"subuk/vmango/compute"
+	"subuk/vmango/tasks"
 )
 
 type apiCPU struct {
@@ -77,6 +78,9 @@ type apiImage struct {
 	MinimumMemoryBytes uint64           `json:"minimum_memory_bytes"`
 	MinimumDiskBytes   uint64           `json:"minimum_disk_bytes"`
 	Defaults           apiImageDefaults `json:"defaults"`
+	SourceMode         string           `json:"source_mode" enum:"local,download"`
+	State              string           `json:"state" enum:"ready,downloadable,preparing,failed"`
+	PreparationError   string           `json:"preparation_error,omitempty"`
 }
 type apiArchInput struct {
 	Node string `path:"node"`
@@ -186,12 +190,31 @@ func (e *Environ) registerDiscovery(api huma.API) {
 			return nil, apiError(err)
 		}
 		out := []apiImage{}
+		caps, err := e.vms.Capabilities(in.Node, arch)
+		if err != nil {
+			return nil, apiError(err)
+		}
 		for _, i := range items {
+			if !i.Compatible(caps) {
+				continue
+			}
 			bus := ""
 			if i.Defaults.DiskBus != compute.DeviceBusUnknown {
 				bus = i.Defaults.DiskBus.String()
 			}
-			out = append(out, apiImage{i.ID, i.Name, i.OSName, i.OSVersion, i.Arch.String(), volumeID(i.SourcePath), i.MinimumMemoryBytes, i.MinimumDiskBytes, apiImageDefaults{i.Defaults.Firmware, bus, i.Defaults.DiskController, i.Defaults.NICModel, i.Defaults.GuestAgent, i.Defaults.Initialization}})
+			dto := apiImage{ID: i.ID, Name: i.Name, OSName: i.OSName, OSVersion: i.OSVersion, Arch: i.Arch.String(), VolumeID: volumeID(i.SourcePath), MinimumMemoryBytes: i.MinimumMemoryBytes, MinimumDiskBytes: i.MinimumDiskBytes, Defaults: apiImageDefaults{i.Defaults.Firmware, bus, i.Defaults.DiskController, i.Defaults.NICModel, i.Defaults.GuestAgent, i.Defaults.Initialization}, SourceMode: "local", State: "ready"}
+			if i.Managed() {
+				dto.SourceMode = "download"
+				dto.VolumeID = ""
+				b, bindErr := e.images.ManagedSources.Bind(in.Node, i)
+				if bindErr != nil {
+					dto.State = "failed"
+					dto.PreparationError = tasks.Redact(bindErr.Error(), nil)
+				} else {
+					dto.State, dto.PreparationError = e.images.ManagedSources.Status(b, i)
+				}
+			}
+			out = append(out, dto)
 		}
 		return &apiResult[[]apiImage]{Body: out}, nil
 	})

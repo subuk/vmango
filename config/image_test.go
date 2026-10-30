@@ -1,8 +1,10 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"subuk/vmango/compute"
 	"testing"
 )
@@ -57,5 +59,121 @@ func TestInvalidImageConfiguration(t *testing.T) {
 				t.Fatal("invalid config accepted")
 			}
 		})
+	}
+}
+
+func TestManagedSourceConfiguration(t *testing.T) {
+	hash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	base := `image "managed" { os_arch="aarch64" url="https://example.org/image" sha256="` + hash + `" source_format="qcow2" source_size_bytes=4096 }`
+	path := filepath.Join(t.TempDir(), "config.conf")
+	if err := os.WriteFile(path, []byte(base+` libvirt "one" { uri="qemu:///session" } libvirt "two" { uri="qemu+ssh://host/system" image_pool="cloud" }`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	images, policies, err := cfg.ImageDefinitions()
+	if err != nil || len(images) != 1 || !images[0].Managed() || images[0].SourcePath != "" || images[0].Download.SizeBytes != 4096 || len(policies) != 0 {
+		t.Fatal(images, policies, err)
+	}
+	if cfg.Libvirts[0].ImagePool != "default" || cfg.Libvirts[1].ImagePool != "cloud" {
+		t.Fatal(cfg.Libvirts)
+	}
+	for _, invalid := range []string{
+		`url="https://example.org/image"`,
+		`sha256="` + hash + `"`,
+		`url="ftp://example.org/image" sha256="` + hash + `" source_format="raw"`,
+		`url="https://example.org/image" sha256="bad" source_format="qcow2"`,
+		`url="https://example.org/image" sha256="` + hash + `" source_format="qcow2" path="/base"`,
+		`url="https://example.org/image" sha256="` + hash + `" source_format="xz"`,
+		`source_size_bytes=4096`,
+	} {
+		os.WriteFile(path, []byte(`image "invalid" { os_arch="x86_64" `+invalid+` }`), 0600)
+		if _, err := Parse(path); err == nil {
+			t.Fatal("invalid source accepted", invalid)
+		}
+	}
+}
+
+func TestShippedManagedCatalogMatchesVerifiedProvenance(t *testing.T) {
+	data, err := os.ReadFile("../vmango.dist.conf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.ReplaceAll(string(data), "REPLACE_WITH_RANDOM_SECRET", "4e3068f439dc1b9a8f63cb61ab758150e01354a259bfb48346c04ab72233a5d1")
+	text = strings.ReplaceAll(text, "REPLACE_WITH_SEPARATE_RANDOM_SECRET", "8af3d4c90e7b5a261f06081349a7b26fe110934bab138fcae53d906de871c5ab")
+	path := filepath.Join(t.TempDir(), "dist.conf")
+	if err = os.WriteFile(path, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	images, _, err := cfg.ImageDefinitions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var verified []struct {
+		ID        string `json:"id"`
+		URL       string `json:"url"`
+		SHA256    string `json:"sha256"`
+		Size      uint64 `json:"size_bytes"`
+		Capacity  uint64 `json:"virtual_size_bytes"`
+		Features  uint64 `json:"incompatible_features"`
+		Publisher string `json:"publisher_checksums"`
+	}
+	data, err = os.ReadFile("../docs/data/image-sources.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(data, &verified); err != nil {
+		t.Fatal(err)
+	}
+	if len(images) != 12 || len(verified) != len(images) {
+		t.Fatalf("expected six families in both architectures: %d/%d", len(images), len(verified))
+	}
+	families := map[string]map[compute.Arch]bool{}
+	for _, i := range images {
+		if !i.Managed() || i.SourcePath != "" || i.Download.Format != compute.VolumeFormatQcow2 || i.Defaults.Initialization != "nocloud" {
+			t.Fatalf("incomplete shipped definition: %+v", i)
+		}
+		found := false
+		for _, v := range verified {
+			if v.ID == i.ID {
+				found = true
+				if i.Download.URL != v.URL || i.Download.SHA256 != v.SHA256 || v.Size == 0 || v.Capacity == 0 || v.Features != 0 || !strings.HasPrefix(v.Publisher, "https://") {
+					t.Fatalf("provenance differs for %s", i.ID)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("missing provenance: %s", i.ID)
+		}
+		if families[i.OSName] == nil {
+			families[i.OSName] = map[compute.Arch]bool{}
+		}
+		families[i.OSName][i.Arch] = true
+	}
+	if len(families) != 6 {
+		t.Fatal(families)
+	}
+	for name, arches := range families {
+		if !arches[compute.ArchAmd64] || !arches[compute.ArchAarch64] {
+			t.Fatal("missing architecture", name)
+		}
+	}
+}
+
+func TestConflictingSharedArtifactDefinitions(t *testing.T) {
+	hash := strings.Repeat("a", 64)
+	for _, other := range []string{`source_format="raw" source_size_bytes=4096`, `source_format="qcow2" source_size_bytes=8192`} {
+		text := `image "first" { os_arch="x86_64" url="https://example.org/one" sha256="` + hash + `" source_format="qcow2" source_size_bytes=4096 } image "second" { os_arch="x86_64" url="https://example.org/two" sha256="` + hash + `" ` + other + ` }`
+		path := filepath.Join(t.TempDir(), "conflict.conf")
+		os.WriteFile(path, []byte(text), 0600)
+		if _, err := Parse(path); err == nil {
+			t.Fatal("conflicting artifact definitions accepted")
+		}
 	}
 }

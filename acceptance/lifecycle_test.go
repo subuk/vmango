@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"subuk/vmango/compute"
 	"subuk/vmango/tasks"
 	"testing"
 	"time"
@@ -34,26 +35,38 @@ import (
 // required; this suite must never run as part of ordinary unit tests.
 func TestLifecycle(t *testing.T) {
 	image := os.Getenv("ACCEPTANCE_IMAGE")
-	if image == "" {
+	imageURL := os.Getenv("ACCEPTANCE_IMAGE_URL")
+	imageSHA := os.Getenv("ACCEPTANCE_IMAGE_SHA256")
+	if image == "" && imageURL == "" {
 		t.Fatal("set ACCEPTANCE_IMAGE to a local Ubuntu cloud image (see README.md)")
 	}
 	image, err := filepath.Abs(image)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(image); err != nil {
+	if _, err := os.Stat(image); imageURL == "" && err != nil {
 		t.Fatal(err)
 	}
 	uri := os.Getenv("ACCEPTANCE_URI")
 	if uri == "" {
 		uri = "qemu:///session"
 	}
-	if uri != "qemu:///session" && uri != "qemu:///system" {
+	remote := os.Getenv("ACCEPTANCE_REMOTE") == "1"
+	if remote && (!strings.HasPrefix(uri, "qemu+ssh://") || imageURL == "") {
+		t.Fatal("remote acceptance requires qemu+ssh URI and downloadable image")
+	}
+	if !remote && uri != "qemu:///session" && uri != "qemu:///system" {
 		t.Fatal("only local qemu:///session or qemu:///system is supported")
 	}
 	arch := "x86_64"
 	if runtime.GOARCH == "arm64" {
 		arch = "aarch64"
+	}
+	if remote {
+		arch = os.Getenv("ACCEPTANCE_ARCH")
+		if arch != "x86_64" && arch != "aarch64" {
+			t.Fatal("remote acceptance needs ACCEPTANCE_ARCH")
+		}
 	}
 	expectedType := "kvm"
 	firmware := "auto"
@@ -64,9 +77,15 @@ func TestLifecycle(t *testing.T) {
 	if initialization != "nocloud" && initialization != "openstack" {
 		t.Fatal("ACCEPTANCE_INITIALIZATION must be nocloud or openstack")
 	}
-	if runtime.GOOS == "darwin" {
+	if runtime.GOOS == "darwin" && !remote {
 		expectedType = "hvf"
 		firmware = "efi"
+	}
+	if remote && arch == "aarch64" {
+		firmware = "efi"
+	}
+	if imageURL != "" && len(imageSHA) != 64 {
+		t.Fatal("ACCEPTANCE_IMAGE_SHA256 is required with ACCEPTANCE_IMAGE_URL")
 	}
 	name := "vmango-acceptance-" + uuid.NewString()
 	root, err := filepath.Abs("../result/" + name)
@@ -108,11 +127,19 @@ func TestLifecycle(t *testing.T) {
 		t.Fatal("unexpected existing test domain")
 	}
 	poolDir := filepath.Join(root, "pool")
-	if err := os.Mkdir(poolDir, 0755); err != nil {
-		t.Fatal(err)
+	if remote {
+		poolDir = "/tmp/" + name
+	}
+	if !remote {
+		if err := os.Mkdir(poolDir, 0755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	// Pool creation fails on collisions. Cleanup is limited to this random name.
 	mustVir("pool-define-as", name, "dir", "--target", poolDir)
+	if remote {
+		mustVir("pool-build", name)
+	}
 	poolUUID := strings.TrimSpace(mustVir("pool-uuid", name))
 	domainUUID := ""
 	write(filepath.Join(root, "resources.txt"), "pool="+name+"\npool_uuid="+poolUUID+"\npool_path="+poolDir+"\n")
@@ -179,19 +206,58 @@ func TestLifecycle(t *testing.T) {
 			t.Errorf("refusing cleanup: pool identity changed")
 			return
 		}
+		if remote {
+			listing, err := vir("vol-list", "--pool", name)
+			if err != nil {
+				t.Errorf("cannot list owned pool volumes: %s %v", listing, err)
+				return
+			}
+			for _, line := range strings.Split(listing, "\n")[2:] {
+				fields := strings.Fields(line)
+				if len(fields) == 0 {
+					continue
+				}
+				volume := fields[0]
+				volPath, err := vir("vol-path", "--pool", name, volume)
+				if err != nil || !strings.HasPrefix(strings.TrimSpace(volPath), poolDir+"/") {
+					t.Error("refusing cleanup outside owned pool")
+					return
+				}
+				if out, err := vir("vol-delete", "--pool", name, volume); err != nil {
+					t.Errorf("cleanup owned volume: %s %v", out, err)
+					return
+				}
+			}
+		}
 		vir("pool-destroy", name)
+		if remote {
+			if out, err := vir("pool-delete", name); err != nil {
+				t.Errorf("cleanup remote pool directory: %s %v", out, err)
+				return
+			}
+		}
 		if out, err := vir("pool-undefine", name); err != nil {
 			t.Errorf("cleanup pool: %s %v", out, err)
 			return
 		}
-		if err := os.RemoveAll(poolDir); err != nil {
+		if err := func() error {
+			if remote {
+				return nil
+			}
+			return os.RemoveAll(poolDir)
+		}(); err != nil {
 			t.Error(err)
 		}
 	})
 	mustVir("pool-start", name)
 	base := filepath.Join(poolDir, "base.qcow2")
-	if out, err := run("qemu-img", "convert", "-O", "qcow2", image, base); err != nil {
-		t.Fatalf("prepare image: %s %v", out, err)
+	if imageURL == "" {
+		if out, err := run("qemu-img", "convert", "-O", "qcow2", image, base); err != nil {
+			t.Fatalf("prepare image: %s %v", out, err)
+		}
+	}
+	if imageURL != "" {
+		base = filepath.Join(poolDir, compute.ManagedImagePrefix+imageSHA+".qcow2")
 	}
 	mustVir("pool-refresh", name)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -207,10 +273,11 @@ func TestLifecycle(t *testing.T) {
 	}
 	config := filepath.Join(root, "vmango.conf")
 	write(filepath.Join(root, "keys"), "")
-	write(config, fmt.Sprintf(`key_file = %q
+	configuration := fmt.Sprintf(`key_file = %q
 libvirt "acceptance" {
  uri = %q
  config_drive_pool = %q
+ image_pool = %q
  qcow_prealloc_metadata = false
 }
 image "boot" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q protected = true disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false initialization = %q minimum_memory_mib = 1024 minimum_disk_gib = 8 }
@@ -224,7 +291,14 @@ api {
  token_dir = %q
  user "acceptance" { hashed_password = %q }
 }
-`, filepath.Join(root, "keys"), uri, name, base, arch, firmware, initialization, base, arch, firmware, filepath.Join(root, "tasks"), address, uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString(), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash)))
+`, filepath.Join(root, "keys"), uri, name, name, base, arch, firmware, initialization, base, arch, firmware, filepath.Join(root, "tasks"), address, uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString(), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
+	if imageURL != "" {
+		if strings.Contains(imageURL, "alpinelinux.org/") {
+			configuration = strings.ReplaceAll(configuration, `os_name = "Ubuntu"`, `os_name = "Alpine Linux"`)
+		}
+		configuration = strings.ReplaceAll(configuration, fmt.Sprintf("path = %q", base), fmt.Sprintf("url = %q sha256 = %q source_format = \"qcow2\"", imageURL, imageSHA))
+	}
+	write(config, configuration)
 	log, err := os.Create(filepath.Join(root, "vmango.log"))
 	if err != nil {
 		t.Fatal(err)
@@ -311,7 +385,7 @@ api {
 		if err := json.Unmarshal(raw, &accepted); err != nil || accepted.StatusURL == "" {
 			t.Fatalf("invalid task response: %s", raw)
 		}
-		deadline := time.Now().Add(2 * time.Minute)
+		deadline := time.Now().Add(8 * time.Minute)
 		for time.Now().Before(deadline) {
 			var task tasks.Task
 			if err := json.Unmarshal(apiRequest("GET", accepted.StatusURL, nil, 200), &task); err != nil {
@@ -320,6 +394,10 @@ api {
 			if task.State.Terminal() {
 				if task.State != tasks.Succeeded {
 					t.Fatalf("infrastructure task %s: %+v", task.ID, task)
+				}
+				if imageURL != "" && task.Kind == "machine.create" {
+					data, _ := json.MarshalIndent(task, "", "  ")
+					write(filepath.Join(root, "create-task-"+task.ID+".json"), string(data))
 				}
 				if strings.HasPrefix(task.Kind, "volume.") && (task.Kind == "volume.create" || task.Kind == "volume.clone") {
 					for _, effect := range task.Effects {
@@ -346,18 +424,40 @@ api {
 	for _, resource := range []string{"nodes", "nodes/acceptance", "nodes/acceptance/images", "nodes/acceptance/pools", "nodes/acceptance/networks", "nodes/acceptance/capabilities", "keys", "vms", "volumes", "networks"} {
 		apiRequest("GET", "/api/v1/"+resource, nil, 200)
 	}
+	if imageURL != "" {
+		if _, err := vir("vol-info", base); err == nil {
+			t.Fatal("catalog listing downloaded an image")
+		}
+		var catalog []struct {
+			ID    string `json:"id"`
+			State string `json:"state"`
+		}
+		json.Unmarshal(apiRequest("GET", "/api/v1/nodes/acceptance/images", nil, 200), &catalog)
+		if len(catalog) != 2 || catalog[0].State != "downloadable" {
+			t.Fatalf("missing managed image unavailable: %+v", catalog)
+		}
+	}
 	request("/machines/add/?node=acceptance&arch="+arch, 200)
 	marker := "VMANGO_BOOT_OK_" + uuid.NewString()
-	userdata := fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, 'test \"$(hostname)\" = %s && echo %s > /dev/console']\n", name, marker)
+	serialDevice := "/dev/ttyS0"
+	if arch == "aarch64" {
+		serialDevice = "/dev/ttyAMA0"
+	}
+	userdata := fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, 'test \"$(hostname)\" = %s && echo %s > %s']\n", name, marker, serialDevice)
 	// Check image constraints and the no-init alias through the same JSON API.
 	aliasBody := map[string]any{"id": name, "arch": arch, "vcpus": 2, "memory_bytes": uint64(512 << 20), "clone_disks": []any{map[string]any{"image_id": "boot", "name": name + "_root", "pool": name, "size_bytes": uint64(8 << 30)}}, "interfaces": []any{map[string]any{"network": "qemu-usernet"}}}
 	apiRequest("POST", "/api/v1/nodes/acceptance/vms", aliasBody, 422)
-	if _, err := os.Stat(filepath.Join(poolDir, name+"_root")); !os.IsNotExist(err) {
+	if _, err := vir("vol-info", "--pool", name, name+"_root"); err == nil {
 		t.Fatal("invalid request created a disk")
 	}
 	aliasBody["memory_bytes"] = uint64(2 << 30)
 	aliasBody["clone_disks"] = []any{map[string]any{"image_id": "no-init", "name": name + "_root", "pool": name, "size_bytes": uint64(8 << 30)}}
 	apiCommand("POST", "/api/v1/nodes/acceptance/vms", aliasBody)
+	if imageURL != "" {
+		if _, err := vir("vol-info", base); err != nil {
+			t.Fatal("verified image missing", err)
+		}
+	}
 	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
 	noInitXML := mustVir("dumpxml", name)
 	if strings.Contains(noInitXML, "_config.iso") || !strings.Contains(noInitXML, "org.qemu.guest_agent.0") {
@@ -503,7 +603,11 @@ api {
 	apiCommand("DELETE", apiVMPath+"/disks/"+disk.ID, nil)
 	apiCommand("DELETE", volumeBase+"/"+disk.ID, nil)
 	apiCommand("DELETE", volumeBase+"/"+clone.ID, nil)
-	apiRequest("DELETE", volumeBase+"/"+base64.RawURLEncoding.EncodeToString([]byte(base)), nil, 409)
+	if imageURL == "" {
+		apiRequest("DELETE", volumeBase+"/"+base64.RawURLEncoding.EncodeToString([]byte(base)), nil, 409)
+	} else {
+		apiRequest("DELETE", volumeBase+"/"+base64.RawURLEncoding.EncodeToString([]byte(base)), nil, 404)
+	}
 	apiCommand("POST", apiVMPath+"/interfaces", map[string]any{"network": "qemu-usernet", "mac": "52:54:00:ab:cd:01", "model": "virtio"})
 	apiCommand("DELETE", apiVMPath+"/interfaces/52:54:00:ab:cd:01", nil)
 	public, _, err := ed25519.GenerateKey(rand.Reader)
@@ -526,7 +630,7 @@ api {
 		t.Fatal("VM still exists after HTTP delete")
 	}
 	for _, file := range []string{name + "_root", name + "_config.iso"} {
-		if _, err := os.Stat(filepath.Join(poolDir, file)); !os.IsNotExist(err) {
+		if _, err := vir("vol-info", "--pool", name, file); err == nil {
 			t.Fatalf("volume remains after HTTP delete: %s (%v)", file, err)
 		}
 	}

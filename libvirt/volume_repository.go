@@ -1,10 +1,12 @@
 package libvirt
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"path"
+	"strings"
 	"subuk/vmango/compute"
 	"subuk/vmango/tasks"
 	"subuk/vmango/util"
@@ -78,6 +80,9 @@ func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.Sto
 	volume.Name = virVolumeConfig.Name
 	volume.Pool = poolConfig.Name
 	volume.Metadata = repo.metadata[virVolumeConfig.Target.Path]
+	if strings.HasPrefix(volume.Name, compute.ManagedImagePrefix) {
+		volume.Metadata = compute.VolumeMetadata{Protected: true, Hidden: true}
+	}
 	volume.Size = ComputeSizeFromLibvirtSize(virVolumeConfig.Capacity.Unit, virVolumeConfig.Capacity.Value)
 
 	switch getVolTargetFormatType(virVolumeConfig) {
@@ -418,24 +423,15 @@ func (repo *VolumeRepository) Upload(path, nodeId string, content io.Reader, siz
 		return repositoryError(err, "cannot lookup storage volume")
 	}
 
-	stream, err := conn.NewStream(0)
-	if err != nil {
-		return repositoryError(err, "cannot initialize upload stream")
-	}
-	if err := virVolume.Upload(stream, 0, size, 0); err != nil {
-		return repositoryError(err, "cannot start upload")
-	}
-	if _, err := io.Copy(&virStreamWrapper{stream}, content); err != nil {
-		return repositoryError(err, "upload failed")
-	}
-	if err := stream.Finish(); err != nil {
-		return repositoryError(err, "cannot finalize upload")
-	}
-	return nil
+	defer virVolume.Free()
+	return uploadStream(context.Background(), conn, virVolume, content, size)
 }
 
 // ValidateCreate checks storage destinations without creating or resizing them.
 func (repo *VolumeRepository) ValidateCreate(p compute.VolumeCreateParams) error {
+	if strings.HasPrefix(p.Name, compute.ManagedImagePrefix) {
+		return fmt.Errorf("%w: reserved managed image volume name", compute.ErrInvalid)
+	}
 	conn, err := repo.pool.Acquire(p.NodeId)
 	if err != nil {
 		return repositoryError(err, "backend validation failed")

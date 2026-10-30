@@ -14,10 +14,25 @@ type Execution struct {
 	ctx               context.Context
 	service           *Service
 	id                string
+	acceptedAt        time.Time
 	secrets           []string
 	mutating          bool
 	ambiguous         bool
 	persistenceFailed bool
+}
+
+func (e *Execution) ID() string            { return e.id }
+func (e *Execution) AcceptedAt() time.Time { return e.acceptedAt }
+
+// Transfer updates the currently running stage. Callers throttle persistence
+// to at most once per second, with an additional final sample.
+func (e *Execution) Transfer(p TransferProgress) error {
+	return e.save(func(rec *Record) error {
+		if n := len(rec.Task.Stages); n > 0 {
+			rec.Task.Stages[n-1].Transfer = &p
+		}
+		return nil
+	})
 }
 
 func (e *Execution) save(fn func(*Record) error) error {
@@ -87,7 +102,7 @@ func (e *Execution) Effect(resource ResourceRef, action string) error {
 		rec.Task.Effects = append(rec.Task.Effects, Effect{resource, action, time.Now().UTC()})
 		found := false
 		for _, r := range rec.Task.Resources {
-			if r == resource {
+			if r.Kind == resource.Kind && r.Scope == resource.Scope && r.ID == resource.ID {
 				found = true
 			}
 		}

@@ -31,7 +31,7 @@ func (e *Environ) serveIndex(w http.ResponseWriter, r *http.Request) {
 func frontendRoute(p string) bool {
 	parts := strings.Split(strings.Trim(p, "/"), "/")
 	switch parts[0] {
-	case "", "login", "nodes", "machines", "volumes", "networks", "keys", "tokens", "console":
+	case "", "login", "nodes", "machines", "volumes", "networks", "keys", "tokens", "console", "tasks":
 		return true
 	}
 	return false

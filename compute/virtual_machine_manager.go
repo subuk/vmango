@@ -66,6 +66,10 @@ func NewVirtualMachineManager(vms *VirtualMachineService, volumes *VolumeService
 	}
 }
 
+func (m *VirtualMachineManager) withImages(images *ImageService) *VirtualMachineManager {
+	return NewVirtualMachineManager(m.vms, m.volumes, m.epub, m.settings, images)
+}
+
 func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool) error {
 	return manager.CreateWithImageDefaults(vm, cloneVols, newVols, start, ImageDefaults{})
 }
@@ -196,7 +200,24 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 	for _, p := range cloneVols {
 		params := VolumeCloneParams{NodeId: vm.NodeId, Format: p.NewFormat, OriginalPath: p.OriginalPath, NewName: p.NewName, NewPool: p.NewPool, NewSize: p.NewSize}
 		if err := stage("clone-volume", vmRef, true, func() error {
-			volume, err := manager.volumes.Clone(params)
+			verifiedManaged := false
+			if p.ImageID != "" && manager.images != nil {
+				i, imageErr := manager.images.Get(p.ImageID)
+				if imageErr != nil {
+					return imageErr
+				}
+				if i.Managed() {
+					source, sourceErr := manager.images.Source(i, vm.NodeId, manager.volumes)
+					if sourceErr != nil {
+						return sourceErr
+					}
+					if source.Path != params.OriginalPath {
+						return fmt.Errorf("managed source differs from pinned clone")
+					}
+					verifiedManaged = true
+				}
+			}
+			volume, err := manager.volumes.clone(params, verifiedManaged)
 			if err != nil {
 				return err
 			}

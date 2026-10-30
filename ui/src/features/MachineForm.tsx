@@ -604,8 +604,22 @@ export function CreateMachine() {
                                                     key={i.id}
                                                     value={i.id}
                                                 >
-                                                    {i.name} · {i.os_name}{" "}
-                                                    {i.os_version} · {i.arch}
+                                                    {i.name} · {i.os_version} ·{" "}
+                                                    {i.arch}
+                                                    {i.defaults.firmware &&
+                                                    i.defaults.firmware !==
+                                                        "auto"
+                                                        ? ` · ${i.defaults.firmware.toUpperCase()}`
+                                                        : ""}{" "}
+                                                    ·{" "}
+                                                    {i.state === "downloadable"
+                                                        ? "Download on first use"
+                                                        : i.state ===
+                                                            "preparing"
+                                                          ? "Preparing"
+                                                          : i.state === "failed"
+                                                            ? "Preparation failed"
+                                                            : "Ready"}
                                                 </MenuItem>
                                             ))}
                                         </TextField>
@@ -1363,7 +1377,21 @@ function Section({
 }
 function ImageDefaults({ image }: { image: Image }) {
     return (
-        <Alert severity="info" icon={false}>
+        <Alert
+            severity={image.state === "failed" ? "warning" : "info"}
+            icon={false}
+        >
+            {image.source_mode === "download" && (
+                <Typography variant="body2">
+                    {image.state === "downloadable"
+                        ? "This image will be downloaded and verified automatically when creation starts."
+                        : image.state === "preparing"
+                          ? "Image preparation is in progress. Creation will wait for the verified image."
+                          : image.state === "failed"
+                            ? `Image preparation needs attention: ${image.preparation_error || "Inspect the previous creation task."}`
+                            : "Verified image ready on this node."}
+                </Typography>
+            )}
             <Typography variant="body2">
                 Image minimums: {bytes(image.minimum_memory_bytes)} RAM ·{" "}
                 {bytes(image.minimum_disk_bytes)} disk.

@@ -88,11 +88,17 @@ func (s *VolumeService) Create(p VolumeCreateParams) (*Volume, error) {
 }
 
 func (s *VolumeService) Clone(p VolumeCloneParams) (*Volume, error) {
+	return s.clone(p, false)
+}
+
+// clone permits hidden sources only after the manager has verified a pinned
+// managed artifact. Public volume commands always use Clone's visible-source path.
+func (s *VolumeService) clone(p VolumeCloneParams, verifiedManaged bool) (*Volume, error) {
 	source, err := s.Get(p.OriginalPath, p.NodeId)
 	if err != nil {
 		return nil, err
 	}
-	if source.Metadata.Hidden {
+	if source.Metadata.Hidden && !verifiedManaged {
 		return nil, ErrVolumeNotFound
 	}
 	if source.AttachedTo != "" {

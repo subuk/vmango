@@ -359,3 +359,80 @@ func TestShutdownDoesNotStartAnotherBackendStage(t *testing.T) {
 		t.Fatalf("shutdown continued stages or lost history: %+v calls=%d", task, calls.Load())
 	}
 }
+
+func TestSharedImageReadLocksExcludeMutationsAndUncertainReaders(t *testing.T) {
+	r, _ := repository(t)
+	s := tasks.New(r, handler{}, zerolog.Nop())
+	read := tasks.ResourceRef{Kind: "volume", Scope: "n", ID: "/image", ReadOnly: true}
+	makeRead := func(id string) tasks.Command { c := command(id); c.Resources = append(c.Resources, read); return c }
+	first, err := s.Submit(identity, "first-shared-image", makeRead("first"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Submit(identity, "second-shared-image", makeRead("second")); err != nil {
+		t.Fatal("shared readers conflict", err)
+	}
+	write := command("writer")
+	write.Resources = append(write.Resources, tasks.ResourceRef{Kind: read.Kind, Scope: read.Scope, ID: read.ID})
+	if _, err = s.Submit(identity, "write-shared-image", write); err == nil {
+		t.Fatal("writer bypassed readers")
+	}
+	if err = r.Update(func(store *tasks.Store) error {
+		rec := store.Records[first.ID]
+		rec.Task.OutcomeUncertain = true
+		store.Records[first.ID] = rec
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Submit(identity, "third-shared-image", makeRead("third")); err == nil {
+		t.Fatal("uncertain reader bypassed")
+	}
+}
+
+func TestSharedPreparationFollowersDoNotOccupyWorkers(t *testing.T) {
+	repo, _ := repository(t)
+	release := make(chan struct{})
+	entered := make(chan struct{})
+	h := handler{run: func(ctx context.Context, c tasks.Command, e *tasks.Execution) error {
+		if c.Resources[0].ID == "leader" {
+			close(entered)
+			select {
+			case <-release:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	}}
+	service := tasks.New(repo, h, zerolog.Nop())
+	leader := command("leader")
+	leader.ExecutionGroups = []string{"shared-image"}
+	first, err := service.Submit(identity, "group-leader-command", leader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	follower := command("follower")
+	follower.ExecutionGroups = []string{"shared-image"}
+	second, err := service.Submit(identity, "group-follower-command", follower)
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, err := service.Submit(identity, "independent-command", command("independent"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start(t, service)
+	<-entered
+	if task := waitTask(t, service, third.ID); task.State != tasks.Succeeded {
+		t.Fatal(task)
+	}
+	if task, _ := service.Get(second.ID); task.State != tasks.Queued {
+		t.Fatal("follower occupied the independent worker", task)
+	}
+	close(release)
+	if waitTask(t, service, first.ID).State != tasks.Succeeded || waitTask(t, service, second.ID).State != tasks.Succeeded {
+		t.Fatal("serialized commands did not finish")
+	}
+}

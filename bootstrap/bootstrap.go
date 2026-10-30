@@ -125,6 +125,16 @@ func Web(configFilename string) {
 	vms := libcompute.NewVirtualMachineService(vmRepo)
 
 	vmanager := libcompute.NewVirtualMachineManager(vms, volumes, epub, vmManSettings, images)
+	artifactRepo, err := filesystem.NewImageArtifactRepository(util.ExpandHomeDir(cfg.Tasks.Directory) + "-images")
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cannot initialize image verification metadata")
+	}
+	defer artifactRepo.Close()
+	imageBindings := map[string]compute.ImageBinding{}
+	for _, c := range cfg.Libvirts {
+		imageBindings[c.Name] = compute.ImageBinding{Scope: nodeScopes[c.Name], Pool: c.ImagePool}
+	}
+	images.ManagedSources = compute.NewManagedImageService(volumeRepo, artifactRepo, imageBindings, compute.ImageTransferLimits{MaxBytes: uint64(cfg.ImageTransfers.MaxBytes), Timeout: time.Duration(cfg.ImageTransfers.TimeoutSeconds) * time.Second, IdleTimeout: time.Duration(cfg.ImageTransfers.IdleTimeoutSeconds) * time.Second})
 
 	sessions, err := filesystem.NewAuthRepository(util.ExpandHomeDir(cfg.API.SessionDir), "refresh")
 	if err != nil {

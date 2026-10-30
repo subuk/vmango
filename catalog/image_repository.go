@@ -9,6 +9,10 @@ import (
 type ImageRepository struct{ images []compute.Image }
 
 func copyImage(i compute.Image) compute.Image {
+	if i.Download != nil {
+		d := *i.Download
+		i.Download = &d
+	}
 	if i.Defaults.GuestAgent != nil {
 		v := *i.Defaults.GuestAgent
 		i.Defaults.GuestAgent = &v

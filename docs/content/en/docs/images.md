@@ -8,30 +8,148 @@ Vmango starts machines from pre-installed cloud images. There is no need to boot
 an installer or mount an installation CD for each VM: cloud-init handles the
 initial configuration on first boot.
 
-## Choose a cloud image
+## Shared downloadable catalog
 
-Download a pre-installed disk image with cloud-init from the distribution's
-official site. For QEMU/libvirt, choose QCOW2 and the architecture of your host:
-`amd64`/`x86_64` or `arm64`/`aarch64`.
+`vmango.dist.conf` ships twelve pinned QCOW2 definitions: Ubuntu 24.04 LTS,
+Debian 13 Generic, Fedora Cloud Base 44, AlmaLinux GenericCloud 9.8,
+Rocky Linux GenericCloud 9.8 and Alpine 3.24.3 cloud-init VM images, each for
+x86_64/BIOS and aarch64/UEFI. The Alpine images use Limine; the selected boot
+mode is explicit in each catalog ID and label. These settings describe the
+selected variants, not universal BIOS/UEFI or cross-architecture compatibility.
+The selector filters architecture and launch requirements using node capabilities.
 
-- [Ubuntu Cloud Images](https://cloud-images.ubuntu.com/releases/): choose a
-  supported release and its `server-cloudimg-*.img` disk image (QCOW2 despite
-  the `.img` extension).
-- [Debian Cloud Images](https://cloud.debian.org/images/cloud/): choose a supported
-  release, then `latest/` and a `generic-*.qcow2` image for broad driver support.
-- [Fedora Cloud](https://fedoraproject.org/cloud/download/): download the Cloud
-  Base QCOW2 image.
-- [AlmaLinux Generic Cloud](https://wiki.almalinux.org/cloud/Generic-cloud.html):
-  cloud-init-enabled QCOW2 images, with download links by release and architecture.
-- [Rocky Linux](https://rockylinux.org/download): choose a GenericCloud QCOW2 image
-  from the cloud image downloads.
-- [Alpine Linux Cloud Images](https://www.alpinelinux.org/cloud/): choose a
-  virtual-machine QCOW2 image with **cloud-init** as the bootstrap system and a
-  boot method matching your VM (BIOS or UEFI).
+Each top-level `image` entry is defined once and is available on compatible nodes.
+Storage placement is configured separately:
 
-These are upstream download sources, not a tested compatibility matrix. Image
-defaults vary; select an SSH key when creating the VM and use the distribution's
-default cloud user to log in.
+```hcl
+libvirt "local" {
+    uri = "qemu:///system"
+    image_pool = "default"
+}
+libvirt "remote" {
+    uri = "qemu+ssh://libvirt@example.org/system"
+    image_pool = "cloud-images"
+}
+```
+
+`image_pool` names an existing **dir** libvirt storage pool on that node and defaults
+to `default`. The pool must be active, writable through libvirt, and have enough
+free space for the artifact. Vmango does not create, start or mount pools.
+Other pool types, including `fs`, `netfs`, LVM and RBD, are not supported for
+managed image storage. VM destination disks retain their existing pool selection.
+The same catalog entry can use different pool paths on different nodes. Adding
+a node needs only its connection and pool binding, without copied image definitions.
+
+A downloadable entry has `url`, mandatory `sha256` and `source_format` (`raw` or
+`qcow2`), with no `path`. Use the complete definitions in `vmango.dist.conf` as
+ready-to-use examples. SHA-256 covers the exact downloaded file bytes, not a
+guest-visible filesystem or an unpacked/converted disk. Archives, external QCOW2
+backing/data files, encryption and incompatible QCOW2 features are rejected.
+
+### Lazy preparation and progress
+
+Configuration parsing, startup and discovery make no upstream image requests.
+A missing compatible image remains selectable. The first accepted `machine.create`
+prepares it on the selected node and then automatically continues creating the VM.
+Closing the form or browser does not cancel accepted work.
+
+The data path is **upstream HTTP(S) → Vmango → libvirt volume upload**. Download
+and upload overlap with bounded buffers and backpressure. Vmango creates no image
+payload file, temporary download, spool or application-side cache. The staging
+volume and reusable verified image belong to the destination libvirt node, even
+when Vmango and libvirt run on the same computer. Concurrent creates share one
+preparation for the same connection, pool and artifact. Followers remain queued
+while that artifact is in use by an active create, leaving workers available for
+unrelated images and nodes. Different nodes prepare independently. Different image IDs can share bytes while supplying different
+launch defaults.
+
+Task progress shows source inspection, destination preparation, concurrent
+**Download and upload image**, final verification and normal VM provisioning.
+Transfer progress includes forwarded bytes, percentage, average throughput and
+estimated transfer time remaining. Speed includes destination backpressure; ETA
+covers the transfer stage and excludes verification and VM creation. Estimates
+are hidden when progress updates become stale.
+
+The artifact byte size comes from `Content-Length`. If a source cannot provide it,
+set `source_size_bytes` in the image definition. An error names this setting when
+needed. This is the **exact file byte count**, separate from the QCOW2 virtual
+capacity and `minimum_disk_gib`. If both HTTP and configuration provide sizes they
+must agree. Truncated/oversized input and checksum mismatches fail the task.
+QCOW2 virtual capacity and safety checks use a bounded header; source format and
+capacity are confirmed from the resulting libvirt volume before cloning.
+
+Optional application-wide limits:
+
+```hcl
+image_transfers {
+    max_bytes = 17179869184 # 16 GiB of downloaded bytes per artifact
+    timeout_seconds = 3600
+    idle_timeout_seconds = 120
+}
+```
+
+### Verification, failures and pinned updates
+
+Managed names include the SHA-256 and format. Incomplete volumes are hidden from
+ordinary volume selection and cannot be cloned through public volume commands.
+Readiness is published only after consuming the complete response, checking
+SHA-256, successfully finalizing the libvirt stream and confirming backend format,
+capacity and identity. Durable verification metadata is stored in a private
+`<tasks.directory>-images` directory; keep it alongside task history when backing
+up the application. It contains metadata only. Reuse checks pool UUID, volume key,
+modification/change timestamps, format and capacity. A matching path alone is
+never adopted. External modification invalidates readiness. Removing a managed
+source makes it downloadable again; the next explicit create verifies a fresh
+transfer.
+
+Ordinary transfer failures attempt to delete only staging created by that
+operation, recording confirmed effects and cleanup errors. A verified source is
+retained if later VM provisioning fails. Shutdown/interruption retains uncertain
+staging for inspection. Stale running tasks become interrupted; they are never
+automatically resumed or replayed. Before retrying, inspect the failed task's
+exact resources and backend state, remove confirmed unused incomplete storage if
+necessary, and explicitly release uncertain task locks through the task UI.
+Never remove storage used by a VM or unrelated pre-existing volumes.
+
+A new create after confirmed cleanup can retry explicitly; waiting requests see
+the active preparation's failure. There are no background retries, upstream
+polls, automatic image updates or automatic deletion of old revisions. Updating
+an image requires an explicit configuration edit of URL/checksum together.
+Accepted commands retain their image definitions and pool identities, and
+existing VM disks stay unchanged. Old source revisions remain protected and
+hidden until an administrator deliberately handles them.
+
+### Publisher provenance and maintainer refresh
+
+The source verification record, `docs/data/image-sources.json`,
+contains each official direct URL, publisher checksum URL/algorithm/digest, the
+calculated literal SHA-256, observed HTTP byte count/type and inspected QCOW2
+virtual capacity. Where publishers supply only SHA-512 (Debian and Alpine), the
+artifact was streamed through SHA-512 and SHA-256 together, checked against the
+publisher SHA-512, and the calculated SHA-256 was pinned in configuration.
+No image payload was saved during that verification.
+
+To refresh intentionally:
+
+1. Select a maintained release/build and architecture from the official publisher.
+   Prefer a dated/build-specific artifact over a `latest` alias. Confirm its boot
+   variant, cloud-init support and minimum resources from publisher documentation.
+2. Update that entry's official artifact/checksum URLs and expected publisher digest
+   in `docs/data/image-sources.json`. Remove its old `sha256` for an intentional
+   revision change. Obtain manifests over HTTPS and verify publisher signatures
+   where available using trusted distribution keys.
+3. Run `python3 scripts/verify-image-sources.py --record`. This explicit maintainer
+   command streams each artifact without saving payloads, checks publisher digests,
+   inspects the header/HTTP metadata and records SHA-256. Without `--record`, it
+   verifies the pinned records without rewriting them.
+4. Copy the verified URL/SHA-256 pair into `vmango.dist.conf`, review firmware,
+   initialization and resource defaults, and update documentation together.
+5. Run configuration/domain/API/UI checks. Run a real Alpine download-to-boot test
+   as described in `acceptance/README.md`; record release, architecture and backend.
+
+Source/checksum validation establishes artifact identity and format. It does not
+establish that a guest boots or provisions correctly. Real boot checks and their
+backend-specific results are recorded separately in the acceptance documentation.
 
 ## Register the image
 
@@ -59,14 +177,14 @@ image "ubuntu-server" {
 
 The block label is a stable image **identifier**, separate from `path`. `name`
 is the display name (it defaults to the identifier). `os_arch` must be
-`x86_64` or `aarch64`. The selector shows images matching the selected
+`x86_64` or `aarch64`. For path-based entries, the selector shows images matching the selected
 architecture whose source volume is visible, available and not attached to a VM.
 
 The catalog is shared across all nodes. Vmango resolves `path` on the selected
 node and reads that volume's actual capacity and format. A volume on another
 node cannot satisfy a missing source. The same path on several nodes intentionally
 receives the same settings; administrators must ensure its contents match the
-image description. Vmango does not download or replicate images.
+image description. Path-based entries require an administrator-provisioned source on each selected node. Downloadable entries use the lazy managed flow described above.
 
 Several entries can reference the same disk with different defaults:
 

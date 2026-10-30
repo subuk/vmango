@@ -78,6 +78,9 @@ type InfrastructureCommand struct {
 	CloneVolume    *VolumeCloneParams  `json:",omitempty"`
 	Size           Size
 	Settings       VirtualMachineManagerNodeSettings
+	Images         []Image                 `json:",omitempty"`
+	ImageBindings  map[string]ImageBinding `json:",omitempty"`
+	AutoImageSizes []bool                  `json:",omitempty"`
 }
 
 func NewCommand(kind string, c InfrastructureCommand) tasks.Command {
@@ -165,14 +168,54 @@ func (h *CommandHandler) Prepare(command tasks.Command) (tasks.Command, error) {
 				c.Machine.Config.Keys = append(c.Machine.Config.Keys, key)
 			}
 		}
-		vm, clones, err := h.Manager.PrepareCreation(c.Machine, c.Clones, c.NewVolumes, c.Defaults)
+		images := h.Manager.images
+		c.ImageBindings = map[string]ImageBinding{}
+		if images != nil {
+			seen := map[string]bool{}
+			for _, clone := range c.Clones {
+				if clone.ImageID == "" || seen[clone.ImageID] {
+					continue
+				}
+				i, err := images.Get(clone.ImageID)
+				if err != nil {
+					return command, err
+				}
+				seen[i.ID] = true
+				c.Images = append(c.Images, i)
+				if i.Managed() {
+					if images.ManagedSources == nil {
+						return command, fmt.Errorf("managed image storage is unavailable")
+					}
+					b, err := images.ManagedSources.Bind(c.Node, i)
+					if err != nil {
+						return command, err
+					}
+					c.ImageBindings[i.ID] = b
+				}
+			}
+		}
+		for _, clone := range c.Clones {
+			c.AutoImageSizes = append(c.AutoImageSizes, clone.ImageID != "" && clone.NewSize.Value == 0)
+		}
+		manager := h.Manager
+		if len(c.Images) > 0 {
+			manager = manager.withImages(images.Snapshot(c.Images, c.ImageBindings, true))
+		}
+		vm, clones, err := manager.PrepareCreation(c.Machine, c.Clones, c.NewVolumes, c.Defaults)
 		if err != nil {
 			return command, err
 		}
 		c.Machine, c.Clones, c.KeyIDs = vm, clones, nil
+		// Shared-image followers stay queued rather than consuming workers
+		// waiting for a transfer. Unrelated artifacts/nodes can still run.
+		for _, binding := range c.ImageBindings {
+			command.ExecutionGroups = append(command.ExecutionGroups, "image:"+artifactKey(binding))
+		}
 		c.Settings = h.Manager.settings[c.Node]
 		for _, clone := range clones {
-			add(VolumeRef(c.Node, clone.OriginalPath))
+			ref := VolumeRef(c.Node, clone.OriginalPath)
+			ref.ReadOnly = clone.ImageID != ""
+			add(ref)
 			if err := destination(clone.NewPool, clone.NewName); err != nil {
 				return command, err
 			}
@@ -353,6 +396,33 @@ func (h *CommandHandler) Execute(ctx context.Context, command tasks.Command, pro
 		return ErrInvalid
 	}
 	if command.Kind == "machine.create" {
+		if len(c.Images) > 0 {
+			manager := h.Manager.withImages(h.Manager.images.Snapshot(c.Images, c.ImageBindings, false))
+			manager.settings = map[string]VirtualMachineManagerNodeSettings{c.Node: c.Settings}
+			for _, i := range c.Images {
+				if i.Managed() {
+					if manager.images.ManagedSources == nil {
+						return fmt.Errorf("managed image storage unavailable")
+					}
+					if err := manager.images.ManagedSources.Ensure(ctx, c.ImageBindings[i.ID], i, progress); err != nil {
+						return err
+					}
+				}
+			}
+			for n, auto := range c.AutoImageSizes {
+				if auto {
+					c.Clones[n].NewSize = Size{}
+				}
+			}
+			var err error
+			if err = progress.Stage("validate-image-creation", nil, false, func() error {
+				c.Machine, c.Clones, err = manager.PrepareCreation(c.Machine, c.Clones, c.NewVolumes, c.Defaults)
+				return err
+			}); err != nil {
+				return err
+			}
+			return manager.createPrepared(c.Machine, c.Clones, c.NewVolumes, c.Start, c.Settings, progress)
+		}
 		return h.Manager.createPrepared(c.Machine, c.Clones, c.NewVolumes, c.Start, c.Settings, progress)
 	}
 	ref := VMRef(c.Node, c.VM)

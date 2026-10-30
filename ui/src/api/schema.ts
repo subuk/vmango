@@ -797,6 +797,11 @@ export interface components {
             name: string;
             os_name: string;
             os_version: string;
+            preparation_error?: string;
+            /** @enum {string} */
+            source_mode: "local" | "download";
+            /** @enum {string} */
+            state: "ready" | "downloadable" | "preparing" | "failed";
             volume_id: string;
         };
         ApiImageDefaults: {
@@ -1112,6 +1117,7 @@ export interface components {
         ResourceRef: {
             id: string;
             kind: string;
+            read_only?: boolean;
             scope: string;
         };
         Stage: {
@@ -1123,6 +1129,7 @@ export interface components {
             /** Format: date-time */
             started_at: string;
             state: string;
+            transfer?: components["schemas"]["TransferProgress"];
         };
         Task: {
             blocks_resources: boolean;
@@ -1155,6 +1162,18 @@ export interface components {
             name: string;
             owner: string;
             status: string;
+        };
+        TransferProgress: {
+            /** Format: int64 */
+            bytes: number;
+            /** Format: double */
+            bytes_per_second: number;
+            /** Format: int64 */
+            remaining_seconds?: number;
+            /** Format: int64 */
+            total_bytes?: number;
+            /** Format: date-time */
+            updated_at: string;
         };
         Transition: {
             /** Format: date-time */

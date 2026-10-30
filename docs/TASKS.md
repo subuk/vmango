@@ -165,3 +165,41 @@ This is a single-process local store. Each update rewrites the snapshot; it is
 intended for the current deployment size, not distributed workers or large
 multi-tenant histories. Multi-process/network-filesystem storage, HA, automatic
 reconciliation and resumable workflow execution are outside this implementation.
+
+## Managed image preparation
+
+A `machine.create` command snapshots each selected image's definition, source
+SHA-256 and resolved pool UUID/path before durable acceptance. Submission makes
+no upstream HTTP request and performs no image mutation. The worker prepares
+missing managed sources and rechecks capacity/format-dependent creation rules
+against the confirmed backend volume before making any VM disks.
+
+Image preparation uses the same bounded workers as provisioning. The first
+worker requiring an artifact performs its transfer. Commands sharing a managed
+artifact stay queued while a member runs, leaving workers available for unrelated
+artifacts and nodes. In-process callers also coordinate through the active
+preparation and observe its result. Requests accepted before a preparation failed
+inherit that failure; retry requires a newly accepted explicit attempt. There is no separately queued
+preparation job, workflow graph or background retry. Catalog source references
+hold shared read locks; writes and uncertain earlier outcomes exclude readers.
+Artifact preparation additionally coordinates by backend connection, pool UUID
+and content-addressed destination, including across distinct image IDs.
+
+Stages include `prepare-image`, `wait-image`, `inspect-image-source`,
+`create-image-staging`, `stream-image`, `verify-image`, `cleanup-image` and
+`validate-image-creation`. `stream-image` means concurrent HTTP download and
+libvirt upload, with incremental SHA-256 and bounded backpressure. Its optional
+`transfer` object records byte count, total bytes, average bytes per second,
+estimated transfer seconds remaining and sample time. Samples are durably
+throttled to approximately once per second plus the final sample. Estimates do
+not include later verification/provisioning and must not be presented as live
+throughput after failure or interruption.
+
+Readiness metadata is persisted separately under `<tasks.directory>-images` and
+is not removed with task-history retention. It contains no image payload. Ready
+artifacts survive later provisioning failures. Interrupted transfers do not
+resume, and staging is never adopted as ready from its name or path. A new
+explicit attempt reuses only verified backend identity or fails with instructions
+to inspect leftovers. Cleanup is limited to staging created by the current
+operation and refuses attached storage. Retained old revisions have no automatic
+eviction or deletion policy.

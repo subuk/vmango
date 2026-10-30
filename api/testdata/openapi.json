@@ -548,6 +548,25 @@
           "os_version": {
             "type": "string"
           },
+          "preparation_error": {
+            "type": "string"
+          },
+          "source_mode": {
+            "enum": [
+              "local",
+              "download"
+            ],
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "ready",
+              "downloadable",
+              "preparing",
+              "failed"
+            ],
+            "type": "string"
+          },
           "volume_id": {
             "type": "string"
           }
@@ -561,7 +580,9 @@
           "volume_id",
           "minimum_memory_bytes",
           "minimum_disk_bytes",
-          "defaults"
+          "defaults",
+          "source_mode",
+          "state"
         ],
         "type": "object"
       },
@@ -1602,6 +1623,9 @@
           "kind": {
             "type": "string"
           },
+          "read_only": {
+            "type": "boolean"
+          },
           "scope": {
             "type": "string"
           }
@@ -1635,6 +1659,9 @@
           },
           "state": {
             "type": "string"
+          },
+          "transfer": {
+            "$ref": "#/components/schemas/TransferProgress"
           }
         },
         "required": [
@@ -1770,6 +1797,40 @@
           "created_at",
           "expires_at",
           "status"
+        ],
+        "type": "object"
+      },
+      "TransferProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "bytes_per_second": {
+            "format": "double",
+            "type": "number"
+          },
+          "remaining_seconds": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "total_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bytes",
+          "bytes_per_second",
+          "updated_at"
         ],
         "type": "object"
       },

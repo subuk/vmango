@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"strings"
 	"subuk/vmango/auth"
 	"subuk/vmango/compute"
 	"subuk/vmango/configdrive"
@@ -64,6 +65,10 @@ func (c *APIConfig) AuthPolicy() auth.IdentityPolicy {
 type ImageConfig struct {
 	ID               string `hcl:",key"`
 	Path             string `hcl:"path"`
+	URL              string `hcl:"url"`
+	SHA256           string `hcl:"sha256"`
+	SourceFormat     string `hcl:"source_format"`
+	SourceSizeBytes  int64  `hcl:"source_size_bytes"`
 	Name             string `hcl:"name"`
 	OsName           string `hcl:"os_name"`
 	OsVersion        string `hcl:"os_version"`
@@ -97,14 +102,21 @@ func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeM
 		policies[path] = compute.VolumeMetadata{Protected: old.Protected || protected, Hidden: old.Hidden || hidden}
 	}
 	seen := map[string]bool{}
+	artifacts := map[string]compute.ImageDownload{}
 	for _, entry := range c.Images {
 		path := entry.Path
 		if path == "" {
 			path = entry.ID
 		}
-		mergePolicy(path, entry.Protected, entry.Hidden)
+		managed := entry.URL != "" || entry.SHA256 != ""
+		if !managed && (entry.SourceFormat != "" || entry.SourceSizeBytes != 0) {
+			return nil, nil, fmt.Errorf("image %q: source_format/source_size_bytes require url and sha256", entry.ID)
+		}
+		if !managed {
+			mergePolicy(path, entry.Protected, entry.Hidden)
+		}
 		// Legacy image blocks without OS metadata were ordinary volume policies.
-		if entry.Path == "" && entry.OsName == "" {
+		if !managed && entry.Path == "" && entry.OsName == "" {
 			continue
 		}
 		firmware := entry.Firmware
@@ -132,6 +144,25 @@ func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeM
 		i := compute.Image{ID: entry.ID, Name: name, OSName: entry.OsName, OSVersion: entry.OsVersion, Arch: compute.NewArch(entry.OsArch), SourcePath: path,
 			Defaults:           compute.ImageDefaults{Firmware: firmware, DiskBus: bus, DiskController: entry.DiskController, NICModel: entry.NICModel, GuestAgent: entry.GuestAgent, Initialization: entry.Initialization},
 			MinimumMemoryBytes: uint64(entry.MinimumMemoryMiB) << 20, MinimumDiskBytes: uint64(entry.MinimumDiskGiB) << 30}
+		if entry.SourceSizeBytes < 0 {
+			return nil, nil, fmt.Errorf("image %q: source_size_bytes must be positive", entry.ID)
+		}
+		if managed {
+			i.SourcePath = entry.Path
+			i.Download = &compute.ImageDownload{URL: entry.URL, SHA256: strings.ToLower(entry.SHA256), Format: compute.NewVolumeFormat(entry.SourceFormat), SizeBytes: uint64(entry.SourceSizeBytes)}
+		} else if entry.SourceFormat != "" || entry.SourceSizeBytes != 0 {
+			return nil, nil, fmt.Errorf("image %q: source_format/source_size_bytes require url and sha256", entry.ID)
+		}
+		if i.Managed() {
+			if previous, ok := artifacts[i.Download.SHA256]; ok && (previous.Format != i.Download.Format || (previous.SizeBytes != 0 && i.Download.SizeBytes != 0 && previous.SizeBytes != i.Download.SizeBytes)) {
+				return nil, nil, fmt.Errorf("image %q: conflicting format or byte size for shared artifact", i.ID)
+			}
+			identity := *i.Download
+			if previous, ok := artifacts[i.Download.SHA256]; ok && identity.SizeBytes == 0 {
+				identity.SizeBytes = previous.SizeBytes
+			}
+			artifacts[i.Download.SHA256] = identity
+		}
 		if err := i.Validate(); err != nil {
 			return nil, nil, err
 		}
@@ -156,6 +187,7 @@ type SubscribeConfig struct {
 type LibvirtConfig struct {
 	Name                   string `hcl:",key"`
 	Uri                    string `hcl:"uri"`
+	ImagePool              string `hcl:"image_pool"`
 	ConfigDriveSuffix      string `hcl:"config_drive_suffix"`
 	ConfigDrivePool        string `hcl:"config_drive_pool"`
 	ConfigDriveWriteFormat string `hcl:"config_drive_write_format"`
@@ -165,21 +197,28 @@ type LibvirtConfig struct {
 }
 
 type Config struct {
-	Tasks      TaskConfig        `hcl:"tasks"`
-	LogLevel   string            `hcl:"log_level"`
-	Images     []ImageConfig     `hcl:"image"`
-	Volumes    []VolumeConfig    `hcl:"volume"`
-	Bridges    []string          `hcl:"bridges"`
-	Libvirts   []LibvirtConfig   `hcl:"libvirt"`
-	KeyFile    string            `hcl:"key_file"`
-	API        APIConfig         `hcl:"api"`
-	Subscribes []SubscribeConfig `hcl:"subscribe"`
+	ImageTransfers ImageTransferConfig `hcl:"image_transfers"`
+	Tasks          TaskConfig          `hcl:"tasks"`
+	LogLevel       string              `hcl:"log_level"`
+	Images         []ImageConfig       `hcl:"image"`
+	Volumes        []VolumeConfig      `hcl:"volume"`
+	Bridges        []string            `hcl:"bridges"`
+	Libvirts       []LibvirtConfig     `hcl:"libvirt"`
+	KeyFile        string              `hcl:"key_file"`
+	API            APIConfig           `hcl:"api"`
+	Subscribes     []SubscribeConfig   `hcl:"subscribe"`
 
 	LegacyLibvirtUri                    string   `hcl:"libvirt_uri"`
 	LegacyLibvirtConfigDriveSuffix      string   `hcl:"libvirt_config_drive_suffix"`
 	LegacyLibvirtConfigDrivePool        string   `hcl:"libvirt_config_drive_pool"`
 	LegacyLibvirtConfigDriveWriteFormat string   `hcl:"libvirt_config_drive_write_format"`
 	LegacyBridges                       []string `hcl:"bridges"`
+}
+
+type ImageTransferConfig struct {
+	MaxBytes           int64 `hcl:"max_bytes"`
+	TimeoutSeconds     int   `hcl:"timeout_seconds"`
+	IdleTimeoutSeconds int   `hcl:"idle_timeout_seconds"`
 }
 
 type TaskConfig struct {
@@ -190,9 +229,10 @@ type TaskConfig struct {
 
 func Default() *Config {
 	return &Config{
-		Tasks:    TaskConfig{Directory: "~/.vmango/tasks", Workers: 2},
-		LogLevel: "info",
-		KeyFile:  "~/.vmango/authorized_keys",
+		ImageTransfers: ImageTransferConfig{MaxBytes: 16 << 30, TimeoutSeconds: 3600, IdleTimeoutSeconds: 120},
+		Tasks:          TaskConfig{Directory: "~/.vmango/tasks", Workers: 2},
+		LogLevel:       "info",
+		KeyFile:        "~/.vmango/authorized_keys",
 		API: APIConfig{
 			Listen:                     ":8080",
 			Debug:                      false,
@@ -261,6 +301,9 @@ func Parse(filename string) (*Config, error) {
 	libvirt_ids := map[string]struct{}{}
 	for index := range config.Libvirts {
 		libvirt := &config.Libvirts[index]
+		if libvirt.ImagePool == "" {
+			libvirt.ImagePool = "default"
+		}
 		if _, exists := libvirt_ids[libvirt.Name]; exists {
 			return nil, fmt.Errorf("duplicate libvirt connection '%s'", libvirt.Name)
 		}
@@ -299,6 +342,10 @@ func Parse(filename string) (*Config, error) {
 	if util.ExpandHomeDir(config.Tasks.Directory) == util.ExpandHomeDir(config.API.SessionDir) || util.ExpandHomeDir(config.Tasks.Directory) == util.ExpandHomeDir(config.API.TokenDir) {
 		return nil, fmt.Errorf("task and credential stores must use separate directories")
 	}
+	imageMetadata := util.ExpandHomeDir(config.Tasks.Directory) + "-images"
+	if imageMetadata == util.ExpandHomeDir(config.API.SessionDir) || imageMetadata == util.ExpandHomeDir(config.API.TokenDir) {
+		return nil, fmt.Errorf("image metadata and credential stores must use separate directories")
+	}
 	if config.API.ConsoleLinkLifetimeSeconds < 1 || config.API.ConsoleLinkLifetimeSeconds > 86400*30 {
 		return nil, fmt.Errorf("console_link_lifetime_seconds must be between 1 and 2592000")
 	}
@@ -315,6 +362,9 @@ func Parse(filename string) (*Config, error) {
 	}
 	if _, _, err := config.ImageDefinitions(); err != nil {
 		return nil, err
+	}
+	if config.ImageTransfers.MaxBytes <= 0 || config.ImageTransfers.MaxBytes > 1<<40 || config.ImageTransfers.TimeoutSeconds < 1 || config.ImageTransfers.TimeoutSeconds > 86400 || config.ImageTransfers.IdleTimeoutSeconds < 1 || config.ImageTransfers.IdleTimeoutSeconds > config.ImageTransfers.TimeoutSeconds {
+		return nil, fmt.Errorf("image_transfers needs max_bytes in 1..1TiB and timeout_seconds/idle_timeout_seconds in 1..86400, idle <= total")
 	}
 	return config, nil
 }

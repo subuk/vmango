@@ -30,6 +30,8 @@ vi.mock("../api/hooks", async (original) => ({
                     name: "Ubuntu",
                     os_name: "Ubuntu",
                     os_version: "24.04",
+                    source_mode: "download",
+                    state: "downloadable",
                     arch: "aarch64",
                     minimum_memory_bytes: 1024 ** 3,
                     minimum_disk_bytes: 8 * 1024 ** 3,
@@ -83,7 +85,14 @@ it("preserves entered values and flags an incompatible image after changing node
     );
     await user.paste("#cloud-config\npackages: [curl]");
     await user.click(screen.getByRole("combobox", { name: "Image" }));
-    await user.click(screen.getByRole("option", { name: /Ubuntu.*24.04/ }));
+    await user.click(
+        screen.getByRole("option", {
+            name: /Ubuntu.*24.04.*Download on first use/,
+        }),
+    );
+    expect(
+        screen.getByText(/downloaded and verified automatically/),
+    ).toBeTruthy();
     await user.click(screen.getByRole("combobox", { name: "Node" }));
     await user.click(screen.getByRole("option", { name: "n2" }));
     expect(

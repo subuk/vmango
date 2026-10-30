@@ -5,6 +5,7 @@ import {
     Button,
     Chip,
     Link,
+    LinearProgress,
     MenuItem,
     Stack,
     Table,
@@ -37,6 +38,7 @@ import {
     ErrorMessage,
     PageTitle,
     QueryState,
+    bytes,
 } from "../components/common";
 
 const time = (value?: string) =>
@@ -164,13 +166,21 @@ export function TaskMonitor() {
                 </Alert>
             )}
             {(active.data || []).slice(0, 5).map((task) => (
-                <Typography key={task.id} variant="body2">
-                    <TaskLink task={task} /> ·{" "}
-                    {(task.resources || [])
-                        .filter((r) => r.kind === "machine")
-                        .map((r) => r.id)
-                        .join(", ")}
-                </Typography>
+                <Box key={task.id}>
+                    <Typography variant="body2">
+                        <TaskLink task={task} /> ·{" "}
+                        {(task.resources || [])
+                            .filter((r) => r.kind === "machine")
+                            .map((r) => r.id)
+                            .join(", ")}
+                    </Typography>
+                    {task.stages?.at(-1)?.transfer && (
+                        <TransferStatus
+                            transfer={task.stages.at(-1)!.transfer!}
+                            running={true}
+                        />
+                    )}
+                </Box>
             ))}
             {failures.map((task) => (
                 <Alert
@@ -455,6 +465,43 @@ function ResourceLink({
         </Link>
     );
 }
+export function TransferStatus({
+    transfer,
+    running,
+}: {
+    transfer: NonNullable<NonNullable<Task["stages"]>[number]["transfer"]>;
+    running: boolean;
+}) {
+    const stale = Date.now() - new Date(transfer.updated_at).getTime() > 15000;
+    const total = transfer.total_bytes || 0;
+    const percent = total
+        ? Math.min(100, (100 * transfer.bytes) / total)
+        : undefined;
+    const eta = transfer.remaining_seconds;
+    return (
+        <Box sx={{ my: 1, minWidth: 220 }}>
+            <LinearProgress
+                aria-label="Image transfer"
+                variant={
+                    percent === undefined ? "indeterminate" : "determinate"
+                }
+                value={percent}
+            />
+            <Typography variant="body2">
+                {bytes(transfer.bytes)}
+                {total ? ` / ${bytes(total)} · ${percent!.toFixed(1)}%` : ""}
+            </Typography>
+            <Typography variant="caption">
+                {running && !stale
+                    ? `${bytes(transfer.bytes_per_second)}/s${eta === undefined ? "" : ` · About ${eta < 60 ? `${eta}s` : `${Math.ceil(eta / 60)} min`} remaining in transfer`}`
+                    : running
+                      ? "Waiting for a progress update…"
+                      : "Last recorded transfer sample"}
+            </Typography>
+        </Box>
+    );
+}
+
 export function TaskDetail() {
     const { id = "" } = useParams();
     const query = useTask(id);
@@ -607,10 +654,28 @@ export function TaskDetail() {
                                                 <TableRow key={index}>
                                                     <TableCell>
                                                         {stageLabel(stage.name)}
+                                                        {stage.transfer && (
+                                                            <TransferStatus
+                                                                transfer={
+                                                                    stage.transfer
+                                                                }
+                                                                running={
+                                                                    task.state ===
+                                                                        "running" &&
+                                                                    stage.state ===
+                                                                        "running"
+                                                                }
+                                                            />
+                                                        )}
                                                         {stage.resource && (
                                                             <Typography
                                                                 variant="caption"
                                                                 component="div"
+                                                                sx={{
+                                                                    overflowWrap:
+                                                                        "anywhere",
+                                                                    maxWidth: 440,
+                                                                }}
                                                             >
                                                                 {
                                                                     stage

@@ -217,7 +217,7 @@ the password you just entered. The node should appear after login. Stop the
 foreground server with Ctrl+C.
 
 To create a VM, follow the [cloud images and provisioning guide](/docs/images/)
-to put a cloud-init-enabled image in a storage pool **on the hypervisor** and
+to configure lazy downloadable images or register a manually prepared source **on the hypervisor** and
 register it in `vmango.conf`. Configure networking on the hypervisor first.
 The binary archive does not configure KVM, pools, networks or guest images for you.
 

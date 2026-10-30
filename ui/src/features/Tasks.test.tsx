@@ -210,3 +210,34 @@ it("preserves typed resource filters until explicitly applied", async () => {
         ),
     ).toBe("local");
 });
+
+it("shows overlapping image transfer progress with speed and remaining time after reload", async () => {
+    request.mockResolvedValue({
+        ...base,
+        stages: [
+            {
+                name: "stream-image",
+                state: "running",
+                started_at: new Date().toISOString(),
+                transfer: {
+                    bytes: 524288,
+                    total_bytes: 1048576,
+                    bytes_per_second: 65536,
+                    remaining_seconds: 8,
+                    updated_at: new Date().toISOString(),
+                },
+            },
+        ],
+    });
+    show();
+    await screen.findByText("Download and upload image");
+    expect(
+        screen
+            .getByRole("progressbar", { name: "Image transfer" })
+            .getAttribute("aria-valuenow"),
+    ).toBe("50");
+    expect(screen.getByText(/50.0%/)).toBeTruthy();
+    expect(
+        screen.getByText(/64 KiB\/s.*8s.*remaining in transfer/),
+    ).toBeTruthy();
+});

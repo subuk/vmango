@@ -26,9 +26,10 @@ func (s State) Terminal() bool {
 // ResourceRef is provider independent. Scope identifies a configured backend,
 // while ID is a stable backend resource identifier, not a display label.
 type ResourceRef struct {
-	Kind  string `json:"kind"`
-	Scope string `json:"scope"`
-	ID    string `json:"id"`
+	Kind     string `json:"kind"`
+	Scope    string `json:"scope"`
+	ID       string `json:"id"`
+	ReadOnly bool   `json:"read_only,omitempty"`
 }
 
 type Identity struct {
@@ -62,12 +63,23 @@ type Effect struct {
 }
 
 type Stage struct {
-	Name       string       `json:"name"`
-	Resource   *ResourceRef `json:"resource,omitempty"`
-	StartedAt  time.Time    `json:"started_at"`
-	FinishedAt *time.Time   `json:"finished_at,omitempty"`
-	State      string       `json:"state"`
-	Error      *Diagnostic  `json:"error,omitempty"`
+	Name       string            `json:"name"`
+	Resource   *ResourceRef      `json:"resource,omitempty"`
+	StartedAt  time.Time         `json:"started_at"`
+	FinishedAt *time.Time        `json:"finished_at,omitempty"`
+	State      string            `json:"state"`
+	Error      *Diagnostic       `json:"error,omitempty"`
+	Transfer   *TransferProgress `json:"transfer,omitempty"`
+}
+
+// TransferProgress measures bytes forwarded to the destination, including
+// backpressure. Estimates describe transfer time only, not VM provisioning.
+type TransferProgress struct {
+	Bytes            uint64    `json:"bytes"`
+	TotalBytes       uint64    `json:"total_bytes,omitempty"`
+	BytesPerSecond   float64   `json:"bytes_per_second"`
+	RemainingSeconds *uint64   `json:"remaining_seconds,omitempty"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type Transition struct {
@@ -102,11 +114,12 @@ type Task struct {
 
 // Record is private storage data. Only Task may cross the public API boundary.
 type Record struct {
-	Task        Task            `json:"task"`
-	Payload     json.RawMessage `json:"payload,omitempty"`
-	KeyHash     string          `json:"key_hash"`
-	Fingerprint string          `json:"fingerprint"`
-	Locks       []ResourceRef   `json:"locks"`
+	Task            Task            `json:"task"`
+	Payload         json.RawMessage `json:"payload,omitempty"`
+	KeyHash         string          `json:"key_hash"`
+	Fingerprint     string          `json:"fingerprint"`
+	Locks           []ResourceRef   `json:"locks"`
+	ExecutionGroups []string        `json:"execution_groups,omitempty"`
 }
 
 type Store struct {
@@ -125,6 +138,9 @@ type Command struct {
 	Kind      string
 	Payload   json.RawMessage
 	Resources []ResourceRef
+	// ExecutionGroups serialize accepted commands without occupying a worker
+	// while another member runs. They are scheduling hints, not dependencies.
+	ExecutionGroups []string
 }
 
 type Handler interface {

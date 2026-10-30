@@ -38,7 +38,7 @@ func conflict(store Store, refs []ResourceRef) *ConflictError {
 		}
 		for _, a := range rec.Locks {
 			for _, b := range refs {
-				if a == b {
+				if a.Kind == b.Kind && a.Scope == b.Scope && a.ID == b.ID && (!a.ReadOnly || !b.ReadOnly || rec.Task.OutcomeUncertain) {
 					return &ConflictError{rec.Task.ID}
 				}
 			}
@@ -110,7 +110,7 @@ func (s *Service) Submit(who Identity, key string, command Command) (Task, error
 	now := time.Now().UTC()
 	task := Task{ID: uuid.NewString(), Kind: command.Kind, State: Queued, Initiator: who, CreatedAt: now, Resources: command.Resources, Stages: []Stage{}, Transitions: []Transition{{State: Queued, At: now}}, Effects: []Effect{}, BlocksResources: true}
 	err = s.repo.Update(func(state *Store) error {
-		state.Records[task.ID] = Record{Task: task, Payload: command.Payload, Locks: s.lockRefs(command.Resources), KeyHash: keyHash, Fingerprint: fingerprint}
+		state.Records[task.ID] = Record{Task: task, Payload: command.Payload, Locks: s.lockRefs(command.Resources), KeyHash: keyHash, Fingerprint: fingerprint, ExecutionGroups: command.ExecutionGroups}
 		return nil
 	})
 	if err != nil {
@@ -326,7 +326,22 @@ func (s *Service) claim() (Record, bool) {
 		return Record{}, false
 	}
 	var next *Record
+	activeGroups := map[string]bool{}
 	for _, rec := range store.Records {
+		if rec.Task.State == Running {
+			for _, group := range rec.ExecutionGroups {
+				activeGroups[group] = true
+			}
+		}
+	}
+	for _, rec := range store.Records {
+		blocked := false
+		for _, group := range rec.ExecutionGroups {
+			blocked = blocked || activeGroups[group]
+		}
+		if blocked {
+			continue
+		}
 		if rec.Task.State == Queued && (next == nil || cursor(rec.Task) < cursor(next.Task)) {
 			r := rec
 			next = &r
@@ -346,7 +361,7 @@ func (s *Service) claim() (Record, bool) {
 }
 
 func (s *Service) execute(ctx context.Context, rec Record) {
-	e := &Execution{ctx: ctx, service: s, id: rec.Task.ID, secrets: PayloadSecrets(rec.Payload)}
+	e := &Execution{ctx: ctx, service: s, id: rec.Task.ID, acceptedAt: rec.Task.CreatedAt, secrets: PayloadSecrets(rec.Payload)}
 	err := func() (err error) {
 		defer func() {
 			if recover() != nil {

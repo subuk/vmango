@@ -27,6 +27,14 @@ export const taskLabel = (kind: string) => {
     return `${labels[action] || action || kind} ${resource === "machine" ? "machine" : resource === "volume" ? "volume" : resource || ""}`;
 };
 const stageNames: Record<string, string> = {
+    "prepare-image": "Check image readiness",
+    "wait-image": "Wait for shared image preparation",
+    "inspect-image-source": "Inspect image source",
+    "create-image-staging": "Prepare image storage",
+    "stream-image": "Download and upload image",
+    "verify-image": "Verify and publish image",
+    "cleanup-image": "Clean up incomplete image",
+    "validate-image-creation": "Check creation against verified image",
     "clone-volume": "Clone disk",
     "create-volume": "Create disk",
     "define-vm": "Create machine configuration",

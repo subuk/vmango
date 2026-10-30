@@ -98,11 +98,11 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		if i.Arch != vm.Arch {
 			return nil, nil, fmt.Errorf("image %q architecture does not match the VM", i.ID)
 		}
-		source, e := m.volumes.Get(i.SourcePath, vm.NodeId)
+		source, e := m.images.Source(i, vm.NodeId, m.volumes)
 		if e != nil {
 			return nil, nil, fmt.Errorf("image %q source unavailable on node %q: %w", i.ID, vm.NodeId, e)
 		}
-		if source.NodeId != vm.NodeId || source.Path != i.SourcePath || source.Metadata.Hidden || source.AttachedTo != "" {
+		if source.NodeId != vm.NodeId || (!i.Managed() && (source.Path != i.SourcePath || source.Metadata.Hidden)) || source.AttachedTo != "" {
 			return nil, nil, fmt.Errorf("image %q source is unavailable for cloning", i.ID)
 		}
 		if source.Format != VolumeFormatQcow2 && source.Format != VolumeFormatRaw {
