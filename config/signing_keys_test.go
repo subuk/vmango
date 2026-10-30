@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -26,7 +27,8 @@ func TestSigningKeyFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 {
+	// Windows does not expose Unix permission bits through os.Stat.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatal(info.Mode())
 	}
 	if err := os.WriteFile(c.JWTSigningKeyFile, []byte("short"), 0600); err != nil {
