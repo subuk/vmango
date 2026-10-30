@@ -40,9 +40,10 @@ type VirtualMachineConfig struct {
 }
 
 type VirtualMachineGraphic struct {
-	Type   GraphicType
-	Listen string
-	Port   int
+	BindingResolved bool
+	Type            GraphicType
+	Listen          string
+	Port            int
 }
 
 func (g VirtualMachineGraphic) Vnc() bool {

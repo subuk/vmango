@@ -38,6 +38,8 @@ type ImageDefaults struct {
 	DiskBus        DeviceBus
 	DiskController string
 	NICModel       string
+	Graphics       string
+	VideoModel     string
 	GuestAgent     *bool
 	Initialization string // Empty inherits the node's config drive format.
 }
@@ -55,6 +57,12 @@ func (i Image) Validate() error {
 		}
 	}
 	d := i.Defaults
+	if (d.Graphics != "" && NewGraphicType(d.Graphics) == GraphicTypeUnknown) || (d.VideoModel != "" && NewVideoModel(d.VideoModel) == VideoModelUnknown) {
+		return fmt.Errorf("image %q: invalid graphics or video_model", i.ID)
+	}
+	if d.Graphics == "none" && d.VideoModel != "" && d.VideoModel != "none" {
+		return fmt.Errorf("image %q: graphics = none requires video_model = none", i.ID)
+	}
 	if !slices.Contains([]DeviceBus{DeviceBusUnknown, DeviceBusVirtio, DeviceBusScsi, DeviceBusIde}, d.DiskBus) {
 		return fmt.Errorf("image %q: invalid disk bus", i.ID)
 	}
@@ -165,5 +173,18 @@ func (s *ImageService) SourcePaths() (map[string]bool, error) {
 // Compatible checks catalog launch requirements against actual backend capabilities.
 func (i Image) Compatible(c VirtualMachineCapabilities) bool {
 	d := i.Defaults
-	return c.Arch == i.Arch && (d.Firmware == "" || d.Firmware == "auto" || slices.Contains(c.Firmwares, d.Firmware)) && (d.DiskBus == DeviceBusUnknown || slices.Contains(c.DiskBuses, d.DiskBus)) && (d.NICModel == "" || slices.Contains(c.NICModels, d.NICModel)) && (d.DiskController == "" || slices.Contains(c.DiskControllers, d.DiskController))
+	g, v := d.Display()
+	return slices.Contains(c.Graphics, g) && slices.Contains(c.VideoModels, v) && c.Arch == i.Arch && (d.Firmware == "" || d.Firmware == "auto" || slices.Contains(c.Firmwares, d.Firmware)) && (d.DiskBus == DeviceBusUnknown || slices.Contains(c.DiskBuses, d.DiskBus)) && (d.NICModel == "" || slices.Contains(c.NICModels, d.NICModel)) && (d.DiskController == "" || slices.Contains(c.DiskControllers, d.DiskController))
+}
+
+// Display centrally defines omission defaults for image-owned guest devices.
+func (d ImageDefaults) Display() (GraphicType, VideoModel) {
+	g, v := GraphicType(GraphicTypeVnc), VideoModel(VideoModelNone)
+	if d.Graphics != "" {
+		g = NewGraphicType(d.Graphics)
+	}
+	if d.VideoModel != "" {
+		v = NewVideoModel(d.VideoModel)
+	}
+	return g, v
 }

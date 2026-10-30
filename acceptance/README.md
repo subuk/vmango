@@ -54,7 +54,7 @@ clones the image and
 creates the VM and config drive through the JWT Bearer-authenticated JSON API. Mutations assert 202 acceptance,
 then poll the durable task until success before inspecting the real backend.
 The harness uses a dedicated task directory under its own artifact directory.
-It also checks API discovery, duplicate-create conflicts and partial updates. It checks the image-selected SCSI/virtio-scsi configuration, explicit guest agent
+It also checks API discovery, duplicate-create conflicts and rejection of the removed machine PATCH route. It checks administrator-owned autostart during an explicit type change and a loopback graphics binding. It checks the image-selected SCSI/virtio-scsi configuration, explicit guest agent
 disablement and presence/absence of the config drive. It checks the generated domain
 uses hardware acceleration, starts it through HTTP and checks libvirt reports
 it running. It then checks the VNC WebSocket proxy's RFB greeting and reads the

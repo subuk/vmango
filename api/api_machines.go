@@ -6,20 +6,6 @@ import (
 	"subuk/vmango/compute"
 )
 
-type apiPatchVM struct {
-	Autostart      *bool   `json:"autostart,omitempty"`
-	GuestAgent     *bool   `json:"guest_agent,omitempty"`
-	Graphics       *string `json:"graphics,omitempty" enum:"none,vnc,spice"`
-	GraphicsListen *string `json:"graphics_listen,omitempty" doc:"Backend listen address; Vmango still proxies console access."`
-	VideoModel     *string `json:"video_model,omitempty" enum:"none,cirrus,qxl"`
-}
-type apiPatchVMInput struct {
-	Cloud string `path:"cloud"`
-	SubmissionInput
-	Node string `path:"node"`
-	VM   string `path:"vm"`
-	Body apiPatchVM
-}
 type apiDeleteVMInput struct {
 	Cloud string `path:"cloud"`
 	SubmissionInput
@@ -77,10 +63,6 @@ func (e *Environ) registerVMOperations(api huma.API) {
 	const path = "/clouds/{cloud}/machines/{node}/{vm}"
 	registerAPI(api, "GET", path, "get-vm", "Get virtual machine", func(ctx context.Context, in *apiVMInput) (*apiResult[apiVM], error) {
 		return e.apiGetVM(in.VM, in.Node)
-	})
-	registerAPI(api, "PATCH", path, "update-vm", "Queue a persistent configuration update; omitted fields are preserved", func(ctx context.Context, in *apiPatchVMInput) (*apiAccepted, error) {
-		patch := compute.MachinePatch{Autostart: in.Body.Autostart, GuestAgent: in.Body.GuestAgent, Graphics: in.Body.Graphics, GraphicsListen: in.Body.GraphicsListen, VideoModel: in.Body.VideoModel}
-		return e.submitTask(ctx, in.IdempotencyKey, "machine.update", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, VM: in.VM, Patch: &patch})
 	})
 	registerAPI(api, "DELETE", path, "delete-vm", "Queue VM deletion; attached disk deletion requires delete_volumes=true", func(ctx context.Context, in *apiDeleteVMInput) (*apiAccepted, error) {
 		return e.submitTask(ctx, in.IdempotencyKey, "machine.delete", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, VM: in.VM, DeleteVolumes: in.DeleteVolumes})

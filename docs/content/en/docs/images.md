@@ -215,9 +215,17 @@ drive. It does not change the `ubuntu-server` entry or the shared source disk.
 | `disk_controller` | `virtio-scsi` (requires `disk_bus = "scsi"`) | Backend-selected controller |
 | `nic_model` | `virtio`, `e1000`, `rtl8139`, subject to backend support | `virtio` |
 | `guest_agent` | `true`, `false` | `true` |
+| `graphics` | `none`, `vnc`, `spice`, subject to backend support | `vnc` |
+| `video_model` | `none`, `cirrus`, `qxl`, subject to backend support | `none` |
 | `initialization` | `none`, `nocloud`, `openstack` | Selected node's `config_drive_write_format` |
 | `minimum_memory_mib` | Nonnegative integer, MiB | No additional minimum |
 | `minimum_disk_gib` | Nonnegative integer, GiB | Source volume capacity |
+
+`graphics = "none"` requires `video_model = "none"` (or omission). The image
+owns these guest device settings. The graphics listener is a private
+`graphics_listen` IP address in each `libvirt` block, resolved after host selection;
+it does not belong to an image or type. Omission preserves the backend listener
+default.
 
 The backend checks capabilities for the selected architecture and node. A listed
 option is not necessarily supported by every backend. For example, built-in

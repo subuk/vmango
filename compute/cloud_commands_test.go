@@ -2,6 +2,7 @@ package compute_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog"
@@ -17,11 +18,14 @@ import (
 
 type cloudVMBackend struct {
 	compute.VirtualMachineRepository
-	mu        sync.Mutex
-	machines  map[string]compute.VirtualMachine
-	inventory []string
-	failHost  string
-	mutations int
+	mu                 sync.Mutex
+	machines           map[string]compute.VirtualMachine
+	inventory          []string
+	failHost           string
+	mutations          int
+	starts             int
+	unsupportedDisplay bool
+	listeners          map[string]string
 }
 
 func (r *cloudVMBackend) Get(id, node string) (*compute.VirtualMachine, error) {
@@ -59,7 +63,10 @@ func (r *cloudVMBackend) ValidateNew(v *compute.VirtualMachine) error {
 	return nil
 }
 func (r *cloudVMBackend) Capabilities(node string, arch compute.Arch) (compute.VirtualMachineCapabilities, error) {
-	return compute.VirtualMachineCapabilities{Arch: arch, MaxVCPUs: 16, Firmwares: []string{"bios"}, DiskBuses: []compute.DeviceBus{compute.DeviceBusVirtio}, NICModels: []string{"virtio"}, Graphics: []compute.GraphicType{compute.GraphicTypeVnc, compute.GraphicTypeNone}, VideoModels: []compute.VideoModel{compute.VideoModelNone}}, nil
+	if r.unsupportedDisplay {
+		return compute.VirtualMachineCapabilities{Arch: arch, DiskBuses: []compute.DeviceBus{compute.DeviceBusVirtio}, NICModels: []string{"virtio"}, Graphics: []compute.GraphicType{compute.GraphicTypeNone}, VideoModels: []compute.VideoModel{compute.VideoModelNone}}, nil
+	}
+	return compute.VirtualMachineCapabilities{Arch: arch, MaxVCPUs: 16, Firmwares: []string{"bios"}, DiskBuses: []compute.DeviceBus{compute.DeviceBusVirtio}, NICModels: []string{"virtio"}, Graphics: []compute.GraphicType{compute.GraphicTypeVnc, compute.GraphicTypeSpice, compute.GraphicTypeNone}, VideoModels: []compute.VideoModel{compute.VideoModelNone, compute.VideoModelQxl}}, nil
 }
 func (r *cloudVMBackend) Save(v *compute.VirtualMachine) error {
 	r.mu.Lock()
@@ -146,12 +153,13 @@ func (cloudEvents) Publish(compute.Event) error { return nil }
 
 func cloudFixture(t *testing.T, cpus int) (*tasks.Service, *cloudVMBackend, *cloudVolumeBackend, compute.Cloud) {
 	t.Helper()
-	imageRepo, err := catalog.NewImageRepository([]compute.Image{{ID: "image", Name: "Image", OSName: "Linux", Arch: compute.ArchAmd64, SourcePath: "/source", Defaults: compute.ImageDefaults{Initialization: "none"}}})
+	off := false
+	imageRepo, err := catalog.NewImageRepository([]compute.Image{{ID: "image", Name: "Image", OSName: "Linux", Arch: compute.ArchAmd64, SourcePath: "/source", Defaults: compute.ImageDefaults{Initialization: "none", Graphics: "spice", VideoModel: "qxl", GuestAgent: &off}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	images := compute.NewImageService(imageRepo)
-	vmBackend := &cloudVMBackend{machines: map[string]compute.VirtualMachine{}}
+	vmBackend := &cloudVMBackend{machines: map[string]compute.VirtualMachine{}, listeners: map[string]string{"a": "127.0.0.2", "b": "::1"}}
 	volumeBackend := &cloudVolumeBackend{}
 	vms := compute.NewVirtualMachineService(vmBackend)
 	vms.CloudMode = true
@@ -159,7 +167,7 @@ func cloudFixture(t *testing.T, cpus int) (*tasks.Service, *cloudVMBackend, *clo
 	nodes := compute.NewNodeService(cloudNodeBackend{cpus: cpus})
 	pools := compute.NewVolumePoolService(cloudPoolBackend{})
 	manager := compute.NewVirtualMachineManager(vms, volumes, cloudEvents{}, nil, images)
-	c := compute.Cloud{ID: "c", Name: "Cloud", Zones: []compute.CatalogEntry{{ID: "z", Name: "Zone"}}, InstanceTypes: []compute.InstanceType{{ID: "small", Name: "Small", VCPUs: 2, CPURequest: 2, MemoryBytes: 2 << 30, MemoryRequestBytes: 2 << 30, BootDiskBytes: 2 << 30}}, Images: []string{"image"}, Networks: []compute.CatalogEntry{{ID: "lan", Name: "LAN"}}, StorageClasses: []compute.CatalogEntry{{ID: "fast", Name: "Fast"}}, Hosts: []compute.CloudHost{{Node: "a", Zone: "z", Labels: map[string]string{"rack": "one"}, Networks: map[string]compute.NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]compute.StorageBinding{"fast": {Pool: "pool", Format: compute.VolumeFormatRaw}}}, {Node: "b", Zone: "z", Labels: map[string]string{"rack": "two"}, Networks: map[string]compute.NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]compute.StorageBinding{"fast": {Pool: "pool", Format: compute.VolumeFormatRaw}}}}}
+	c := compute.Cloud{ID: "c", Name: "Cloud", Zones: []compute.CatalogEntry{{ID: "z", Name: "Zone"}}, InstanceTypes: []compute.InstanceType{{ID: "small", Name: "Small", Autostart: true, VCPUs: 2, CPURequest: 2, MemoryBytes: 2 << 30, MemoryRequestBytes: 2 << 30, BootDiskBytes: 2 << 30}}, Images: []string{"image"}, Networks: []compute.CatalogEntry{{ID: "lan", Name: "LAN"}}, StorageClasses: []compute.CatalogEntry{{ID: "fast", Name: "Fast"}}, Hosts: []compute.CloudHost{{Node: "a", Zone: "z", Labels: map[string]string{"rack": "one"}, Networks: map[string]compute.NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]compute.StorageBinding{"fast": {Pool: "pool", Format: compute.VolumeFormatRaw}}}, {Node: "b", Zone: "z", Labels: map[string]string{"rack": "two"}, Networks: map[string]compute.NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]compute.StorageBinding{"fast": {Pool: "pool", Format: compute.VolumeFormatRaw}}}}}
 	clouds := &compute.CloudService{Definitions: []compute.Cloud{c}, Nodes: nodes, VMs: vms, Pools: pools, Volumes: volumes, Manager: manager}
 	manager.Clouds = clouds
 	handler := &compute.CommandHandler{Clouds: clouds, Manager: manager, VMs: vms, Volumes: volumes, Nodes: nodes}
@@ -238,7 +246,7 @@ func TestTypeChangeStaysOnHostAndPreservesDisks(t *testing.T) {
 	for _, sufficient := range []bool{true, false} {
 		t.Run(fmt.Sprint(sufficient), func(t *testing.T) {
 			s, backend, _, _ := cloudFixture(t, 2)
-			backend.machines["a/v"] = compute.VirtualMachine{Id: "v", NodeId: "a", Arch: compute.ArchAmd64, VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), State: compute.StateStopped, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone, Volumes: []*compute.VirtualMachineAttachedVolume{{Path: "/existing"}}, Metadata: &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 1, MemoryRequestBytes: 1 << 30}}
+			backend.machines["a/v"] = compute.VirtualMachine{Id: "v", NodeId: "a", Arch: compute.ArchAmd64, VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), State: compute.StateStopped, GuestAgent: true, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc, Listen: "127.0.0.9"}, VideoModel: compute.VideoModelQxl, Volumes: []*compute.VirtualMachineAttachedVolume{{Path: "/existing"}}, Metadata: &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 1, MemoryRequestBytes: 1 << 30}}
 			if !sufficient {
 				backend.machines["a/other"] = compute.VirtualMachine{Id: "other", NodeId: "a", VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG)}
 			}
@@ -247,7 +255,7 @@ func TestTypeChangeStaysOnHostAndPreservesDisks(t *testing.T) {
 			result := awaitCloudTask(t, s, task.ID)
 			v, _ := backend.Get("v", "a")
 			if sufficient {
-				if result.State != tasks.Succeeded || v.VCpus != 2 || v.Metadata.CPURequest != 2 || v.Volumes[0].Path != "/existing" {
+				if !v.Autostart || !v.GuestAgent || v.Graphic.Listen != "127.0.0.9" || v.Graphic.Type != compute.GraphicTypeVnc || v.VideoModel != compute.VideoModelQxl || v.State != compute.StateStopped || result.State != tasks.Succeeded || v.VCpus != 2 || v.Metadata.CPURequest != 2 || v.Volumes[0].Path != "/existing" {
 					t.Fatalf("incorrect change: %+v %+v", result, v)
 				}
 			} else if result.State != tasks.Failed || backend.mutations != 0 || v.VCpus != 1 {
@@ -258,7 +266,7 @@ func TestTypeChangeStaysOnHostAndPreservesDisks(t *testing.T) {
 }
 func TestAdoptionDoesNotClaimDisksOrChangeMachine(t *testing.T) {
 	s, backend, volumes, _ := cloudFixture(t, 4)
-	backend.machines["a/external"] = compute.VirtualMachine{Id: "external", NodeId: "a", VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), State: compute.StateRunning, Volumes: []*compute.VirtualMachineAttachedVolume{{Path: "/external-disk"}}}
+	backend.machines["a/external"] = compute.VirtualMachine{Id: "external", NodeId: "a", VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), State: compute.StateRunning, Autostart: true, GuestAgent: true, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc, Listen: "::1"}, VideoModel: compute.VideoModelCirrus, Volumes: []*compute.VirtualMachineAttachedVolume{{Path: "/external-disk"}}}
 	if _, err := s.Submit(tasks.Identity{ID: "admin"}, "delete-before-adoption", compute.NewCommand("machine.delete", compute.InfrastructureCommand{Node: "a", VM: "external"})); err == nil {
 		t.Fatal("unmanaged deletion accepted")
 	}
@@ -268,7 +276,7 @@ func TestAdoptionDoesNotClaimDisksOrChangeMachine(t *testing.T) {
 		t.Fatal(result)
 	}
 	vm, _ := backend.Get("external", "a")
-	if vm.Metadata == nil || vm.VCpus != 1 || vm.State != compute.StateRunning {
+	if !vm.Autostart || !vm.GuestAgent || vm.Graphic.Type != compute.GraphicTypeVnc || vm.Graphic.Listen != "::1" || vm.VideoModel != compute.VideoModelCirrus || vm.Metadata == nil || vm.VCpus != 1 || vm.State != compute.StateRunning {
 		t.Fatal("adoption changed configuration or claimed disks")
 	}
 	deletion := submitCloud(t, s, "delete-after-adoption", "machine.delete", compute.InfrastructureCommand{Node: "a", VM: "external", DeleteVolumes: true})
@@ -395,4 +403,98 @@ func TestCloudProvisioningDoesNotBlockIndependentPower(t *testing.T) {
 func isTaskConflict(err error) bool {
 	var conflict *tasks.ConflictError
 	return errors.As(err, &conflict)
+}
+
+func (r *cloudVMBackend) SnapshotCreationBinding(node string) (json.RawMessage, error) {
+	return json.Marshal(r.listeners[node])
+}
+func (r *cloudVMBackend) ApplyCreationBinding(vm *compute.VirtualMachine, binding json.RawMessage) error {
+	return json.Unmarshal(binding, &vm.Graphic.Listen)
+}
+
+func TestCloudCreatePinsPolicyAndSelectedHostBinding(t *testing.T) {
+	s, backend, _, cloud := cloudFixture(t, 4)
+	task := submitCloud(t, s, "accepted-policy", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: createSpec("pinned")})
+	// All private bindings and the type policy must remain as accepted, including
+	// when scheduling does not choose a host until execution starts.
+	backend.listeners["a"] = "192.0.2.4"
+	cloud.InstanceTypes[0].Autostart = false
+	runCloudService(t, s)
+	result := awaitCloudTask(t, s, task.ID)
+	vm, err := backend.Get("pinned", "a")
+	if err != nil || result.State != tasks.Succeeded {
+		t.Fatalf("creation failed: %+v %v", result, err)
+	}
+	if !vm.Autostart || vm.GuestAgent || vm.Graphic.Type != compute.GraphicTypeSpice || vm.VideoModel != compute.VideoModelQxl || vm.Graphic.Listen != "127.0.0.2" {
+		t.Fatalf("accepted policy changed: %+v", vm)
+	}
+}
+
+func TestTypeChangePinsAutostartAndDoesNotRewriteOnCatalogEdit(t *testing.T) {
+	s, backend, _, cloud := cloudFixture(t, 4)
+	backend.machines["a/v"] = compute.VirtualMachine{Id: "v", NodeId: "a", Arch: compute.ArchAmd64, State: compute.StateStopped, VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), Metadata: &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 1, MemoryRequestBytes: 1 << 30}, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
+	task := submitCloud(t, s, "accepted-type-policy", "machine.change-type", compute.InfrastructureCommand{CloudID: "c", Node: "a", VM: "v", InstanceType: "small"})
+	cloud.InstanceTypes[0].Autostart = false
+	before, _ := backend.Get("v", "a")
+	if before.Autostart {
+		t.Fatal("catalog edit rewrote an existing VM")
+	}
+	runCloudService(t, s)
+	if result := awaitCloudTask(t, s, task.ID); result.State != tasks.Succeeded {
+		t.Fatal(result)
+	}
+	after, _ := backend.Get("v", "a")
+	if !after.Autostart || after.State != compute.StateStopped {
+		t.Fatalf("type policy not pinned or changed power: %+v", after)
+	}
+}
+
+func (r *cloudVMBackend) SaveResources(vm *compute.VirtualMachine) error { return r.Save(vm) }
+
+func (r *cloudVMBackend) Start(id, node string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	vm := r.machines[node+"/"+id]
+	vm.State = compute.StateRunning
+	r.machines[node+"/"+id] = vm
+	r.starts++
+	return nil
+}
+
+func TestCreateStartIsIndependentOfAutostart(t *testing.T) {
+	s, backend, _, cloud := cloudFixture(t, 4)
+	cloud.InstanceTypes[0].Autostart = false
+	spec := createSpec("start-once")
+	spec.Start = true
+	task := submitCloud(t, s, "one-time-start", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: spec})
+	runCloudService(t, s)
+	if result := awaitCloudTask(t, s, task.ID); result.State != tasks.Succeeded {
+		t.Fatal(result)
+	}
+	vm, _ := backend.Get("start-once", "a")
+	if vm.Autostart || vm.State != compute.StateRunning || backend.starts != 1 {
+		t.Fatalf("one-time start replaced persistent policy: %+v", vm)
+	}
+}
+
+func TestUnsupportedDisplayIsNotOfferedOrProvisioned(t *testing.T) {
+	s, backend, volumes, cloud := cloudFixture(t, 4)
+	backend.unsupportedDisplay = true
+	repo, err := catalog.NewImageRepository([]compute.Image{{ID: "image", Arch: compute.ArchAmd64, SourcePath: "/source", Defaults: compute.ImageDefaults{Graphics: "spice", VideoModel: "qxl", Initialization: "none"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	vms := compute.NewVirtualMachineService(backend)
+	volumeService := compute.NewVolumeService(volumes)
+	manager := compute.NewVirtualMachineManager(vms, volumeService, cloudEvents{}, nil, compute.NewImageService(repo))
+	service := &compute.CloudService{VMs: vms, Volumes: volumeService, Nodes: compute.NewNodeService(cloudNodeBackend{cpus: 4}), Pools: compute.NewVolumePoolService(cloudPoolBackend{}), Manager: manager}
+	offers, err := service.Offers(cloud)
+	if err != nil || len(offers) != 0 {
+		t.Fatalf("unsupported display offered: %+v %v", offers, err)
+	}
+	task := submitCloud(t, s, "unsupported-display", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: createSpec("no-display")})
+	runCloudService(t, s)
+	if result := awaitCloudTask(t, s, task.ID); result.State != tasks.Failed || result.OutcomeUncertain || volumes.created != 0 || backend.mutations != 0 {
+		t.Fatalf("unsupported display caused side effects: %+v", result)
+	}
 }

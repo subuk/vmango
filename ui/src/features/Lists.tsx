@@ -237,7 +237,7 @@ export function MachineActions({
                     component={RouterLink}
                     to={`${machineURL(vm.node, vm.id)}update/`}
                 >
-                    Edit configuration
+                    Change instance type
                 </MenuItem>
                 {vm.state === "running" &&
                     ["reboot", "poweroff"].map((action) => (
@@ -271,7 +271,7 @@ export function MachineActions({
                     to={`${machineURL(vm.node, vm.id)}update/`}
                     disabled={conflict}
                 >
-                    Edit
+                    Change instance type
                 </Button>
             )}
             {confirm && (

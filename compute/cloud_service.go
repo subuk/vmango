@@ -1,6 +1,7 @@
 package compute
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -279,7 +280,7 @@ func addStorage(required map[string]uint64, pool string, bytes uint64) error {
 	return nil
 }
 
-func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *ImageService, inventory []HostInventory) (InfrastructureCommand, error) {
+func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *ImageService, inventory []HostInventory, bindings ...map[string]json.RawMessage) (InfrastructureCommand, error) {
 	t, err := c.InstanceType(spec.InstanceType)
 	if err != nil {
 		return InfrastructureCommand{}, err
@@ -328,7 +329,7 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 			if network.Model != "" && image.Defaults.NICModel != "" && network.Model != image.Defaults.NICModel {
 				return InfrastructureCommand{}, fmt.Errorf("network model conflicts with image requirements")
 			}
-			vm := &VirtualMachine{Id: spec.ID, NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Hugepages: t.Hugepages, GuestAgent: true, Graphic: VirtualMachineGraphic{Type: GraphicTypeVnc}, VideoModel: VideoModelNone, Config: &VirtualMachineConfig{Hostname: spec.ID, Userdata: []byte(spec.UserData)}, Interfaces: []*VirtualMachineAttachedInterface{{NetworkName: network.Network, LogicalNetwork: spec.Network, Bridge: network.Bridge, Model: network.Model, AccessVlan: network.VLAN}}, Metadata: &MachineMetadata{Cloud: c.ID, Zone: h.Zone, InstanceType: t.ID, Image: image.ID, CPURequest: t.CPURequest, MemoryRequestBytes: t.MemoryBytes, MinimumMemoryBytes: image.MinimumMemoryBytes}}
+			vm := &VirtualMachine{Id: spec.ID, NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Hugepages: t.Hugepages, Autostart: t.Autostart, Config: &VirtualMachineConfig{Hostname: spec.ID, Userdata: []byte(spec.UserData)}, Interfaces: []*VirtualMachineAttachedInterface{{NetworkName: network.Network, LogicalNetwork: spec.Network, Bridge: network.Bridge, Model: network.Model, AccessVlan: network.VLAN}}, Metadata: &MachineMetadata{Cloud: c.ID, Zone: h.Zone, InstanceType: t.ID, Image: image.ID, CPURequest: t.CPURequest, MemoryRequestBytes: t.MemoryBytes, MinimumMemoryBytes: image.MinimumMemoryBytes}}
 			clones := []VirtualMachineManagerClonedVolumeParams{{Cloud: c.ID, StorageClass: spec.StorageClass, ImageID: image.ID, NewName: spec.ID + "_root", NewPool: storage.Pool, NewSize: NewSize(t.BootDiskBytes, SizeUnitB), NewFormat: storage.Format, Alias: "root", DeviceType: DeviceTypeDisk}}
 			newDisks := []VirtualMachineManagerCreatedVolumeParams{}
 			required := map[string]uint64{storage.Pool: t.BootDiskBytes}
@@ -376,6 +377,9 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 				return InfrastructureCommand{}, err
 			}
 			manager := s.Manager.withImages(images)
+			if len(bindings) != 0 {
+				manager.creationBindings = bindings[0]
+			}
 			prepared, clones, err := manager.PrepareCreation(vm, clones, newDisks, ImageDefaults{})
 			if err != nil {
 				return InfrastructureCommand{}, err

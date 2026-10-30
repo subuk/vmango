@@ -1,6 +1,7 @@
 package compute
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -43,13 +44,14 @@ type VirtualMachineManagerCreatedVolumeParams struct {
 }
 
 type VirtualMachineManager struct {
-	Clouds   *CloudService
-	createMu sync.Mutex
-	images   *ImageService
-	vms      *VirtualMachineService
-	volumes  *VolumeService
-	settings map[string]VirtualMachineManagerNodeSettings
-	epub     EventPublisher
+	creationBindings map[string]json.RawMessage
+	Clouds           *CloudService
+	createMu         sync.Mutex
+	images           *ImageService
+	vms              *VirtualMachineService
+	volumes          *VolumeService
+	settings         map[string]VirtualMachineManagerNodeSettings
+	epub             EventPublisher
 }
 
 func NewVirtualMachineManager(vms *VirtualMachineService, volumes *VolumeService, epub EventPublisher, settings map[string]VirtualMachineManagerNodeSettings, images *ImageService) *VirtualMachineManager {
@@ -94,6 +96,19 @@ func (manager *VirtualMachineManager) PrepareCreation(vm *VirtualMachine, cloneV
 		return nil, nil, err
 	}
 	vm, cloneVols = prepared, clones
+	if !vm.Graphic.BindingResolved {
+		binding, pinned := manager.creationBindings[vm.NodeId]
+		if !pinned {
+			binding, err = manager.vms.SnapshotCreationBinding(vm.NodeId)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		if err = manager.vms.applyCreationBinding(vm, binding); err != nil {
+			return nil, nil, err
+		}
+		vm.Graphic.BindingResolved = true
+	}
 	if err := ValidateVM(vm); err != nil {
 		return nil, nil, err
 	}

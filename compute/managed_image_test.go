@@ -477,10 +477,14 @@ func TestDurableCreatePinsImageAndClonesHiddenVerifiedSource(t *testing.T) {
 			}
 			image.Defaults.DiskBus = compute.DeviceBusVirtio
 			image.Defaults.Firmware = "bios"
+			image.Defaults.Graphics = "none"
+			image.Defaults.VideoModel = "none"
+			off := false
+			image.Defaults.GuestAgent = &off
 			catalog := &mutableImageCatalog{image}
 			images := compute.NewImageService(catalog)
 			images.ManagedSources = managed
-			vmRepo := &managedMachines{machines: machines{caps: compute.VirtualMachineCapabilities{Arch: compute.ArchAmd64, MaxVCPUs: 8, Firmwares: []string{"bios", "efi"}, DiskBuses: []compute.DeviceBus{compute.DeviceBusVirtio}, Graphics: []compute.GraphicType{compute.GraphicTypeNone}, VideoModels: []compute.VideoModel{compute.VideoModelNone}}}, saved: map[string]*compute.VirtualMachine{}}
+			vmRepo := &managedMachines{machines: machines{caps: compute.VirtualMachineCapabilities{Arch: compute.ArchAmd64, MaxVCPUs: 8, Firmwares: []string{"bios", "efi"}, DiskBuses: []compute.DeviceBus{compute.DeviceBusVirtio}, Graphics: []compute.GraphicType{compute.GraphicTypeNone, compute.GraphicTypeVnc}, VideoModels: []compute.VideoModel{compute.VideoModelNone}}}, saved: map[string]*compute.VirtualMachine{}}
 			volRepo := &managedVolumes{backend: backend}
 			volumes := compute.NewVolumeService(volRepo)
 			vms := compute.NewVirtualMachineService(vmRepo)
@@ -508,6 +512,10 @@ func TestDurableCreatePinsImageAndClonesHiddenVerifiedSource(t *testing.T) {
 			// Change the catalog before restarting the executor with its accepted command.
 			catalog.image.Download = &compute.ImageDownload{URL: "https://invalid.example/revision", SHA256: strings.Repeat("0", 64), Format: compute.VolumeFormatQcow2}
 			catalog.image.Defaults.Firmware = "efi"
+			catalog.image.Defaults.Graphics = "vnc"
+			catalog.image.Defaults.VideoModel = "qxl"
+			on := true
+			catalog.image.Defaults.GuestAgent = &on
 			settings["one"] = compute.VirtualMachineManagerNodeSettings{CdFormat: configdrive.FormatOpenstack, CdPool: "changed-init", CdSuffix: "_different.iso"}
 			repo.Close()
 			repo, err = filesystem.NewTaskRepository(dir)
@@ -529,7 +537,7 @@ func TestDurableCreatePinsImageAndClonesHiddenVerifiedSource(t *testing.T) {
 			if result.State != expectedState {
 				t.Fatalf("%+v", result)
 			}
-			if len(volRepo.clones) != 1 || volRepo.clones[0].NewSize.Bytes() != uint64(len(data)) || requests.Load() != 1 || vmRepo.saved[vm.Id].Firmware != "bios" {
+			if len(volRepo.clones) != 1 || volRepo.clones[0].NewSize.Bytes() != uint64(len(data)) || requests.Load() != 1 || vmRepo.saved[vm.Id].Firmware != "bios" || vmRepo.saved[vm.Id].Graphic.Type != compute.GraphicTypeNone || vmRepo.saved[vm.Id].VideoModel != compute.VideoModelNone || vmRepo.saved[vm.Id].GuestAgent {
 				t.Fatal("accepted image definition or observed source capacity lost", volRepo.clones)
 			}
 			if inherited && (vmRepo.saved[vm.Id].Config == nil || vmRepo.saved[vm.Id].Config.Initialization != "nocloud") {

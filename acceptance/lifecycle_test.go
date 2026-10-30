@@ -289,8 +289,9 @@ libvirt "acceptance" {
  config_drive_pool = %q
  image_pool = %q
  qcow_prealloc_metadata = false
+ graphics_listen = "127.0.0.1"
 }
-image "boot" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q protected = true disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false initialization = %q minimum_memory_mib = 1024 minimum_disk_gib = 8 }
+image "boot" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q protected = true disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" initialization = %q minimum_memory_mib = 1024 minimum_disk_gib = 8 }
 image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q initialization = "none" }
 tasks { directory = %q workers = 2 }
 api {
@@ -309,7 +310,7 @@ cloud "acceptance" {
  zone "test" {}
  instance_type "small" { cpu=2 memory_mib=2048 boot_disk_gib=8 }
  instance_type "too-small" { cpu=2 memory_mib=512 boot_disk_gib=8 }
- instance_type "larger" { cpu=2 memory_mib=3072 boot_disk_gib=16 }
+ instance_type "larger" { cpu=2 memory_mib=3072 boot_disk_gib=16 autostart=true }
  network "lan" {}
  storage_class "standard" {}
  host "acceptance" { zone="test" labels={rack="test"} network "lan" { network="qemu-usernet" } storage_class "standard" {pool=%q format="qcow2"} }
@@ -524,6 +525,9 @@ cloud "acceptance" {
 
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines/acceptance/"+name+"/instance-type", map[string]any{"instance_type": "larger"})
 	changedXML := mustVir("dumpxml", name)
+	if !strings.Contains(mustVir("dominfo", name), "enable") || !strings.Contains(mustVir("domstate", name), "shut off") || !strings.Contains(changedXML, "org.qemu.guest_agent.0") || !strings.Contains(changedXML, "127.0.0.1") {
+		t.Fatal("type change did not apply autostart or preserve power/devices/listener")
+	}
 	if !strings.Contains(changedXML, "3145728") {
 		t.Fatal("instance type RAM change missing from domain XML")
 	}
@@ -570,7 +574,7 @@ cloud "acceptance" {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	apiCommand("PATCH", apiVMPath, map[string]any{"autostart": false})
+	apiRequest("PATCH", apiVMPath, map[string]any{"autostart": true}, 405)
 	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
 	write(filepath.Join(root, "resources.txt"), "pool="+name+"\npool_uuid="+poolUUID+"\npool_path="+poolDir+"\nvm_uuid="+domainUUID+"\n")
 	path := "/machines/acceptance/" + name + "/"
@@ -709,7 +713,8 @@ cloud "acceptance" {
 	} else {
 		apiRequest("DELETE", volumeBase+"/"+base64.RawURLEncoding.EncodeToString([]byte(base)), nil, 404)
 	}
-	apiCommand("POST", apiVMPath+"/interfaces", map[string]any{"network": "lan", "mac": "52:54:00:ab:cd:01", "model": "virtio"})
+	apiRequest("POST", apiVMPath+"/interfaces", map[string]any{"network": "lan", "model": "virtio"}, 422)
+	apiCommand("POST", apiVMPath+"/interfaces", map[string]any{"network": "lan", "mac": "52:54:00:ab:cd:01"})
 	apiCommand("DELETE", apiVMPath+"/interfaces/52:54:00:ab:cd:01", nil)
 	public, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

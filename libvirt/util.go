@@ -14,6 +14,7 @@ import (
 
 type NodeSettings struct {
 	CdSuffix             string
+	GraphicsListen       string
 	Emulator             string
 	QcowPreallocMetadata bool
 	Cache                bool
