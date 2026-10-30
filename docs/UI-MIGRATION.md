@@ -32,8 +32,8 @@ api {
     listen = "127.0.0.1:8080"
     base_url = "https://vmango.example"
     session_secure = true
-    jwt_signing_key = "REPLACE_WITH_RANDOM_SECRET"
-    console_signing_key = "REPLACE_WITH_SEPARATE_RANDOM_SECRET"
+    jwt_signing_key_file = "~/.vmango/jwt_signing_key"
+    console_signing_key_file = "~/.vmango/console_signing_key"
     session_dir = "/var/lib/vmango/sessions"
     token_dir = "/var/lib/vmango/tokens"
     # Move your existing user, oidc and link blocks here.
@@ -158,3 +158,9 @@ mutation endpoints. Configure a dedicated tasks directory; package examples use
 /var/lib/vmango/tasks. The UI provides Tasks, resource history links and progress
 that survives navigation and reload. See [task storage and restart semantics](TASKS.md)
 for interruption, manual lock release, private payload cleanup and retention.
+
+Signing keys now live in files. Before upgrading, write each existing inline
+secret into its corresponding file (mode `0600`), then replace `jwt_signing_key`
+and `console_signing_key` with the `_file` settings shown above. Missing files
+are generated automatically. Preserve them across restarts; replacing them
+invalidates existing signed credentials and console links.

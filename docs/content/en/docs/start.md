@@ -149,8 +149,8 @@ cloud "local" {
 api {
     listen = "127.0.0.1:8080"
     base_url = "http://localhost:8080"
-    jwt_signing_key = "REPLACE_WITH_RANDOM_SECRET"
-    console_signing_key = "REPLACE_WITH_SEPARATE_RANDOM_SECRET"
+    jwt_signing_key_file = "~/.vmango/jwt_signing_key"
+    console_signing_key_file = "~/.vmango/console_signing_key"
 
     user "admin" {
         hashed_password = "REPLACE_WITH_GENPW_OUTPUT"
@@ -212,19 +212,11 @@ Run `./vmango genpw` (PowerShell: `.\vmango.exe genpw`), enter your administrato
 password, and paste the printed bcrypt hash into `hashed_password` without
 changing its `$` characters. Run this in an interactive terminal.
 
-Generate two separate persistent signing keys with `openssl rand -hex 32` on Linux/macOS. In Windows
-PowerShell, use:
-
-```powershell
-$bytes = New-Object byte[] 32
-$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-$rng.GetBytes($bytes)
-$rng.Dispose()
-[BitConverter]::ToString($bytes).Replace('-', '').ToLowerInvariant()
-```
-
-Generate a second value independently. Set `api.jwt_signing_key` and
-`api.console_signing_key` to the two values. Preserve both across restarts. Keep `vmango.conf` private to your user.
+Signing keys are generated on startup when their files are missing. Defaults are
+`~/.vmango/jwt_signing_key` and `~/.vmango/console_signing_key`. Override them with
+`api.jwt_signing_key_file` and `api.console_signing_key_file`. Preserve these private
+files across restarts. To migrate, write each existing secret into its corresponding
+file and remove the old inline settings.
 Start from the extracted directory, which must be writable:
 
 ```sh

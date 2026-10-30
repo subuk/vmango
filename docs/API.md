@@ -276,8 +276,10 @@ Native access-JWT streams end at access expiry; reconnect with a valid token.
 API revocation additionally closes personal-token streams. Manual file removal
 only guarantees rejection at the next authentication check.
 
-Set `api.console_signing_key` to a separate persistent random secret of at least
-32 bytes (`openssl rand -hex 32`). It must differ from `api.jwt_signing_key`.
+Signing keys are loaded from `api.console_signing_key_file` and
+`api.jwt_signing_key_file`, defaulting to `~/.vmango/console_signing_key` and
+`~/.vmango/jwt_signing_key`. Missing files are generated privately on startup;
+existing files must contain distinct random secrets of at least 32 bytes.
 There is no legacy session-secret fallback. Restarting with the same key
 preserves links; changing it rejects subsequent handshakes. Already active
 sharing streams retain their original expiry. Individual link revocation and

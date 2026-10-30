@@ -39,13 +39,15 @@ type OidcConfig struct {
 }
 
 type APIConfig struct {
+	JWTSigningKeyFile          string          `hcl:"jwt_signing_key_file"`
+	ConsoleSigningKeyFile      string          `hcl:"console_signing_key_file"`
 	APIDisabled                bool            `hcl:"api_disabled"`
-	ConsoleSigningKey          string          `hcl:"console_signing_key"`
+	ConsoleSigningKey          string          `hcl:"-"`
 	ConsoleLinkLifetimeSeconds int             `hcl:"console_link_lifetime_seconds"`
 	Listen                     string          `hcl:"listen"`
 	Debug                      bool            `hcl:"debug"`
 	BaseUrl                    string          `hcl:"base_url"`
-	JWTSigningKey              string          `hcl:"jwt_signing_key"`
+	JWTSigningKey              string          `hcl:"-"`
 	SessionDir                 string          `hcl:"session_dir"`
 	TokenDir                   string          `hcl:"token_dir"`
 	SessionSecure              bool            `hcl:"session_secure"`
@@ -221,6 +223,8 @@ func Default() *Config {
 		LogLevel:       "info",
 		KeyFile:        "~/.vmango/authorized_keys",
 		API: APIConfig{
+			JWTSigningKeyFile:          "~/.vmango/jwt_signing_key",
+			ConsoleSigningKeyFile:      "~/.vmango/console_signing_key",
 			Listen:                     ":8080",
 			Debug:                      false,
 			SessionDir:                 "~/.vmango/sessions",
@@ -263,7 +267,7 @@ func Parse(filename string) (*Config, error) {
 		}
 		for _, item := range list.Filter("api").Items {
 			if obj, ok := item.Val.(*ast.ObjectType); ok {
-				for _, removed := range []string{"session_secret", "session_domain", "session_max_age", "static_version", "media_upload_tmp"} {
+				for _, removed := range []string{"jwt_signing_key", "console_signing_key", "session_secret", "session_domain", "session_max_age", "static_version", "media_upload_tmp"} {
 					if len(obj.List.Filter(removed).Items) > 0 {
 						return nil, fmt.Errorf("api.%s was removed; follow docs/UI-MIGRATION.md and configure JWT signing and credential stores", removed)
 					}

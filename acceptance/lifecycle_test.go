@@ -289,13 +289,13 @@ image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q initia
 tasks { directory = %q workers = 2 }
 api {
  listen = %q
- jwt_signing_key = %q
- console_signing_key = %q
+ jwt_signing_key_file = %q
+ console_signing_key_file = %q
  session_dir = %q
  token_dir = %q
  user "acceptance" { hashed_password = %q }
 }
-`, filepath.Join(root, "keys"), base, arch, firmware, initialization, base, arch, firmware, filepath.Join(root, "tasks"), address, uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString(), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
+`, filepath.Join(root, "keys"), base, arch, firmware, initialization, base, arch, firmware, filepath.Join(root, "tasks"), address, filepath.Join(root, "jwt-key"), filepath.Join(root, "console-key"), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
 
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {
