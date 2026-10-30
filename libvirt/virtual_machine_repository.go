@@ -506,32 +506,7 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) (err erro
 		}
 	}
 
-	virDomainConfig.VCPU = &libvirtxml.DomainVCPU{Placement: "static", Value: uint(vm.VCpus)}
-	virDomainConfig.Memory = &libvirtxml.DomainMemory{Unit: "bytes", Value: uint(vm.Memory.Bytes())}
-	virDomainConfig.CurrentMemory = &libvirtxml.DomainCurrentMemory{Unit: "bytes", Value: uint(vm.Memory.Bytes())}
-
-	if vm.Hugepages {
-		virDomainConfig.MemoryBacking = &libvirtxml.DomainMemoryBacking{
-			MemoryHugePages: &libvirtxml.DomainMemoryHugepages{},
-		}
-	} else {
-		if virDomainConfig.MemoryBacking != nil && virDomainConfig.MemoryBacking.MemoryHugePages != nil {
-			virDomainConfig.MemoryBacking.MemoryHugePages = nil
-		}
-	}
-
-	if capsConfig.Host.CPU != nil && capsConfig.Host.CPU.Topology != nil && capsConfig.Host.CPU.Topology.Threads > 0 {
-		threadsPerCore := capsConfig.Host.CPU.Topology.Threads
-		if vm.VCpus%threadsPerCore == 0 {
-			virDomainConfig.CPU.Topology = &libvirtxml.DomainCPUTopology{
-				Sockets: VirtualMachineSockets,
-				Cores:   vm.VCpus / threadsPerCore,
-				Threads: threadsPerCore,
-			}
-		} else {
-			virDomainConfig.CPU.Topology = nil
-		}
-	}
+	applyDomainResources(virDomainConfig, vm, capsConfig)
 
 	if vm.GuestAgent {
 		hasGuestAgent := false
