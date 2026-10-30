@@ -553,12 +553,39 @@ export function TaskDetail() {
             />
             <QueryState query={query}>
                 {(task) => (
-                    <Stack spacing={3}>
+                    <Stack
+                        spacing={3}
+                        sx={{
+                            maxWidth: 1200,
+                            "& > .MuiBox-root": {
+                                p: { xs: 2, sm: 3 },
+                                border: "1px solid",
+                                borderColor: "divider",
+                                borderRadius: 2,
+                                bgcolor: "background.paper",
+                                minWidth: 0,
+                                overflowWrap: "anywhere",
+                            },
+                            "& h2": { fontSize: "1.2rem", fontWeight: 600 },
+                        }}
+                    >
                         <Box>
                             <Typography variant="h2">
                                 {taskLabel(task.kind)}
                             </Typography>
-                            <Chip sx={{ mt: 1 }} label={task.state} />
+                            <Chip
+                                sx={{ mt: 1.5 }}
+                                label={task.state}
+                                color={
+                                    task.state === "succeeded"
+                                        ? "success"
+                                        : task.state === "failed"
+                                          ? "error"
+                                          : task.state === "running"
+                                            ? "info"
+                                            : "default"
+                                }
+                            />
                             <Typography sx={{ mt: 1 }}>
                                 {task.state === "queued"
                                     ? "Accepted and waiting to execute. You can leave this page."
@@ -621,29 +648,41 @@ export function TaskDetail() {
                                 />
                             </Alert>
                         )}
-                        <Box component="dl" className="details">
-                            <dt>Task ID</dt>
-                            <dd className="mono">
-                                {task.id}
-                                <Copy label="Copy task ID" text={task.id} />
-                            </dd>
-                            <dt>Initiated by</dt>
-                            <dd>{task.initiator.name || task.initiator.id}</dd>
-                            <dt>Accepted</dt>
-                            <dd>{time(task.created_at)}</dd>
-                            <dt>Started</dt>
-                            <dd>{time(task.started_at)}</dd>
-                            <dt>Finished / interruption detected</dt>
-                            <dd>{time(task.finished_at)}</dd>
-                            <dt>Last successful stage</dt>
-                            <dd>
-                                {stageLabel(
-                                    [...(task.stages || [])]
-                                        .reverse()
-                                        .find((s) => s.state === "succeeded")
-                                        ?.name || "None",
-                                )}
-                            </dd>
+                        <Box component="section">
+                            <Typography variant="h2" sx={{ mb: 2 }}>
+                                Task overview
+                            </Typography>
+                            <Box
+                                component="dl"
+                                className="details"
+                                sx={{ m: 0 }}
+                            >
+                                <dt>Task ID</dt>
+                                <dd className="mono">
+                                    {task.id}
+                                    <Copy label="Copy task ID" text={task.id} />
+                                </dd>
+                                <dt>Initiated by</dt>
+                                <dd>
+                                    {task.initiator.name || task.initiator.id}
+                                </dd>
+                                <dt>Accepted</dt>
+                                <dd>{time(task.created_at)}</dd>
+                                <dt>Started</dt>
+                                <dd>{time(task.started_at)}</dd>
+                                <dt>Finished / interruption detected</dt>
+                                <dd>{time(task.finished_at)}</dd>
+                                <dt>Last successful stage</dt>
+                                <dd>
+                                    {stageLabel(
+                                        [...(task.stages || [])]
+                                            .reverse()
+                                            .find(
+                                                (s) => s.state === "succeeded",
+                                            )?.name || "None",
+                                    )}
+                                </dd>
+                            </Box>
                         </Box>
                         <Box>
                             <Typography variant="h2" sx={{ mb: 2 }}>
@@ -651,7 +690,16 @@ export function TaskDetail() {
                             </Typography>
                             {(task.transitions || []).map(
                                 (transition, index) => (
-                                    <Typography key={index} sx={{ mb: 1 }}>
+                                    <Typography
+                                        key={index}
+                                        variant="body2"
+                                        color="text.secondary"
+                                        sx={{
+                                            py: 1,
+                                            borderBottom: "1px solid",
+                                            borderColor: "divider",
+                                        }}
+                                    >
                                         {time(transition.at)} ·{" "}
                                         {transition.state}
                                         {transition.reason &&
@@ -759,7 +807,14 @@ export function TaskDetail() {
                                 Confirmed changes
                             </Typography>
                             {(task.effects || []).map((effect, index) => (
-                                <Typography key={index}>
+                                <Typography
+                                    key={index}
+                                    sx={{
+                                        py: 1,
+                                        borderBottom: "1px solid",
+                                        borderColor: "divider",
+                                    }}
+                                >
                                     {time(effect.at)} ·{" "}
                                     {stageLabel(effect.action)} ·{" "}
                                     <ResourceLink
@@ -779,7 +834,14 @@ export function TaskDetail() {
                                 Affected resources
                             </Typography>
                             {(task.resources || []).map((resource, index) => (
-                                <Typography key={index}>
+                                <Typography
+                                    key={index}
+                                    sx={{
+                                        py: 1,
+                                        borderBottom: "1px solid",
+                                        borderColor: "divider",
+                                    }}
+                                >
                                     <ResourceLink
                                         resource={resource}
                                         available={
