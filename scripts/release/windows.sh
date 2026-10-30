@@ -4,12 +4,12 @@ set -euo pipefail
 dnf install -y mingw64-gcc mingw64-libvirt mingw64-pkg-config make python3
 export PATH="/opt/go/bin:$PATH"
 export GOCACHE=/tmp/vmango-go-cache
-make web/assets_generated.go
+make UI_PREBUILT=1 ui
 export GOOS=windows GOARCH=amd64 CGO_ENABLED=1
 export CC=x86_64-w64-mingw32-gcc PKG_CONFIG=x86_64-w64-mingw32-pkg-config
-go build -trimpath -ldflags="-X subuk/vmango/web.AppVersion=$VERSION" -o bin/vmango.exe .
+go build -trimpath -ldflags="-X subuk/vmango/api.AppVersion=$VERSION" -o bin/vmango.exe .
 mkdir -p result/windows-tests
 go test -c -o "$PWD/result/windows-tests/" ./...
-cp -R web/testdata result/windows-tests/
+cp -R api/testdata result/windows-tests/
 python3 scripts/release/package.py "$VERSION" windows-x64 bin/vmango.exe \
   /usr/x86_64-w64-mingw32/sys-root/mingw/bin

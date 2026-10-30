@@ -3,6 +3,7 @@
 case "$1" in
     configure)
         adduser --system --group --home /var/lib/vmango vmango
+        install -d -o vmango -g vmango -m 0700 /var/lib/vmango/sessions /var/lib/vmango/tokens
     ;;
 esac
 

@@ -1,0 +1,88 @@
+package api
+
+import (
+	"encoding/json"
+	"github.com/rs/zerolog"
+	"reflect"
+	"subuk/vmango/compute"
+	"testing"
+)
+
+type listNodes struct {
+	compute.NodeRepository
+	nodes []string
+}
+
+func (r *listNodes) Get(node string, _ compute.NodeGetOptions) (*compute.Node, error) {
+	for _, n := range r.nodes {
+		if n == node {
+			return &compute.Node{Id: node}, nil
+		}
+	}
+	return nil, compute.ErrUnknownNode
+}
+
+type listMachines struct {
+	compute.VirtualMachineRepository
+	nodes []string
+	fail  bool
+}
+
+func (r *listMachines) List(options compute.VirtualMachineListOptions) ([]*compute.VirtualMachine, error) {
+	r.nodes = options.NodeIds
+	if r.fail {
+		return nil, compute.ErrUnavailable
+	}
+	return []*compute.VirtualMachine{{Id: "vm", NodeId: "a", Memory: compute.NewSize(1, compute.SizeUnitG)}}, nil
+}
+
+func TestGlobalListsRepeatedNodeFiltersAndCompleteErrors(t *testing.T) {
+	nodes := compute.NewNodeService(&listNodes{nodes: []string{"a", "b"}})
+	repo := &listMachines{}
+	h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nodes, nil, compute.NewVirtualMachineService(repo), nil, nil)
+	w := apiRequest(h, "GET", "/api/v1/vms?node=a&node=b", "", true)
+	if w.Code != 200 || !reflect.DeepEqual(repo.nodes, []string{"a", "b"}) {
+		t.Fatalf("repeated node filters lost: %d %s %+v", w.Code, w.Body, repo.nodes)
+	}
+	repo.fail = true
+	w = apiRequest(h, "GET", "/api/v1/vms", "", true)
+	if w.Code != 503 {
+		t.Fatal("failed backend appeared as successful empty list", w.Code, w.Body)
+	}
+	w = apiRequest(h, "GET", "/api/v1/vms?node=missing", "", true)
+	if w.Code != 404 {
+		t.Fatal("unknown filter node", w.Code, w.Body)
+	}
+}
+
+func TestReadModelKeepsInterfaceAddressesPinningAndKeyAvailability(t *testing.T) {
+	v := &compute.VirtualMachine{Memory: compute.NewSize(1, compute.SizeUnitG), Graphic: compute.VirtualMachineGraphic{Listen: "127.0.0.1"}, Interfaces: []*compute.VirtualMachineAttachedInterface{{NetworkName: "default", Mac: "52:54:00:12:34:56", IpAddressList: []string{"192.0.2.4"}}}, Cpupin: &compute.VirtualMachineCpuPin{Emulator: []uint{3}, Vcpus: map[uint][]uint{2: {4}, 0: {1, 2}}}}
+	d := vmDTO(v)
+	raw, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err = json.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["graphics_listen"] != "127.0.0.1" || body["configured_keys"] != nil {
+		t.Fatal("edit field/unknown keys lost", string(raw))
+	}
+	interfaces := body["interfaces"].([]any)
+	iface := interfaces[0].(map[string]any)
+	if iface["network"] != "default" || iface["mac"] != "52:54:00:12:34:56" || len(iface["ip_addresses"].([]any)) != 1 {
+		t.Fatal("interface details lost", string(raw))
+	}
+	if d.CPUPinning.VCPUs[0].VCPU != 0 || d.CPUPinning.VCPUs[1].VCPU != 2 {
+		t.Fatal("pin identity changed on sorting")
+	}
+	v.Config = &compute.VirtualMachineConfig{}
+	if vmDTO(v).ConfiguredKeys == nil {
+		t.Fatal("known-empty keys became unknown")
+	}
+	problem := apiError(&compute.ProvisioningError{Stage: "save", Cause: &compute.ValidationError{Field: "memory_bytes", Message: "Safe validation message"}})
+	if problem.(interface{ GetStatus() int }).GetStatus() != 500 {
+		t.Fatal("partial provisioning was incorrectly reported as validation-only")
+	}
+}

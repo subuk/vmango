@@ -69,6 +69,18 @@ func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []Vir
 	return manager.CreateWithImageDefaults(vm, cloneVols, newVols, start, ImageDefaults{})
 }
 
+func (manager *VirtualMachineManager) AttachVolume(id, node string, disk *VirtualMachineAttachedVolume) error {
+	if disk == nil {
+		return ErrInvalid
+	}
+	manager.createMu.Lock()
+	defer manager.createMu.Unlock()
+	if err := manager.volumes.ValidateAttachable(disk.Path, node, manager.images); err != nil {
+		return err
+	}
+	return manager.vms.AttachVolume(id, node, disk)
+}
+
 func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool, overrides ImageDefaults) (err error) {
 	if vm == nil || vm.Id == "" || vm.NodeId == "" {
 		return fmt.Errorf("%w: VM name and node are required", ErrInvalid)
@@ -99,6 +111,9 @@ func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine
 	}
 	for _, v := range vm.Volumes {
 		if err := ValidateVolumeAttachment(v); err != nil {
+			return err
+		}
+		if err := manager.volumes.ValidateAttachable(v.Path, vm.NodeId, manager.images); err != nil {
 			return err
 		}
 	}

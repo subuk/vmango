@@ -114,9 +114,6 @@ func (repo *VolumeRepository) Get(path, node string) (*compute.Volume, error) {
 	if err != nil {
 		return nil, repositoryError(err, "cannot parse volume")
 	}
-	if volume.Metadata.Hidden {
-		return nil, compute.ErrVolumeNotFound
-	}
 	if err := repo.fetchAttachedVm(conn, []*compute.Volume{volume}); err != nil {
 		return nil, repositoryError(err, "cannot fetch attached vm")
 	}

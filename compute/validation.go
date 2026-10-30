@@ -15,7 +15,7 @@ func ValidateVM(vm *VirtualMachine) error {
 	}
 	b, err := sizeBytes(vm.Memory)
 	if err != nil || b == 0 {
-		return fmt.Errorf("%w: memory must be a positive byte size", ErrInvalid)
+		return &ValidationError{Field: "memory_bytes", Message: "Memory must be a positive byte size."}
 	}
 	if !slices.Contains([]GraphicType{GraphicTypeNone, GraphicTypeVnc, GraphicTypeSpice}, vm.Graphic.Type) || !slices.Contains([]VideoModel{VideoModelNone, VideoModelCirrus, VideoModelQxl}, vm.VideoModel) {
 		return fmt.Errorf("%w: unsupported graphics or video model", ErrInvalid)
@@ -35,11 +35,11 @@ func ValidateInterface(v *VirtualMachineAttachedInterface) error {
 		v.Model = "virtio"
 	}
 	if v.NetworkName == "" || v.AccessVlan > 4094 || !slices.Contains([]string{"virtio", "e1000", "rtl8139"}, v.Model) {
-		return fmt.Errorf("%w: invalid interface network, model or VLAN", ErrInvalid)
+		return &ValidationError{Field: "network", Message: "Choose a supported network/model and a VLAN between 0 and 4094."}
 	}
 	if v.Mac != "" {
 		if mac, err := net.ParseMAC(v.Mac); err != nil || len(mac) != 6 {
-			return fmt.Errorf("%w: invalid MAC address", ErrInvalid)
+			return &ValidationError{Field: "mac", Message: "Enter a valid six-byte MAC address, or omit it to generate one."}
 		}
 	}
 	return nil
@@ -92,6 +92,9 @@ func (s *VolumeService) Clone(p VolumeCloneParams) (*Volume, error) {
 	if err != nil {
 		return nil, err
 	}
+	if source.Metadata.Hidden {
+		return nil, ErrVolumeNotFound
+	}
 	if source.AttachedTo != "" {
 		return nil, fmt.Errorf("%w: source volume is attached", ErrConflict)
 	}
@@ -119,6 +122,9 @@ func (s *VolumeService) Resize(path, node string, size Size) error {
 	if err != nil {
 		return err
 	}
+	if v.Metadata.Hidden {
+		return ErrVolumeNotFound
+	}
 	if v.Metadata.Protected {
 		return fmt.Errorf("%w: volume is protected", ErrConflict)
 	}
@@ -133,6 +139,9 @@ func (s *VolumeService) Delete(path, node string) error {
 	v, err := s.Get(path, node)
 	if err != nil {
 		return err
+	}
+	if v.Metadata.Hidden {
+		return ErrVolumeNotFound
 	}
 	if v.Metadata.Protected || v.AttachedTo != "" {
 		return fmt.Errorf("%w: volume is protected or attached", ErrConflict)

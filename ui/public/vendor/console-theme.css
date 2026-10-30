@@ -1,0 +1,17 @@
+:root { --console-bg: #fafbfc; --console-surface: #fff; --console-text: #252b32; --console-border: #a4b0bd; }
+:root[data-theme="dark"] { --console-bg: #171b20; --console-surface: #20262d; --console-text: #edf0f4; --console-border: #596979; }
+body { background: var(--console-bg); color: var(--console-text); }
+#noVNC_container { background: var(--console-bg); border-radius: 0; }
+#noVNC_control_bar, .noVNC_panel, #noVNC_connect_dlg { background: var(--console-surface); color: var(--console-text); border: 1px solid var(--console-border); box-shadow: none; }
+#noVNC_control_bar .noVNC_logo, .noVNC_heading, #noVNC_connect_dlg .noVNC_logo { color: var(--console-text); text-shadow: none; }
+#noVNC_control_bar .noVNC_heading, #noVNC_connect_dlg input { background: var(--console-surface); }
+#noVNC_connect_dlg { padding: 18px; border-radius: 5px; }
+#noVNC_connect_dlg .noVNC_logo { font: bold 26px ui-monospace, monospace; margin: 0 0 14px; padding: 0; }
+#noVNC_connect_dlg .noVNC_logo span { color: inherit; }
+#noVNC_connect_dlg div { padding: 0; background: transparent; border-radius: 0; box-shadow: none; }
+#noVNC_connect_button { background: #245a91; color: #fff; border-radius: 5px; font-size: 14px; }
+:root[data-theme="dark"] #noVNC_connect_button { background: #8cbcf0; color: #171b20; }
+input, select, textarea, button { color-scheme: inherit; }
+input:focus-visible, button:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #8cbcf0; outline-offset: 2px; }
+/* The guest canvas is intentionally unaffected by theme rules. */
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }

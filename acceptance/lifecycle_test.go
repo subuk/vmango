@@ -214,12 +214,15 @@ libvirt "acceptance" {
 }
 image "boot" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q protected = true disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false initialization = %q minimum_memory_mib = 1024 minimum_disk_gib = 8 }
 image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q initialization = "none" }
-web {
+api {
  listen = %q
- session_secret = %q
+ jwt_signing_key = %q
+ console_signing_key = %q
+ session_dir = %q
+ token_dir = %q
  user "acceptance" { hashed_password = %q }
 }
-`, filepath.Join(root, "keys"), uri, name, base, arch, firmware, initialization, base, arch, firmware, address, uuid.NewString(), string(hash)))
+`, filepath.Join(root, "keys"), uri, name, base, arch, firmware, initialization, base, arch, firmware, address, uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString(), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash)))
 	log, err := os.Create(filepath.Join(root, "vmango.log"))
 	if err != nil {
 		t.Fatal(err)
@@ -254,33 +257,19 @@ web {
 	if !ready {
 		t.Fatal("app didn't become ready; see vmango.log")
 	}
-	request := func(path string, values url.Values, status int) {
+	request := func(path string, status int) {
 		t.Helper()
-		var resp *http.Response
-		var err error
-		if values == nil {
-			resp, err = client.Get(origin + path)
-		} else {
-			req, e := http.NewRequest("POST", origin+path, strings.NewReader(values.Encode()))
-			if e != nil {
-				t.Fatal(e)
-			}
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			req.Header.Set("Origin", origin)
-			resp, err = client.Do(req)
-		}
+		resp, err := client.Get(origin + path)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode != status {
-			t.Fatalf("%s: HTTP %d, want %d\n%s", path, resp.StatusCode, status, body)
-		}
-		if status == 302 && strings.HasPrefix(resp.Header.Get("Location"), "/login") {
-			t.Fatal("unexpected authentication redirect")
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("%s: %d want %d: %s", path, resp.StatusCode, status, body)
 		}
 	}
+	access := ""
 	apiRequest := func(method, path string, value any, status int) []byte {
 		t.Helper()
 		data, err := json.Marshal(value)
@@ -292,7 +281,9 @@ web {
 			t.Fatal(err)
 		}
 		req.Header.Set("Content-Type", "application/json")
-		req.SetBasicAuth("acceptance", password)
+		if access != "" {
+			req.Header.Set("Authorization", "Bearer "+access)
+		}
 		response, err := client.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -304,41 +295,34 @@ web {
 		}
 		return body
 	}
-	for _, resource := range []string{"nodes", "nodes/acceptance", "nodes/acceptance/images", "nodes/acceptance/pools", "nodes/acceptance/networks", "nodes/acceptance/capabilities", "keys"} {
+	var credentials struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.Unmarshal(apiRequest("POST", "/api/v1/auth/login", map[string]string{"username": "acceptance", "password": password}, 200), &credentials); err != nil {
+		t.Fatal(err)
+	}
+	access = credentials.AccessToken
+	for _, resource := range []string{"nodes", "nodes/acceptance", "nodes/acceptance/images", "nodes/acceptance/pools", "nodes/acceptance/networks", "nodes/acceptance/capabilities", "keys", "vms", "volumes", "networks"} {
 		apiRequest("GET", "/api/v1/"+resource, nil, 200)
 	}
-	request("/login/", url.Values{"Username": {"acceptance"}, "Password": {password}}, 302)
-	request("/machines/add/?node=acceptance&arch="+arch, nil, 200)
-	request("/machines/add/?node=acceptance&mode=advanced&arch="+arch, nil, 200)
+	request("/machines/add/?node=acceptance&arch="+arch, 200)
 	marker := "VMANGO_BOOT_OK_" + uuid.NewString()
 	userdata := fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, 'test \"$(hostname)\" = %s && echo %s > /dev/console']\n", name, marker)
-	values := url.Values{
-		"Name": {name}, "NodeId": {"acceptance"}, "Arch": {arch}, "Vcpus": {"2"}, "MemoryValue": {"2"}, "MemoryUnit": {"G"},
-		"GraphicType": {"vnc"}, "VideoModel": {"none"}, "Userdata": {userdata},
-		"CloneImageID": {"boot"}, "CloneVolumeNewName": {"__magic_root_suffix__"}, "CloneVolumeNewPool": {name},
-		"CloneVolumeNewFormat": {"qcow2"}, "CloneVolumeNewSizeValue": {"8"}, "CloneVolumeNewSizeUnit": {"G"},
-		"CloneVolumeDeviceType": {"disk"}, "CloneVolumeDeviceBus": {""},
-		"InterfaceNetwork": {"qemu-usernet"}, "InterfaceMac": {""}, "InterfaceModel": {""}, "InterfaceAccessVlan": {""},
-	}
-	// Resource validation must fail without leaving any destination disk.
-	values.Set("MemoryValue", "512")
-	values.Set("MemoryUnit", "M")
-	request("/machines/add/", values, 400)
+	// Check image constraints and the no-init alias through the same JSON API.
+	aliasBody := map[string]any{"id": name, "arch": arch, "vcpus": 2, "memory_bytes": uint64(512 << 20), "clone_disks": []any{map[string]any{"image_id": "boot", "name": name + "_root", "pool": name, "size_bytes": uint64(8 << 30)}}, "interfaces": []any{map[string]any{"network": "qemu-usernet"}}}
+	apiRequest("POST", "/api/v1/nodes/acceptance/vms", aliasBody, 422)
 	if _, err := os.Stat(filepath.Join(poolDir, name+"_root")); !os.IsNotExist(err) {
 		t.Fatal("invalid request created a disk")
 	}
-	values.Set("MemoryValue", "2")
-	values.Set("MemoryUnit", "G")
-	// The second catalog ID uses the same source with independent defaults.
-	values.Set("CloneImageID", "no-init")
-	request("/machines/add/", values, 302)
+	aliasBody["memory_bytes"] = uint64(2 << 30)
+	aliasBody["clone_disks"] = []any{map[string]any{"image_id": "no-init", "name": name + "_root", "pool": name, "size_bytes": uint64(8 << 30)}}
+	apiRequest("POST", "/api/v1/nodes/acceptance/vms", aliasBody, 201)
 	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
 	noInitXML := mustVir("dumpxml", name)
 	if strings.Contains(noInitXML, "_config.iso") || !strings.Contains(noInitXML, "org.qemu.guest_agent.0") {
 		t.Fatal("no-init alias defaults were not applied")
 	}
-	request("/machines/acceptance/"+name+"/delete/", url.Values{"DeleteVolumes": {"true"}}, 302)
-	values.Set("CloneImageID", "boot")
+	apiRequest("DELETE", "/api/v1/nodes/acceptance/vms/"+name+"?delete_volumes=true", nil, 204)
 	domainUUID = ""
 	apiVMPath := "/api/v1/nodes/acceptance/vms/" + name
 	createBody := map[string]any{"id": name, "arch": arch, "vcpus": 2, "memory_bytes": uint64(2 << 30), "cloud_init": map[string]any{"user_data": userdata}, "clone_disks": []any{map[string]any{"image_id": "boot", "name": name + "_root", "pool": name, "size_bytes": uint64(8 << 30)}}, "interfaces": []any{map[string]any{"network": "qemu-usernet"}}}
@@ -356,13 +340,13 @@ web {
 	if !strings.Contains(xml, "virtio-scsi") || strings.Contains(xml, "org.qemu.guest_agent.0") || !strings.Contains(xml, "_config.iso") {
 		t.Fatal("image launch defaults did not reach domain XML")
 	}
-	request(path, nil, 200)
+	request(path, 200)
 	t.Log("created VM and cloud-init disk through HTTP; starting guest")
 	apiRequest("POST", apiVMPath+"/actions", map[string]string{"action": "start"}, 204)
 	if state := strings.TrimSpace(mustVir("domstate", name)); state != "running" {
 		t.Fatalf("expected running, got %s", state)
 	}
-	headers := http.Header{"Origin": {origin}, "Authorization": {"Basic " + base64.StdEncoding.EncodeToString([]byte("acceptance:"+password))}}
+	headers := http.Header{"Origin": {origin}, "Authorization": {"Bearer " + access}}
 	u, _ := url.Parse(origin)
 	for _, c := range jar.Cookies(u) {
 		headers.Add("Cookie", c.String())
@@ -408,7 +392,7 @@ web {
 	}
 	console.Close()
 	t.Log("guest ran cloud-init userdata and confirmed its hostname")
-	// Test signed browser transports without UI session cookies or Basic headers.
+	// Test signed browser transports without browser refresh cookies or resource Bearer headers.
 	for _, kind := range []string{"serial", "vnc"} {
 		var link struct {
 			URL string `json:"url"`

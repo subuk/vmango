@@ -1,0 +1,166 @@
+:root {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+body {
+    margin: 0;
+}
+* {
+    box-sizing: border-box;
+}
+.wordmark {
+    font:
+        bold 26px ui-monospace,
+        SFMono-Regular,
+        Consolas,
+        monospace !important;
+    letter-spacing: -1px !important;
+}
+.login {
+    width: min(420px, calc(100% - 40px));
+    margin: 10vh auto;
+}
+.auth-frame {
+    min-height: 65vh;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 24px;
+}
+.mono,
+code,
+pre,
+textarea {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace !important;
+}
+a {
+    text-underline-offset: 3px;
+}
+a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+}
+.top-nav a {
+    color: inherit;
+    text-decoration: none;
+    padding: 8px 0;
+    border-bottom: 2px solid transparent;
+}
+.top-nav a.active {
+    border-color: #245a91;
+    color: #245a91;
+}
+:root[data-theme="dark"] .top-nav a.active {
+    border-color: #8cbcf0;
+    color: #8cbcf0;
+}
+.skip-link {
+    position: absolute;
+    top: -80px;
+    left: 10px;
+    z-index: 1500;
+    padding: 10px;
+    background: #fff;
+    color: #245a91;
+}
+.skip-link:focus {
+    top: 5px;
+}
+.details {
+    display: grid;
+    grid-template-columns: minmax(130px, 200px) minmax(0, 1fr);
+    gap: 12px 24px;
+    margin: 0;
+}
+.details dt {
+    font-weight: 600;
+}
+.details dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+.table-scroll {
+    overflow-x: auto;
+}
+.console-page {
+    width: 100%;
+}
+.terminal {
+    height: max(360px, calc(100vh - 380px));
+    padding: 8px;
+}
+.vnc-frame {
+    width: 100%;
+    height: max(480px, calc(100vh - 290px));
+    border: 1px solid #596979;
+}
+.api-docs .swagger-ui {
+    color: inherit;
+}
+.api-docs .swagger-ui .opblock .opblock-summary-method {
+    color: #15202b;
+    text-shadow: none;
+}
+:root[data-theme="dark"] .api-docs .swagger-ui {
+    color: #edf0f4;
+}
+:root[data-theme="dark"] .api-docs .swagger-ui .info .title,
+:root[data-theme="dark"] .api-docs .swagger-ui .info p,
+:root[data-theme="dark"] .api-docs .swagger-ui .opblock-tag,
+:root[data-theme="dark"]
+    .api-docs
+    .swagger-ui
+    .opblock
+    .opblock-summary-description,
+:root[data-theme="dark"] .api-docs .swagger-ui .opblock .opblock-summary-path,
+:root[data-theme="dark"] .api-docs .swagger-ui label,
+:root[data-theme="dark"] .api-docs .swagger-ui table thead tr th,
+:root[data-theme="dark"] .api-docs .swagger-ui table tbody tr td,
+:root[data-theme="dark"] .api-docs .swagger-ui .model,
+:root[data-theme="dark"] .api-docs .swagger-ui .model-title,
+:root[data-theme="dark"] .api-docs .swagger-ui section.models h4,
+:root[data-theme="dark"] .api-docs .swagger-ui .btn,
+:root[data-theme="dark"] .api-docs .swagger-ui .parameter__name {
+    color: #edf0f4;
+}
+:root[data-theme="dark"] .api-docs .swagger-ui .opblock-section-header h4,
+:root[data-theme="dark"] .api-docs .swagger-ui .opblock-description-wrapper p,
+:root[data-theme="dark"] .api-docs .swagger-ui .responses-inner h4,
+:root[data-theme="dark"] .api-docs .swagger-ui .responses-inner h5,
+:root[data-theme="dark"] .api-docs .swagger-ui .parameter__type,
+:root[data-theme="dark"] .api-docs .swagger-ui .parameter__in,
+:root[data-theme="dark"] .api-docs .swagger-ui .markdown p,
+:root[data-theme="dark"] .api-docs .swagger-ui .markdown li,
+:root[data-theme="dark"] .api-docs .swagger-ui .tab li {
+    color: #edf0f4;
+}
+:root[data-theme="dark"] .api-docs .swagger-ui svg,
+:root[data-theme="dark"] .api-docs .swagger-ui svg path {
+    fill: #b3bdc9;
+}
+:root[data-theme="dark"] .api-docs .swagger-ui .scheme-container,
+:root[data-theme="dark"] .api-docs .swagger-ui .opblock .opblock-section-header,
+:root[data-theme="dark"] .api-docs .swagger-ui .model-container,
+:root[data-theme="dark"] .api-docs .swagger-ui .dialog-ux .modal-ux,
+:root[data-theme="dark"] .api-docs .swagger-ui input,
+:root[data-theme="dark"] .api-docs .swagger-ui textarea,
+:root[data-theme="dark"] .api-docs .swagger-ui select {
+    background: #20262d;
+    color: #edf0f4;
+    box-shadow: none;
+}
+:root[data-theme="dark"] .api-docs .swagger-ui a {
+    color: #8cbcf0;
+}
+:root[data-theme="dark"] .api-docs .swagger-ui .opblock {
+    background: #20262d;
+}
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}

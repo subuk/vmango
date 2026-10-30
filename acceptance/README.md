@@ -45,11 +45,12 @@ Remote hypervisors are not supported by this harness.
 
 ## What constitutes success
 
-The test logs in through HTTP, loads both creation forms, rejects an insufficient
+The test logs in through the JSON endpoint, loads the SPA creation shell and
+rejects an insufficient
 RAM request before creating a disk, and exercises two catalog IDs referencing
 one source disk. It creates and deletes a VM with initialization disabled, then
 clones the image and
-creates the VM and config drive through the Basic-authenticated JSON API.
+creates the VM and config drive through the JWT Bearer-authenticated JSON API.
 It also checks API discovery, duplicate-create conflicts and partial updates. It checks the image-selected SCSI/virtio-scsi configuration, explicit guest agent
 disablement and presence/absence of the config drive. It checks the generated domain
 uses hardware acceleration, starts it through HTTP and checks libvirt reports

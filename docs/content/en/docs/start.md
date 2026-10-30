@@ -139,11 +139,11 @@ libvirt "local" {
     config_drive_pool = "default"
 }
 
-web {
+api {
     listen = "127.0.0.1:8080"
     base_url = "http://localhost:8080"
-    session_secret = "REPLACE_WITH_RANDOM_SECRET"
-    media_upload_tmp = "."
+    jwt_signing_key = "REPLACE_WITH_RANDOM_SECRET"
+    console_signing_key = "REPLACE_WITH_SEPARATE_RANDOM_SECRET"
 
     user "admin" {
         hashed_password = "REPLACE_WITH_GENPW_OUTPUT"
@@ -187,7 +187,7 @@ Run `./vmango genpw` (PowerShell: `.\vmango.exe genpw`), enter your administrato
 password, and paste the printed bcrypt hash into `hashed_password` without
 changing its `$` characters. Run this in an interactive terminal.
 
-Generate a session secret with `openssl rand -hex 32` on Linux/macOS. In Windows
+Generate two separate persistent signing keys with `openssl rand -hex 32` on Linux/macOS. In Windows
 PowerShell, use:
 
 ```powershell
@@ -198,7 +198,8 @@ $rng.Dispose()
 [BitConverter]::ToString($bytes).Replace('-', '').ToLowerInvariant()
 ```
 
-Paste the result into `session_secret`. Keep `vmango.conf` private to your user.
+Generate a second value independently. Set `api.jwt_signing_key` and
+`api.console_signing_key` to the two values. Preserve both across restarts. Keep `vmango.conf` private to your user.
 Start from the extracted directory, which must be writable:
 
 ```sh
@@ -220,8 +221,8 @@ to put a cloud-init-enabled image in a storage pool **on the hypervisor** and
 register it in `vmango.conf`. Configure networking on the hypervisor first.
 The binary archive does not configure KVM, pools, networks or guest images for you.
 
-For remote browser access, serve Vmango through HTTPS, set `web.base_url` to
-that public URL and enable `web.session_secure`. Preserve `Host`, `Origin` and
+For remote browser access, serve Vmango through HTTPS, set `api.base_url` to
+that public URL and enable `api.session_secure`. Preserve `Host`, `Origin` and
 `Sec-Fetch-Site` in the reverse proxy. Remote VNC access needs HTTPS too.
 SSH console forwarding also needs `ssh` locally and `socat` or `nc` on the
 hypervisor. TLS-connected consoles require network reachability to the host's

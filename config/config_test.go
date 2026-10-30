@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -11,7 +12,7 @@ func TestParseDefaultsAndOverrides(t *testing.T) {
 	content := []byte(`
 log_level = "debug"
 libvirt "local" { uri = "qemu:///system" }
-web {
+api {
     listen = "127.0.0.1:9000"
     session_secure = true
     oidc { scopes = ["openid", "email"] }
@@ -24,14 +25,14 @@ web {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.LogLevel != "debug" || cfg.Web.Listen != "127.0.0.1:9000" || !cfg.Web.SessionSecure {
+	if cfg.LogLevel != "debug" || cfg.API.Listen != "127.0.0.1:9000" || !cfg.API.SessionSecure {
 		t.Fatalf("explicit settings were lost: %+v", cfg)
 	}
-	if cfg.KeyFile != Default().KeyFile || cfg.Web.SessionMaxAge != Default().Web.SessionMaxAge {
+	if cfg.KeyFile != Default().KeyFile || cfg.API.SessionDir != Default().API.SessionDir {
 		t.Fatalf("defaults were not merged: %+v", cfg)
 	}
-	if len(cfg.Web.Oidc.Scopes) != 2 || cfg.Web.Oidc.Scopes[1] != "email" {
-		t.Fatalf("explicit OIDC scopes were changed: %v", cfg.Web.Oidc.Scopes)
+	if len(cfg.API.Oidc.Scopes) != 2 || cfg.API.Oidc.Scopes[1] != "email" {
+		t.Fatalf("explicit OIDC scopes were changed: %v", cfg.API.Oidc.Scopes)
 	}
 	if len(cfg.Libvirts) != 1 || cfg.Libvirts[0].ConfigDriveWriteFormat != "nocloud" || cfg.Libvirts[0].ConfigDrivePool != "default" {
 		t.Fatalf("libvirt defaults were not applied: %+v", cfg.Libvirts)
@@ -39,18 +40,28 @@ web {
 }
 
 func TestQuickStartConfig(t *testing.T) {
-	cfg, err := Parse("../vmango.quickstart.conf")
+	content, err := os.ReadFile("../vmango.quickstart.conf")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Web.Listen != "127.0.0.1:8080" || cfg.Web.MediaUploadTmp != "." {
-		t.Fatalf("quick start must use loopback and a portable upload directory: %+v", cfg.Web)
+	filename := filepath.Join(t.TempDir(), "quickstart.conf")
+	content = []byte(strings.ReplaceAll(string(content), "REPLACE_WITH_RANDOM_SECRET", "e702acd09d76676cd386642a315038470691f711b3821e1552bfffd37cb15b983"))
+	content = []byte(strings.ReplaceAll(string(content), "REPLACE_WITH_SEPARATE_RANDOM_SECRET", "938f251d85b54115ae5466f999682d803c8ad5926ba4b11ee7cd123a69cf790ed"))
+	if err = os.WriteFile(filename, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Parse(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.API.Listen != "127.0.0.1:8080" {
+		t.Fatalf("quick start must use loopback: %+v", cfg.API)
 	}
 	if len(cfg.Libvirts) != 1 || cfg.Libvirts[0].Uri != "qemu:///system" {
 		t.Fatalf("quick start needs an explicit libvirt node: %+v", cfg.Libvirts)
 	}
-	if len(cfg.Web.Users) != 1 || cfg.Web.Users[0].Id != "admin" {
-		t.Fatalf("quick start needs an explicit admin user: %+v", cfg.Web.Users)
+	if len(cfg.API.Users) != 1 || cfg.API.Users[0].Id != "admin" {
+		t.Fatalf("quick start needs an explicit admin user: %+v", cfg.API.Users)
 	}
 }
 
@@ -61,11 +72,11 @@ func TestAPIConfiguration(t *testing.T) {
 		disabled bool
 		ttl      int
 	}{
-		{`web {}`, true, false, 3600},
-		{`web { api_disabled = true console_link_lifetime_seconds = 90 }`, true, true, 90},
-		{`web { console_link_lifetime_seconds = -1 }`, false, false, 0},
-		{`web { console_link_lifetime_seconds = 2592001 }`, false, false, 0},
-		{`web { console_signing_key = "short" }`, false, false, 0},
+		{`api {}`, true, false, 3600},
+		{`api { api_disabled = true console_link_lifetime_seconds = 90 }`, false, true, 90},
+		{`api { console_link_lifetime_seconds = -1 }`, false, false, 0},
+		{`api { console_link_lifetime_seconds = 2592001 }`, false, false, 0},
+		{`api { console_signing_key = "short" }`, false, false, 0},
 	} {
 		file := filepath.Join(t.TempDir(), "vmango.conf")
 		if err := os.WriteFile(file, []byte(tc.body), 0600); err != nil {
@@ -75,8 +86,18 @@ func TestAPIConfiguration(t *testing.T) {
 		if (err == nil) != tc.valid {
 			t.Fatalf("%s: %v", tc.body, err)
 		}
-		if err == nil && (cfg.Web.APIDisabled != tc.disabled || cfg.Web.ConsoleLinkLifetimeSeconds != tc.ttl) {
+		if err == nil && (cfg.API.APIDisabled != tc.disabled || cfg.API.ConsoleLinkLifetimeSeconds != tc.ttl) {
 			t.Fatalf("API defaults/overrides lost")
 		}
+	}
+}
+
+func TestLegacyWebConfigurationFails(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "legacy.conf")
+	if err := os.WriteFile(f, []byte(`web { api_disabled=true }`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Parse(f); err == nil || !strings.Contains(err.Error(), "migrate web") {
+		t.Fatal("missing migration instruction", err)
 	}
 }

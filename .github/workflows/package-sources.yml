@@ -25,6 +25,15 @@ jobs:
         with:
           ref: ${{ inputs.source_ref }}
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ui/.nvmrc
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Build frontend and verify API types
+        run: |
+          make ui
+          make ui-test
       - name: Install source packaging tools
         run: sudo apt-get update && sudo apt-get install -y devscripts dpkg-dev dput gnupg
       - name: Build SRPM and Ubuntu source packages

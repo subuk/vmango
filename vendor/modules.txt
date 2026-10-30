@@ -16,34 +16,20 @@ github.com/danielgtaylor/huma/v2/negotiation
 github.com/danielgtaylor/huma/v2/queryparam
 github.com/danielgtaylor/huma/v2/validation
 github.com/danielgtaylor/huma/v2/yaml
-# github.com/dustin/go-humanize v1.1.0
-## explicit; go 1.21
-github.com/dustin/go-humanize
-# github.com/fsnotify/fsnotify v1.10.1
-## explicit; go 1.23
-github.com/fsnotify/fsnotify
-github.com/fsnotify/fsnotify/internal
-# github.com/go-bindata/go-bindata v3.1.2+incompatible
-## explicit
-github.com/go-bindata/go-bindata
-github.com/go-bindata/go-bindata/go-bindata
 # github.com/go-jose/go-jose/v4 v4.1.6
 ## explicit; go 1.24.0
 github.com/go-jose/go-jose/v4
 github.com/go-jose/go-jose/v4/cipher
 github.com/go-jose/go-jose/v4/json
+# github.com/golang-jwt/jwt/v5 v5.3.1
+## explicit; go 1.21
+github.com/golang-jwt/jwt/v5
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
 # github.com/gorilla/mux v1.8.1
 ## explicit; go 1.20
 github.com/gorilla/mux
-# github.com/gorilla/securecookie v1.1.2
-## explicit; go 1.20
-github.com/gorilla/securecookie
-# github.com/gorilla/sessions v1.4.0
-## explicit; go 1.23
-github.com/gorilla/sessions
 # github.com/gorilla/websocket v1.5.3
 ## explicit; go 1.12
 github.com/gorilla/websocket
@@ -69,9 +55,6 @@ github.com/mattn/go-isatty
 github.com/rs/zerolog
 github.com/rs/zerolog/internal/cbor
 github.com/rs/zerolog/internal/json
-# github.com/unrolled/render v1.8.1
-## explicit; go 1.25.0
-github.com/unrolled/render
 # golang.org/x/crypto v0.58.0
 ## explicit; go 1.26.0
 golang.org/x/crypto/bcrypt

@@ -1,0 +1,2 @@
+# Preserve upstream whitespace in generated vendored dependencies.
+vendor/** whitespace=-blank-at-eol,-blank-at-eof

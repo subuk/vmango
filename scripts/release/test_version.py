@@ -16,10 +16,17 @@ class VersionTest(unittest.TestCase):
         (self.root / 'scripts').mkdir()
         shutil.copy(ROOT / 'scripts/version.sh', self.root / 'scripts/version.sh')
         shutil.copy(ROOT / 'Makefile', self.root / 'Makefile')
-        for name in ('templates', 'static'):
-            (self.root / name).mkdir()
+        shutil.copy(ROOT / 'scripts/ui-assets.py', self.root / 'scripts/ui-assets.py')
+        for name in ('ui/src', 'ui/dist/assets', 'api/testdata'):
+            (self.root / name).mkdir(parents=True)
+        (self.root / 'ui/src/main.ts').write_text("console.log('fixture');\n")
+        (self.root / 'ui/dist/index.html').write_text('<script src="/assets/main.js"></script>\n')
+        (self.root / 'ui/dist/assets/main.js').write_text("console.log('fixture');\n")
+        (self.root / 'api/testdata/openapi.json').write_text('{}\n')
+        (self.root / '.gitignore').write_text('/ui/dist/\n')
         self.env = dict(os.environ)
         self.env.pop('VERSION', None)
+        self.run_command('python3', 'scripts/ui-assets.py', 'write')
         self.run_command('git', 'init', '-q')
         self.run_command('git', 'config', 'user.email', 'test@example.com')
         self.run_command('git', 'config', 'user.name', 'Version test')
@@ -85,11 +92,12 @@ class VersionTest(unittest.TestCase):
         value = self.run_command('tar', '-xOf', f'dist/packages/vmango-{version}.tar.gz',
                                  f'vmango-{version}/VERSION')
         self.assertEqual(value, version)
+        self.assertIn('index.html', self.run_command('tar', '-tzf', f'dist/packages/vmango-{version}.tar.gz'))
 
     def test_tarball_preserves_override_without_git(self):
         tar = shutil.which('gtar') or shutil.which('tar')
-        self.run_command('make', '-s', 'tarball', 'VERSION=5.6.7', f'TAR={tar}',
-                         'TARBALL_SOURCES=Makefile scripts/version.sh templates static')
+        self.run_command('make', '-s', 'tarball', 'UI_PREBUILT=1', 'VERSION=5.6.7', f'TAR={tar}',
+                         'TARBALL_SOURCES=Makefile scripts/version.sh scripts/ui-assets.py ui api')
         destination = self.root / 'unpacked'
         destination.mkdir()
         self.run_command(tar, '-xzf', str(self.root / 'vmango-5.6.7.tar.gz'),

@@ -153,7 +153,7 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		}
 		memory, e := sizeBytes(vm.Memory)
 		if e != nil || memory == 0 || memory < i.MinimumMemoryBytes {
-			return nil, nil, fmt.Errorf("image %q requires valid RAM of at least %d bytes", i.ID, i.MinimumMemoryBytes)
+			return nil, nil, &ValidationError{Field: "memory_bytes", Message: fmt.Sprintf("Selected image requires at least %d bytes of memory.", i.MinimumMemoryBytes)}
 		}
 		for _, field := range []struct {
 			name            string

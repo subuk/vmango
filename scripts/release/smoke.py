@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Exercise the extracted release with the documented config and libvirt test driver."""
 import http.cookiejar
+import json
+import secrets
+import re
 import os
 import pathlib
 import shutil
@@ -34,7 +37,10 @@ def smoke(archive):
         config = (directory / "vmango.quickstart.conf").read_text()
         config = config.replace("qemu:///system", "test:///default")
         config = config.replace("8080", str(port))
-        config = config.replace("REPLACE_WITH_RANDOM_SECRET", "smoke-test-session-secret-32-bytes")
+        config = config.replace("REPLACE_WITH_RANDOM_SECRET", secrets.token_hex(32))
+        config = config.replace("REPLACE_WITH_SEPARATE_RANDOM_SECRET", secrets.token_hex(32))
+        config = config.replace('session_dir = "~/.vmango/sessions"', f'session_dir = "{(directory / "sessions").as_posix()}"')
+        config = config.replace('token_dir = "~/.vmango/tokens"', f'token_dir = "{(directory / "tokens").as_posix()}"')
         # This test-only hash is the existing sample password "admin".
         config = config.replace("REPLACE_WITH_GENPW_OUTPUT", "$2a$10$igHQGROHntvl05AztpfMeONSBDUsEbZHxayc5DOPTKIFX50WrHURS")
         (directory / "vmango.conf").write_text(config)
@@ -53,14 +59,21 @@ def smoke(archive):
                         time.sleep(0.1)
                 else:
                     raise RuntimeError("Server did not become ready")
-                credentials = urllib.parse.urlencode({"Username": "admin", "Password": "admin"}).encode()
-                response = client.open(base + "/login/", credentials, timeout=10)
-                if "/login" in response.url:
-                    raise RuntimeError("Login failed")
-                page = client.open(base + "/nodes/local/", timeout=10).read().decode()
-                if "local" not in page or "error" in page.lower().split("<title>")[-1].split("</title>")[0]:
-                    raise RuntimeError("Libvirt test node was not rendered")
-                print("Archive smoke test passed: startup, login, libvirt test node")
+                credentials = json.dumps({"username": "admin", "password": "admin"}).encode()
+                request = urllib.request.Request(base + "/api/v1/auth/login", credentials, {"Content-Type": "application/json"})
+                token = json.load(client.open(request, timeout=10))["access_token"]
+                request = urllib.request.Request(base + "/api/v1/nodes/local", headers={"Authorization": "Bearer " + token})
+                node = json.load(client.open(request, timeout=10))
+                if node["id"] != "local":
+                    raise RuntimeError("Libvirt test node was not returned")
+                shell = client.open(base + "/machines/", timeout=10).read().decode()
+                assets = re.findall(r'(?:src|href)="(/assets/[^"\s]+)"', shell)
+                if not assets:
+                    raise RuntimeError("Embedded frontend assets missing")
+                for asset in assets:
+                    if not client.open(base + asset, timeout=10).read():
+                        raise RuntimeError("Empty embedded asset")
+                print("Archive smoke test passed: standalone embedded UI, JWT login, libvirt test node")
             finally:
                 server.terminate()
                 server.wait(timeout=15)

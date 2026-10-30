@@ -20,7 +20,8 @@ runner; **users do not need Docker**.
 
 Every target extracts its archive and runs `scripts/release/smoke.py` against
 `vmango.quickstart.conf`, substituting a temporary port, test credentials and
-libvirt's `test:///default` URI. It verifies startup, login and node rendering.
+libvirt's `test:///default` URI. It verifies startup, JWT login, the node API and embedded assets from outside
+the checkout. The browser SPA must also be checked in a real browser.
 Unix runners also install ISO tools for `TestISORoundTrip`; that test skips when
 the tools are unavailable, including the default Windows runner.
 
@@ -264,3 +265,24 @@ Ubuntu PPA URL. This check does not cover real KVM operations.
 
 See [COPR submission methods](https://docs.copr.fedorainfracloud.org/user_documentation.html)
 and [Launchpad source upload/signing](https://ubuntu.com/docs/launchpad/user/how-to/packaging/build-deb-packages-in-launchpad/).
+
+
+## Embedded frontend in release sources
+
+CI uses the Node version in `ui/.nvmrc`, runs `make ui`, checks generated API
+types and runs frontend tests before archiving. The frontend is built from the
+trusted source SHA. `ui/dist/build-manifest.json` records hashes of every input
+and output, including source paths, the lockfile and OpenAPI snapshot.
+
+Both `make tarball` and `scripts/release/package-sources.sh` include frontend
+source, lockfile, runtime licenses and generated `ui/dist`. The latter appends
+dist explicitly to `git archive HEAD` and verifies an extracted archive; ignored
+build artifacts cannot be assumed to exist in a Git archive.
+
+RPM and DEB compile/install/test targets use `UI_PREBUILT=1`, which checks the
+manifest using Python 3 and never calls Node/npm. Debian clean/source-rebuild
+also preserves packaged dist in this mode. Validate a source archive by extracting
+it into a fresh directory and running `make UI_PREBUILT=1` and
+`make UI_PREBUILT=1 test` with Node/npm absent and networking disabled. A changed
+or missing source/asset must fail with an instruction to rebuild the frontend.
+Do not disable digest checks to get a stale source archive through packaging.

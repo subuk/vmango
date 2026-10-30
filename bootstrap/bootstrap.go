@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"subuk/vmango/api"
+	"subuk/vmango/auth"
 	"subuk/vmango/catalog"
 	"subuk/vmango/compute"
 	libcompute "subuk/vmango/compute"
@@ -12,7 +14,7 @@ import (
 	"subuk/vmango/filesystem"
 	"subuk/vmango/libvirt"
 	"subuk/vmango/util"
-	"subuk/vmango/web"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -114,10 +116,36 @@ func Web(configFilename string) {
 
 	vmanager := libcompute.NewVirtualMachineManager(vms, volumes, epub, vmManSettings, images)
 
-	webenv := web.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager, images)
+	sessions, err := filesystem.NewAuthRepository(util.ExpandHomeDir(cfg.API.SessionDir), "refresh")
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cannot initialize refresh-session storage")
+	}
+	defer sessions.Close()
+	tokens, err := filesystem.NewAuthRepository(util.ExpandHomeDir(cfg.API.TokenDir), "personal")
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cannot initialize personal-token storage")
+	}
+	defer tokens.Close()
+	authentication, err := auth.New(cfg.API.JWTSigningKey, sessions, tokens, cfg.API.AuthPolicy().Eligible)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cannot initialize authentication")
+	}
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := authentication.Cleanup(); err != nil {
+				logger.Error().Err(err).Msg("authentication cleanup failed")
+			}
+		}
+	}()
+	apiEnv, err := api.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager, images, authentication)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cannot initialize API")
+	}
 	server := http.Server{
-		Addr:    cfg.Web.Listen,
-		Handler: webenv,
+		Addr:    cfg.API.Listen,
+		Handler: apiEnv,
 	}
 	logger.Info().Str("addr", server.Addr).Msg("staring server")
 	if err := server.ListenAndServe(); err != nil {

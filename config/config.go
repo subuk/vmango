@@ -4,22 +4,24 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"subuk/vmango/auth"
 	"subuk/vmango/compute"
 	"subuk/vmango/configdrive"
 	"subuk/vmango/util"
 
 	"dario.cat/mergo"
 	"github.com/hashicorp/hcl"
+	"github.com/hashicorp/hcl/hcl/ast"
 )
 
-type UserWebConfig struct {
+type UserAPIConfig struct {
 	Id             string `hcl:",key"`
 	FullName       string `hcl:"full_name"`
 	Email          string `hcl:"email"`
 	HashedPassword string `hcl:"hashed_password"`
 }
 
-type WebConfigLink struct {
+type APIConfigLink struct {
 	Title  string `hcl:",key"`
 	Active bool   `hcl:"active"`
 	Url    string `hcl:"url"`
@@ -34,23 +36,29 @@ type OidcConfig struct {
 	AllowedEmails []string `hcl:"allowed_emails"`
 }
 
-type WebConfig struct {
+type APIConfig struct {
 	APIDisabled                bool            `hcl:"api_disabled"`
 	ConsoleSigningKey          string          `hcl:"console_signing_key"`
 	ConsoleLinkLifetimeSeconds int             `hcl:"console_link_lifetime_seconds"`
 	Listen                     string          `hcl:"listen"`
 	Debug                      bool            `hcl:"debug"`
 	BaseUrl                    string          `hcl:"base_url"`
-	StaticVersion              string          `hcl:"static_version"`
-	SessionSecret              string          `hcl:"session_secret"`
+	JWTSigningKey              string          `hcl:"jwt_signing_key"`
+	SessionDir                 string          `hcl:"session_dir"`
+	TokenDir                   string          `hcl:"token_dir"`
 	SessionSecure              bool            `hcl:"session_secure"`
-	SessionDomain              string          `hcl:"session_domain"`
-	SessionMaxAge              int             `hcl:"session_max_age"`
-	MediaUploadTmp             string          `hcl:"media_upload_tmp"`
-	Users                      []UserWebConfig `hcl:"user"`
+	Users                      []UserAPIConfig `hcl:"user"`
 	Oidc                       OidcConfig      `hcl:"oidc"`
-	Links                      []WebConfigLink `hcl:"link"`
+	Links                      []APIConfigLink `hcl:"link"`
 	LinksTitle                 string          `hcl:"links_title"`
+}
+
+func (c *APIConfig) AuthPolicy() auth.IdentityPolicy {
+	p := auth.IdentityPolicy{OIDCIssuer: c.Oidc.IssuerUrl, OIDCClientID: c.Oidc.ClientId, AllowedEmails: c.Oidc.AllowedEmails}
+	for _, u := range c.Users {
+		p.Users = append(p.Users, auth.LocalUser{ID: u.Id, Name: u.FullName, Email: u.Email, PasswordHash: u.HashedPassword})
+	}
+	return p
 }
 
 type ImageConfig struct {
@@ -163,7 +171,7 @@ type Config struct {
 	Bridges    []string          `hcl:"bridges"`
 	Libvirts   []LibvirtConfig   `hcl:"libvirt"`
 	KeyFile    string            `hcl:"key_file"`
-	Web        WebConfig         `hcl:"web"`
+	API        APIConfig         `hcl:"api"`
 	Subscribes []SubscribeConfig `hcl:"subscribe"`
 
 	LegacyLibvirtUri                    string   `hcl:"libvirt_uri"`
@@ -177,12 +185,12 @@ func Default() *Config {
 	return &Config{
 		LogLevel: "info",
 		KeyFile:  "~/.vmango/authorized_keys",
-		Web: WebConfig{
+		API: APIConfig{
 			Listen:                     ":8080",
 			Debug:                      false,
-			SessionMaxAge:              12 * 60 * 60,
+			SessionDir:                 "~/.vmango/sessions",
+			TokenDir:                   "~/.vmango/tokens",
 			ConsoleLinkLifetimeSeconds: 3600,
-			MediaUploadTmp:             "/tmp/",
 		},
 	}
 }
@@ -205,6 +213,24 @@ func Parse(filename string) (*Config, error) {
 		return nil, util.NewError(err, "cannot read configuration file")
 	}
 	config := &Config{}
+	parsed, err := hcl.ParseBytes(content)
+	if err != nil {
+		return nil, util.NewError(err, "invalid configuration format")
+	}
+	if list, ok := parsed.Node.(*ast.ObjectList); ok && len(list.Filter("web").Items) > 0 {
+		return nil, fmt.Errorf("legacy web configuration is unsupported: migrate web { ... } to api { ... }, configure jwt_signing_key, session_dir and token_dir; remove api_disabled and legacy session settings")
+	}
+	if list, ok := parsed.Node.(*ast.ObjectList); ok {
+		for _, item := range list.Filter("api").Items {
+			if obj, ok := item.Val.(*ast.ObjectType); ok {
+				for _, removed := range []string{"session_secret", "session_domain", "session_max_age", "static_version", "media_upload_tmp"} {
+					if len(obj.List.Filter(removed).Items) > 0 {
+						return nil, fmt.Errorf("api.%s was removed; follow docs/UI-MIGRATION.md and configure JWT signing and credential stores", removed)
+					}
+				}
+			}
+		}
+	}
 	if err := hcl.Unmarshal(content, config); err != nil {
 		return nil, util.NewError(err, "invalid configuration format")
 	}
@@ -245,14 +271,33 @@ func Parse(filename string) (*Config, error) {
 			libvirt.ConfigDrivePool = "default"
 		}
 	}
-	if len(config.Web.Oidc.Scopes) <= 0 {
-		config.Web.Oidc.Scopes = []string{"openid", "profile", "email"}
+	if len(config.API.Oidc.Scopes) <= 0 {
+		config.API.Oidc.Scopes = []string{"openid", "profile", "email"}
 	}
-	if config.Web.ConsoleLinkLifetimeSeconds < 1 || config.Web.ConsoleLinkLifetimeSeconds > 86400*30 {
+	if config.API.APIDisabled {
+		return nil, fmt.Errorf("api_disabled=true is unsupported: the new UI requires the API; explicitly resolve this setting during migration")
+	}
+	if config.API.JWTSigningKey != "" {
+		if err := auth.ValidateKey(config.API.JWTSigningKey); err != nil {
+			return nil, err
+		}
+	}
+	if config.API.SessionDir == config.API.TokenDir {
+		return nil, fmt.Errorf("api.session_dir and api.token_dir must be separate directories")
+	}
+	if config.API.ConsoleLinkLifetimeSeconds < 1 || config.API.ConsoleLinkLifetimeSeconds > 86400*30 {
 		return nil, fmt.Errorf("console_link_lifetime_seconds must be between 1 and 2592000")
 	}
-	if config.Web.ConsoleSigningKey != "" && len(config.Web.ConsoleSigningKey) < 32 {
+	if config.API.ConsoleSigningKey != "" && len(config.API.ConsoleSigningKey) < 32 {
 		return nil, fmt.Errorf("console_signing_key must contain at least 32 random bytes")
+	}
+	if config.API.ConsoleSigningKey != "" {
+		if err := auth.ValidateKey(config.API.ConsoleSigningKey); err != nil {
+			return nil, fmt.Errorf("console_signing_key: %w", err)
+		}
+		if config.API.ConsoleSigningKey == config.API.JWTSigningKey {
+			return nil, fmt.Errorf("console_signing_key must differ from jwt_signing_key")
+		}
 	}
 	if _, _, err := config.ImageDefinitions(); err != nil {
 		return nil, err

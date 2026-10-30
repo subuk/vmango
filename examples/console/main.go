@@ -3,7 +3,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"io"
@@ -21,15 +20,15 @@ import (
 
 func main() {
 	endpoint := flag.String("url", "", "Vmango WebSocket URL")
-	user := flag.String("user", "", "Configured Vmango username")
+	tokenFile := flag.String("token-file", "", "Protected file containing a personal API JWT")
 	listen := flag.String("listen", "", "Optional loopback TCP address for a native VNC viewer, e.g. 127.0.0.1:5901")
 	flag.Parse()
-	if err := run(*endpoint, *user, *listen); err != nil {
+	if err := run(*endpoint, *tokenFile, *listen); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
-func run(endpoint, user, listen string) error {
+func run(endpoint, tokenFile, listen string) error {
 	u, err := url.Parse(endpoint)
 	if err != nil {
 		return err
@@ -37,18 +36,16 @@ func run(endpoint, user, listen string) error {
 	if u.Scheme != "wss" && !(u.Scheme == "ws" && (u.Hostname() == "localhost" || net.ParseIP(u.Hostname()).IsLoopback())) {
 		return fmt.Errorf("use wss, except for loopback development")
 	}
-	if user == "" {
-		return fmt.Errorf("-user is required")
+	if tokenFile == "" {
+		return fmt.Errorf("-token-file is required; create a personal API token in the account menu")
 	}
-	password := os.Getenv("VMANGO_PASSWORD")
-	if password == "" {
-		fmt.Fprint(os.Stderr, "Password: ")
-		b, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Fprintln(os.Stderr)
-		if err != nil {
-			return err
-		}
-		password = string(b)
+	raw, err := os.ReadFile(tokenFile)
+	if err != nil {
+		return fmt.Errorf("cannot read token file")
+	}
+	token := strings.TrimSpace(string(raw))
+	if token == "" || strings.ContainsAny(token, "\r\n ") {
+		return fmt.Errorf("invalid token file")
 	}
 	var input io.Reader = os.Stdin
 	var output io.Writer = os.Stdout
@@ -72,7 +69,7 @@ func run(endpoint, user, listen string) error {
 		input = local
 		output = local
 	}
-	header := http.Header{"Authorization": {"Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))}}
+	header := http.Header{"Authorization": {"Bearer " + token}}
 	dialer := websocket.Dialer{Subprotocols: []string{"binary"}, HandshakeTimeout: 15 * time.Second}
 	ws, response, err := dialer.Dial(endpoint, header)
 	if err != nil {

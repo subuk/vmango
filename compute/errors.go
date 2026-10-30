@@ -2,6 +2,15 @@ package compute
 
 import "errors"
 
+// ValidationError carries a safe correction hint, separate from backend errors.
+type ValidationError struct {
+	Field   string
+	Message string
+}
+
+func (e *ValidationError) Error() string { return e.Message }
+func (e *ValidationError) Unwrap() error { return ErrInvalid }
+
 var (
 	ErrNotFound    = errors.New("resource not found")
 	ErrConflict    = errors.New("resource conflict")

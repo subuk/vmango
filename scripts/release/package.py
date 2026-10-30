@@ -26,9 +26,13 @@ def package(version, target, binary, runtime=None):
         for filename in ("LICENSE", "vmango.quickstart.conf", "vmango.dist.conf"):
             shutil.copy2(root / filename, stage)
         shutil.copy2(root / "docs/content/en/docs/start.md", stage / "QUICKSTART.md")
+        shutil.copy2(root / "docs/UI-MIGRATION.md", stage / "MIGRATION.md")
+        shutil.copy2(root / "docs/API.md", stage / "API.md")
         # Embedded Go and browser dependencies retain their upstream notices.
         notices = stage / "licenses"
-        for directory in (root / "vendor", root / "static"):
+        notices.mkdir(exist_ok=True)
+        shutil.copy2(root / "ui/dist/THIRD-PARTY-LICENSES.txt", notices / "frontend.txt")
+        for directory in (root / "vendor", root / "ui/public/vendor"):
             for path in directory.rglob("*"):
                 if path.is_file() and path.name.lower().startswith(("license", "copying", "notice", "copyright")):
                     dest = notices / path.relative_to(root)

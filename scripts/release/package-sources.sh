@@ -3,6 +3,7 @@ set -euo pipefail
 : "${VERSION:?}" "${PACKAGE_REVISION:?}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(~test\.[1-9][0-9]*\.g[0-9a-f]{40})?$ ]]
 [[ "$PACKAGE_REVISION" =~ ^[1-9][0-9]*$ ]]
+python3 scripts/ui-assets.py verify
 mkdir -p dist/packages/rpm dist/packages/ppa
 # Archive the exact checkout, including vendored dependencies and test fixtures.
 # Persist the requested version for builders without Git metadata.
@@ -11,7 +12,14 @@ trap 'rm -rf "$metadata"' EXIT
 mkdir -p "$metadata/vmango-$VERSION"
 printf '%s\n' "$VERSION" > "$metadata/vmango-$VERSION/VERSION"
 git archive --format=tar --prefix="vmango-$VERSION/" HEAD > "$metadata/source.tar"
-tar -rf "$metadata/source.tar" -C "$metadata" "vmango-$VERSION/VERSION"
+cp -R ui/dist "$metadata/vmango-$VERSION/ui-dist"
+mkdir -p "$metadata/vmango-$VERSION/ui"
+mv "$metadata/vmango-$VERSION/ui-dist" "$metadata/vmango-$VERSION/ui/dist"
+tar -rf "$metadata/source.tar" -C "$metadata" "vmango-$VERSION/VERSION" "vmango-$VERSION/ui/dist"
+# Verify the extracted archive rather than trusting the working copy.
+mkdir "$metadata/verify"
+tar -xf "$metadata/source.tar" -C "$metadata/verify"
+python3 "$metadata/verify/vmango-$VERSION/scripts/ui-assets.py" verify
 gzip -n < "$metadata/source.tar" > "dist/packages/vmango-$VERSION.tar.gz"
 mkdir -p dist/packages/rpmbuild/{SOURCES,SPECS,SRPMS}
 cp "dist/packages/vmango-$VERSION.tar.gz" dist/packages/rpmbuild/SOURCES/

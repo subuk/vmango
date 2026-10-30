@@ -12,6 +12,7 @@ Vendor: subuk
 Requires: genisoimage
 BuildRequires: go >= 1.26
 BuildRequires: make
+BuildRequires: python3
 BuildRequires: gcc
 BuildRequires: pkgconfig
 BuildRequires: libvirt-devel
@@ -27,17 +28,18 @@ Requires(pre): shadow-utils
 
 %build
 export GOTOOLCHAIN=local
-make
+make UI_PREBUILT=1
 
 %check
 export GOTOOLCHAIN=local
-make test
+make UI_PREBUILT=1 test
 
 %install
-make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
+make UI_PREBUILT=1 install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 install -d %{buildroot}%{_unitdir}
 install vmango.service %{buildroot}%{_unitdir}/
 install -d %{buildroot}/var/lib/vmango/
+install -d -m 0700 %{buildroot}/var/lib/vmango/sessions %{buildroot}/var/lib/vmango/tokens
 
 %pre
 getent group vmango >/dev/null || groupadd -r vmango
@@ -59,7 +61,9 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %attr(0755,root,root) %{_prefix}/bin/vmango
-%attr(0755,vmango,vmango) /var/lib/vmango
+%attr(0755,vmango,vmango) %dir /var/lib/vmango
+%attr(0700,vmango,vmango) %dir /var/lib/vmango/sessions
+%attr(0700,vmango,vmango) %dir /var/lib/vmango/tokens
 %config(noreplace) /etc/vmango.conf
 %{_unitdir}/vmango.service
 

@@ -2,6 +2,7 @@ package compute
 
 import (
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -46,4 +47,42 @@ type VolumeService struct {
 
 func NewVolumeService(repo VolumeRepository) *VolumeService {
 	return &VolumeService{repo}
+}
+
+// Attachable excludes catalog sources independently of image architecture.
+// Protection alone does not make an otherwise eligible volume unattachable.
+func (s *VolumeService) Attachable(options VolumeListOptions, images *ImageService) ([]*Volume, error) {
+	volumes, err := s.List(options)
+	if err != nil {
+		return nil, err
+	}
+	sources, err := images.SourcePaths()
+	if err != nil {
+		return nil, err
+	}
+	out := []*Volume{}
+	for _, v := range volumes {
+		if !v.Metadata.Hidden && v.AttachedTo == "" && !sources[v.Path] {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+
+func (s *VolumeService) ValidateAttachable(path, node string, images *ImageService) error {
+	v, err := s.Get(path, node)
+	if err != nil {
+		return err
+	}
+	sources := map[string]bool{}
+	if images != nil {
+		sources, err = images.SourcePaths()
+		if err != nil {
+			return err
+		}
+	}
+	if v.Metadata.Hidden || v.AttachedTo != "" || sources[v.Path] {
+		return fmt.Errorf("%w: volume is not attachable", ErrConflict)
+	}
+	return nil
 }

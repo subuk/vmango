@@ -35,6 +35,15 @@ jobs:
         with:
           ref: ${{ inputs.source_ref }}
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ui/.nvmrc
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Build frontend and verify API types
+        run: |
+          make ui
+          make ui-test
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -54,7 +63,7 @@ jobs:
         run: |
           python3 -m venv /tmp/vmango-openapi-validator
           /tmp/vmango-openapi-validator/bin/pip install openapi-spec-validator==0.7.2
-          /tmp/vmango-openapi-validator/bin/openapi-spec-validator web/testdata/openapi.json
+          /tmp/vmango-openapi-validator/bin/openapi-spec-validator api/testdata/openapi.json
       - name: Build and test
         env:
           VERSION: ${{ inputs.version }}
@@ -88,6 +97,15 @@ jobs:
         with:
           ref: ${{ inputs.source_ref }}
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ui/.nvmrc
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Build frontend and verify API types
+        run: |
+          make ui
+          make ui-test
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'

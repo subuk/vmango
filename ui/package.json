@@ -1,0 +1,46 @@
+{
+  "name": "vmango-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": "^22.12.0 || ^24.13.0 || >=26.0.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build && node scripts/licenses.mjs && python3 ../scripts/ui-assets.py write",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "api:generate": "openapi-typescript ../api/testdata/openapi.json --default-non-nullable false -o src/api/schema.ts",
+    "api:check": "node scripts/check-api.mjs",
+    "verify": "python3 ../scripts/ui-assets.py verify",
+    "format": "prettier --write src vite.config.ts vitest.config.ts scripts index.html",
+    "postinstall": "node scripts/dependencies.mjs"
+  },
+  "dependencies": {
+    "@emotion/react": "11.14.0",
+    "@emotion/styled": "11.14.1",
+    "@mui/material": "9.5.0",
+    "@tanstack/react-query": "5.105.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "openapi-fetch": "0.17.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-router": "8.5.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "jsdom": "29.1.1",
+    "openapi-typescript": "7.13.0",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

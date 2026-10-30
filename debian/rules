@@ -4,6 +4,7 @@
 export DH_VERBOSE = 1
 export PATH := /usr/lib/go-1.26/bin:$(PATH)
 export GOTOOLCHAIN = local
+export UI_PREBUILT = 1
 
 
 # see FEATURE AREAS in dpkg-buildflags(1)

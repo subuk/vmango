@@ -18,9 +18,10 @@ libvirt. Keep business logic separate from HTTP handlers and libvirt calls.
 - `filesystem/`: filesystem repositories and event hooks.
 - `config/`: HCL configuration and defaults; `vmango.dist.conf` is the example.
 - `configdrive/`: cloud-init data and ISO generation.
-- `web/`: HTTP routing, handlers, sessions, authentication and CSRF protection.
-- `templates/`, `static/`: server-rendered UI and bundled browser dependencies.
-- `vendor/`: committed Go dependencies; `vendortools/` tracks build tooling.
+- `api/`: HTTP API/auth/OIDC routing, origin checks, WebSocket proxies and UI serving.
+- `auth/`: JWT credential profiles, refresh/token lifecycle and repository contracts.
+- `ui/`: React/TypeScript/Vite frontend, runtime vendor assets and embedded build.
+- `vendor/`: committed Go dependencies.
 - `docs/`: Hugo/Docsy documentation, with its own Go and npm dependencies.
 - `vmango.spec.in`, `Makefile.RPM.mk`, `.copr/`: RPM packaging and COPR entry point.
 - `debian/`, `Makefile.DEB.mk`, `dockerbuild/`: DEB packaging and build containers.
@@ -46,7 +47,7 @@ construction belong in the implementation.
 
 `filesystem/` provides filesystem-backed implementations such as key storage
 and scripted event hooks. `bootstrap/` constructs implementations, injects them
-into domain services and wires those services into `web/`. HTTP handlers should
+into domain services and wires those services into `api/`. HTTP handlers should
 parse requests, call domain operations and render responses; keep shared
 business rules out of handlers and templates.
 
@@ -74,9 +75,14 @@ Use `make test` rather than bare `go test ./...` on a clean checkout: it generat
 the embedded assets first. The Makefile sets `GOFLAGS=-mod=vendor` and a build
 cache under `/tmp`. Format changed Go files with `gofmt`.
 
-Edit `templates/` and `static/`, not `web/assets_generated.go`. The latter and
-`bin/` are generated and ignored by Git. If assets were removed or renamed,
-remove `web/assets_generated.go` and rebuild to avoid retaining stale content.
+Edit frontend source under `ui/src/` and preserved runtime distributions under
+`ui/public/vendor/`. `ui/dist/` and `bin/` are generated and ignored. `make ui`
+uses the pinned Node toolchain in `ui/.nvmrc`; `make ui-test` checks frontend
+behavior and generated API types. Run `make api-types` after intentional contract
+changes and review the snapshot/type diff. Distribution archives include dist
+and a source/asset manifest; `UI_PREBUILT=1` verifies it without Node/npm and
+preserves it during package clean steps. Never replace missing assets with a
+dummy page or bypass manifest validation.
 The local `vmango.conf` is ignored; do not commit local credentials or machine
 settings. Avoid using `make clean` casually: it also removes package artifacts.
 
@@ -111,13 +117,13 @@ Package builds use `GOTOOLCHAIN=local` and vendored modules: install the compile
 in the build environment instead of relying on a toolchain download.
 
 The bundled noVNC is a runtime distribution. Read
-`static/noVNC-1.7.0/VMANGO.md` before changing it. Preserve upstream licenses,
+`ui/public/vendor/noVNC-1.7.0/VMANGO.md` before changing it. Preserve upstream licenses,
 module-relative locale/metadata URLs and the mandatory same-origin WebSocket
 settings in the VNC template. URL parameters and saved browser settings must
 not redirect the console connection. Remote VNC access needs HTTPS.
 
 CSRF protection uses `net/http.CrossOriginProtection` plus the HTTPS-origin
-check in `web/csrf.go`. Preserve tests for proxy deployments, cross-site requests
+check in `api/csrf.go`. Preserve tests for proxy deployments, cross-site requests
 and authentication. Requests without browser origin headers still require
 authentication on protected routes.
 

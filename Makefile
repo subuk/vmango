@@ -4,10 +4,10 @@ export GOBIN=$(PWD)/bin/
 export GOCACHE=/tmp/.vmango-go-build-cache
 GO = go
 INSTALL = install
-GO_SOURCES = $(shell find . -name '*.go')
-ASSETS_SOURCES = $(shell find templates static)
+GO_SOURCES = $(shell find . -path './ui/node_modules' -prune -o -path './ui/dist' -prune -o -path './vendor' -prune -o -name '*.go' -print)
 UNAME_S := $(shell uname -s)
-TARBALL_SOURCES = $(GO_SOURCES) Makefile README.md vmango.dist.conf vmango.service static/ templates/ vendor/ go.mod go.sum scripts/version.sh
+TARBALL_SOURCES = main.go bootstrap/ compute/ auth/ api/ ui/ filesystem/ libvirt/ config/ configdrive/ catalog/ util/ acceptance/ Makefile README.md LICENSE docs/API.md docs/UI-MIGRATION.md vmango.dist.conf vmango.quickstart.conf vmango.service vendor/ go.mod go.sum scripts/version.sh scripts/ui-assets.py
+UI_PREBUILT ?= 0
 
 # Release workflows can override this before the release tag exists.
 .DEFAULT_GOAL := default
@@ -17,7 +17,7 @@ VERSION ?= $(shell sh scripts/version.sh)
 print-version:
 	@printf '%s\n' '$(VERSION)'
 
-BUILD_LDFLAGS = -X subuk/vmango/web.AppVersion=$(VERSION)
+BUILD_LDFLAGS = -X subuk/vmango/api.AppVersion=$(VERSION)
 
 ifeq ($(UNAME_S),Darwin)
 	TAR = gtar
@@ -35,14 +35,26 @@ default: bin/vmango
 .PHONY: FORCE
 FORCE:
 
-bin/vmango: FORCE $(GO_SOURCES) web/assets_generated.go Makefile go.mod go.sum
+bin/vmango: FORCE ui $(GO_SOURCES) Makefile go.mod go.sum
 	$(GO) build -ldflags='$(BUILD_LDFLAGS)' -o bin/vmango
 
-bin/go-bindata: go.mod go.sum
-	$(GO) build -o bin/go-bindata github.com/go-bindata/go-bindata/go-bindata
+.PHONY: ui ui-test api-types
+ui:
+ifeq ($(UI_PREBUILT),1)
+	python3 scripts/ui-assets.py verify
+else
+	@command -v npm >/dev/null || { echo 'Node/npm required: install the version in ui/.nvmrc, or use UI_PREBUILT=1 with a verified source archive.' >&2; exit 1; }
+	@if ! cmp -s ui/package-lock.json ui/node_modules/.vmango-lock; then cd ui && npm ci && cp package-lock.json node_modules/.vmango-lock; fi
+	@if ! python3 scripts/ui-assets.py verify >/dev/null 2>&1; then cd ui && npm run build; fi
+endif
 
-web/assets_generated.go: bin/go-bindata $(ASSETS_SOURCES)
-	bin/go-bindata $(ASSETS_FLAGS) -o web/assets_generated.go -pkg web static/... templates/...
+ui-test: ui
+	cd ui && npm run api:check && npm test
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_ui_assets.py'
+
+api-types:
+	UPDATE_API_SPEC=1 $(MAKE) test
+	cd ui && npm run api:generate
 
 install: bin/vmango vmango.dist.conf
 	$(INSTALL) -d -m 0755 $(CONF_DIR)
@@ -51,10 +63,10 @@ install: bin/vmango vmango.dist.conf
 	$(INSTALL) -m 0644 vmango.dist.conf $(CONF_DIR)/vmango.conf
 
 tarball: vmango-$(VERSION).tar.gz
-vmango-$(VERSION).tar.gz: $(TARBALL_SOURCES)
+vmango-$(VERSION).tar.gz: ui $(TARBALL_SOURCES)
 	@set -eu; metadata=$$(mktemp -d); trap 'rm -rf "$$metadata"' EXIT; \
 	printf '%s\n' '$(VERSION)' > "$$metadata/VERSION"; \
-	$(TAR) --transform "s,,vmango-$(VERSION)/," -czf $@ $(TARBALL_SOURCES) -C "$$metadata" VERSION
+	$(TAR) --exclude=ui/node_modules --exclude='ui/*.tsbuildinfo' --transform "s,,vmango-$(VERSION)/," -czf $@ $(TARBALL_SOURCES) -C "$$metadata" VERSION
 
 .PHONY: vendor
 vendor:
@@ -62,12 +74,15 @@ vendor:
 	$(GO) mod vendor -v
 
 .PHONY: test
-test: web/assets_generated.go
+test: ui
 	$(GO) test ./...
 
 .PHONY: clean
 clean:
-	rm -rf web/assets_generated.go bin/ *.tar.gz *.tar.hz *.rpm *.deb *_source.buildinfo *_source.changes *_source.ppa.upload *.debian.tar.xz *.dsc *.spec
+	rm -rf bin/ *.tar.gz *.tar.hz *.rpm *.deb *_source.buildinfo *_source.changes *_source.ppa.upload *.debian.tar.xz *.dsc *.spec
+ifneq ($(UI_PREBUILT),1)
+	rm -rf ui/dist
+endif
 
 ifneq ("$(wildcard /usr/bin/rpm)","")
 -include Makefile.RPM.mk
