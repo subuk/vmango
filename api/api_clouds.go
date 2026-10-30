@@ -36,6 +36,7 @@ type apiCloudInput struct {
 
 type apiCloudVolumesInput struct {
 	Cloud string `path:"cloud"`
+	Host  string `query:"host" doc:"Filter by the observed owning host; this does not select placement."`
 	Usage string `query:"usage" enum:"attachable"`
 }
 type apiCloudCreateInput struct {
@@ -95,13 +96,18 @@ func (e *Environ) registerClouds(api huma.API) {
 		if e.clouds == nil {
 			return nil, apiError(compute.ErrNotFound)
 		}
+		if in.Host != "" {
+			if _, _, err := e.clouds.ForHost(in.Cloud, in.Host); err != nil {
+				return nil, apiError(err)
+			}
+		}
 		volumes, err := e.clouds.ListVolumes(in.Cloud, in.Usage == "attachable")
 		if err != nil {
 			return nil, apiError(err)
 		}
 		out := []apiVolume{}
 		for _, v := range volumes {
-			if !v.Metadata.Hidden {
+			if !v.Metadata.Hidden && (in.Host == "" || v.NodeId == in.Host) {
 				out = append(out, e.volumeDTO(v))
 			}
 		}
@@ -189,7 +195,7 @@ func (e *Environ) registerClouds(api huma.API) {
 	registerAPI(api, "POST", "/clouds/{cloud}/machines/{node}/{vm}/disks", "create-machine-disk", "Create and attach a local disk through a storage class", func(ctx context.Context, in *createDiskInput) (*apiAccepted, error) {
 		return e.submitTask(ctx, in.IdempotencyKey, "machine.create-disk", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, VM: in.VM, NewDisk: &in.Body})
 	})
-	registerAPI(api, "GET", "/nodes/{node}/catalog", "get-host-catalog", "Discover logical storage classes and networks supported on a host", func(ctx context.Context, in *apiHostChoicesInput) (*apiResult[apiHostChoices], error) {
+	registerAPI(api, "GET", "/hosts/{node}/catalog", "get-host-catalog", "Discover logical storage classes and networks supported on a host", func(ctx context.Context, in *apiHostChoicesInput) (*apiResult[apiHostChoices], error) {
 		if e.clouds == nil {
 			return nil, apiError(compute.ErrNotFound)
 		}

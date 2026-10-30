@@ -128,13 +128,17 @@ acceptance is not completion. Existing-disk references contain the observed
 Queued commands accepted before the cloud migration fail before backend mutation
 if they lack cloud context; inspect their history and submit a new cloud command.
 
-The former low-level `POST /api/v1/nodes/{node}/vms` route is removed. CPU/RAM
+All former `/api/v1/nodes/...` resource routes and global `/vms`, `/volumes` and
+`/networks` collections are removed without compatibility aliases. Read-only
+administrative diagnostics use `/api/v1/hosts/...`. CPU/RAM
 patches are replaced by `POST /api/v1/clouds/{cloud}/machines/{node}/{vm}/instance-type`
 with `{"instance_type":"medium"}`. The node in an existing-resource URL identifies
 observed placement; it cannot be used to move a machine. Adoption uses the same
 resource URL with `/adopt`. New disk creation and attachment uses `/disks` with
-`name`, `storage_class` and `size_bytes`. Ordinary attachment, power, console and
-deletion commands continue to address existing resource identities.
+`name`, `storage_class` and `size_bytes`. Attachment, power, console and deletion
+commands use that same cloud-scoped identity. Existing-disk attachment uses `/disks/attach`; `/disks` creates and
+attaches a new disk. Cloud membership is checked before reads, commands and
+native console upgrades.
 
 `GET /api/v1/clouds/{cloud}/volumes?usage=attachable` excludes image sources and
 already attached disks. The creation form further restricts existing-disk choices
@@ -142,5 +146,5 @@ to one owning host after the first selection.
 
 Standalone creation uses `POST /api/v1/clouds/{cloud}/volumes` with `name`, `zone`,
 `storage_class` and `size_bytes`. Existing-volume clone commands select
-`storage_class`, not `pool` or `format`. Node and pool discovery remain available
-for administrative diagnostics. See authenticated OpenAPI for the complete schema.
+`storage_class`, not `pool` or `format`. Read-only host and pool discovery remain
+available under `/hosts` for administrative diagnostics. See authenticated OpenAPI for the complete schema.

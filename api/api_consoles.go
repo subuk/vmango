@@ -69,10 +69,11 @@ func (e *Environ) verifyConsole(raw, node, vm, kind string, now time.Time) (cons
 }
 
 type apiConsoleLinkInput struct {
-	Node string `path:"node"`
-	VM   string `path:"vm"`
-	Kind string `path:"kind" enum:"serial,vnc"`
-	Body struct {
+	Cloud string `path:"cloud"`
+	Node  string `path:"node"`
+	VM    string `path:"vm"`
+	Kind  string `path:"kind" enum:"serial,vnc"`
+	Body  struct {
 		Force bool `json:"force,omitempty" doc:"Serial only: allow takeover on every connection using this link."`
 	}
 }
@@ -82,7 +83,7 @@ type apiConsoleLink struct {
 }
 
 func (e *Environ) registerConsoles(api huma.API, router *mux.Router) {
-	const path = "/nodes/{node}/vms/{vm}/consoles/{kind}"
+	const path = "/clouds/{cloud}/machines/{node}/{vm}/consoles/{kind}"
 	registerAPI(api, "POST", path+"/links", "create-console-link", "Issue reusable signed browser console link", func(ctx context.Context, in *apiConsoleLinkInput) (*apiResult[apiConsoleLink], error) {
 		if claims(ctx).Kind != "web" {
 			return nil, authError(auth.ErrForbidden)
@@ -128,7 +129,7 @@ func (e *Environ) registerConsoles(api huma.API, router *mux.Router) {
 		}
 		e.serveConsole(w, r, v["node"], v["vm"], v["kind"], force == "true", claims(r.Context()).ExpiresAt.Time)
 	}).Methods("GET")
-	api.OpenAPI().AddOperation(&huma.Operation{Method: "GET", Path: native, OperationID: "connect-console", Tags: []string{"nodes"}, Summary: "Binary serial or VNC WebSocket; Bearer JWT on handshake", Description: consoleProtocol, Parameters: []*huma.Param{{Name: "node", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "vm", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "kind", In: "path", Required: true, Schema: &huma.Schema{Type: "string", Enum: []any{"serial", "vnc"}}}, {Name: "force", In: "query", Schema: &huma.Schema{Type: "boolean", Default: false}}}, Responses: map[string]*huma.Response{"101": {Description: "Switching protocols; binary messages only"}, "401": {Description: "Invalid Bearer credential"}, "403": {Description: "Origin or transport rejected"}, "404": {Description: "Missing resource"}, "409": {Description: "Console busy or VM state conflict"}, "503": {Description: "Backend unavailable"}}})
+	api.OpenAPI().AddOperation(&huma.Operation{Method: "GET", Path: native, OperationID: "connect-console", Tags: []string{"clouds"}, Summary: "Binary serial or VNC WebSocket; Bearer JWT on handshake", Description: consoleProtocol, Parameters: []*huma.Param{{Name: "cloud", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "node", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "vm", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "kind", In: "path", Required: true, Schema: &huma.Schema{Type: "string", Enum: []any{"serial", "vnc"}}}, {Name: "force", In: "query", Schema: &huma.Schema{Type: "boolean", Default: false}}}, Responses: map[string]*huma.Response{"101": {Description: "Switching protocols; binary messages only"}, "401": {Description: "Invalid Bearer credential"}, "403": {Description: "Origin or transport rejected"}, "404": {Description: "Missing resource"}, "409": {Description: "Console busy or VM state conflict"}, "503": {Description: "Backend unavailable"}}})
 	router.HandleFunc("/api/console-protocol", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		io.WriteString(w, consoleProtocol)
@@ -280,7 +281,7 @@ func bridgeConsole(ws *websocket.Conn, stream io.ReadWriteCloser, expires time.T
 }
 
 const consoleProtocol = `Console protocol v1
-Native clients: GET /api/v1/nodes/{node}/vms/{vm}/consoles/{serial|vnc}/ws
+Native clients: GET /api/v1/clouds/{cloud}/machines/{node}/{vm}/consoles/{serial|vnc}/ws
 Send Authorization: Bearer TOKEN on the WebSocket handshake over WSS.
 Access-token expiry closes the stream; reconnect with a valid token.
 Revoking a personal token through the API closes its active streams.

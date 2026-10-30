@@ -109,7 +109,7 @@ func (e *Environ) discoveryArch(in *apiArchInput) (compute.Arch, error) {
 	return n.CpuArch, nil
 }
 func (e *Environ) registerDiscovery(api huma.API) {
-	registerAPI(api, "GET", "/nodes", "list-nodes", "List nodes", func(ctx context.Context, in *apiEmpty) (*apiResult[[]apiNode], error) {
+	registerAPI(api, "GET", "/hosts", "list-hosts", "List hosts for read-only administrative diagnostics", func(ctx context.Context, in *apiEmpty) (*apiResult[[]apiNode], error) {
 		nodes, err := e.nodes.List(compute.NodeListOptions{})
 		if err != nil {
 			return nil, apiError(err)
@@ -120,14 +120,14 @@ func (e *Environ) registerDiscovery(api huma.API) {
 		}
 		return &apiResult[[]apiNode]{Body: out}, nil
 	})
-	registerAPI(api, "GET", "/nodes/{node}", "get-node", "Get node and CPU topology", func(ctx context.Context, in *apiNodeInput) (*apiResult[apiNode], error) {
+	registerAPI(api, "GET", "/hosts/{node}", "get-host", "Get read-only host diagnostics and CPU topology", func(ctx context.Context, in *apiNodeInput) (*apiResult[apiNode], error) {
 		n, err := e.nodes.Get(in.Node, compute.NodeGetOptions{})
 		if err != nil {
 			return nil, apiError(err)
 		}
 		return &apiResult[apiNode]{Body: nodeDTO(n)}, nil
 	})
-	registerAPI(api, "GET", "/nodes/{node}/networks", "list-networks", "List networks", func(ctx context.Context, in *apiNodeInput) (*apiResult[[]apiNetwork], error) {
+	registerAPI(api, "GET", "/hosts/{node}/networks", "list-networks", "List networks", func(ctx context.Context, in *apiNodeInput) (*apiResult[[]apiNetwork], error) {
 		if _, err := e.nodes.Get(in.Node, compute.NodeGetOptions{NoPins: true}); err != nil {
 			return nil, apiError(err)
 		}
@@ -141,7 +141,7 @@ func (e *Environ) registerDiscovery(api huma.API) {
 		}
 		return &apiResult[[]apiNetwork]{Body: out}, nil
 	})
-	registerAPI(api, "GET", "/nodes/{node}/pools", "list-pools", "List storage pools", func(ctx context.Context, in *apiNodeInput) (*apiResult[[]apiPool], error) {
+	registerAPI(api, "GET", "/hosts/{node}/pools", "list-pools", "List storage pools", func(ctx context.Context, in *apiNodeInput) (*apiResult[[]apiPool], error) {
 		if _, err := e.nodes.Get(in.Node, compute.NodeGetOptions{NoPins: true}); err != nil {
 			return nil, apiError(err)
 		}
@@ -155,7 +155,7 @@ func (e *Environ) registerDiscovery(api huma.API) {
 		}
 		return &apiResult[[]apiPool]{Body: out}, nil
 	})
-	registerAPI(api, "GET", "/nodes/{node}/capabilities", "get-capabilities", "Discover supported launch options", func(ctx context.Context, in *apiArchInput) (*apiResult[apiCapabilities], error) {
+	registerAPI(api, "GET", "/hosts/{node}/capabilities", "get-capabilities", "Discover supported launch options", func(ctx context.Context, in *apiArchInput) (*apiResult[apiCapabilities], error) {
 		arch, err := e.discoveryArch(in)
 		if err != nil {
 			return nil, apiError(err)
@@ -176,7 +176,7 @@ func (e *Environ) registerDiscovery(api huma.API) {
 		}
 		return &apiResult[apiCapabilities]{Body: out}, nil
 	})
-	registerAPI(api, "GET", "/nodes/{node}/images", "list-images", "List available images for this node", func(ctx context.Context, in *apiArchInput) (*apiResult[[]apiImage], error) {
+	registerAPI(api, "GET", "/hosts/{node}/images", "list-images", "List available images for this node", func(ctx context.Context, in *apiArchInput) (*apiResult[[]apiImage], error) {
 		arch, err := e.discoveryArch(in)
 		if err != nil {
 			return nil, apiError(err)

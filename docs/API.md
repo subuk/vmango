@@ -63,39 +63,52 @@ contract changes run `make api-types`, review the snapshot/type diff and run
 
 ## Resource contract
 
-All node resources live under `/api/v1/nodes/{node}`. VM names are scoped to the
-node. Volume IDs are opaque URL-safe identifiers returned by volume discovery;
-clients should not construct or interpret them. SSH keys are application-wide
-and identified by their returned fingerprint. Sizes are integer **bytes**.
-Enums are strings. Unknown fields and invalid types are rejected.
+All machine and volume operations live under `/api/v1/clouds/{cloud}`.
+Create commands select catalog entries and an availability zone; the scheduler
+selects the host. Existing resource URLs contain their observed `{node}` host
+identity because local disks and existing VM names are host-bound. Copy these
+identities from discovery: they are not a placement input and cannot move a VM.
+The API verifies that the addressed host belongs to the requested cloud before
+reads, mutation submission and native console connections.
+
+Volume IDs are opaque URL-safe identifiers returned by discovery; clients should
+not construct or interpret them. SSH keys are application-wide and identified by
+their fingerprint. Sizes are integer **bytes**. Enums are strings. Unknown fields
+and invalid types are rejected. Paths below are relative to `/api/v1`.
 
 | Resource | Operations |
 | --- | --- |
-| `/nodes` | GET list |
-| `/vms`, `/volumes`, `/networks` | GET across all nodes; optional repeated `node` filters and volume `pool` filter |
-| `/nodes/{node}` | GET node, CPU topology, NUMA memory and pins |
-| `/nodes/{node}/networks` | GET list |
-| `/nodes/{node}/pools` | GET list |
-| `/nodes/{node}/images` | GET available images, optional `arch` |
-| `/nodes/{node}/capabilities` | GET supported settings, optional `arch` |
-| `/clouds` | GET cloud catalogs and compatible offers |
-| `/clouds/{cloud}/machines` | GET inventory, POST scheduled create |
-| `/clouds/{cloud}/volumes` | GET volumes (`usage=attachable` excludes image sources), POST scheduled create |
-| `/clouds/{cloud}/machines/{node}/{vm}/instance-type` | POST explicit type change on the current host |
-| `/clouds/{cloud}/machines/{node}/{vm}/adopt` | POST adopt unmanaged VM |
-| `/nodes/{node}/vms` | GET diagnostic list |
-| `/nodes/{node}/vms/{vm}` | GET, PATCH configuration, DELETE |
-| `/nodes/{node}/vms/{vm}/actions` | POST `start`, `reboot`, `poweroff` |
-| `/nodes/{node}/vms/{vm}/disks` | POST attach existing volume |
-| `/nodes/{node}/vms/{vm}/disks/{volume}` | DELETE attachment |
-| `/nodes/{node}/vms/{vm}/interfaces` | POST attach network interface |
-| `/nodes/{node}/vms/{vm}/interfaces/{mac}` | DELETE attachment |
-| `/nodes/{node}/volumes` | GET list (optional `pool`, `usage=attachable`), POST create |
-| `/nodes/{node}/volumes/{volume}` | GET, DELETE |
-| `/nodes/{node}/volumes/{volume}/clone` | POST clone |
-| `/nodes/{node}/volumes/{volume}/resize` | POST grow |
-| `/keys` | GET list, POST add public key |
+| `/clouds`, `/clouds/{cloud}` | GET catalogs, compatible offers and placement capabilities |
+| `/clouds/{cloud}/machines` | GET managed/unmanaged inventory, POST scheduled creation |
+| `/clouds/{cloud}/machines/{node}/{vm}` | GET, PATCH supported configuration, DELETE |
+| `/clouds/{cloud}/machines/{node}/{vm}/actions` | POST `start`, `reboot`, `poweroff` |
+| `/clouds/{cloud}/machines/{node}/{vm}/instance-type` | POST explicit stopped, same-host type change |
+| `/clouds/{cloud}/machines/{node}/{vm}/adopt` | POST explicit adoption |
+| `/clouds/{cloud}/machines/{node}/{vm}/disks` | POST create and attach a disk using storage class and size |
+| `/clouds/{cloud}/machines/{node}/{vm}/disks/attach` | POST attach an existing local volume |
+| `/clouds/{cloud}/machines/{node}/{vm}/disks/{volume}` | DELETE attachment without deleting the disk |
+| `/clouds/{cloud}/machines/{node}/{vm}/interfaces` | POST attach a configured logical network |
+| `/clouds/{cloud}/machines/{node}/{vm}/interfaces/{mac}` | DELETE attachment |
+| `/clouds/{cloud}/volumes` | GET visible volumes, POST scheduled creation |
+| `/clouds/{cloud}/volumes/{node}/{volume}` | GET, DELETE |
+| `/clouds/{cloud}/volumes/{node}/{volume}/clone` | POST host-local clone to a storage class |
+| `/clouds/{cloud}/volumes/{node}/{volume}/resize` | POST explicit growth |
+| `/hosts`, `/hosts/{node}` | GET administrative diagnostics, topology, NUMA memory and pins |
+| `/hosts/{node}/networks`, `/hosts/{node}/pools` | GET backend diagnostics |
+| `/hosts/{node}/images`, `/hosts/{node}/capabilities` | GET backend diagnostics, optional `arch` |
+| `/hosts/{node}/catalog` | GET logical networks/storage classes supported on an observed host, plus its cloud and AZ |
+| `/keys` | GET list, POST add a public key |
 | `/keys/{fingerprint}` | GET, DELETE |
+
+`GET /clouds/{cloud}/volumes` accepts `host` to filter by observed locality and
+`usage=attachable` to exclude attached disks and image sources. Neither changes
+placement. Standalone disk creation uses `name`, `zone`, `storage_class` and
+`size_bytes`; it has no host or raw-pool input.
+
+The separate `/hosts` API is **read-only**. It cannot create, update, adopt or
+delete infrastructure. Legacy `/nodes/...`, `/vms`, `/volumes` and `/networks`
+endpoints are removed; there are no compatibility aliases. Clients aggregating
+multiple clouds enumerate `/clouds` and query each cloud's collections.
 
 Infrastructure mutations return **202 Accepted** with a task and `status_url`,
 and require an `Idempotency-Key` header. Reads return 200. Key creation and
@@ -111,7 +124,8 @@ deleted, protected volumes cannot be resized, and resizing cannot shrink a disk.
 are persistent and may require stopping and starting a VM.
 
 PATCH preserves omitted fields; optional null fields are treated as omitted.
-False is distinct from omission; zero vCPUs/memory are rejected. Attachment
+False is distinct from omission. CPU, RAM and hugepages changes use the explicit
+instance-type command, not PATCH. Attachment
 changes have dedicated routes. Unknown fields and invalid requests are rejected
 before acceptance with field errors where available. Dynamic backend conditions
 are rechecked during execution where appropriate and can fail an accepted task.
@@ -166,7 +180,7 @@ See [configured clouds](CLOUDS.md) for placement, local disk ownership, adoption
 The full stream protocol is also served at `/api/console-protocol` and included
 in OpenAPI. Native clients send Bearer JWTs on the WebSocket handshake:
 
-`/api/v1/nodes/{node}/vms/{vm}/consoles/{serial|vnc}/ws`
+`/api/v1/clouds/{cloud}/machines/{node}/{vm}/consoles/{serial|vnc}/ws`
 
 Serial bytes and VNC/RFB bytes use **binary** WebSocket messages. Message boundaries
 are not byte-stream boundaries. Maximum message size is 1 MiB; text messages close
@@ -183,10 +197,10 @@ Run the native example with a protected file containing your personal JWT:
 
 ```sh
 go run -mod=vendor ./examples/console -token-file ~/.config/vmango/token \
-  -url wss://vmango.example/api/v1/nodes/local/vms/demo/consoles/serial/ws
+  -url wss://vmango.example/api/v1/clouds/local/machines/local/demo/consoles/serial/ws
 
 go run -mod=vendor ./examples/console -token-file ~/.config/vmango/token -listen 127.0.0.1:5901 \
-  -url wss://vmango.example/api/v1/nodes/local/vms/demo/consoles/vnc/ws
+  -url wss://vmango.example/api/v1/clouds/local/machines/local/demo/consoles/vnc/ws
 ```
 
 For VNC, connect a native viewer to the local forwarding port. Backend graphics
@@ -196,13 +210,13 @@ viewer connection and exits when it disconnects.
 ### Reusable browser links
 
 ```sh
-curl --token-file ~/.config/vmango/token --json '{}' \
-  https://vmango.example/api/v1/nodes/local/vms/demo/consoles/vnc/links
+curl --config ~/.config/vmango/web-curl.conf --json '{}' \
+  https://vmango.example/api/v1/clouds/local/machines/local/demo/consoles/vnc/links
 ```
 
 This operation requires a short-lived interactive web JWT; a personal JWT
 cannot issue an independent sharing credential. The protected curl configuration
-in this example supplies that interactive Bearer header. The browser Console
+in this example must contain that interactive Bearer header and have mode 0600. The browser Console
 page provides the same issuance/sharing flow.
 
 The response contains `url` and `expires_at`. Serial issuance accepts

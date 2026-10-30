@@ -10,7 +10,9 @@ in `libvirt/`, HTTP transport in `api/`, and authentication lifecycle in `auth/`
 
 Replace `web { ... }` with `api { ... }`. The legacy block fails with a migration
 instruction; it is not an alias. The subsequent [cloud migration](CLOUDS.md)
-replaces low-level machine creation and CPU/RAM updates with catalog commands. Remove
+replaces low-level machine creation and CPU/RAM updates with catalog commands.
+All machine/volume/console operations now use cloud-scoped API URLs. Legacy
+`/nodes` routes are removed; `/hosts` provides read-only administrative diagnostics. Remove
 `static_version`, `session_secret`, `session_domain`, `session_max_age` and
 `media_upload_tmp`. Listener/base URL, users/OIDC, navigation links and console
 settings move into `api`. The CLI command remains `vmango web`.

@@ -249,7 +249,7 @@ export async function request<T>(
     const infrastructure =
         method !== "GET" &&
         !new URL(path, location.href).pathname.includes("/consoles/") &&
-        /^\/api\/v1\/(?:nodes\/[^/]+\/(?:vms|volumes)|clouds\/[^/]+\/(?:machines|volumes))(?:\/|$)/.test(
+        /^\/api\/v1\/clouds\/[^/]+\/(?:machines|volumes)(?:\/|$)/.test(
             new URL(path, location.href).pathname,
         );
     const submission = infrastructure

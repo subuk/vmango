@@ -36,22 +36,37 @@ func (r *listMachines) List(options compute.VirtualMachineListOptions) ([]*compu
 	return []*compute.VirtualMachine{{Id: "vm", NodeId: "a", Memory: compute.NewSize(1, compute.SizeUnitG)}}, nil
 }
 
-func TestGlobalListsRepeatedNodeFiltersAndCompleteErrors(t *testing.T) {
+func TestCloudListsScopeHostsAndFailClosed(t *testing.T) {
 	nodes := compute.NewNodeService(&listNodes{nodes: []string{"a", "b"}})
 	repo := &listMachines{}
-	h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nodes, nil, compute.NewVirtualMachineService(repo), nil, nil)
-	w := apiRequest(h, "GET", "/api/v1/vms?node=a&node=b", "", true)
+	manager := &compute.VirtualMachineManager{Clouds: &compute.CloudService{Definitions: []compute.Cloud{{ID: "local", Hosts: []compute.CloudHost{{Node: "a"}, {Node: "b"}}}}}}
+	h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nodes, nil, compute.NewVirtualMachineService(repo), manager, nil)
+	w := apiRequest(h, "GET", "/api/v1/clouds/local/machines", "", true)
 	if w.Code != 200 || !reflect.DeepEqual(repo.nodes, []string{"a", "b"}) {
-		t.Fatalf("repeated node filters lost: %d %s %+v", w.Code, w.Body, repo.nodes)
+		t.Fatalf("cloud host filter lost: %d %s %+v", w.Code, w.Body, repo.nodes)
 	}
 	repo.fail = true
-	w = apiRequest(h, "GET", "/api/v1/vms", "", true)
+	w = apiRequest(h, "GET", "/api/v1/clouds/local/machines", "", true)
 	if w.Code != 503 {
 		t.Fatal("failed backend appeared as successful empty list", w.Code, w.Body)
 	}
-	w = apiRequest(h, "GET", "/api/v1/vms?node=missing", "", true)
-	if w.Code != 404 {
-		t.Fatal("unknown filter node", w.Code, w.Body)
+	for _, route := range []string{"/api/v1/clouds/missing/machines", "/api/v1/clouds/local/machines/other/v", "/api/v1/clouds/local/volumes/other/dm9s", "/api/v1/clouds/local/machines/other/v/consoles/serial/ws"} {
+		w = apiRequest(h, "GET", route, "", true)
+		if w.Code != 404 {
+			t.Fatalf("cloud scope bypass at %s: %d %s", route, w.Code, w.Body)
+		}
+	}
+	for _, route := range []string{"/api/v1/clouds/local/machines/other/v/actions", "/api/v1/clouds/local/volumes/other/dm9s/resize"} {
+		w = apiRequest(h, "POST", route, `{}`, true)
+		if w.Code != 404 {
+			t.Fatalf("mutation escaped cloud scope at %s: %d %s", route, w.Code, w.Body)
+		}
+	}
+	for _, route := range []string{"/api/v1/nodes/a/vms/v", "/api/v1/vms", "/api/v1/volumes", "/api/v1/networks"} {
+		w = apiRequest(h, "GET", route, "", true)
+		if w.Code != 404 {
+			t.Fatalf("retired API route remains at %s: %d", route, w.Code)
+		}
 	}
 }
 

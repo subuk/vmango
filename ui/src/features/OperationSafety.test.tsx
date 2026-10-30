@@ -52,7 +52,14 @@ it.each([false, true])(
     async (deleteDisks) => {
         show(
             <MachineActions
-                vm={{ id: "example", node: "node-a", state: "stopped" } as VM}
+                vm={
+                    {
+                        id: "example",
+                        node: "node-a",
+                        cloud: "local",
+                        state: "stopped",
+                    } as VM
+                }
             />,
         );
         await userEvent.click(
@@ -79,7 +86,7 @@ it.each([false, true])(
         );
         await waitFor(() =>
             expect(request).toHaveBeenCalledWith(
-                `/api/v1/nodes/node-a/vms/example?delete_volumes=${deleteDisks}`,
+                `/api/v1/clouds/local/machines/node-a/example?delete_volumes=${deleteDisks}`,
                 "DELETE",
             ),
         );

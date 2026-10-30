@@ -22,13 +22,13 @@ import { bytes, PageTitle, QueryState } from "../components/common";
 
 export function NodeDetail() {
     const { node = "" } = useParams();
-    const q = useResource<Node>(`/api/v1/nodes/${esc(node)}`);
-    const pools = useResource<Pool[]>(`/api/v1/nodes/${esc(node)}/pools`);
+    const q = useResource<Node>(`/api/v1/hosts/${esc(node)}`);
+    const pools = useResource<Pool[]>(`/api/v1/hosts/${esc(node)}/pools`);
     return (
         <>
             <Breadcrumbs sx={{ mb: 2 }}>
                 <Link component={RouterLink} to="/nodes/">
-                    Nodes
+                    Hosts
                 </Link>
                 <Typography>{node}</Typography>
             </Breadcrumbs>

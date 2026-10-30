@@ -15,7 +15,7 @@ import { Link as RouterLink, useParams } from "react-router";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { machineURL, useResource, vmPath, type VM } from "../api/hooks";
+import { machineURL, useMachine, vmPath, type VM } from "../api/hooks";
 import { request } from "../api/client";
 import { Confirm, Copy, ErrorMessage, PageTitle } from "../components/common";
 import { useAppearance } from "../app/theme";
@@ -23,7 +23,7 @@ import { useAppearance } from "../app/theme";
 type LinkResponse = { url: string; expires_at: string };
 export function Console({ standalone = false }: { standalone?: boolean }) {
     const { node = "", id = "", kind: pathKind } = useParams();
-    const vm = useResource<VM>(vmPath(node, id), !standalone, false);
+    const vm = useMachine(node, id, !standalone, false);
     const [kind, setKind] = useState(
         pathKind || (location.pathname.endsWith("/vnc/") ? "vnc" : "serial"),
     );
@@ -49,7 +49,7 @@ export function Console({ standalone = false }: { standalone?: boolean }) {
         try {
             setLink(
                 await request<LinkResponse>(
-                    `${vmPath(node, id)}/consoles/${currentKind}/links`,
+                    `${vmPath(node, id, vm.data!.cloud)}/consoles/${currentKind}/links`,
                     "POST",
                     { force },
                 ),

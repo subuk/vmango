@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button, Link, Menu, MenuItem, TextField } from "@mui/material";
+import { Alert, Button, Link, Menu, MenuItem, TextField } from "@mui/material";
 import { Link as RouterLink, useSearchParams } from "react-router";
 import {
     machineURL,
@@ -32,6 +32,17 @@ export function Machines() {
     const clouds = useResource<Cloud[]>("/api/v1/clouds");
     const cloudID = params.get("cloud") || clouds.data?.[0]?.id || "";
     const q = useMachines(cloudID);
+    if (clouds.isSuccess && clouds.data.length === 0) {
+        return (
+            <>
+                <PageTitle title="Machines" />
+                <Alert severity="info">
+                    No clouds are configured. Add a cloud catalog and host
+                    bindings to the application configuration.
+                </Alert>
+            </>
+        );
+    }
     return (
         <>
             <PageTitle
@@ -162,7 +173,9 @@ export function MachineActions({
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const [confirm, setConfirm] = useState<string>();
     const op = useOperation<string>((action) =>
-        request(`${vmPath(vm.node, vm.id)}/actions`, "POST", { action }),
+        request(`${vmPath(vm.node, vm.id, vm.cloud)}/actions`, "POST", {
+            action,
+        }),
     );
     const uncertain = op.error instanceof APIError && op.error.uncertain;
     return (
@@ -289,12 +302,12 @@ export function MachineActions({
                             );
                         else if (confirm === "delete")
                             await request(
-                                `${vmPath(vm.node, vm.id)}?delete_volumes=${deleteVolumes}`,
+                                `${vmPath(vm.node, vm.id, vm.cloud)}?delete_volumes=${deleteVolumes}`,
                                 "DELETE",
                             );
                         else
                             await request(
-                                `${vmPath(vm.node, vm.id)}/actions`,
+                                `${vmPath(vm.node, vm.id, vm.cloud)}/actions`,
                                 "POST",
                                 { action: confirm },
                             );
@@ -317,7 +330,7 @@ export function Nodes() {
     const q = useNodes();
     return (
         <>
-            <PageTitle title="Nodes" count={q.data?.length} />
+            <PageTitle title="Hosts" count={q.data?.length} />
             <QueryState query={q}>
                 {(rows) => (
                     <ResourceTable

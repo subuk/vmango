@@ -159,8 +159,9 @@ type apiNodeInput struct {
 	Node string `path:"node" minLength:"1"`
 }
 type apiVMInput struct {
-	Node string `path:"node" minLength:"1"`
-	VM   string `path:"vm" minLength:"1"`
+	Cloud string `path:"cloud"`
+	Node  string `path:"node" minLength:"1"`
+	VM    string `path:"vm" minLength:"1"`
 }
 
 func (e *Environ) registerAPI() {
@@ -168,6 +169,7 @@ func (e *Environ) registerAPI() {
 		return
 	}
 	router := mux.NewRouter()
+	router.Use(e.cloudScopeGuard)
 	cfg := huma.DefaultConfig("Vmango API", "1.0.0")
 	cfg.OpenAPIPath = "/api/openapi"
 	cfg.DocsPath = ""
@@ -186,12 +188,11 @@ func (e *Environ) registerAPI() {
 	cfg.RejectUnknownQueryParameters = true
 	cfg.Components.SecuritySchemes = map[string]*huma.SecurityScheme{"bearer": {Type: "http", Scheme: "bearer", BearerFormat: "JWT"}}
 	cfg.Security = []map[string][]string{{"bearer": {}}}
-	cfg.Info.Description = "Durable asynchronous infrastructure commands return 202 and a task status URL. An Idempotency-Key is required; reuse it after a lost response. Task history survives restart. Sizes are bytes. poweroff is a hard power-off. See /api/console-protocol for binary WebSocket framing."
+	cfg.Info.Description = "Machine and volume operations are cloud-scoped. Host routes are read-only administrative diagnostics. Durable asynchronous infrastructure commands return 202 and a task status URL. An Idempotency-Key is required; reuse it after a lost response. Task history survives restart. Sizes are bytes. poweroff is a hard power-off. See /api/console-protocol for binary WebSocket framing."
 	api := humamux.New(router, cfg)
 	e.registerAuth(api)
 	e.registerTasks(api)
 	e.registerClouds(api)
-	e.registerGlobalLists(api)
 	e.registerDiscovery(api)
 	e.registerVMOperations(api)
 	e.registerVolumeOperations(api)

@@ -18,6 +18,7 @@ import {
     esc,
     machineURL,
     useResource,
+    useMachine,
     vmPath,
     volumePath,
     type VM,
@@ -41,7 +42,7 @@ import type { HostCatalog } from "./MachineForm";
 
 export function MachineDetail() {
     const { node = "", id = "" } = useParams();
-    const q = useResource<VM>(vmPath(node, id));
+    const q = useMachine(node, id);
     const [params, setParams] = useSearchParams();
     const tab = params.get("tab") || "overview";
     return (
@@ -230,7 +231,7 @@ function Disks({ vm }: { vm: VM }) {
     const conflict =
         !!blocked.task || blocked.unavailable || vm.managed === false;
     const volumes = useResource<Volume[]>(
-        `/api/v1/nodes/${esc(vm.node)}/volumes`,
+        `/api/v1/clouds/${esc(vm.cloud)}/volumes?host=${esc(vm.node)}`,
     );
     const [add, setAdd] = useState(false);
     const [createDisk, setCreateDisk] = useState(false);
@@ -276,6 +277,7 @@ function Disks({ vm }: { vm: VM }) {
                         value: (d) => d.volume?.name || d.alias || d.volume_id,
                         render: (d) => (
                             <DiskLabel
+                                cloud={vm.cloud}
                                 node={vm.node}
                                 id={d.volume_id}
                                 known={d.volume}
@@ -324,7 +326,7 @@ function Disks({ vm }: { vm: VM }) {
                     onClose={() => setRemove(undefined)}
                     run={async () => {
                         await request(
-                            `${vmPath(vm.node, vm.id)}/disks/${esc(remove)}`,
+                            `${vmPath(vm.node, vm.id, vm.cloud)}/disks/${esc(remove)}`,
                             "DELETE",
                         );
                         await queries.invalidateQueries();
@@ -338,6 +340,7 @@ function Disks({ vm }: { vm: VM }) {
     );
 }
 function DiskLabel({
+    cloud,
     node,
     id,
     known,
@@ -345,8 +348,9 @@ function DiskLabel({
     node: string;
     id: string;
     known?: Volume;
+    cloud: string;
 }) {
-    const q = useResource<Volume>(volumePath(node, id), !known, false);
+    const q = useResource<Volume>(volumePath(node, id, cloud), !known, false);
     return (
         <>
             {known?.name ||
@@ -357,7 +361,7 @@ function DiskLabel({
 }
 function CreateDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
     const catalog = useResource<HostCatalog>(
-        `/api/v1/nodes/${esc(vm.node)}/catalog`,
+        `/api/v1/hosts/${esc(vm.node)}/catalog`,
     );
     const [name, setName] = useState("");
     const [storage, setStorage] = useState("");
@@ -438,7 +442,7 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
         id: vm.id,
     });
     const q = useResource<Volume[]>(
-        `/api/v1/nodes/${esc(vm.node)}/volumes?usage=attachable`,
+        `/api/v1/clouds/${esc(vm.cloud)}/volumes?host=${esc(vm.node)}&usage=attachable`,
         true,
         false,
     );
@@ -453,12 +457,16 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
             action="Attach disk"
             onClose={onClose}
             run={() =>
-                request(`${vmPath(vm.node, vm.id)}/disks`, "POST", {
-                    volume_id: id,
-                    alias,
-                    device,
-                    bus,
-                })
+                request(
+                    `${vmPath(vm.node, vm.id, vm.cloud)}/disks/attach`,
+                    "POST",
+                    {
+                        volume_id: id,
+                        alias,
+                        device,
+                        bus,
+                    },
+                )
             }
         >
             {(error) => (
@@ -590,7 +598,7 @@ function Interfaces({ vm }: { vm: VM }) {
                     onClose={() => setRemove(undefined)}
                     run={async () => {
                         await request(
-                            `${vmPath(vm.node, vm.id)}/interfaces/${esc(remove)}`,
+                            `${vmPath(vm.node, vm.id, vm.cloud)}/interfaces/${esc(remove)}`,
                             "DELETE",
                         );
                         await queries.invalidateQueries();
@@ -610,7 +618,7 @@ function AttachInterface({ vm, onClose }: { vm: VM; onClose: () => void }) {
         id: vm.id,
     });
     const choices = useResource<HostCatalog>(
-        `/api/v1/nodes/${esc(vm.node)}/catalog`,
+        `/api/v1/hosts/${esc(vm.node)}/catalog`,
     );
     const [network, setNetwork] = useState("");
     useEffect(() => {
@@ -632,9 +640,13 @@ function AttachInterface({ vm, onClose }: { vm: VM; onClose: () => void }) {
             }
             onClose={onClose}
             run={() =>
-                request(`${vmPath(vm.node, vm.id)}/interfaces`, "POST", {
-                    network,
-                })
+                request(
+                    `${vmPath(vm.node, vm.id, vm.cloud)}/interfaces`,
+                    "POST",
+                    {
+                        network,
+                    },
+                )
             }
         >
             {(error) => (

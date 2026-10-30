@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("../api/hooks", async (original) => ({
     ...(await original<typeof import("../api/hooks")>()),
+    useMachine: () => ({ data: state.vm, isError: false, isPending: false }),
     useResource: (path: string) => ({
         data:
             path === "/api/v1/clouds"

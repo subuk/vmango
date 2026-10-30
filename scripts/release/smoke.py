@@ -62,7 +62,7 @@ def smoke(archive):
                 credentials = json.dumps({"username": "admin", "password": "admin"}).encode()
                 request = urllib.request.Request(base + "/api/v1/auth/login", credentials, {"Content-Type": "application/json"})
                 token = json.load(client.open(request, timeout=10))["access_token"]
-                request = urllib.request.Request(base + "/api/v1/nodes/local", headers={"Authorization": "Bearer " + token})
+                request = urllib.request.Request(base + "/api/v1/hosts/local", headers={"Authorization": "Bearer " + token})
                 node = json.load(client.open(request, timeout=10))
                 if node["id"] != "local":
                     raise RuntimeError("Libvirt test node was not returned")

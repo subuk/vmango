@@ -19,6 +19,7 @@ import { APIError, request, type TaskReference } from "../api/client";
 import {
     esc,
     useResource,
+    useMachine,
     vmPath,
     type Key,
     type VM,
@@ -699,7 +700,7 @@ export function CreateMachine() {
 
 export function EditMachine() {
     const { node = "", id = "" } = useParams();
-    const machine = useResource<VM>(vmPath(node, id));
+    const machine = useMachine(node, id);
     return (
         <QueryState query={machine}>
             {(vm) => <EditForm key={`${node}/${id}`} vm={vm} />}

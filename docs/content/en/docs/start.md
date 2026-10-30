@@ -129,7 +129,9 @@ with the bundled client:
 .\virsh.exe -c 'qemu+tls://hypervisor.example.com/system' list --all
 ```
 
-Edit the archive's minimal configuration:
+Edit the archive's `vmango.quickstart.conf` and save it as `vmango.conf`. Keep
+its shipped `image` and `cloud` blocks. The excerpt below shows only connection
+and login settings; it is not a complete cloud configuration:
 
 ```hcl
 key_file = "./authorized_keys"
@@ -178,8 +180,11 @@ host over SSH. Use the connection types supported by your server platform;
 Windows requires remote hosts with authenticated TLS, as described above.
 Verify each URI and its storage pool as the user running Vmango. Pool names
 refer to pools on each respective host; they do not create shared storage.
-Restart Vmango after changing the configuration, then select the target node
-when creating a VM.
+Add a corresponding `host` binding inside the configured cloud for each
+connection, assigning its AZ, logical networks and storage classes. Multiple hosts
+can share one AZ. Restart Vmango after changing the configuration. The scheduler
+selects the host when creating a VM; the user does not select a node. See
+[configured clouds and scheduling](/docs/clouds/) for a complete example.
 
 ## Set a password and start
 
@@ -213,10 +218,12 @@ On Windows:
 ```
 
 Open [http://localhost:8080/](http://localhost:8080/) and log in as `admin` with
-the password you just entered. The node should appear after login. Stop the
+the password you just entered. The configured cloud should appear after login;
+read-only host diagnostics are available under Hosts. Stop the
 foreground server with Ctrl+C.
 
-To create a VM, follow the [cloud images and provisioning guide](/docs/images/)
+To create a VM, first check the [cloud catalog and host bindings](/docs/clouds/),
+then follow the [cloud images and provisioning guide](/docs/images/)
 to configure lazy downloadable images or register a manually prepared source **on the hypervisor** and
 register it in `vmango.conf`. Configure networking on the hypervisor first.
 The binary archive does not configure KVM, pools, networks or guest images for you.
@@ -228,11 +235,11 @@ SSH console forwarding also needs `ssh` locally and `socat` or `nc` on the
 hypervisor. TLS-connected consoles require network reachability to the host's
 VNC port; a successful libvirt TLS connection alone does not tunnel VNC.
 
-## Troubleshooting zero nodes
+## Troubleshooting empty clouds or hosts
 
 - Check the startup log for the configuration filename. Use `-c` explicitly
   if the current directory differs from the extracted archive.
-- Define at least one `libvirt "name"` block. Nodes are configured explicitly,
+- Define at least one `libvirt "name"` block. Hosts are configured explicitly,
   not discovered automatically.
 - Read `cannot get node` / `cannot open libvirt connection` messages. A failed
   connection is omitted from the node list.
@@ -240,6 +247,8 @@ VNC port; a successful libvirt TLS connection alone does not tunnel VNC.
   environment. Fix socket permissions, SSH keys, host-key trust or TLS
   certificates there first. A remote account may need membership in the host's
   libvirt group and a new login session.
+- Define a `cloud` catalog and assign each connection to a cloud/AZ with a
+  `host` binding. A connection alone provides diagnostics, not a user-facing cloud.
 - Verify the pool exists and is active on that connection. An empty VM list
   is normal on a new host and does not mean that no nodes are configured.
 

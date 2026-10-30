@@ -8,6 +8,9 @@ Vmango starts machines from pre-installed cloud images. There is no need to boot
 an installer or mount an installation CD for each VM: cloud-init handles the
 initial configuration on first boot.
 
+Image entries are exposed to users through a configured cloud. Define the
+[cloud catalog and host bindings](/docs/clouds/) before creating machines.
+
 ## Shared downloadable catalog
 
 `vmango.dist.conf` ships twelve pinned QCOW2 definitions: Ubuntu 24.04 LTS,

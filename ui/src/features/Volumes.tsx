@@ -171,7 +171,10 @@ function VolumeActions({ volume: v }: { volume: Volume }) {
                     action="Delete volume"
                     onClose={() => setMode(undefined)}
                     run={async () => {
-                        await request(volumePath(v.node, v.id), "DELETE");
+                        await request(
+                            volumePath(v.node, v.id, v.cloud),
+                            "DELETE",
+                        );
                         await queries.invalidateQueries();
                     }}
                 >
@@ -203,7 +206,7 @@ export function VolumeDialog({
 }) {
     const clouds = useResource<Cloud[]>("/api/v1/clouds");
     const host = useResource<HostCatalog>(
-        `/api/v1/nodes/${esc(volume?.node || nodeContext)}/catalog`,
+        `/api/v1/hosts/${esc(volume?.node || nodeContext)}/catalog`,
         !!(volume?.node || nodeContext),
     );
     const [cloudID, setCloud] = useState(volume?.cloud || "");
@@ -260,13 +263,13 @@ export function VolumeDialog({
             run={() =>
                 mode === "resize"
                     ? request(
-                          `${volumePath(volume!.node, volume!.id)}/resize`,
+                          `${volumePath(volume!.node, volume!.id, volume!.cloud)}/resize`,
                           "POST",
                           { size_bytes: Math.round(Number(size) * 2 ** 30) },
                       )
                     : request(
                           mode === "clone"
-                              ? `${volumePath(volume!.node, volume!.id)}/clone`
+                              ? `${volumePath(volume!.node, volume!.id, volume!.cloud)}/clone`
                               : `/api/v1/clouds/${esc(cloud!.id)}/volumes`,
                           "POST",
                           {

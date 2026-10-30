@@ -8,36 +8,30 @@ import (
 )
 
 type apiVolumeInput struct {
+	Cloud  string `path:"cloud"`
 	Node   string `path:"node"`
 	Volume string `path:"volume"`
 }
 type apiVolumeDeleteInput struct {
+	Cloud string `path:"cloud"`
 	SubmissionInput
 	Node   string `path:"node"`
 	Volume string `path:"volume"`
-}
-type apiVolumeListInput struct {
-	Node  string `path:"node"`
-	Pool  string `query:"pool"`
-	Usage string `query:"usage" enum:"attachable"`
 }
 type apiVolumeCreate struct {
 	Name         string `json:"name" pattern:"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"`
 	StorageClass string `json:"storage_class" minLength:"1"`
 	SizeBytes    uint64 `json:"size_bytes" minimum:"1"`
 }
-type apiVolumeCreateInput struct {
-	SubmissionInput
-	Node string `path:"node"`
-	Body apiVolumeCreate
-}
 type apiVolumeCloneInput struct {
+	Cloud string `path:"cloud"`
 	SubmissionInput
 	Node   string `path:"node"`
 	Volume string `path:"volume"`
 	Body   apiVolumeCreate
 }
 type apiVolumeResizeInput struct {
+	Cloud string `path:"cloud"`
 	SubmissionInput
 	Node   string `path:"node"`
 	Volume string `path:"volume"`
@@ -47,34 +41,8 @@ type apiVolumeResizeInput struct {
 }
 
 func (e *Environ) registerVolumeOperations(api huma.API) {
-	const path = "/nodes/{node}/volumes"
-	registerAPI(api, "GET", path, "list-volumes", "List visible volumes", func(ctx context.Context, in *apiVolumeListInput) (*apiResult[[]apiVolume], error) {
-		if _, err := e.nodes.Get(in.Node, compute.NodeGetOptions{NoPins: true}); err != nil {
-			return nil, apiError(err)
-		}
-		opts := compute.VolumeListOptions{NodeIds: []string{in.Node}}
-		if in.Pool != "" {
-			opts.PoolNames = []string{in.Pool}
-		}
-		var vs []*compute.Volume
-		var err error
-		if in.Usage == "attachable" {
-			vs, err = e.volumes.Attachable(opts, e.images)
-		} else {
-			vs, err = e.volumes.List(opts)
-		}
-		if err != nil {
-			return nil, apiError(err)
-		}
-		out := []apiVolume{}
-		for _, v := range vs {
-			if !v.Metadata.Hidden {
-				out = append(out, e.volumeDTO(v))
-			}
-		}
-		return &apiResult[[]apiVolume]{Body: out}, nil
-	})
-	registerAPI(api, "GET", path+"/{volume}", "get-volume", "Get volume", func(ctx context.Context, in *apiVolumeInput) (*apiResult[apiVolume], error) {
+	const path = "/clouds/{cloud}/volumes/{node}/{volume}"
+	registerAPI(api, "GET", path, "get-volume", "Get volume", func(ctx context.Context, in *apiVolumeInput) (*apiResult[apiVolume], error) {
 		p, err := volumePath(in.Volume)
 		if err != nil {
 			return nil, apiError(err)
@@ -85,33 +53,28 @@ func (e *Environ) registerVolumeOperations(api huma.API) {
 		}
 		return &apiResult[apiVolume]{Body: e.volumeDTO(v)}, nil
 	})
-	registerAPI(api, "POST", path, "create-volume", "Queue volume creation", func(ctx context.Context, in *apiVolumeCreateInput) (*apiAccepted, error) {
-		b := in.Body
-		p := compute.VolumeCreateParams{NodeId: in.Node, Name: b.Name, Size: compute.NewSize(b.SizeBytes, compute.SizeUnitB)}
-		return e.submitTask(ctx, in.IdempotencyKey, "volume.create", compute.InfrastructureCommand{Node: in.Node, StorageClass: b.StorageClass, CreateVolume: &p})
-	})
-	registerAPI(api, "POST", path+"/{volume}/clone", "clone-volume", "Queue volume cloning", func(ctx context.Context, in *apiVolumeCloneInput) (*apiAccepted, error) {
+	registerAPI(api, "POST", path+"/clone", "clone-volume", "Queue volume cloning", func(ctx context.Context, in *apiVolumeCloneInput) (*apiAccepted, error) {
 		path, err := volumePath(in.Volume)
 		if err != nil {
 			return nil, apiError(err)
 		}
 		b := in.Body
 		p := compute.VolumeCloneParams{NodeId: in.Node, OriginalPath: path, NewName: b.Name, NewSize: compute.NewSize(b.SizeBytes, compute.SizeUnitB)}
-		return e.submitTask(ctx, in.IdempotencyKey, "volume.clone", compute.InfrastructureCommand{Node: in.Node, StorageClass: b.StorageClass, Path: path, CloneVolume: &p})
+		return e.submitTask(ctx, in.IdempotencyKey, "volume.clone", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, StorageClass: b.StorageClass, Path: path, CloneVolume: &p})
 	})
-	registerAPI(api, "POST", path+"/{volume}/resize", "resize-volume", "Queue volume growth", func(ctx context.Context, in *apiVolumeResizeInput) (*apiAccepted, error) {
+	registerAPI(api, "POST", path+"/resize", "resize-volume", "Queue volume growth", func(ctx context.Context, in *apiVolumeResizeInput) (*apiAccepted, error) {
 		path, err := volumePath(in.Volume)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		return e.submitTask(ctx, in.IdempotencyKey, "volume.resize", compute.InfrastructureCommand{Node: in.Node, Path: path, Size: compute.NewSize(in.Body.SizeBytes, compute.SizeUnitB)})
+		return e.submitTask(ctx, in.IdempotencyKey, "volume.resize", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, Path: path, Size: compute.NewSize(in.Body.SizeBytes, compute.SizeUnitB)})
 	})
-	registerAPI(api, "DELETE", path+"/{volume}", "delete-volume", "Queue deletion of an unattached volume", func(ctx context.Context, in *apiVolumeDeleteInput) (*apiAccepted, error) {
+	registerAPI(api, "DELETE", path, "delete-volume", "Queue deletion of an unattached volume", func(ctx context.Context, in *apiVolumeDeleteInput) (*apiAccepted, error) {
 		path, err := volumePath(in.Volume)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		return e.submitTask(ctx, in.IdempotencyKey, "volume.delete", compute.InfrastructureCommand{Node: in.Node, Path: path})
+		return e.submitTask(ctx, in.IdempotencyKey, "volume.delete", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, Path: path})
 	})
 }
 

@@ -8,7 +8,7 @@ import (
 )
 
 type apiDisk struct {
-	VolumeID string `json:"volume_id" minLength:"1" doc:"Opaque node-scoped volume identifier returned by discovery."`
+	VolumeID string `json:"volume_id" minLength:"1" doc:"Opaque host-local volume identifier returned by cloud discovery."`
 	Alias    string `json:"alias,omitempty"`
 	Device   string `json:"device,omitempty" enum:"disk,cdrom" default:"disk"`
 	Bus      string `json:"bus,omitempty" enum:"virtio,scsi,ide" default:"virtio"`

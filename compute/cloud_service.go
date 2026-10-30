@@ -179,6 +179,19 @@ func (s *CloudService) ForNode(node string) (Cloud, CloudHost, error) {
 	}
 	return Cloud{}, CloudHost{}, fmt.Errorf("%w: host is not assigned to a cloud", ErrInvalid)
 }
+
+// ForHost resolves an observed host only within the requested cloud.
+func (s *CloudService) ForHost(cloudID, node string) (Cloud, CloudHost, error) {
+	c, err := s.Get(cloudID)
+	if err != nil {
+		return Cloud{}, CloudHost{}, err
+	}
+	h, ok := c.Host(node)
+	if !ok {
+		return Cloud{}, CloudHost{}, ErrNotFound
+	}
+	return c, h, nil
+}
 func (s *CloudService) Inventory(c Cloud) ([]HostInventory, error) {
 	result := []HostInventory{}
 	for _, host := range c.Hosts {

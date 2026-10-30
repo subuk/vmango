@@ -383,7 +383,7 @@ cloud "acceptance" {
 			t.Fatal(err)
 		}
 		req.Header.Set("Content-Type", "application/json")
-		if method != "GET" && (strings.Contains(path, "/nodes/") || strings.Contains(path, "/clouds/")) && !strings.Contains(path, "/consoles/") {
+		if method != "GET" && strings.Contains(path, "/clouds/") && !strings.Contains(path, "/consoles/") {
 			req.Header.Set("Idempotency-Key", uuid.NewString())
 		}
 		if access != "" {
@@ -428,7 +428,7 @@ cloud "acceptance" {
 				if strings.HasPrefix(task.Kind, "volume.") && (task.Kind == "volume.create" || task.Kind == "volume.clone") {
 					for _, effect := range task.Effects {
 						if effect.Action == "created" && effect.Resource.Kind == "volume" {
-							return apiRequest("GET", "/api/v1/nodes/acceptance/volumes/"+base64.RawURLEncoding.EncodeToString([]byte(effect.Resource.ID)), nil, 200)
+							return apiRequest("GET", "/api/v1/clouds/acceptance/volumes/acceptance/"+base64.RawURLEncoding.EncodeToString([]byte(effect.Resource.ID)), nil, 200)
 						}
 					}
 					t.Fatal("created volume missing from task effects")
@@ -447,7 +447,7 @@ cloud "acceptance" {
 		t.Fatal(err)
 	}
 	access = credentials.AccessToken
-	for _, resource := range []string{"clouds", "clouds/acceptance", "clouds/acceptance/machines", "nodes", "nodes/acceptance", "nodes/acceptance/images", "nodes/acceptance/pools", "nodes/acceptance/networks", "nodes/acceptance/capabilities", "keys", "vms", "volumes", "networks"} {
+	for _, resource := range []string{"clouds", "clouds/acceptance", "clouds/acceptance/machines", "hosts", "hosts/acceptance", "hosts/acceptance/images", "hosts/acceptance/pools", "hosts/acceptance/networks", "hosts/acceptance/capabilities", "keys", "clouds/acceptance/volumes"} {
 		apiRequest("GET", "/api/v1/"+resource, nil, 200)
 	}
 	if imageURL != "" {
@@ -458,7 +458,7 @@ cloud "acceptance" {
 			ID    string `json:"id"`
 			State string `json:"state"`
 		}
-		json.Unmarshal(apiRequest("GET", "/api/v1/nodes/acceptance/images", nil, 200), &catalog)
+		json.Unmarshal(apiRequest("GET", "/api/v1/hosts/acceptance/images", nil, 200), &catalog)
 		if len(catalog) != 2 || catalog[0].State != "downloadable" {
 			t.Fatalf("missing managed image unavailable: %+v", catalog)
 		}
@@ -536,18 +536,18 @@ cloud "acceptance" {
 	var observed struct {
 		Managed bool `json:"managed"`
 	}
-	json.Unmarshal(apiRequest("GET", "/api/v1/nodes/acceptance/vms/"+name, nil, 200), &observed)
+	json.Unmarshal(apiRequest("GET", "/api/v1/clouds/acceptance/machines/acceptance/"+name, nil, 200), &observed)
 	if observed.Managed {
 		t.Fatal("unmanaged machine was inferred from its name")
 	}
-	apiRequest("POST", "/api/v1/nodes/acceptance/vms/"+name+"/actions", map[string]string{"action": "start"}, 409)
+	apiRequest("POST", "/api/v1/clouds/acceptance/machines/acceptance/"+name+"/actions", map[string]string{"action": "start"}, 409)
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines/acceptance/"+name+"/adopt", map[string]any{})
 	if !strings.Contains(mustVir("dumpxml", name), "3145728") {
 		t.Fatal("adoption changed resource configuration")
 	}
-	apiCommand("DELETE", "/api/v1/nodes/acceptance/vms/"+name+"?delete_volumes=true", nil)
+	apiCommand("DELETE", "/api/v1/clouds/acceptance/machines/acceptance/"+name+"?delete_volumes=true", nil)
 	domainUUID = ""
-	apiVMPath := "/api/v1/nodes/acceptance/vms/" + name
+	apiVMPath := "/api/v1/clouds/acceptance/machines/acceptance/" + name
 	createBody := map[string]any{"id": name, "image": "boot", "instance_type": "small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false, "user_data": userdata}
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines", createBody)
 	// A duplicate name fails during the asynchronous fresh inventory stage.
@@ -682,7 +682,7 @@ cloud "acceptance" {
 		t.Fatalf("expected shut off, got %s", state)
 	}
 	// Exercise the remaining mutating routes only against this isolated VM/pool.
-	volumeBase := "/api/v1/nodes/acceptance/volumes"
+	volumeBase := "/api/v1/clouds/acceptance/volumes/acceptance"
 	var disk struct {
 		ID string `json:"id"`
 	}
@@ -699,7 +699,7 @@ cloud "acceptance" {
 	if err := json.Unmarshal(rawClone, &clone); err != nil {
 		t.Fatal(err)
 	}
-	apiCommand("POST", apiVMPath+"/disks", map[string]any{"volume_id": disk.ID})
+	apiCommand("POST", apiVMPath+"/disks/attach", map[string]any{"volume_id": disk.ID})
 	apiRequest("DELETE", volumeBase+"/"+disk.ID, nil, 409)
 	apiCommand("DELETE", apiVMPath+"/disks/"+disk.ID, nil)
 	apiCommand("DELETE", volumeBase+"/"+disk.ID, nil)

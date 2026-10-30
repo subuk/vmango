@@ -20,6 +20,8 @@ and manage machines from your browser.
   hypervisors to one Vmango instance.
 - [Package installation](/docs/packages/): install release packages on Ubuntu,
   Debian or RHEL.
+- [Configured clouds and scheduling](/docs/clouds/): define instance types, AZs,
+  logical networks, storage classes and automatic placement.
 - [Cloud images and provisioning](/docs/images/): choose an OS image, register
   it in Vmango and create your first machine.
 - [Build from source](/docs/build/): build and run Vmango for development.

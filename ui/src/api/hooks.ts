@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, APIError, request } from "./client";
+import { request } from "./client";
 import type { components } from "./schema";
 
 export type VM = components["schemas"]["ApiVM"];
@@ -15,10 +15,10 @@ export type PatchVM = components["schemas"]["ApiPatchVM"];
 export type Disk = components["schemas"]["ApiDisk"];
 export type Interface = components["schemas"]["ApiInterface"];
 export const esc = encodeURIComponent;
-export const vmPath = (node: string, id: string) =>
-    `/api/v1/nodes/${esc(node)}/vms/${esc(id)}`;
-export const volumePath = (node: string, id: string) =>
-    `/api/v1/nodes/${esc(node)}/volumes/${esc(id)}`;
+export const vmPath = (node: string, id: string, cloud: string) =>
+    `/api/v1/clouds/${esc(cloud)}/machines/${esc(node)}/${esc(id)}`;
+export const volumePath = (node: string, id: string, cloud: string) =>
+    `/api/v1/clouds/${esc(cloud)}/volumes/${esc(node)}/${esc(id)}`;
 export const machineURL = (node: string, id: string) =>
     `/machines/${esc(node)}/${esc(id)}/`;
 export function useResource<T>(path: string, enabled = true, poll = true) {
@@ -29,47 +29,65 @@ export function useResource<T>(path: string, enabled = true, poll = true) {
         refetchInterval: poll ? 15000 : false,
     });
 }
-async function unwrap<T>(result: {
-    data?: T;
-    error?: unknown;
-    response: Response;
-}): Promise<T> {
-    if (result.error || !result.response.ok)
-        throw new APIError(result.response.status, result.error as object);
-    return result.data as T;
-}
 export function useNodes(enabled = true) {
-    return useQuery({
-        queryKey: ["/api/v1/nodes"],
+    return useResource<Node[]>("/api/v1/hosts", enabled);
+}
+export function useMachine(
+    node: string,
+    id: string,
+    enabled = true,
+    poll = true,
+) {
+    return useQuery<VM>({
+        queryKey: ["machine", node, id],
         enabled,
-        queryFn: async () => unwrap(await api.GET("/api/v1/nodes")),
+        queryFn: async () => {
+            const host = await request<{ cloud: string }>(
+                `/api/v1/hosts/${esc(node)}/catalog`,
+            );
+            return request<VM>(vmPath(node, id, host.cloud));
+        },
+        refetchInterval: poll ? 15000 : false,
     });
 }
 export function useMachines(cloud?: string) {
-    return useQuery({
-        queryKey: [
-            cloud ? `/api/v1/clouds/${esc(cloud)}/machines` : "/api/v1/vms",
-        ],
-        queryFn: async () =>
-            unwrap(
-                cloud
-                    ? await api.GET("/api/v1/clouds/{cloud}/machines", {
-                          params: { path: { cloud } },
-                      })
-                    : await api.GET("/api/v1/vms"),
-            ),
-    });
+    return useResource<VM[]>(
+        `/api/v1/clouds/${esc(cloud || "")}/machines`,
+        !!cloud,
+    );
 }
 export function useVolumes() {
     return useQuery({
-        queryKey: ["/api/v1/volumes"],
-        queryFn: async () => unwrap(await api.GET("/api/v1/volumes")),
+        queryKey: ["cloud-volumes"],
+        queryFn: async () => {
+            const clouds = await request<{ id: string }[]>("/api/v1/clouds");
+            return (
+                await Promise.all(
+                    clouds.map((c) =>
+                        request<Volume[]>(
+                            `/api/v1/clouds/${esc(c.id)}/volumes`,
+                        ),
+                    ),
+                )
+            ).flat();
+        },
     });
 }
 export function useNetworks() {
     return useQuery({
-        queryKey: ["/api/v1/networks"],
-        queryFn: async () => unwrap(await api.GET("/api/v1/networks")),
+        queryKey: ["host-networks"],
+        queryFn: async () => {
+            const hosts = await request<Node[]>("/api/v1/hosts");
+            return (
+                await Promise.all(
+                    hosts.map((h) =>
+                        request<Network[]>(
+                            `/api/v1/hosts/${esc(h.id)}/networks`,
+                        ),
+                    ),
+                )
+            ).flat();
+        },
     });
 }
 export function useOperation<T>(execute: (input: T) => Promise<unknown>) {

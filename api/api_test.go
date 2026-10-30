@@ -45,7 +45,7 @@ func apiRequest(h http.Handler, method, path, body string, auth bool) *httptest.
 	if body != "" {
 		r.Header.Set("Content-Type", "application/json")
 	}
-	if method != "GET" && strings.Contains(path, "/nodes/") {
+	if method != "GET" && strings.Contains(path, "/clouds/") {
 		r.Header.Set("Idempotency-Key", uuid.NewString())
 	}
 	if auth {
@@ -58,7 +58,7 @@ func apiRequest(h http.Handler, method, path, body string, auth bool) *httptest.
 func TestAPIAuthenticationAndOrigins(t *testing.T) {
 	cfg := apiTestConfig(t)
 	h := newTestAPI(t, cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil)
-	for _, path := range []string{"/api/openapi.json", "/api/v1/nodes", "/api/v1/nodes/n/vms/v/consoles/serial/ws"} {
+	for _, path := range []string{"/api/openapi.json", "/api/v1/hosts", "/api/v1/clouds/local/machines/n/v/consoles/serial/ws"} {
 		w := apiRequest(h, "GET", path, "", false)
 		if w.Code != 401 || !strings.HasPrefix(w.Header().Get("WWW-Authenticate"), "Bearer") || w.Header().Get("Location") != "" {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
@@ -134,7 +134,13 @@ func TestAPISpecificationContract(t *testing.T) {
 	}
 	ids := map[string]bool{}
 	for path, ops := range spec.Paths {
+		if strings.HasPrefix(path, "/api/v1/nodes") || path == "/api/v1/vms" || path == "/api/v1/volumes" || path == "/api/v1/networks" {
+			t.Fatalf("retired infrastructure route in OpenAPI: %s", path)
+		}
 		for method, op := range ops {
+			if strings.HasPrefix(path, "/api/v1/hosts") && method != "get" {
+				t.Fatalf("host diagnostics must be read-only: %s %s", method, path)
+			}
 			if op.OperationID == "" || ids[op.OperationID] {
 				t.Fatalf("duplicate/missing operation id %s", path)
 			}
@@ -143,13 +149,13 @@ func TestAPISpecificationContract(t *testing.T) {
 				t.Fatal("missing responses")
 			}
 			if !strings.HasPrefix(path, "/api/v1/auth/") {
-				if r := apiRequest(h, strings.ToUpper(method), strings.NewReplacer("{node}", "n", "{vm}", "v", "{volume}", "dm9s", "{kind}", "serial", "{mac}", "aa", "{fingerprint}", "ff").Replace(path), "", false); r.Code != 401 {
+				if r := apiRequest(h, strings.ToUpper(method), strings.NewReplacer("{cloud}", "local", "{node}", "n", "{vm}", "v", "{volume}", "dm9s", "{kind}", "serial", "{mac}", "aa", "{fingerprint}", "ff").Replace(path), "", false); r.Code != 401 {
 					t.Fatalf("unguarded %s %s: %d", method, path, r.Code)
 				}
 			}
 		}
 	}
-	for _, id := range []string{"create-cloud-machine", "list-clouds", "get-cloud", "list-cloud-machines", "change-instance-type", "adopt-machine", "create-machine-disk", "update-vm", "get-vm", "list-vms", "delete-vm", "vm-action", "attach-disk", "detach-disk", "attach-interface", "detach-interface", "create-volume", "clone-volume", "resize-volume", "delete-volume", "get-volume", "list-volumes", "list-keys", "get-key", "add-key", "delete-key", "list-nodes", "get-node", "list-networks", "list-pools", "list-images", "get-capabilities", "create-console-link", "connect-console"} {
+	for _, id := range []string{"create-cloud-machine", "list-clouds", "get-cloud", "list-cloud-machines", "change-instance-type", "adopt-machine", "create-machine-disk", "update-vm", "get-vm", "delete-vm", "vm-action", "attach-disk", "detach-disk", "attach-interface", "detach-interface", "clone-volume", "resize-volume", "delete-volume", "get-volume", "list-keys", "get-key", "add-key", "delete-key", "list-hosts", "get-host", "list-networks", "list-pools", "list-images", "get-capabilities", "create-console-link", "connect-console"} {
 		if !ids[id] {
 			t.Errorf("missing operation %s", id)
 		}
@@ -219,7 +225,7 @@ func TestAPIPatchAndErrors(t *testing.T) {
 	cfg := apiTestConfig(t)
 	repo := &apiVMRepo{vm: compute.VirtualMachine{VCpus: 4, Memory: compute.NewSize(2, compute.SizeUnitG), GuestAgent: true, Autostart: true, Hugepages: true, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc}, VideoModel: compute.VideoModelNone}}
 	h := newTestAPI(t, cfg, zerolog.Nop(), nil, nil, nil, nil, nil, compute.NewVirtualMachineService(repo), nil, nil)
-	w := apiRequest(h, "PATCH", "/api/v1/nodes/n/vms/v", `{"autostart":false}`, true)
+	w := apiRequest(h, "PATCH", "/api/v1/clouds/local/machines/n/v", `{"autostart":false}`, true)
 	if w.Code != 202 {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
@@ -228,7 +234,7 @@ func TestAPIPatchAndErrors(t *testing.T) {
 		t.Fatalf("omitted fields changed: %+v", repo.vm)
 	}
 	for _, body := range []string{`{"vcpus":0}`, `{"graphics":"bad"}`, `{"memory_bytes":-1}`, `{"unexpected":true}`, `broken`} {
-		w := apiRequest(h, "PATCH", "/api/v1/nodes/n/vms/v", body, true)
+		w := apiRequest(h, "PATCH", "/api/v1/clouds/local/machines/n/v", body, true)
 		if w.Code != 422 && w.Code != 400 {
 			t.Fatalf("invalid %s: %d", body, w.Code)
 		}
@@ -241,7 +247,7 @@ func TestAPIPatchAndErrors(t *testing.T) {
 		status int
 	}{{compute.ErrNotFound, 404}, {compute.ErrConflict, 409}, {compute.ErrUnavailable, 503}, {fmt.Errorf("secret backend data"), 500}} {
 		repo.getErr = tt.err
-		w := apiRequest(h, "GET", "/api/v1/nodes/n/vms/v", "", true)
+		w := apiRequest(h, "GET", "/api/v1/clouds/local/machines/n/v", "", true)
 		if w.Code != tt.status || !strings.Contains(w.Header().Get("Content-Type"), "problem+json") || strings.Contains(w.Body.String(), "secret backend") {
 			t.Fatalf("%d %s", w.Code, w.Body)
 		}
@@ -346,7 +352,7 @@ func TestConsoleStreamsAndExpiry(t *testing.T) {
 	}
 	peersMu.Unlock()
 	// A signed console token is not a resource credential and does not authorize REST.
-	r, _ := http.NewRequest("GET", srv.URL+"/api/v1/nodes", nil)
+	r, _ := http.NewRequest("GET", srv.URL+"/api/v1/hosts", nil)
 	r.Header.Set("Authorization", "Bearer "+token)
 	res, err := http.DefaultClient.Do(r)
 	if err != nil {
@@ -468,6 +474,12 @@ func testAuthService(t *testing.T, cfg *config.Config) *auth.Service {
 }
 func newTestAPI(t *testing.T, cfg *config.Config, logger zerolog.Logger, networks *compute.NetworkService, keys *compute.KeyService, pools *compute.VolumePoolService, nodes *compute.NodeService, volumes *compute.VolumeService, vms *compute.VirtualMachineService, manager *compute.VirtualMachineManager, images *compute.ImageService) http.Handler {
 	t.Helper()
+	if manager == nil {
+		manager = &compute.VirtualMachineManager{}
+	}
+	if manager.Clouds == nil {
+		manager.Clouds = &compute.CloudService{Definitions: []compute.Cloud{{ID: "local", Hosts: []compute.CloudHost{{Node: "n"}, {Node: "local"}, {Node: "a"}, {Node: "b"}}}}}
+	}
 	h, err := New(cfg, logger, networks, keys, pools, nodes, volumes, vms, manager, images, testAuthService(t, cfg), newTestTaskService(t, &compute.CommandHandler{Manager: manager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys}))
 	if err != nil {
 		t.Fatal(err)
