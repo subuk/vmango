@@ -37,6 +37,7 @@ import {
 } from "../components/common";
 import { OperationDialog, fieldError } from "../components/OperationDialog";
 import { ResourceTable } from "../components/ResourceTable";
+import { DetailSection, Summary } from "../components/Information";
 import { MachineActions } from "./Lists";
 import type { HostCatalog } from "./MachineForm";
 
@@ -67,32 +68,39 @@ export function MachineDetail() {
                     <>
                         <PageTitle
                             title={vm.name}
+                            description={`Virtual machine in ${vm.cloud} · ${vm.zone || "No availability zone"}`}
                             action={<MachineActions vm={vm} full />}
                         />
-                        <Stack
-                            direction="row"
-                            spacing={3}
-                            sx={{ flexWrap: "wrap", mb: 3 }}
-                        >
-                            <Typography>Host: {vm.node}</Typography>
-                            <Typography>
-                                Cloud: {vm.cloud} · AZ: {vm.zone}
-                            </Typography>
-                            <Typography>
-                                Instance type:{" "}
-                                {vm.instance_type || "Unassigned"}
-                            </Typography>
-                            <State value={vm.state} />
-                            <Typography>
-                                {vm.vcpus} vCPU · {bytes(vm.memory_bytes)}
-                            </Typography>
-                            {vm.ip_addresses.map((ip) => (
-                                <Box key={ip}>
-                                    <span className="mono">{ip}</span>
-                                    <Copy label={`Copy IP ${ip}`} text={ip} />
-                                </Box>
-                            ))}
-                        </Stack>
+                        <Summary
+                            label="Machine summary"
+                            items={[
+                                {
+                                    label: "Status",
+                                    value: <State value={vm.state} />,
+                                    detail:
+                                        vm.managed === false
+                                            ? "Read-only · adoption required"
+                                            : "Managed machine",
+                                },
+                                {
+                                    label: "Compute",
+                                    value: `${vm.vcpus} vCPU`,
+                                    detail:
+                                        vm.instance_type ||
+                                        "Unassigned instance type",
+                                },
+                                {
+                                    label: "Memory",
+                                    value: bytes(vm.memory_bytes),
+                                    detail: "Configured guest memory",
+                                },
+                                {
+                                    label: "Connectivity",
+                                    value: `${vm.ip_addresses.length} IP${vm.ip_addresses.length === 1 ? "" : "s"}`,
+                                    detail: `${vm.interfaces.length} network interface${vm.interfaces.length === 1 ? "" : "s"}`,
+                                },
+                            ]}
+                        />
                         <Tabs
                             value={
                                 ["overview", "disks", "network"].includes(tab)
@@ -168,40 +176,118 @@ export function MachineDetail() {
 function Overview({ vm }: { vm: VM }) {
     return (
         <Stack spacing={3}>
-            <Box component="dl" className="details">
-                <dt>Architecture</dt>
-                <dd>{vm.arch}</dd>
-                <dt>Firmware</dt>
-                <dd>{vm.firmware || "Default"}</dd>
-                <dt>Disk controller</dt>
-                <dd>{vm.disk_controller || "Default"}</dd>
-                <dt>Autostart</dt>
-                <dd>{vm.autostart ? "Enabled" : "Disabled"}</dd>
-                <dt>Guest agent</dt>
-                <dd>{vm.guest_agent ? "Enabled" : "Disabled"}</dd>
-                <dt>Hugepages</dt>
-                <dd>{vm.hugepages ? "Enabled" : "Disabled"}</dd>
-                <dt>Graphics</dt>
-                <dd>{vm.graphics}</dd>
-                <dt>Graphics listen</dt>
-                <dd className="mono">{vm.graphics_listen || "Default"}</dd>
-                <dt>Video model</dt>
-                <dd>{vm.video_model}</dd>
-                <dt>Emulator CPUs</dt>
-                <dd>{vm.cpu_pinning?.emulator.join(", ") || "Not pinned"}</dd>
-                <dt>vCPU pinning</dt>
-                <dd>
-                    {vm.cpu_pinning?.vcpus.map((p) => (
-                        <div key={p.vcpu}>
-                            vCPU {p.vcpu}: host CPUs {p.host_cpus.join(", ")}
-                        </div>
-                    )) || "Not pinned"}
-                </dd>
+            <Box className="detail-grid">
+                <DetailSection
+                    title="Identity and placement"
+                    description="Where this machine runs and how it was provisioned."
+                >
+                    <Box component="dl" className="details">
+                        <dt>Machine ID</dt>
+                        <dd>
+                            <span className="mono">{vm.id}</span>
+                            <Copy label="Copy machine ID" text={vm.id} />
+                        </dd>
+                        <dt>Host</dt>
+                        <dd>
+                            <Link
+                                component={RouterLink}
+                                to={`/nodes/${esc(vm.node)}/`}
+                            >
+                                {vm.node}
+                            </Link>
+                        </dd>
+                        <dt>Cloud</dt>
+                        <dd>{vm.cloud}</dd>
+                        <dt>Availability zone</dt>
+                        <dd>{vm.zone || "Unassigned"}</dd>
+                        <dt>Instance type</dt>
+                        <dd>{vm.instance_type || "Unassigned"}</dd>
+                        <dt>Source image</dt>
+                        <dd>{vm.image || "Not recorded"}</dd>
+                    </Box>
+                </DetailSection>
+                <DetailSection
+                    title="Network access"
+                    description="Reported IP addresses and connection details."
+                >
+                    {vm.ip_addresses.length ? (
+                        <Stack spacing={1}>
+                            {vm.ip_addresses.map((ip) => (
+                                <Box className="address-row" key={ip}>
+                                    <span className="mono">{ip}</span>
+                                    <Copy label={`Copy IP ${ip}`} text={ip} />
+                                </Box>
+                            ))}
+                        </Stack>
+                    ) : (
+                        <Typography color="text.secondary">
+                            No IP addresses reported.
+                        </Typography>
+                    )}
+                    <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 2 }}
+                    >
+                        Open the Network tab for interfaces, MAC addresses and
+                        network assignments.
+                    </Typography>
+                </DetailSection>
+                <DetailSection
+                    title="Hardware and boot"
+                    description="Guest hardware, startup and memory options."
+                >
+                    <Box component="dl" className="details">
+                        <dt>Architecture</dt>
+                        <dd>{vm.arch}</dd>
+                        <dt>Firmware</dt>
+                        <dd>{vm.firmware || "Default"}</dd>
+                        <dt>Disk controller</dt>
+                        <dd>{vm.disk_controller || "Default"}</dd>
+                        <dt>Autostart</dt>
+                        <dd>{vm.autostart ? "Enabled" : "Disabled"}</dd>
+                        <dt>Guest agent</dt>
+                        <dd>{vm.guest_agent ? "Enabled" : "Disabled"}</dd>
+                        <dt>Hugepages</dt>
+                        <dd>{vm.hugepages ? "Enabled" : "Disabled"}</dd>
+                    </Box>
+                </DetailSection>
+                <DetailSection
+                    title="Console and CPU placement"
+                    description="Display configuration and host CPU affinity."
+                >
+                    <Box component="dl" className="details">
+                        <dt>Graphics</dt>
+                        <dd>{vm.graphics || "None"}</dd>
+                        <dt>Graphics listen</dt>
+                        <dd className="mono">
+                            {vm.graphics_listen || "Default"}
+                        </dd>
+                        <dt>Video model</dt>
+                        <dd>{vm.video_model || "Default"}</dd>
+                        <dt>Emulator CPUs</dt>
+                        <dd>
+                            {vm.cpu_pinning?.emulator.join(", ") ||
+                                "Not pinned"}
+                        </dd>
+                        <dt>vCPU pinning</dt>
+                        <dd>
+                            {vm.cpu_pinning?.vcpus.length
+                                ? vm.cpu_pinning.vcpus.map((p) => (
+                                      <div key={p.vcpu}>
+                                          vCPU {p.vcpu}: host CPUs{" "}
+                                          {p.host_cpus.join(", ")}
+                                      </div>
+                                  ))
+                                : "Not pinned"}
+                        </dd>
+                    </Box>
+                </DetailSection>
             </Box>
-            <Box>
-                <Typography variant="h2" sx={{ mb: 2 }}>
-                    Configured SSH keys
-                </Typography>
+            <DetailSection
+                title="Configured SSH keys"
+                description="Public keys configured during machine provisioning."
+            >
                 {vm.configured_keys === null ? (
                     <Typography color="text.secondary">
                         Key configuration is unavailable.
@@ -212,20 +298,32 @@ function Overview({ vm }: { vm: VM }) {
                     </Typography>
                 ) : (
                     vm.configured_keys.map((k) => (
-                        <Typography component="div" key={k.fingerprint}>
-                            <span className="mono">{k.fingerprint}</span>{" "}
-                            {k.comment}
+                        <Box className="key-row" key={k.fingerprint}>
+                            <Box sx={{ minWidth: 0 }}>
+                                <Typography sx={{ fontWeight: 600 }}>
+                                    {k.comment || "SSH key"}
+                                </Typography>
+                                <Typography
+                                    variant="body2"
+                                    className="mono"
+                                    sx={{ overflowWrap: "anywhere" }}
+                                    color="text.secondary"
+                                >
+                                    {k.fingerprint}
+                                </Typography>
+                            </Box>
                             <Copy
                                 label={`Copy fingerprint ${k.fingerprint}`}
                                 text={k.fingerprint}
                             />
-                        </Typography>
+                        </Box>
                     ))
                 )}
-            </Box>
+            </DetailSection>
         </Stack>
     );
 }
+
 function Disks({ vm }: { vm: VM }) {
     const blocked = useResourceBusy({
         kind: "machine",

@@ -25,6 +25,7 @@ export function Keys() {
         <>
             <PageTitle
                 title="Keys"
+                description="Manage SSH public keys available for machine provisioning."
                 count={q.data?.length}
                 action={
                     <Button

@@ -284,13 +284,6 @@ func TestLifecycle(t *testing.T) {
 	config := filepath.Join(root, "vmango.conf")
 	write(filepath.Join(root, "keys"), "")
 	configuration := fmt.Sprintf(`key_file = %q
-libvirt "acceptance" {
- uri = %q
- config_drive_pool = %q
- image_pool = %q
- qcow_prealloc_metadata = false
- graphics_listen = "127.0.0.1"
-}
 image "boot" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q protected = true disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" initialization = %q minimum_memory_mib = 1024 minimum_disk_gib = 8 }
 image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q initialization = "none" }
 tasks { directory = %q workers = 2 }
@@ -302,7 +295,7 @@ api {
  token_dir = %q
  user "acceptance" { hashed_password = %q }
 }
-`, filepath.Join(root, "keys"), uri, name, name, base, arch, firmware, initialization, base, arch, firmware, filepath.Join(root, "tasks"), address, uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString(), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
+`, filepath.Join(root, "keys"), base, arch, firmware, initialization, base, arch, firmware, filepath.Join(root, "tasks"), address, uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString(), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
 
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {
@@ -313,9 +306,15 @@ cloud "acceptance" {
  instance_type "larger" { cpu=2 memory_mib=3072 boot_disk_gib=16 autostart=true }
  network "lan" {}
  storage_class "standard" {}
- host "acceptance" { zone="test" labels={rack="test"} network "lan" { network="qemu-usernet" } storage_class "standard" {pool=%q format="qcow2"} }
+ host "acceptance" {
+ uri = %q
+ config_drive_pool = %q
+ image_pool = %q
+ qcow_prealloc_metadata = false
+ graphics_listen = "127.0.0.1"
+ zone="test" labels={rack="test"} network "lan" { network="qemu-usernet" } storage_class "standard" {pool=%q format="qcow2"} }
 }
-`, name)
+`, uri, name, name, name)
 	if imageURL != "" {
 		if strings.Contains(imageURL, "alpinelinux.org/") {
 			configuration = strings.ReplaceAll(configuration, `os_name = "Ubuntu"`, `os_name = "Alpine Linux"`)

@@ -69,7 +69,10 @@ func TestManagedSourceConfiguration(t *testing.T) {
 	hash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	base := `image "managed" { os_arch="aarch64" url="https://example.org/image" sha256="` + hash + `" source_format="qcow2" source_size_bytes=4096 }`
 	path := filepath.Join(t.TempDir(), "config.conf")
-	if err := os.WriteFile(path, []byte(base+` libvirt "one" { uri="qemu:///session" } libvirt "two" { uri="qemu+ssh://host/system" image_pool="cloud" }`), 0600); err != nil {
+	hostConfig := strings.Replace(cloudConfig, `image "linux" { path="/source" os_arch="x86_64" }`, "", 1)
+	hostConfig = strings.Replace(hostConfig, `uri="qemu+ssh://b/system"`, `uri="qemu+ssh://b/system" image_pool="cloud"`, 1)
+	hostConfig = strings.Replace(hostConfig, `images=["linux"]`, `images=["managed"]`, 1)
+	if err := os.WriteFile(path, []byte(base+hostConfig), 0600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := Parse(path)
@@ -80,8 +83,8 @@ func TestManagedSourceConfiguration(t *testing.T) {
 	if err != nil || len(images) != 1 || !images[0].Managed() || images[0].SourcePath != "" || images[0].Download.SizeBytes != 4096 || len(policies) != 0 {
 		t.Fatal(images, policies, err)
 	}
-	if cfg.Libvirts[0].ImagePool != "default" || cfg.Libvirts[1].ImagePool != "cloud" {
-		t.Fatal(cfg.Libvirts)
+	if cfg.Hosts()[0].ImagePool != "default" || cfg.Hosts()[1].ImagePool != "cloud" {
+		t.Fatal(cfg.Hosts())
 	}
 	for _, invalid := range []string{
 		`url="https://example.org/image"`,
@@ -190,10 +193,10 @@ func TestConflictingSharedArtifactDefinitions(t *testing.T) {
 func TestPrivateGraphicsListenerValidation(t *testing.T) {
 	for _, address := range []string{"", "127.0.0.1", "0.0.0.0", "::1", "::", "not-an-ip", "127.0.0.1:5900"} {
 		path := filepath.Join(t.TempDir(), "listener.conf")
-		os.WriteFile(path, []byte(`libvirt "host" { uri="qemu:///session" graphics_listen="`+address+`" }`), 0600)
+		os.WriteFile(path, []byte(strings.Replace(cloudConfig, `uri="qemu:///session"`, `uri="qemu:///session" graphics_listen="`+address+`"`, 1)), 0600)
 		cfg, err := Parse(path)
 		valid := address != "not-an-ip" && address != "127.0.0.1:5900"
-		if valid && (err != nil || cfg.Libvirts[0].GraphicsListen != address) {
+		if valid && (err != nil || cfg.Hosts()[0].GraphicsListen != address) {
 			t.Fatalf("valid binding %q: %v", address, err)
 		}
 		if !valid && err == nil {

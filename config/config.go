@@ -187,19 +187,6 @@ type SubscribeConfig struct {
 	Mandatory bool   `hcl:"mandatory"`
 }
 
-type LibvirtConfig struct {
-	Name                   string `hcl:",key"`
-	Uri                    string `hcl:"uri"`
-	ImagePool              string `hcl:"image_pool"`
-	ConfigDriveSuffix      string `hcl:"config_drive_suffix"`
-	ConfigDrivePool        string `hcl:"config_drive_pool"`
-	ConfigDriveWriteFormat string `hcl:"config_drive_write_format"`
-	Emulator               string `hcl:"emulator"`
-	GraphicsListen         string `hcl:"graphics_listen"`
-	QcowPreallocMetadata   bool   `hcl:"qcow_prealloc_metadata"`
-	Cache                  bool   `hcl:"cache"`
-}
-
 type Config struct {
 	Clouds         []CloudConfig       `hcl:"cloud"`
 	ImageTransfers ImageTransferConfig `hcl:"image_transfers"`
@@ -208,16 +195,11 @@ type Config struct {
 	Images         []ImageConfig       `hcl:"image"`
 	Volumes        []VolumeConfig      `hcl:"volume"`
 	Bridges        []string            `hcl:"bridges"`
-	Libvirts       []LibvirtConfig     `hcl:"libvirt"`
 	KeyFile        string              `hcl:"key_file"`
 	API            APIConfig           `hcl:"api"`
 	Subscribes     []SubscribeConfig   `hcl:"subscribe"`
 
-	LegacyLibvirtUri                    string   `hcl:"libvirt_uri"`
-	LegacyLibvirtConfigDriveSuffix      string   `hcl:"libvirt_config_drive_suffix"`
-	LegacyLibvirtConfigDrivePool        string   `hcl:"libvirt_config_drive_pool"`
-	LegacyLibvirtConfigDriveWriteFormat string   `hcl:"libvirt_config_drive_write_format"`
-	LegacyBridges                       []string `hcl:"bridges"`
+	LegacyBridges []string `hcl:"bridges"`
 }
 
 type ImageTransferConfig struct {
@@ -274,6 +256,11 @@ func Parse(filename string) (*Config, error) {
 		return nil, fmt.Errorf("legacy web configuration is unsupported: migrate web { ... } to api { ... }, configure jwt_signing_key, session_dir and token_dir; remove api_disabled and legacy session settings")
 	}
 	if list, ok := parsed.Node.(*ast.ObjectList); ok {
+		for _, removed := range []string{"libvirt", "libvirt_uri", "libvirt_config_drive_suffix", "libvirt_config_drive_pool", "libvirt_config_drive_write_format"} {
+			if len(list.Filter(removed).Items) > 0 {
+				return nil, fmt.Errorf(`top-level %s configuration is unsupported: move libvirt settings into the matching cloud { host "name" { uri = "..." } } block; preserve host names and URIs (see docs/CLOUDS.md)`, removed)
+			}
+		}
 		for _, item := range list.Filter("api").Items {
 			if obj, ok := item.Val.(*ast.ObjectType); ok {
 				for _, removed := range []string{"session_secret", "session_domain", "session_max_age", "static_version", "media_upload_tmp"} {
@@ -295,44 +282,32 @@ func Parse(filename string) (*Config, error) {
 	if err := mergo.Merge(config, Default()); err != nil {
 		return nil, util.NewError(err, "cannot apply default configuration value")
 	}
-	if config.LegacyLibvirtUri != "" && len(config.Libvirts) == 0 {
-		config.Libvirts = append(config.Libvirts, LibvirtConfig{
-			Name:                   "__legacy_config_format__",
-			Uri:                    config.LegacyLibvirtUri,
-			ConfigDriveSuffix:      config.LegacyLibvirtConfigDriveSuffix,
-			ConfigDrivePool:        config.LegacyLibvirtConfigDrivePool,
-			ConfigDriveWriteFormat: config.LegacyLibvirtConfigDriveWriteFormat,
-		})
-	}
 	if len(config.LegacyBridges) > 0 {
 		fmt.Println(OLD_BRIDGES_WARNING)
 	}
 
-	libvirt_ids := map[string]struct{}{}
-	for index := range config.Libvirts {
-		libvirt := &config.Libvirts[index]
-		if libvirt.GraphicsListen != "" && net.ParseIP(libvirt.GraphicsListen) == nil {
-			return nil, fmt.Errorf("libvirt %s: graphics_listen must be empty or an IP address", libvirt.Name)
-		}
-		if libvirt.ImagePool == "" {
-			libvirt.ImagePool = "default"
-		}
-		if _, exists := libvirt_ids[libvirt.Name]; exists {
-			return nil, fmt.Errorf("duplicate libvirt connection '%s'", libvirt.Name)
-		}
-		libvirt_ids[libvirt.Name] = struct{}{}
-
-		if libvirt.Uri == "" {
-			return nil, fmt.Errorf("no uri specified for libvirt connection '%s'", libvirt.Name)
-		}
-		if libvirt.ConfigDriveWriteFormat == "" {
-			libvirt.ConfigDriveWriteFormat = configdrive.FormatNoCloud.String()
-		}
-		if libvirt.ConfigDriveSuffix == "" {
-			libvirt.ConfigDriveSuffix = "_config.iso"
-		}
-		if libvirt.ConfigDrivePool == "" {
-			libvirt.ConfigDrivePool = "default"
+	for cloudIndex := range config.Clouds {
+		cloud := &config.Clouds[cloudIndex]
+		for hostIndex := range cloud.Hosts {
+			host := &cloud.Hosts[hostIndex]
+			if host.GraphicsListen != "" && net.ParseIP(host.GraphicsListen) == nil {
+				return nil, fmt.Errorf("cloud %s host %s: graphics_listen must be empty or an IP address", cloud.ID, host.Node)
+			}
+			if host.ImagePool == "" {
+				host.ImagePool = "default"
+			}
+			if host.ConfigDriveWriteFormat == "" {
+				host.ConfigDriveWriteFormat = configdrive.FormatNoCloud.String()
+			}
+			if configdrive.NewFormat(host.ConfigDriveWriteFormat) == configdrive.FormatUnknown {
+				return nil, fmt.Errorf("cloud %s host %s: invalid config_drive_write_format %q", cloud.ID, host.Node, host.ConfigDriveWriteFormat)
+			}
+			if host.ConfigDriveSuffix == "" {
+				host.ConfigDriveSuffix = "_config.iso"
+			}
+			if host.ConfigDrivePool == "" {
+				host.ConfigDrivePool = "default"
+			}
 		}
 	}
 	if len(config.API.Oidc.Scopes) <= 0 {
@@ -392,18 +367,31 @@ func Parse(filename string) (*Config, error) {
 // Policy options have exactly one configuration owner; misplaced fields must
 // not be silently ignored by the permissive HCL decoder.
 func validatePolicyOwners(list *ast.ObjectList, owner string) error {
-	owners := map[string]string{"guest_agent": "image", "graphics": "image", "video_model": "image", "autostart": "instance_type", "graphics_listen": "libvirt"}
+	owners := map[string]string{
+		"guest_agent": "image", "graphics": "image", "video_model": "image",
+		"autostart":       "instance_type",
+		"graphics_listen": "host", "uri": "host", "image_pool": "host",
+		"config_drive_suffix": "host", "config_drive_pool": "host",
+		"config_drive_write_format": "host", "emulator": "host",
+		"qcow_prealloc_metadata": "host", "cache": "host",
+	}
 	for _, item := range list.Items {
 		if len(item.Keys) == 0 {
 			continue
 		}
 		key, _ := item.Keys[0].Token.Value().(string)
+		if key == "libvirt" {
+			return fmt.Errorf("libvirt blocks are unsupported: put backend settings directly in cloud.host")
+		}
+		if key == "host" && owner != "cloud" {
+			return fmt.Errorf("host blocks belong only inside cloud configuration")
+		}
 		if required, exists := owners[key]; exists && owner != required {
 			return fmt.Errorf("%s belongs only in %s configuration", key, required)
 		}
 		if object, ok := item.Val.(*ast.ObjectType); ok {
 			switch key {
-			case "image", "libvirt", "cloud", "host", "instance_type":
+			case "image", "cloud", "host", "instance_type":
 				if err := validatePolicyOwners(object.List, key); err != nil {
 					return err
 				}

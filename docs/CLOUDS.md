@@ -6,11 +6,51 @@ and bindings. Users select catalog entries; the scheduler chooses a host. Vmango
 currently implements only libvirt. Placement intent and capability discovery are
 independent of libvirt so future provider adapters can implement supported features.
 
-See the complete `cloud` example in `vmango.dist.conf`. Each `host` refers to a
-`libvirt` connection by its stable ID and belongs to exactly one cloud and zone.
-Do not configure aliases for the same connection. Multiple hosts can share a zone.
+See the complete `cloud` example in `vmango.dist.conf`. Each nested `host` owns
+its libvirt connection (`uri`) and backend settings, alongside its zone, reserves,
+network and storage bindings. Host names and URIs must be globally unique across
+clouds. Do not configure aliases for the same connection. Multiple hosts can
+share a zone.
 Catalog IDs are separate from display names. Images remain a shared catalog with
 host-specific image storage; cloud membership is an explicit list of image IDs.
+
+## Host configuration migration
+
+Move every setting from each top-level `libvirt "name"` block into the matching
+`cloud { host "name" { ... } }` block and remove the old block. This includes
+`uri`, `image_pool`, `config_drive_pool`, `config_drive_suffix`,
+`config_drive_write_format`, `emulator`, `graphics_listen`,
+`qcow_prealloc_metadata` and `cache`. These settings are direct host attributes;
+there is no nested `libvirt` block. Preserve host names, exact URIs and pool
+settings to retain resource identities, task scopes and image ownership.
+
+Top-level `libvirt` blocks and legacy `libvirt_uri` / `libvirt_config_drive_*`
+options are rejected with migration guidance, including when old and new formats
+are mixed. Hosts must be declared within a cloud. Backend settings stay private;
+public cloud discovery exposes catalog choices and host diagnostics.
+
+For example, inside an existing cloud with a `local` zone, `lan` network and
+`standard` storage class, configure the complete host in one place:
+
+```hcl
+host "local" {
+    uri = "qemu:///system"
+    image_pool = "default"
+    config_drive_pool = "default"
+    zone = "local"
+    cpu_reserve = 1
+    memory_reserve_mib = 1024
+    network "lan" { network = "default" }
+    storage_class "standard" { pool = "default" }
+}
+```
+
+Omitted `image_pool` and `config_drive_pool` default to `default`,
+`config_drive_suffix` to `_config.iso` and `config_drive_write_format` to
+`nocloud`. An omitted `graphics_listen` preserves the backend's default listener;
+`cache` and `qcow_prealloc_metadata` default to `false`.
+
+## Catalog and placement
 
 Instance types configure the actual positive integer vCPU count (`cpu`), admission
 requests (`cpu_request`, defaulting to `cpu`), guest RAM (`memory_mib`) and the size
@@ -110,7 +150,7 @@ unchanged. Adoption also preserves these settings. Configuration edits affect
 future explicit operations; accepted tasks retain their policy and backend
 binding snapshots.
 
-Configure `graphics_listen` only inside the private `libvirt` connection block.
+Configure `graphics_listen` only inside the cloud's private `host` block.
 Omission preserves libvirt's listener default. Explicit values must be IP
 addresses (IPv4 or IPv6), not hostnames or host:port strings. The backend resolves
 the selected host's binding before writing its XML. Console forwarding uses the

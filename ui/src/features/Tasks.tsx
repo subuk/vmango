@@ -275,7 +275,10 @@ export function Tasks() {
         });
     return (
         <>
-            <PageTitle title="Tasks" />
+            <PageTitle
+                title="Tasks"
+                description="Follow infrastructure operations, review progress and investigate failures."
+            />
             <Typography sx={{ mb: 2 }} color="text.secondary">
                 Accepted operations and their saved execution history. Leaving a
                 page does not cancel work.
@@ -333,7 +336,7 @@ export function Tasks() {
                     onChange={(e) => setResourceID(e.target.value)}
                 />
                 <Button type="submit" variant="outlined">
-                    Apply resource filters
+                    Apply
                 </Button>
             </Stack>
             <QueryState query={query}>

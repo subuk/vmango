@@ -32,13 +32,22 @@ type CloudConfig struct {
 	Hosts          []CloudHostConfig    `hcl:"host"`
 }
 type CloudHostConfig struct {
-	Node             string                 `hcl:",key"`
-	Zone             string                 `hcl:"zone"`
-	Labels           map[string]string      `hcl:"labels"`
-	CPUReserve       int                    `hcl:"cpu_reserve"`
-	MemoryReserveMiB int64                  `hcl:"memory_reserve_mib"`
-	Networks         []NetworkBindingConfig `hcl:"network"`
-	Storage          []StorageBindingConfig `hcl:"storage_class"`
+	Node                   string                 `hcl:",key"`
+	Uri                    string                 `hcl:"uri"`
+	ImagePool              string                 `hcl:"image_pool"`
+	ConfigDriveSuffix      string                 `hcl:"config_drive_suffix"`
+	ConfigDrivePool        string                 `hcl:"config_drive_pool"`
+	ConfigDriveWriteFormat string                 `hcl:"config_drive_write_format"`
+	Emulator               string                 `hcl:"emulator"`
+	GraphicsListen         string                 `hcl:"graphics_listen"`
+	QcowPreallocMetadata   bool                   `hcl:"qcow_prealloc_metadata"`
+	Cache                  bool                   `hcl:"cache"`
+	Zone                   string                 `hcl:"zone"`
+	Labels                 map[string]string      `hcl:"labels"`
+	CPUReserve             int                    `hcl:"cpu_reserve"`
+	MemoryReserveMiB       int64                  `hcl:"memory_reserve_mib"`
+	Networks               []NetworkBindingConfig `hcl:"network"`
+	Storage                []StorageBindingConfig `hcl:"storage_class"`
 }
 type NetworkBindingConfig struct {
 	Bridge  string `hcl:"bridge"`
@@ -70,10 +79,6 @@ func (cfg *Config) CloudDefinitions() ([]compute.Cloud, error) {
 	seen := map[string]bool{}
 	nodes := map[string]string{}
 	uris := map[string]string{}
-	knownNodes := map[string]string{}
-	for _, n := range cfg.Libvirts {
-		knownNodes[n.Name] = n.Uri
-	}
 	images, _, err := cfg.ImageDefinitions()
 	if err != nil {
 		return nil, err
@@ -124,15 +129,14 @@ func (cfg *Config) CloudDefinitions() ([]compute.Cloud, error) {
 			c.InstanceTypes = append(c.InstanceTypes, compute.InstanceType{ID: t.ID, Name: displayName(t.ID, t.Name), VCPUs: t.CPU, CPURequest: cpuRequest, MemoryBytes: memory, MemoryRequestBytes: request, BootDiskBytes: disk, Hugepages: t.Hugepages, Autostart: t.Autostart})
 		}
 		for _, h := range entry.Hosts {
-			uri := knownNodes[h.Node]
-			if uri == "" {
-				return nil, fmt.Errorf("cloud %s: unknown node %s", c.ID, h.Node)
+			if h.Uri == "" {
+				return nil, fmt.Errorf("cloud %s host %s: uri is required", c.ID, h.Node)
 			}
-			if nodes[h.Node] != "" || uris[uri] != "" {
+			if nodes[h.Node] != "" || uris[h.Uri] != "" {
 				return nil, fmt.Errorf("host/connection %s must belong to exactly one cloud and zone", h.Node)
 			}
 			nodes[h.Node] = c.ID
-			uris[uri] = c.ID
+			uris[h.Uri] = c.ID
 			reserve, err := byteSize(h.MemoryReserveMiB, 20)
 			if err != nil {
 				return nil, err
@@ -170,4 +174,14 @@ func (cfg *Config) CloudDefinitions() ([]compute.Cloud, error) {
 		result = append(result, c)
 	}
 	return result, nil
+}
+
+// Hosts returns backend configuration in cloud and host declaration order.
+// Backend settings stay in config; CloudDefinitions exposes only domain policy.
+func (cfg *Config) Hosts() []CloudHostConfig {
+	var hosts []CloudHostConfig
+	for _, cloud := range cfg.Clouds {
+		hosts = append(hosts, cloud.Hosts...)
+	}
+	return hosts
 }

@@ -1,0 +1,3 @@
+{{ $example := resources.Get "examples/cloud.hcl" }}
+{{ transform.Highlight $example.Content "hcl" "" }}
+<p><a href="{{ $example.RelPermalink }}" download="cloud.hcl">Download the cloud configuration example</a></p>

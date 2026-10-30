@@ -13,6 +13,7 @@ import { useResourceBusy, volumeResource } from "../api/tasks";
 import { ResourceTasks } from "./Tasks";
 import { request } from "../api/client";
 import { bytes, Confirm, PageTitle, QueryState } from "../components/common";
+import { Summary } from "../components/Information";
 import { ResourceTable } from "../components/ResourceTable";
 import type { Cloud, HostCatalog } from "./MachineForm";
 import { fieldError, OperationDialog } from "../components/OperationDialog";
@@ -25,6 +26,7 @@ export function Volumes() {
         <>
             <PageTitle
                 title="Volumes"
+                description="Review virtual disks, storage classes and machine attachments."
                 count={q.data?.length}
                 action={
                     <Button variant="contained" onClick={() => setCreate(true)}>
@@ -32,6 +34,38 @@ export function Volumes() {
                     </Button>
                 }
             />
+            {q.data && (
+                <Summary
+                    label="Volume inventory summary"
+                    items={[
+                        {
+                            label: "Provisioned size",
+                            value: bytes(
+                                q.data.reduce(
+                                    (sum, v) => sum + v.size_bytes,
+                                    0,
+                                ),
+                            ),
+                            detail: "Logical volume capacity",
+                        },
+                        {
+                            label: "Attached",
+                            value: q.data.filter((v) => !!v.attached_to).length,
+                            detail: "Connected to machines",
+                        },
+                        {
+                            label: "Unattached",
+                            value: q.data.filter((v) => !v.attached_to).length,
+                            detail: "No machine attachment",
+                        },
+                        {
+                            label: "Protected",
+                            value: q.data.filter((v) => v.protected).length,
+                            detail: "Protected from deletion",
+                        },
+                    ]}
+                />
+            )}
             <QueryState query={q}>
                 {(rows) => (
                     <ResourceTable

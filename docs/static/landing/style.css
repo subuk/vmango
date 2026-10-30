@@ -7,7 +7,7 @@
   background: #fff;
 }
 * { box-sizing: border-box; }
-body { max-width: 780px; margin: 0 auto; padding: 38px 30px 24px; }
+body { max-width: 1120px; margin: 0 auto; padding: 38px 30px 24px; }
 a { color: #245a91; text-underline-offset: 3px; }
 a:hover { color: #143b62; }
 a:focus-visible { outline: 2px solid #245a91; outline-offset: 4px; }
@@ -32,4 +32,31 @@ footer { display: flex; justify-content: space-between; gap: 20px; border-top: 1
   nav { gap: 15px; font-size: 13px; }
   .title { font-size: 25px; }
   h1 { font-size: 24px; }
+}
+
+main > p, main > section > p, main > section > ul { max-width: 760px; }
+section { margin-top: 42px; }
+figure { margin: 22px 0; }
+figure a { display: block; border-radius: 8px; }
+figure img { display: block; width: 100%; height: auto; border: 1px solid #d4dbe2; border-radius: 8px; }
+figcaption { margin-top: 10px; color: #535f6b; font-size: 13px; line-height: 1.55; }
+.creation-preview { border: 1px solid #d4dbe2; border-radius: 8px; padding: 16px 20px; }
+.creation-preview summary { color: #245a91; cursor: pointer; font-weight: 600; }
+.creation-preview summary:focus-visible { outline: 2px solid #245a91; outline-offset: 4px; }
+.creation-preview[open] summary { margin-bottom: 14px; }
+.creation-preview > p { max-width: 760px; }
+.creation-preview figure { margin-bottom: 0; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+p code { font-size: .9em; overflow-wrap: anywhere; }
+.config-example { margin: 22px 0; border: 1px solid #d4dbe2; border-radius: 8px; overflow: hidden; }
+.example-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; padding: 12px 18px; background: #f3f6f9; border-bottom: 1px solid #d4dbe2; font-size: 13px; }
+.example-heading span { font-weight: 600; }
+.example-code { max-height: 560px; overflow: auto; font-size: 13px; line-height: 1.65; }
+.example-code:focus-visible { outline: 2px solid #245a91; outline-offset: -2px; }
+.example-code .highlight pre { margin: 0; padding: 20px; }
+@media (max-width: 520px) {
+  section { margin-top: 32px; }
+  .creation-preview { padding: 14px; }
+  .example-heading { padding: 10px 14px; }
+  .example-code .highlight pre { padding: 14px; }
 }

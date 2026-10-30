@@ -275,6 +275,7 @@ function Shell() {
             <Box
                 component="main"
                 id="main"
+                className="app-main"
                 tabIndex={-1}
                 sx={{ p: { xs: 2, sm: 3.5 }, minHeight: "75vh" }}
             >

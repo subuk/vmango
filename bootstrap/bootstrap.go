@@ -83,14 +83,14 @@ func Web(configFilename string) {
 	nodeOrder := []string{}
 	vmRepSettings := map[string]libvirt.NodeSettings{}
 	vmManSettings := map[string]compute.VirtualMachineManagerNodeSettings{}
-	for _, c := range cfg.Libvirts {
+	for _, c := range cfg.Hosts() {
 		if err := libvirt.ValidateGraphicsListen(c.GraphicsListen); err != nil {
-			logger.Fatal().Err(err).Str("node", c.Name).Msg("invalid graphics listener")
+			logger.Fatal().Err(err).Str("node", c.Node).Msg("invalid graphics listener")
 		}
-		nodeUri[c.Name] = c.Uri
+		nodeUri[c.Node] = c.Uri
 		scopeHash := sha256.Sum256([]byte(c.Uri))
-		nodeScopes[c.Name] = "libvirt:" + hex.EncodeToString(scopeHash[:])
-		nodeOrder = append(nodeOrder, c.Name)
+		nodeScopes[c.Node] = "libvirt:" + hex.EncodeToString(scopeHash[:])
+		nodeOrder = append(nodeOrder, c.Node)
 		configDriveWriteFormat := configdrive.NewFormat(c.ConfigDriveWriteFormat)
 		if configDriveWriteFormat == configdrive.FormatUnknown {
 			logger.Error().
@@ -99,14 +99,14 @@ func Web(configFilename string) {
 				Msg("unknown libvirt configdrive write format")
 			os.Exit(1)
 		}
-		vmRepSettings[c.Name] = libvirt.NodeSettings{
+		vmRepSettings[c.Node] = libvirt.NodeSettings{
 			CdSuffix:             c.ConfigDriveSuffix,
 			Emulator:             c.Emulator,
 			GraphicsListen:       c.GraphicsListen,
 			QcowPreallocMetadata: c.QcowPreallocMetadata,
 			Cache:                c.Cache,
 		}
-		vmManSettings[c.Name] = compute.VirtualMachineManagerNodeSettings{
+		vmManSettings[c.Node] = compute.VirtualMachineManagerNodeSettings{
 			CdPool:   c.ConfigDrivePool,
 			CdSuffix: c.ConfigDriveSuffix,
 			CdFormat: configDriveWriteFormat,
@@ -149,11 +149,11 @@ func Web(configFilename string) {
 	}
 	defer artifactRepo.Close()
 	imageBindings := map[string]compute.ImageBinding{}
-	for _, c := range cfg.Libvirts {
+	for _, c := range cfg.Hosts() {
 		if err := libvirt.ValidateGraphicsListen(c.GraphicsListen); err != nil {
-			logger.Fatal().Err(err).Str("node", c.Name).Msg("invalid graphics listener")
+			logger.Fatal().Err(err).Str("node", c.Node).Msg("invalid graphics listener")
 		}
-		imageBindings[c.Name] = compute.ImageBinding{Scope: nodeScopes[c.Name], Pool: c.ImagePool}
+		imageBindings[c.Node] = compute.ImageBinding{Scope: nodeScopes[c.Node], Pool: c.ImagePool}
 	}
 	images.ManagedSources = compute.NewManagedImageService(volumeRepo, artifactRepo, imageBindings, compute.ImageTransferLimits{MaxBytes: uint64(cfg.ImageTransfers.MaxBytes), Timeout: time.Duration(cfg.ImageTransfers.TimeoutSeconds) * time.Second, IdleTimeout: time.Duration(cfg.ImageTransfers.IdleTimeoutSeconds) * time.Second})
 

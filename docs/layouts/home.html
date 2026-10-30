@@ -23,7 +23,7 @@
   <main id="main">
     <h1>Your own personal IaaS cloud.</h1>
     <p>Vmango turns your libvirt hosts into a small, self-hosted cloud.
-      Choose a cloud image, set the machine's resources, add your SSH keys
+      Choose a cloud image and instance type, add your SSH keys
       and launch it from your browser.</p>
     <p class="actions">
       <a class="primary-link" href="/docs/">Read the documentation</a>
@@ -42,6 +42,54 @@
       </ul>
       <p>Linux with QEMU/KVM is the main target. Local development on macOS
         is also possible with QEMU/HVF.</p>
+    </section>
+
+    <section class="interface-preview" aria-labelledby="interface-title">
+      <h2 id="interface-title">A clear view of your cloud</h2>
+      <p>See machine states, allocated resources and IP addresses together.
+        Filter by host or state, then open a machine to inspect its configuration
+        or connect to its console.</p>
+      <figure>
+        <a href="/screenshots/machines.webp" aria-label="View the machine inventory screenshot at full size">
+          <img src="/screenshots/machines.webp" width="2880" height="1960"
+            alt="Vmango machine inventory showing running and stopped machines, total vCPUs and memory, host filters and IP addresses."
+            loading="lazy" decoding="async">
+        </a>
+        <figcaption>Machine inventory with resource summaries and filters. Screenshots use demonstration data; select an image to view it at full size.</figcaption>
+      </figure>
+      <details class="creation-preview">
+        <summary>See how machine creation works</summary>
+        <p>Select an image, availability zone and instance type. CPU, memory and
+          boot disk size are shown before you launch. Add SSH keys and cloud-init
+          data, and Vmango chooses a suitable host in the selected zone.</p>
+        <figure>
+          <a href="/screenshots/create-machine.webp" aria-label="View the machine creation screenshot at full size">
+            <img src="/screenshots/create-machine.webp" width="2880" height="2572"
+              alt="Vmango creation form with an instance type providing 4 vCPUs, 4 GiB of memory and a 40 GiB boot disk, plus network, SSH key and cloud-init settings."
+              loading="lazy" decoding="async">
+          </a>
+          <figcaption>Machine creation with the selected instance type's included resources. Demonstration data.</figcaption>
+        </figure>
+      </details>
+    </section>
+
+    <section aria-labelledby="configuration-title">
+      <h2 id="configuration-title">Define your cloud in a config file</h2>
+      <p>Define instance types and configure each host inside its cloud, including
+        its libvirt URI, logical network and storage-class bindings.</p>
+      <p>Replace the <code>cloud "local"</code> block in the
+        <a href="/docs/start/">quick-start configuration</a> with this example. Keep its image and API settings, including the
+        <code>ubuntu-24.04-x86_64-bios</code> image.
+        The host needs an active libvirt network and a writable storage pool,
+        both named <code>default</code>.</p>
+      {{ $cloudExample := resources.Get "examples/cloud.hcl" }}
+      <div class="config-example">
+        <div class="example-heading"><span>vmango.conf · cloud configuration</span><a href="{{ $cloudExample.RelPermalink }}" download="cloud.hcl">Download example</a></div>
+        <div class="example-code" tabindex="0" role="region" aria-label="Cloud configuration example">{{ transform.Highlight $cloudExample.Content "hcl" "" }}</div>
+      </div>
+      <p>Vmango uses the catalog to offer compatible configurations and place
+        machines automatically. Read the <a href="/docs/clouds/">cloud configuration guide</a>
+        for multiple hosts, resource reserves and placement rules.</p>
     </section>
 
     <section aria-labelledby="development-title">

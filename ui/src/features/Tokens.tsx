@@ -35,6 +35,7 @@ export function Tokens() {
         <>
             <PageTitle
                 title="API tokens"
+                description="Manage credentials used to access the Vmango API."
                 count={q.data?.length}
                 action={
                     <Button

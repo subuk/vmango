@@ -34,6 +34,7 @@ import {
 } from "../components/common";
 import { fieldError, OperationDialog } from "../components/OperationDialog";
 import { ResourceTasks } from "./Tasks";
+import { Summary } from "../components/Information";
 import { useResourceBusy } from "../api/tasks";
 
 export type Cloud = components["schemas"]["ApiCloud"];
@@ -322,6 +323,70 @@ export function CreateMachine() {
                                         entries={typeChoices}
                                         set={setType}
                                     />
+                                    {selectedType ? (
+                                        <Box
+                                            component="section"
+                                            aria-label="Selected instance type resources"
+                                            aria-live="polite"
+                                            sx={{
+                                                "& .summary-grid": {
+                                                    gridTemplateColumns: {
+                                                        xs: "1fr",
+                                                        sm: "repeat(3, minmax(0, 1fr))",
+                                                    },
+                                                    gap: 1.5,
+                                                    mb: 1.5,
+                                                },
+                                                "& .summary-item": { p: 2 },
+                                                "& .summary-item .summary-value":
+                                                    { fontSize: 22, mb: 0 },
+                                            }}
+                                        >
+                                            <Typography
+                                                variant="body2"
+                                                color="text.secondary"
+                                                sx={{ mb: 1.5 }}
+                                            >
+                                                Included with{" "}
+                                                {selectedType.name}
+                                            </Typography>
+                                            <Summary
+                                                label="Included resources"
+                                                items={[
+                                                    {
+                                                        label: "CPU",
+                                                        value: `${selectedType.vcpus} vCPU`,
+                                                    },
+                                                    {
+                                                        label: "Memory",
+                                                        value: bytes(
+                                                            selectedType.memory_bytes,
+                                                        ),
+                                                    },
+                                                    {
+                                                        label: "Boot disk",
+                                                        value: bytes(
+                                                            selectedType.boot_disk_bytes,
+                                                        ),
+                                                    },
+                                                ]}
+                                            />
+                                            <Typography
+                                                variant="body2"
+                                                color="text.secondary"
+                                            >
+                                                Placement is automatic within
+                                                the selected zone. Additional
+                                                disks are configured separately
+                                                below.
+                                            </Typography>
+                                        </Box>
+                                    ) : (
+                                        <Alert severity="warning">
+                                            No compatible image and instance
+                                            type are available in this zone.
+                                        </Alert>
+                                    )}
                                     <Choice
                                         label="Network"
                                         value={network}
@@ -334,23 +399,6 @@ export function CreateMachine() {
                                         entries={storageClasses}
                                         set={setStorage}
                                     />
-                                    {selectedType ? (
-                                        <Alert severity="info">
-                                            {selectedType.vcpus} vCPU ·{" "}
-                                            {bytes(selectedType.memory_bytes)}{" "}
-                                            RAM ·{" "}
-                                            {bytes(
-                                                selectedType.boot_disk_bytes,
-                                            )}{" "}
-                                            boot disk. Placement is automatic
-                                            within the selected zone.
-                                        </Alert>
-                                    ) : (
-                                        <Alert severity="warning">
-                                            No compatible image and instance
-                                            type are available in this zone.
-                                        </Alert>
-                                    )}
                                     <TextField
                                         select
                                         label="SSH keys"
@@ -745,9 +793,9 @@ function EditForm({ vm }: { vm: VM }) {
                 <>
                     <Typography>
                         The machine must be stopped. The change stays on this
-                        host, applies its autostart policy and preserves guest devices
-                        and all disk sizes. Insufficient host
-                        resources cause an error.
+                        host, applies its autostart policy and preserves guest
+                        devices and all disk sizes. Insufficient host resources
+                        cause an error.
                     </Typography>
                     <ErrorMessage error={clouds.error} />
                     <Choice

@@ -41,6 +41,7 @@ def smoke(archive):
         config = config.replace("REPLACE_WITH_SEPARATE_RANDOM_SECRET", secrets.token_hex(32))
         config = config.replace('session_dir = "~/.vmango/sessions"', f'session_dir = "{(directory / "sessions").as_posix()}"')
         config = config.replace('token_dir = "~/.vmango/tokens"', f'token_dir = "{(directory / "tokens").as_posix()}"')
+        config = config.replace('directory = "~/.vmango/tasks"', f'directory = "{(directory / "tasks").as_posix()}"')
         # This test-only hash is the existing sample password "admin".
         config = config.replace("REPLACE_WITH_GENPW_OUTPUT", "$2a$10$igHQGROHntvl05AztpfMeONSBDUsEbZHxayc5DOPTKIFX50WrHURS")
         (directory / "vmango.conf").write_text(config)

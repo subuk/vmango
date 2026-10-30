@@ -88,11 +88,11 @@ export function ResourceTable<T>({
     });
     const active = query || selectedNode || selectedState || selectedPool;
     return (
-        <>
+        <Box className="resource-panel">
             <Stack
                 className="filter-toolbar"
                 direction="row"
-                sx={{ gap: 2, flexWrap: "wrap", mb: 2 }}
+                sx={{ gap: 2, flexWrap: "wrap", p: 2, alignItems: "center" }}
             >
                 <TextField
                     label="Search"
@@ -171,7 +171,23 @@ export function ResourceTable<T>({
                     </TextField>
                 )}
                 <Button
-                    onClick={() => setParams({}, { replace: true })}
+                    onClick={() =>
+                        setParams(
+                            (old) => {
+                                const next = new URLSearchParams(old);
+                                [
+                                    "q",
+                                    "node",
+                                    "state",
+                                    "pool",
+                                    "sort",
+                                    "direction",
+                                ].forEach((key) => next.delete(key));
+                                return next;
+                            },
+                            { replace: true },
+                        )
+                    }
                     disabled={!active && !params.has("sort")}
                 >
                     Reset
@@ -180,9 +196,8 @@ export function ResourceTable<T>({
             <TableContainer
                 component={Box}
                 sx={{
-                    border: 1,
+                    borderTop: 1,
                     borderColor: "divider",
-                    borderRadius: 1,
                     bgcolor: "background.paper",
                 }}
                 tabIndex={0}
@@ -277,9 +292,13 @@ export function ResourceTable<T>({
                         : empty}
                 </Typography>
             )}
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {filtered.length} of {rows.length}
+            <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ px: 2, py: 1.5, borderTop: 1, borderColor: "divider" }}
+            >
+                Showing {filtered.length} of {rows.length} resources
             </Typography>
-        </>
+        </Box>
     );
 }

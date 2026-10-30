@@ -142,7 +142,7 @@ are persistent and may require stopping and starting a VM.
 
 Machine policy has no PATCH endpoint. Images own `guest_agent`, `graphics` and
 `video_model`; instance types own `autostart`, CPU, RAM and hugepages. The private
-libvirt connection owns `graphics_listen`. Creation accepts catalog references,
+cloud host owns `graphics_listen`. Creation accepts catalog references,
 not per-machine policy overrides. The explicit instance-type command applies its
 autostart policy without starting or stopping the VM and preserves applied guest
 devices, graphics listener and disk sizes. `start` on creation is a separate

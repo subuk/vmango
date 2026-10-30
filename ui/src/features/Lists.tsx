@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Link, Menu, MenuItem, TextField } from "@mui/material";
+import {
+    Alert,
+    Box,
+    Button,
+    Link,
+    Menu,
+    MenuItem,
+    TextField,
+    Typography,
+} from "@mui/material";
 import { Link as RouterLink, useSearchParams } from "react-router";
 import {
     machineURL,
@@ -24,6 +33,7 @@ import {
     State,
 } from "../components/common";
 import type { Cloud } from "./MachineForm";
+import { Summary } from "../components/Information";
 import { ResourceTable } from "../components/ResourceTable";
 
 export function Machines() {
@@ -31,6 +41,9 @@ export function Machines() {
     const clouds = useResource<Cloud[]>("/api/v1/clouds");
     const cloudID = params.get("cloud") || clouds.data?.[0]?.id || "";
     const q = useMachines(cloudID);
+    const machines = q.data?.items.filter(
+        (v) => !cloudID || v.cloud === cloudID,
+    );
     if (clouds.isSuccess && clouds.data.length === 0) {
         return (
             <>
@@ -46,6 +59,7 @@ export function Machines() {
         <>
             <PageTitle
                 title="Machines"
+                description="Manage virtual machines, review their resources and connect to a console."
                 count={q.data?.items.length}
                 action={
                     <Button
@@ -57,10 +71,49 @@ export function Machines() {
                     </Button>
                 }
             />
+            {machines && (
+                <Summary
+                    label="Machine inventory summary"
+                    items={[
+                        {
+                            label: "Running",
+                            value: machines.filter((v) => v.state === "running")
+                                .length,
+                            detail: "Powered on",
+                            tone: "success",
+                        },
+                        {
+                            label: "Stopped",
+                            value: machines.filter((v) => v.state === "stopped")
+                                .length,
+                            detail: "Powered off",
+                        },
+                        {
+                            label: "Configured vCPUs",
+                            value: machines.reduce(
+                                (sum, v) => sum + v.vcpus,
+                                0,
+                            ),
+                            detail: "Across listed machines",
+                        },
+                        {
+                            label: "Configured memory",
+                            value: bytes(
+                                machines.reduce(
+                                    (sum, v) => sum + v.memory_bytes,
+                                    0,
+                                ),
+                            ),
+                            detail: "Across listed machines",
+                        },
+                    ]}
+                />
+            )}
             {clouds.data && clouds.data.length > 1 && (
                 <TextField
                     select
                     label="Cloud"
+                    sx={{ maxWidth: 300, mb: 3 }}
                     value={cloudID}
                     onChange={(e) => setParams({ cloud: e.target.value })}
                 >
@@ -103,15 +156,48 @@ export function Machines() {
                                 label: "Name",
                                 value: (v) => v.name,
                                 render: (v) => (
-                                    <Link
-                                        component={RouterLink}
-                                        to={machineURL(v.cloud, v.id)}
-                                    >
-                                        {v.name}
-                                    </Link>
+                                    <Box>
+                                        <Link
+                                            component={RouterLink}
+                                            to={machineURL(v.cloud, v.id)}
+                                            sx={{ fontWeight: 600 }}
+                                        >
+                                            {v.name}
+                                        </Link>
+                                        <Typography
+                                            variant="body2"
+                                            color="text.secondary"
+                                        >
+                                            {v.instance_type ||
+                                                "Unassigned type"}
+                                            {v.managed === false
+                                                ? " · Read-only"
+                                                : ""}
+                                        </Typography>
+                                    </Box>
                                 ),
                             },
-                            { id: "node", label: "Host", value: (v) => v.node },
+                            {
+                                id: "node",
+                                label: "Host",
+                                value: (v) => v.node,
+                                render: (v) => (
+                                    <Box>
+                                        <Link
+                                            component={RouterLink}
+                                            to={`/nodes/${encodeURIComponent(v.node)}/`}
+                                        >
+                                            {v.node}
+                                        </Link>
+                                        <Typography
+                                            variant="body2"
+                                            color="text.secondary"
+                                        >
+                                            {v.zone || "No zone"}
+                                        </Typography>
+                                    </Box>
+                                ),
+                            },
                             {
                                 id: "state",
                                 label: "State",
@@ -132,7 +218,7 @@ export function Machines() {
                             },
                             {
                                 id: "cpu",
-                                label: "CPU",
+                                label: "vCPUs",
                                 value: (v) => v.vcpus,
                                 numeric: true,
                             },
@@ -145,18 +231,29 @@ export function Machines() {
                             },
                             {
                                 id: "ip",
-                                label: "IP",
+                                label: "IP addresses",
                                 value: (v) => v.ip_addresses.join(", "),
                                 render: (v) =>
-                                    v.ip_addresses.map((ip) => (
-                                        <div key={ip}>
-                                            <span className="mono">{ip}</span>
-                                            <Copy
-                                                text={ip}
-                                                label={`Copy IP ${ip}`}
-                                            />
-                                        </div>
-                                    )),
+                                    v.ip_addresses.length ? (
+                                        v.ip_addresses.map((ip) => (
+                                            <div key={ip}>
+                                                <span className="mono">
+                                                    {ip}
+                                                </span>
+                                                <Copy
+                                                    text={ip}
+                                                    label={`Copy IP ${ip}`}
+                                                />
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <Typography
+                                            variant="body2"
+                                            color="text.secondary"
+                                        >
+                                            No IP reported
+                                        </Typography>
+                                    ),
                             },
                         ]}
                         actions={(v) => <MachineActions vm={v} />}
@@ -346,7 +443,49 @@ export function Nodes() {
     const q = useNodes();
     return (
         <>
-            <PageTitle title="Hosts" count={q.data?.length} />
+            <PageTitle
+                title="Hosts"
+                count={q.data?.length}
+                description="Inspect host hardware, CPU topology and storage capacity."
+            />
+            {q.data && (
+                <Summary
+                    label="Host inventory summary"
+                    items={[
+                        {
+                            label: "Hosts",
+                            value: q.data.length,
+                            detail: "Returned by the backend",
+                        },
+                        {
+                            label: "Host CPUs",
+                            value: q.data.reduce(
+                                (sum, n) => sum + n.cpus.length,
+                                0,
+                            ),
+                            detail: "Logical processors",
+                        },
+                        {
+                            label: "Total memory",
+                            value: bytes(
+                                q.data.reduce(
+                                    (sum, n) => sum + n.memory_bytes,
+                                    0,
+                                ),
+                            ),
+                            detail: "Installed host memory",
+                        },
+                        {
+                            label: "Architectures",
+                            value: new Set(q.data.map((n) => n.arch)).size,
+                            detail:
+                                [...new Set(q.data.map((n) => n.arch))].join(
+                                    " · ",
+                                ) || "No hosts",
+                        },
+                    ]}
+                />
+            )}
             <QueryState query={q}>
                 {(rows) => (
                     <ResourceTable
@@ -405,7 +544,11 @@ export function Networks() {
     const cloud = clouds.data?.find((c) => c.id === cloudID);
     return (
         <>
-            <PageTitle title="Networks" count={cloud?.networks.length} />
+            <PageTitle
+                title="Networks"
+                count={cloud?.networks.length}
+                description="Logical networks available to machines in the selected cloud."
+            />
             <QueryState query={clouds}>
                 {(catalogs) => (
                     <>
@@ -419,7 +562,7 @@ export function Networks() {
                                 <TextField
                                     select
                                     label="Cloud"
-                                    sx={{ mb: 2 }}
+                                    sx={{ mb: 3, maxWidth: 300 }}
                                     value={cloud ? cloudID : ""}
                                     onChange={(e) =>
                                         setParams({ cloud: e.target.value })

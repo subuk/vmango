@@ -12,9 +12,9 @@ class. The scheduler assigns a host, shown read-only in the machine details.
 ## Configure a cloud
 
 Keep the `image` definitions from the shipped configuration, or define images
-using the [image guide](/docs/images/). Add the following alongside the existing
-`libvirt "local"` connection. The example assumes an active libvirt network named
-`default` and a writable pool named `default`; Vmango does not create them.
+using the [image guide](/docs/images/). Define each host's connection and backend
+settings directly in its cloud. The example assumes an active libvirt network
+named `default` and a writable pool named `default`; Vmango does not create them.
 
 ```hcl
 cloud "local" {
@@ -34,6 +34,9 @@ cloud "local" {
     }
 
     host "local" {
+        uri = "qemu:///system"
+        config_drive_pool = "default"
+        image_pool = "default"
         zone = "local"
         labels = { rack = "rack-a" }
         cpu_reserve = 1
@@ -47,10 +50,27 @@ cloud "local" {
 }
 ```
 
-Each `host` references one configured libvirt connection and belongs to exactly
-one cloud and AZ. To add another host, add its connection and a matching `host`
-block with its own network/pool bindings. Several hosts can share the same AZ.
-Use the architecture-appropriate image IDs; unsupported combinations are rejected.
+Each `host` owns its libvirt connection and belongs to exactly one cloud and AZ.
+To add another host, add a `host` block with its own `uri`, zone and network/pool
+bindings. Host names and connection URIs must be globally unique across clouds;
+several hosts can share the same AZ. Use architecture-appropriate image IDs;
+unsupported combinations are rejected.
+
+Connection settings `uri`, `image_pool`, `config_drive_pool`,
+`config_drive_suffix`, `config_drive_write_format`, `emulator`, `graphics_listen`,
+`qcow_prealloc_metadata` and `cache` all belong directly in `cloud.host`.
+`image_pool` and `config_drive_pool` default to `default`,
+`config_drive_suffix` to `_config.iso` and `config_drive_write_format` to
+`nocloud`. `graphics_listen` defaults to the backend's listener setting.
+
+### Migrate existing connections
+
+Move the contents of each former top-level `libvirt "name"` block into
+`host "name"` in its cloud, then remove the top-level block. Preserve the exact
+host name, URI and pool settings so resource routes, task scopes and image
+ownership stay associated with the same backend. Top-level `libvirt` blocks and
+legacy `libvirt_uri` / `libvirt_config_drive_*` options now fail startup with a
+migration instruction. Backend settings do not belong in the public cloud API.
 
 ## Resources and placement
 
@@ -107,7 +127,7 @@ silently resize or reconfigure existing machines or disks.
 
 Set `autostart` in `instance_type` blocks (default `false`). Image settings
 `guest_agent`, `graphics` and `video_model` control guest integration and devices;
-their defaults are `true`, `vnc` and `none`. The private `libvirt` connection
+their defaults are `true`, `vnc` and `none`. The cloud's private `host` block
 sets `graphics_listen` as an IP address, with omission preserving the backend
 default. Creation's `start` flag is a separate one-time action. Adoption preserves
 existing policy and devices, and accepted tasks snapshot policy and private host

@@ -11,7 +11,7 @@ func TestParseDefaultsAndOverrides(t *testing.T) {
 	filename := filepath.Join(t.TempDir(), "vmango.conf")
 	content := []byte(`
 log_level = "debug"
-libvirt "local" { uri = "qemu:///system" }
+` + cloudConfig + `
 api {
     listen = "127.0.0.1:9000"
     session_secure = true
@@ -34,8 +34,8 @@ api {
 	if len(cfg.API.Oidc.Scopes) != 2 || cfg.API.Oidc.Scopes[1] != "email" {
 		t.Fatalf("explicit OIDC scopes were changed: %v", cfg.API.Oidc.Scopes)
 	}
-	if len(cfg.Libvirts) != 1 || cfg.Libvirts[0].ConfigDriveWriteFormat != "nocloud" || cfg.Libvirts[0].ConfigDrivePool != "default" {
-		t.Fatalf("libvirt defaults were not applied: %+v", cfg.Libvirts)
+	if len(cfg.Hosts()) != 2 || cfg.Hosts()[0].ConfigDriveWriteFormat != "nocloud" || cfg.Hosts()[0].ConfigDrivePool != "default" {
+		t.Fatalf("host backend defaults were not applied: %+v", cfg.Hosts())
 	}
 }
 
@@ -57,8 +57,8 @@ func TestQuickStartConfig(t *testing.T) {
 	if cfg.API.Listen != "127.0.0.1:8080" {
 		t.Fatalf("quick start must use loopback: %+v", cfg.API)
 	}
-	if len(cfg.Libvirts) != 1 || cfg.Libvirts[0].Uri != "qemu:///system" {
-		t.Fatalf("quick start needs an explicit libvirt node: %+v", cfg.Libvirts)
+	if len(cfg.Hosts()) != 1 || cfg.Hosts()[0].Uri != "qemu:///system" {
+		t.Fatalf("quick start needs a cloud host connection: %+v", cfg.Hosts())
 	}
 	if len(cfg.API.Users) != 1 || cfg.API.Users[0].Id != "admin" {
 		t.Fatalf("quick start needs an explicit admin user: %+v", cfg.API.Users)

@@ -1,5 +1,11 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+    cleanup,
+    render,
+    screen,
+    waitFor,
+    within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -85,6 +91,7 @@ vi.mock("../api/tasks", () => ({
 afterEach(() => {
     cleanup();
     request.mockReset();
+    catalog.offers.splice(1);
 });
 function show() {
     render(
@@ -105,7 +112,12 @@ it("uses compatible catalog defaults without low-level host or disk controls", a
     expect(screen.queryByRole("spinbutton", { name: "vCPUs" })).toBeNull();
     expect(screen.queryByText("Storage pool")).toBeNull();
     expect(screen.queryByText("Large")).toBeNull();
-    expect(screen.getByText(/20 GiB boot disk/)).toBeTruthy();
+    const summary = screen.getByRole("region", {
+        name: "Selected instance type resources",
+    });
+    expect(within(summary).getByText("2 GiB")).toBeTruthy();
+    expect(within(summary).getByText("Boot disk")).toBeTruthy();
+    expect(within(summary).getByText("20 GiB")).toBeTruthy();
     request.mockResolvedValueOnce({ task: { id: "task1" } });
     await userEvent.type(
         screen.getByRole("textbox", { name: "Machine name" }),
@@ -185,4 +197,22 @@ it("filters existing disks by the owning host after the first selection", async 
         expect(screen.queryByRole("option", { name: /Disk B/ })).toBeNull(),
     );
     expect(screen.getByRole("option", { name: /Disk A/ })).toBeTruthy();
+});
+
+it("updates the included resources when the instance type changes", async () => {
+    catalog.offers.push({ ...catalog.offers[0], instance_type: "large" });
+    show();
+    await screen.findByText("2 vCPU");
+    await userEvent.click(
+        screen.getByRole("combobox", { name: "Instance type" }),
+    );
+    await userEvent.click(screen.getByRole("option", { name: "Large" }));
+    const summary = screen.getByRole("region", {
+        name: "Selected instance type resources",
+    });
+    expect(within(summary).getByText("Included with Large")).toBeTruthy();
+    expect(within(summary).getByText("4 vCPU")).toBeTruthy();
+    expect(within(summary).getByText("4 GiB")).toBeTruthy();
+    expect(within(summary).getByText("40 GiB")).toBeTruthy();
+    expect(within(summary).queryByText("20 GiB")).toBeNull();
 });

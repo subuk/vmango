@@ -30,10 +30,12 @@ export const bytes = (n: number) => {
 export function PageTitle({
     title,
     count,
+    description,
     action,
 }: {
     title: string;
     count?: number;
+    description?: string;
     action?: ReactNode;
 }) {
     return (
@@ -47,19 +49,40 @@ export function PageTitle({
                 mb: 3,
             }}
         >
-            <Typography variant="h1">
-                {title}{" "}
-                {count !== undefined && (
+            <Box sx={{ minWidth: 0 }}>
+                <Typography variant="h1" sx={{ overflowWrap: "anywhere" }}>
+                    {title}{" "}
+                    {count !== undefined && (
+                        <Typography
+                            component="span"
+                            color="text.secondary"
+                            sx={{
+                                ml: 1.5,
+                                fontSize: 14,
+                                fontWeight: 600,
+                                bgcolor: "action.hover",
+                                border: 1,
+                                borderColor: "divider",
+                                borderRadius: 1,
+                                px: 1,
+                                py: 0.25,
+                                verticalAlign: "middle",
+                            }}
+                        >
+                            {count}
+                        </Typography>
+                    )}
+                </Typography>
+                {description && (
                     <Typography
-                        component="span"
                         color="text.secondary"
-                        sx={{ ml: 1.5, fontSize: 18 }}
+                        sx={{ mt: 0.75, maxWidth: 720 }}
                     >
-                        {count}
+                        {description}
                     </Typography>
                 )}
-            </Typography>
-            {action}
+            </Box>
+            {action && <Box className="page-actions">{action}</Box>}
         </Stack>
     );
 }
@@ -156,26 +179,15 @@ export function Copy({ text, label }: { text: string; label: string }) {
     );
 }
 export function State({ value }: { value: string }) {
+    const tone =
+        value === "running" || value === "active"
+            ? "success"
+            : value === "stopped"
+              ? "neutral"
+              : "warning";
     return (
-        <Box
-            component="span"
-            sx={{ display: "inline-flex", gap: 1, alignItems: "center" }}
-        >
-            <Box
-                component="span"
-                aria-hidden
-                sx={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: "50%",
-                    bgcolor:
-                        value === "running" || value === "active"
-                            ? "success.main"
-                            : value === "stopped"
-                              ? "text.secondary"
-                              : "warning.main",
-                }}
-            />
+        <Box component="span" className="state-badge" data-tone={tone}>
+            <Box component="span" className="state-dot" aria-hidden />
             {value}
         </Box>
     );

@@ -195,7 +195,7 @@ it("preserves typed resource filters until explicitly applied", async () => {
     ).toBe("pending-vm");
     expect(view.router.state.location.search).toBe("");
     await user.click(
-        screen.getByRole("button", { name: "Apply resource filters" }),
+        screen.getByRole("button", { name: "Apply" }),
     );
     await waitFor(() =>
         expect(

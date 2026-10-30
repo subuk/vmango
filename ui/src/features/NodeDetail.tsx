@@ -20,6 +20,7 @@ import {
     type Node,
     type Pool,
 } from "../api/hooks";
+import { Capacity, DetailSection, Summary } from "../components/Information";
 import { ResourceTable } from "../components/ResourceTable";
 import { bytes, PageTitle, QueryState } from "../components/common";
 
@@ -39,30 +40,65 @@ export function NodeDetail() {
                 </Link>
                 <Typography>{node}</Typography>
             </Breadcrumbs>
-            <PageTitle title={node} />
+            <PageTitle
+                title={node}
+                description="Host hardware, resource topology and backend diagnostics."
+            />
             <QueryState query={q}>
                 {(n) => (
-                    <Stack spacing={4}>
-                        <Box component="dl" className="details">
-                            <dt>Hostname</dt>
-                            <dd>{n.hostname}</dd>
-                            <dt>Architecture</dt>
-                            <dd>{n.arch}</dd>
-                            <dt>CPU</dt>
-                            <dd>
-                                {n.cpu_vendor} {n.cpu_model} {n.cpu_info}
-                            </dd>
-                            <dt>Memory</dt>
-                            <dd>{bytes(n.memory_bytes)}</dd>
-                            <dt>Threads per core</dt>
-                            <dd>{n.threads_per_core}</dd>
-                            <dt>IOMMU</dt>
-                            <dd>{n.iommu ? "Available" : "Unavailable"}</dd>
-                        </Box>
-                        <Box>
-                            <Typography variant="h2" sx={{ mb: 2 }}>
-                                CPU topology
-                            </Typography>
+                    <Stack spacing={3}>
+                        <Summary
+                            label="Host summary"
+                            items={[
+                                {
+                                    label: "Host CPUs",
+                                    value: n.cpus.length,
+                                    detail: `${n.threads_per_core || "—"} threads per core`,
+                                },
+                                {
+                                    label: "Installed memory",
+                                    value: bytes(n.memory_bytes),
+                                    detail: "Physical host memory",
+                                },
+                                {
+                                    label: "NUMA cells",
+                                    value: n.numa.length,
+                                    detail: "Memory locality domains",
+                                },
+                                {
+                                    label: "Architecture",
+                                    value: n.arch,
+                                    detail: n.iommu
+                                        ? "IOMMU available"
+                                        : "IOMMU unavailable",
+                                },
+                            ]}
+                        />
+                        <DetailSection
+                            title="Host configuration"
+                            description="Hardware identity and virtualization capabilities."
+                        >
+                            <Box component="dl" className="details">
+                                <dt>Hostname</dt>
+                                <dd>{n.hostname}</dd>
+                                <dt>Architecture</dt>
+                                <dd>{n.arch}</dd>
+                                <dt>CPU</dt>
+                                <dd>
+                                    {n.cpu_vendor} {n.cpu_model} {n.cpu_info}
+                                </dd>
+                                <dt>Memory</dt>
+                                <dd>{bytes(n.memory_bytes)}</dd>
+                                <dt>Threads per core</dt>
+                                <dd>{n.threads_per_core}</dd>
+                                <dt>IOMMU</dt>
+                                <dd>{n.iommu ? "Available" : "Unavailable"}</dd>
+                            </Box>
+                        </DetailSection>
+                        <DetailSection
+                            title="CPU topology"
+                            description="Sockets, cores and virtual machine CPU assignments."
+                        >
                             <Box className="table-scroll">
                                 <Table size="small">
                                     <TableHead>
@@ -122,11 +158,11 @@ export function NodeDetail() {
                                     </TableBody>
                                 </Table>
                             </Box>
-                        </Box>
-                        <Box>
-                            <Typography variant="h2" sx={{ mb: 2 }}>
-                                NUMA and hugepages
-                            </Typography>
+                        </DetailSection>
+                        <DetailSection
+                            title="NUMA and hugepages"
+                            description="Memory by cell and available page allocations."
+                        >
                             <Box className="table-scroll">
                                 <Table size="small">
                                     <TableHead>
@@ -168,71 +204,96 @@ export function NodeDetail() {
                                     </TableBody>
                                 </Table>
                             </Box>
-                        </Box>
+                        </DetailSection>
                     </Stack>
                 )}
             </QueryState>
-            <Box sx={{ mt: 4 }}>
-                <Typography variant="h2" sx={{ mb: 2 }}>
-                    Backend networks (read-only diagnostics)
-                </Typography>
-                <QueryState query={networks}>
-                    {(rows) => (
-                        <ResourceTable
-                            rows={rows}
-                            rowKey={(n) => n.name}
-                            search={(n) => n.name}
-                            columns={[
-                                {
-                                    id: "name",
-                                    label: "Backend network",
-                                    value: (n) => n.name,
-                                },
-                            ]}
-                            empty="No backend networks are available on this host."
-                        />
-                    )}
-                </QueryState>
+            <Box sx={{ mt: 3 }}>
+                <DetailSection
+                    title="Backend networks (read-only diagnostics)"
+                    description="Networks exposed by libvirt on this host."
+                >
+                    <QueryState query={networks}>
+                        {(rows) => (
+                            <ResourceTable
+                                rows={rows}
+                                rowKey={(n) => n.name}
+                                search={(n) => n.name}
+                                columns={[
+                                    {
+                                        id: "name",
+                                        label: "Backend network",
+                                        value: (n) => n.name,
+                                    },
+                                ]}
+                                empty="No backend networks are available on this host."
+                            />
+                        )}
+                    </QueryState>
+                </DetailSection>
             </Box>
-            <Box sx={{ mt: 4 }}>
-                <Typography variant="h2" sx={{ mb: 2 }}>
-                    Storage pools
-                </Typography>
-                <QueryState query={pools}>
-                    {(rows) => (
-                        <Box className="table-scroll">
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        {["Pool", "Size", "Used", "Free"].map(
-                                            (s) => (
+            <Box sx={{ mt: 3 }}>
+                <DetailSection
+                    title="Storage pools"
+                    description="Host storage capacity, usage and available space."
+                >
+                    <QueryState query={pools}>
+                        {(rows) => (
+                            <Box className="table-scroll">
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow>
+                                            {[
+                                                "Pool",
+                                                "Size",
+                                                "Used",
+                                                "Free",
+                                                "Capacity",
+                                            ].map((s) => (
                                                 <TableCell key={s}>
                                                     {s}
                                                 </TableCell>
-                                            ),
-                                        )}
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {rows.map((p) => (
-                                        <TableRow key={p.name}>
-                                            <TableCell>{p.name}</TableCell>
-                                            <TableCell>
-                                                {bytes(p.size_bytes)}
-                                            </TableCell>
-                                            <TableCell>
-                                                {bytes(p.used_bytes)}
-                                            </TableCell>
-                                            <TableCell>
-                                                {bytes(p.free_bytes)}
-                                            </TableCell>
+                                            ))}
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </Box>
-                    )}
-                </QueryState>
+                                    </TableHead>
+                                    <TableBody>
+                                        {rows.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={5}>
+                                                    No storage pools are
+                                                    available on this host.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                        {rows.map((p) => (
+                                            <TableRow key={p.name}>
+                                                <TableCell>{p.name}</TableCell>
+                                                <TableCell>
+                                                    {bytes(p.size_bytes)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {bytes(p.used_bytes)}
+                                                </TableCell>
+                                                <TableCell
+                                                    sx={{ fontWeight: 600 }}
+                                                >
+                                                    {bytes(p.free_bytes)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Capacity
+                                                        used={p.used_bytes}
+                                                        total={p.size_bytes}
+                                                        label={`${p.name} storage usage`}
+                                                    />
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </Box>
+                        )}
+                    </QueryState>
+                </DetailSection>
             </Box>
         </>
     );

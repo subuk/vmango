@@ -81,8 +81,9 @@ validation checks installation and startup on both Debian versions.
 Administrators prepare the hypervisors, libvirt connections, active storage pools
 and networks outside Vmango. They then define image requirements, instance types,
 availability zones, logical networks, storage classes and private host bindings
-in the configuration. Vmango does not provision hosts or create their pools and
-networks.
+in the configuration. Each `cloud` contains `host` blocks with the connection
+`uri`, backend options, zone and network/storage bindings together. Vmango does
+not provision hosts or create their pools and networks.
 
 Follow the [configured-cloud guide](docs/content/en/docs/clouds.md)
 ([website](https://vmango.org/docs/clouds/)) and the

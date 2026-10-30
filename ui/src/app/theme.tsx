@@ -73,7 +73,7 @@ export function Appearance({ children }: { children: ReactNode }) {
                     warning: { main: mode === "light" ? "#875200" : "#efc477" },
                     error: { main: mode === "light" ? "#b42e35" : "#ff9b9e" },
                 },
-                shape: { borderRadius: 5 },
+                shape: { borderRadius: 8 },
                 typography: {
                     fontFamily:
                         '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
@@ -86,8 +86,15 @@ export function Appearance({ children }: { children: ReactNode }) {
                     MuiButton: { defaultProps: { disableElevation: true } },
                     MuiTableCell: {
                         styleOverrides: {
-                            root: { padding: "6px 14px", fontSize: 14 },
-                            head: { fontWeight: 600, padding: "10px 14px" },
+                            root: { padding: "12px 16px", fontSize: 14 },
+                            head: {
+                                fontWeight: 600,
+                                padding: "12px 16px",
+                                color: mode === "light" ? "#535f6b" : "#b3bdc9",
+                                backgroundColor:
+                                    mode === "light" ? "#f3f6f9" : "#252e38",
+                                whiteSpace: "nowrap",
+                            },
                         },
                     },
                     MuiOutlinedInput: {

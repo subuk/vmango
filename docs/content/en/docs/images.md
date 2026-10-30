@@ -22,16 +22,23 @@ selected variants, not universal BIOS/UEFI or cross-architecture compatibility.
 The selector filters architecture and launch requirements using node capabilities.
 
 Each top-level `image` entry is defined once and is available on compatible nodes.
-Storage placement is configured separately:
+Set `image_pool` directly in each existing cloud host. This excerpt shows the
+image storage settings; keep the cloud's catalog and each host's zone,
+network and storage-class bindings:
 
 ```hcl
-libvirt "local" {
-    uri = "qemu:///system"
-    image_pool = "default"
-}
-libvirt "remote" {
-    uri = "qemu+ssh://libvirt@example.org/system"
-    image_pool = "cloud-images"
+cloud "local" {
+    # Keep the cloud catalog here.
+    host "local" {
+        uri = "qemu:///system"
+        image_pool = "default"
+        # Keep this host's zone and network/storage bindings.
+    }
+    host "remote" {
+        uri = "qemu+ssh://libvirt@example.org/system"
+        image_pool = "cloud-images"
+        # Keep this host's zone and network/storage bindings.
+    }
 }
 ```
 
@@ -42,7 +49,8 @@ Other pool types, including `fs`, `netfs`, LVM and RBD, are not supported for
 managed image storage. VM destination disks use a logical storage class mapped
 to a pool on the selected host.
 The same catalog entry can use different pool paths on different nodes. Adding
-a node needs only its connection and pool binding, without copied image definitions.
+a node needs only a cloud host block with its connection and pool binding,
+without copied image definitions.
 
 A downloadable entry has `url`, mandatory `sha256` and `source_format` (`raw` or
 `qcow2`), with no `path`. Use the complete definitions in `vmango.dist.conf` as
@@ -223,7 +231,7 @@ drive. It does not change the `ubuntu-server` entry or the shared source disk.
 
 `graphics = "none"` requires `video_model = "none"` (or omission). The image
 owns these guest device settings. The graphics listener is a private
-`graphics_listen` IP address in each `libvirt` block, resolved after host selection;
+`graphics_listen` IP address in each cloud `host` block, resolved after host selection;
 it does not belong to an image or type. Omission preserves the backend listener
 default.
 

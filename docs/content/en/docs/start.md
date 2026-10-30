@@ -136,9 +136,14 @@ and login settings; it is not a complete cloud configuration:
 ```hcl
 key_file = "./authorized_keys"
 
-libvirt "local" {
-    uri = "qemu:///system"
-    config_drive_pool = "default"
+cloud "local" {
+    # Keep the shipped images, zone, instance types, network and storage class.
+    host "local" {
+        uri = "qemu:///system"
+        config_drive_pool = "default"
+        zone = "local"
+        # Keep the shipped reserves, network and storage bindings here.
+    }
 }
 
 api {
@@ -153,39 +158,53 @@ api {
 }
 ```
 
-Replace `uri` with the verified URI. The name `local` is just a label; you can
-rename it to describe a remote host only if you also update the corresponding
-`host` binding inside the cloud. Use an existing, active storage pool for
+Replace `uri` inside `cloud "local"` → `host "local"` with the verified URI.
+The host name `local` is its stable identity; connection and backend settings
+belong directly in that host block. Use an existing, active storage pool for
 `config_drive_pool`. For example, check `virsh -c URI pool-list --all`.
 
 ### Manage multiple hosts
 
 One Vmango instance can manage virtual machines across multiple local or remote
-libvirt hosts from the same web interface. Add one `libvirt` block per host in
-`vmango.conf`, giving each block a unique name:
+libvirt hosts from the same web interface. Add a `host` block inside the cloud
+for each hypervisor. Host names and connection URIs must be globally unique.
+The following replaces the `cloud "local"` block in the quick-start configuration;
+keep the shared image definition:
 
 ```hcl
-libvirt "local" {
-    uri = "qemu:///system"
-    config_drive_pool = "default"
-}
+cloud "local" {
+    images = ["ubuntu-24.04-x86_64-bios"]
+    zone "local" {}
+    instance_type "small" { cpu = 2 memory_mib = 2048 boot_disk_gib = 20 }
+    network "lan" {}
+    storage_class "standard" {}
 
-libvirt "remote" {
-    uri = "qemu+ssh://libvirt@hypervisor.example.com/system"
-    config_drive_pool = "default"
+    host "local" {
+        uri = "qemu:///system"
+        config_drive_pool = "default"
+        zone = "local"
+        network "lan" { network = "default" }
+        storage_class "standard" { pool = "default" }
+    }
+    host "remote" {
+        uri = "qemu+ssh://libvirt@hypervisor.example.com/system"
+        config_drive_pool = "default"
+        zone = "local"
+        network "lan" { network = "default" }
+        storage_class "standard" { pool = "default" }
+    }
 }
 ```
 
 This example connects a Linux Vmango server to its local KVM host and a remote
-host over SSH. Use the connection types supported by your server platform;
+host over SSH. Use connection types supported by your server platform;
 Windows requires remote hosts with authenticated TLS, as described above.
 Verify each URI and its storage pool as the user running Vmango. Pool names
 refer to pools on each respective host; they do not create shared storage.
-Add a corresponding `host` binding inside the configured cloud for each
-connection, assigning its AZ, logical networks and storage classes. Multiple hosts
-can share one AZ. Restart Vmango after changing the configuration. The scheduler
-selects the host when creating a VM; the user does not select a node. See
-[configured clouds and scheduling](/docs/clouds/) for a complete example.
+Each host contains its connection settings, AZ, logical networks and storage
+classes together. Multiple hosts can share one AZ. Restart Vmango after changing
+the configuration. The scheduler selects the host when creating a VM; the user
+does not select a node. See [configured clouds and scheduling](/docs/clouds/).
 
 ## Set a password and start
 
@@ -243,7 +262,8 @@ VNC port; a successful libvirt TLS connection alone does not tunnel VNC.
 
 - Check the startup log for the configuration filename. Use `-c` explicitly
   if the current directory differs from the extracted archive.
-- Define at least one `libvirt "name"` block. Hosts are configured explicitly,
+- Define at least one `host "name"` inside a cloud, including its `uri`.
+  Hosts are configured explicitly,
   not discovered automatically.
 - Read `cannot get node` / `cannot open libvirt connection` messages. A failed
   connection is omitted from the node list.
@@ -251,8 +271,9 @@ VNC port; a successful libvirt TLS connection alone does not tunnel VNC.
   environment. Fix socket permissions, SSH keys, host-key trust or TLS
   certificates there first. A remote account may need membership in the host's
   libvirt group and a new login session.
-- Define a `cloud` catalog and assign each connection to a cloud/AZ with a
-  `host` binding. A connection alone provides diagnostics, not a user-facing cloud.
+- Define a `cloud` catalog and put each connection's settings in its `host`
+  block, including its AZ and network/storage bindings. Top-level `libvirt`
+  blocks must be migrated into cloud hosts.
 - Verify the pool exists and is active on that connection. An empty VM list
   is normal on a new host and does not mean that no nodes are configured.
 
