@@ -80,6 +80,10 @@ host. Selecting existing local disks during creation constrains placement to the
 owning host; disks from different hosts cannot be combined or silently copied.
 
 Interfaces select a configured logical network, resolved on the existing host.
+Interface attachment accepts `network` (a logical network ID) and optional `mac`.
+NIC model and VLAN are selected by the administrator's host network binding;
+`model`, `vlan` and other unsupported request fields are rejected. Observed
+interface responses retain `model` and `vlan` for diagnostics.
 Custom network creation remains outside this workflow.
 
 Unmanaged VMs are visible and counted, but read-only until explicit adoption.

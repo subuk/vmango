@@ -839,11 +839,7 @@ export interface components {
         };
         ApiInterface: {
             mac?: string;
-            /** @enum {string} */
-            model?: "virtio" | "e1000" | "rtl8139";
             network: string;
-            /** Format: int64 */
-            vlan?: number;
         };
         ApiKey: {
             comment: string;

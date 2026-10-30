@@ -17,8 +17,6 @@ type apiDisk struct {
 type apiInterface struct {
 	Network string `json:"network" minLength:"1"`
 	MAC     string `json:"mac,omitempty"`
-	Model   string `json:"model,omitempty" enum:"virtio,e1000,rtl8139"`
-	VLAN    uint   `json:"vlan,omitempty" maximum:"4094"`
 }
 
 type apiReadInterface struct {
@@ -117,7 +115,7 @@ func (d apiDisk) domain() (*compute.VirtualMachineAttachedVolume, error) {
 	return &compute.VirtualMachineAttachedVolume{Path: path, Alias: d.Alias, DeviceType: compute.NewDeviceType(d.Device), DeviceBus: compute.NewDeviceBus(d.Bus)}, nil
 }
 func (n apiInterface) domain() *compute.VirtualMachineAttachedInterface {
-	return &compute.VirtualMachineAttachedInterface{NetworkName: n.Network, Mac: n.MAC, Model: n.Model, AccessVlan: n.VLAN}
+	return &compute.VirtualMachineAttachedInterface{NetworkName: n.Network, Mac: n.MAC}
 }
 
 type apiVolume struct {

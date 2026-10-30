@@ -525,3 +525,23 @@ func awaitAPITask(t *testing.T, h http.Handler, accepted *httptest.ResponseRecor
 	t.Fatal("task did not finish")
 	return tasks.Task{}
 }
+
+func TestAttachInterfaceRejectsUnsupportedFields(t *testing.T) {
+	h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil)
+	for _, field := range []string{`"model":"e1000"`, `"vlan":42`, `"vlan":0`, `"unexpected":true`} {
+		t.Run(field, func(t *testing.T) {
+			w := apiRequest(h, "POST", "/api/v1/clouds/local/machines/n/v/interfaces", `{"network":"lan",`+field+`}`, true)
+			if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "unexpected property") {
+				t.Fatalf("unsupported input was not rejected: %d %s", w.Code, w.Body)
+			}
+		})
+	}
+	iface := (apiInterface{Network: "lan", MAC: "52:54:00:12:34:56"}).domain()
+	if iface.NetworkName != "lan" || iface.Mac != "52:54:00:12:34:56" || iface.Model != "" || iface.AccessVlan != 0 {
+		t.Fatalf("unexpected interface input mapping: %+v", iface)
+	}
+	observed := vmDTO(&compute.VirtualMachine{Memory: compute.NewSize(1, compute.SizeUnitG), Interfaces: []*compute.VirtualMachineAttachedInterface{{LogicalNetwork: "lan", Model: "virtio", AccessVlan: 7}}})
+	if observed.Interfaces[0].Model != "virtio" || observed.Interfaces[0].VLAN != 7 {
+		t.Fatalf("observed network diagnostics lost: %+v", observed.Interfaces)
+	}
+}
