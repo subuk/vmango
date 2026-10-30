@@ -147,10 +147,6 @@ type apiImageDefaults struct {
 	Initialization string `json:"initialization,omitempty" enum:"none,nocloud,openstack"`
 }
 
-func (d apiImageDefaults) domain() compute.ImageDefaults {
-	return compute.ImageDefaults{Firmware: d.Firmware, DiskBus: compute.NewDeviceBus(d.DiskBus), DiskController: d.DiskController, NICModel: d.NICModel, GuestAgent: d.GuestAgent, Initialization: d.Initialization}
-}
-
 func (e *Environ) machineDTO(vm *compute.VirtualMachine) apiVM {
 	d := vmDTO(vm)
 	d.Managed = e.clouds == nil || vm.Metadata != nil
