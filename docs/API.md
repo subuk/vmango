@@ -105,6 +105,11 @@ and invalid types are rejected. Paths below are relative to `/api/v1`.
 placement. Standalone disk creation uses `name`, `zone`, `storage_class` and
 `size_bytes`; it has no host or raw-pool input.
 
+Interface attachment accepts `network` (a logical network ID) and optional `mac`.
+NIC model and VLAN are selected by the administrator's host network binding;
+`model`, `vlan` and other unsupported request fields are rejected. Observed
+interface responses retain `model` and `vlan` for diagnostics.
+
 The separate `/hosts` API is **read-only**. It cannot create, update, adopt or
 delete infrastructure. Legacy `/nodes/...`, `/vms`, `/volumes` and `/networks`
 endpoints are removed; there are no compatibility aliases. Clients aggregating

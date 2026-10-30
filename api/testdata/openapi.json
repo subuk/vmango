@@ -599,23 +599,9 @@
           "mac": {
             "type": "string"
           },
-          "model": {
-            "enum": [
-              "virtio",
-              "e1000",
-              "rtl8139"
-            ],
-            "type": "string"
-          },
           "network": {
             "minLength": 1,
             "type": "string"
-          },
-          "vlan": {
-            "format": "int64",
-            "maximum": 4094,
-            "minimum": 0,
-            "type": "integer"
           }
         },
         "required": [
