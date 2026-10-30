@@ -113,7 +113,7 @@ func NewCommand(kind string, c InfrastructureCommand) tasks.Command {
 	if c.CreateSpec != nil {
 		refs = append(refs, tasks.ResourceRef{Kind: "machine-request", Scope: c.CloudID, ID: c.CreateSpec.ID})
 	}
-	if c.CloudID != "" {
+	if c.CloudID != "" && usesCloudCapacity(kind) {
 		refs = append(refs, tasks.ResourceRef{Kind: "cloud", Scope: c.CloudID, ID: "capacity", ReadOnly: true})
 	}
 	if c.VM != "" {

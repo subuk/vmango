@@ -35,8 +35,10 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 		}
 	}
 	c.CloudID = cloud.ID
-	command.ExecutionGroups = append(command.ExecutionGroups, "cloud:"+cloud.ID)
-	command.Resources = append(command.Resources, tasks.ResourceRef{Kind: "cloud", Scope: cloud.ID, ID: "capacity", ReadOnly: true})
+	if usesCloudCapacity(command.Kind) {
+		command.ExecutionGroups = append(command.ExecutionGroups, "cloud:"+cloud.ID)
+		command.Resources = append(command.Resources, tasks.ResourceRef{Kind: "cloud", Scope: cloud.ID, ID: "capacity", ReadOnly: true})
+	}
 	if c.AcceptedScopes == nil {
 		c.AcceptedScopes = map[string]string{}
 		for _, host := range cloud.Hosts {
@@ -480,4 +482,17 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		}
 		return nil
 	})
+}
+
+// usesCloudCapacity includes allocation changes and storage mutations, whose
+// uncertain outcomes must fence further admission. Power operations only change
+// runtime state: stopped and unmanaged machines already count in inventory.
+func usesCloudCapacity(kind string) bool {
+	switch kind {
+	case "machine.create", "machine.delete", "machine.adopt", "machine.change-type", "machine.create-disk",
+		"volume.create", "volume.clone", "volume.resize", "volume.delete":
+		return true
+	default:
+		return false
+	}
 }

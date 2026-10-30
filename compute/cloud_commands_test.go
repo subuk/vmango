@@ -2,6 +2,7 @@ package compute_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/rs/zerolog"
 	"path/filepath"
@@ -102,9 +103,12 @@ func (cloudPoolBackend) List(o compute.VolumePoolListOptions) ([]*compute.Volume
 
 type cloudVolumeBackend struct {
 	compute.VolumeRepository
-	mu      sync.Mutex
-	created int
-	deleted int
+	mu           sync.Mutex
+	created      int
+	deleted      int
+	cloneStarted chan struct{}
+	cloneRelease chan struct{}
+	cloneError   error
 }
 
 func (r *cloudVolumeBackend) Get(path, node string) (*compute.Volume, error) {
@@ -115,6 +119,15 @@ func (r *cloudVolumeBackend) ResolvePath(node, pool, name string) (string, error
 	return "/pool/" + name, nil
 }
 func (r *cloudVolumeBackend) Clone(p compute.VolumeCloneParams) (*compute.Volume, error) {
+	if r.cloneStarted != nil {
+		if p.NewName == "one_root" {
+			close(r.cloneStarted)
+			<-r.cloneRelease
+			if r.cloneError != nil {
+				return nil, r.cloneError
+			}
+		}
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.created++
@@ -300,4 +313,86 @@ func TestTypeChangeDoesNotSilentlyRewriteExplicitPinning(t *testing.T) {
 	if result.State != tasks.Failed || result.OutcomeUncertain || backend.mutations != 0 {
 		t.Fatalf("explicit CPU pinning was rewritten: %+v", result)
 	}
+}
+
+func (r *cloudVMBackend) Poweroff(id, node string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v := r.machines[node+"/"+id]
+	v.State = compute.StateStopped
+	r.machines[node+"/"+id] = v
+	return nil
+}
+
+func TestCloudProvisioningDoesNotBlockIndependentPower(t *testing.T) {
+	for _, uncertain := range []bool{false, true} {
+		t.Run(fmt.Sprint(uncertain), func(t *testing.T) {
+			s, backend, volumes, _ := cloudFixture(t, 8)
+			volumes.cloneStarted, volumes.cloneRelease = make(chan struct{}), make(chan struct{})
+			if uncertain {
+				volumes.cloneError = errors.New("clone response lost")
+			}
+			for _, id := range []string{"during", "after"} {
+				backend.machines["b/"+id] = compute.VirtualMachine{Id: id, NodeId: "b", State: compute.StateRunning, Metadata: &compute.MachineMetadata{Cloud: "c"}, Volumes: []*compute.VirtualMachineAttachedVolume{{Path: "/pool/" + id}}}
+			}
+			create := submitCloud(t, s, "blocked-create", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: createSpec("one")})
+			follower := submitCloud(t, s, "queued-create", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: createSpec("two")})
+			runCloudService(t, s)
+			var once sync.Once
+			release := func() { once.Do(func() { close(volumes.cloneRelease) }) }
+			// Release before the service cleanup waits for workers, even on failure.
+			t.Cleanup(release)
+			select {
+			case <-volumes.cloneStarted:
+			case <-time.After(5 * time.Second):
+				t.Fatal("provisioning did not reach clone")
+			}
+			power := submitCloud(t, s, "power-during-clone", "machine.poweroff", compute.InfrastructureCommand{CloudID: "c", Node: "b", VM: "during"})
+			if got := awaitCloudTask(t, s, power.ID); got.State != tasks.Succeeded {
+				t.Fatal(got)
+			}
+			if got, _ := s.Get(create.ID); got.State != tasks.Running {
+				t.Fatal("provisioning was not held open", got)
+			}
+			if got, _ := s.Get(follower.ID); got.State != tasks.Queued {
+				t.Fatal("competing admission ran during clone", got)
+			}
+			checkProtected := func() {
+				for _, command := range []tasks.Command{
+					compute.NewCommand("machine.start", compute.InfrastructureCommand{CloudID: "c", Node: "a", VM: "one"}),
+					compute.NewCommand("volume.resize", compute.InfrastructureCommand{CloudID: "c", Node: "a", Path: "/pool/one_root", Size: compute.NewSize(3, compute.SizeUnitG)}),
+				} {
+					if _, err := s.Submit(tasks.Identity{ID: "admin"}, "protected-resource", command); !isTaskConflict(err) {
+						t.Fatalf("affected resource not protected: %v", err)
+					}
+				}
+			}
+			checkProtected()
+			release()
+			got := awaitCloudTask(t, s, create.ID)
+			if uncertain {
+				if got.State != tasks.Failed || !got.OutcomeUncertain || !got.BlocksResources {
+					t.Fatal(got)
+				}
+				checkProtected()
+				if _, err := s.Submit(tasks.Identity{ID: "admin"}, "uncertain-admission", compute.NewCommand("machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: createSpec("three")})); !isTaskConflict(err) {
+					t.Fatalf("uncertain capacity was not fenced: %v", err)
+				}
+				power = submitCloud(t, s, "power-after-uncertain", "machine.poweroff", compute.InfrastructureCommand{CloudID: "c", Node: "b", VM: "after"})
+				if got := awaitCloudTask(t, s, power.ID); got.State != tasks.Succeeded {
+					t.Fatal(got)
+				}
+				if got, _ := s.Get(follower.ID); got.State != tasks.Queued {
+					t.Fatal("uncertain admission group released", got)
+				}
+			} else if got.State != tasks.Succeeded {
+				t.Fatal(got)
+			}
+		})
+	}
+}
+
+func isTaskConflict(err error) bool {
+	var conflict *tasks.ConflictError
+	return errors.As(err, &conflict)
 }
