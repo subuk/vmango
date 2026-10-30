@@ -20,6 +20,7 @@ type VirtualMachineRepository interface {
 	DetachInterface(id, node, mac string) error
 	GetConsoleStream(id, node string, force bool) (VirtualMachineConsoleStream, error)
 	GetGraphicStream(id, node string) (VirtualMachineGraphicStream, error)
+	Shutdown(id, node string) error
 	Poweroff(id, node string) error
 	Reboot(id, node string) error
 	Start(id, node string) error
@@ -51,6 +52,8 @@ func (service *VirtualMachineService) Action(id string, node, action string) err
 		return fmt.Errorf("unknown action %s", action)
 	case "reboot":
 		return service.VirtualMachineRepository.Reboot(id, node)
+	case "shutdown":
+		return service.VirtualMachineRepository.Shutdown(id, node)
 	case "poweroff":
 		return service.VirtualMachineRepository.Poweroff(id, node)
 	case "start":

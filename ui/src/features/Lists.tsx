@@ -354,7 +354,7 @@ export function MachineActions({
                     Change instance type
                 </MenuItem>
                 {vm.state === "running" &&
-                    ["reboot", "poweroff"].map((action) => (
+                    ["shutdown", "reboot", "poweroff"].map((action) => (
                         <MenuItem
                             key={action}
                             disabled={conflict}
@@ -365,7 +365,7 @@ export function MachineActions({
                         >
                             {action === "poweroff"
                                 ? "Hard power-off…"
-                                : "Reboot…"}
+                                : action === "shutdown" ? "Shutdown…" : "Reboot…"}
                         </MenuItem>
                     ))}
                 <MenuItem
@@ -390,7 +390,7 @@ export function MachineActions({
             )}
             {confirm && (
                 <Confirm
-                    title={`${confirm === "adopt" ? "Adopt" : confirm === "delete" ? "Delete" : confirm === "poweroff" ? "Hard power-off" : "Reboot"} ${vm.name}?`}
+                    title={`${confirm === "adopt" ? "Adopt" : confirm === "delete" ? "Delete" : confirm === "poweroff" ? "Hard power-off" : confirm === "shutdown" ? "Shutdown" : "Reboot"} ${vm.name}?`}
                     action={
                         confirm === "adopt"
                             ? "Adopt machine"
@@ -398,7 +398,7 @@ export function MachineActions({
                               ? "Delete machine"
                               : confirm === "poweroff"
                                 ? "Hard power-off"
-                                : "Reboot"
+                                : confirm === "shutdown" ? "Shutdown" : "Reboot"
                     }
                     extra={
                         confirm === "delete"
@@ -433,7 +433,7 @@ export function MachineActions({
                           ? `Permanently remove ${vm.node}/${vm.name}. Attached disks are kept unless you explicitly choose to delete them.`
                           : confirm === "poweroff"
                             ? `Immediately cut power to ${vm.node}/${vm.name}. Unsaved guest data may be lost.`
-                            : `Reboot ${vm.node}/${vm.name}.`}
+                            : confirm === "shutdown" ? `Request graceful shutdown of ${vm.node}/${vm.name}. The guest operating system must respond to the request.` : `Reboot ${vm.node}/${vm.name}.`}
                 </Confirm>
             )}
         </>

@@ -147,7 +147,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Queue a start, reboot or hard power-off */
+        /** Queue a start, reboot, graceful shutdown or hard power-off */
         post: operations["vm-action"];
         delete?: never;
         options?: never;
@@ -698,10 +698,10 @@ export interface components {
     schemas: {
         ApiActionInputBody: {
             /**
-             * @description poweroff is libvirt Destroy, a hard power-off.
+             * @description shutdown requests graceful guest shutdown; poweroff is libvirt Destroy, a hard power-off.
              * @enum {string}
              */
-            action: "start" | "reboot" | "poweroff";
+            action: "start" | "reboot" | "shutdown" | "poweroff";
         };
         ApiAuthConfig: {
             oidc: boolean;

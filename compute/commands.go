@@ -243,7 +243,7 @@ func (h *CommandHandler) Prepare(command tasks.Command) (tasks.Command, error) {
 			if vm.IsRunning() {
 				return command, ErrConflict
 			}
-		case "machine.reboot", "machine.poweroff":
+		case "machine.reboot", "machine.shutdown", "machine.poweroff":
 			if !vm.IsRunning() {
 				return command, ErrConflict
 			}
@@ -509,7 +509,7 @@ func (h *CommandHandler) Execute(ctx context.Context, command tasks.Command, pro
 			}
 		}
 		return nil
-	case "machine.start", "machine.reboot", "machine.poweroff":
+	case "machine.start", "machine.reboot", "machine.shutdown", "machine.poweroff":
 		action := strings.TrimPrefix(command.Kind, "machine.")
 		if err := stage(action+"-machine", func() error {
 			if err := h.VMs.Action(c.VM, c.Node, action); err != nil {

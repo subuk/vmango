@@ -73,3 +73,10 @@ func (s *VirtualMachineService) GetGraphicStream(id, node string) (VirtualMachin
 	}
 	return s.VirtualMachineRepository.GetGraphicStream(id, node)
 }
+
+func (s *VirtualMachineService) Shutdown(id, node string) error {
+	if err := s.RequireManaged(id, node); err != nil {
+		return err
+	}
+	return s.VirtualMachineRepository.Shutdown(id, node)
+}

@@ -5,10 +5,11 @@
         "additionalProperties": false,
         "properties": {
           "action": {
-            "description": "poweroff is libvirt Destroy, a hard power-off.",
+            "description": "shutdown requests graceful guest shutdown; poweroff is libvirt Destroy, a hard power-off.",
             "enum": [
               "start",
               "reboot",
+              "shutdown",
               "poweroff"
             ],
             "type": "string"
@@ -3181,7 +3182,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Queue a start, reboot or hard power-off",
+        "summary": "Queue a start, reboot, graceful shutdown or hard power-off",
         "tags": [
           "clouds"
         ]

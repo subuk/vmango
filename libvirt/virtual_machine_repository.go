@@ -1046,3 +1046,17 @@ func (repo *VirtualMachineRepository) DetachInterface(id, nodeId, needleMac stri
 	}
 	return nil
 }
+
+func (repo *VirtualMachineRepository) Shutdown(id, nodeId string) error {
+	conn, err := repo.pool.Acquire(nodeId)
+	if err != nil {
+		return repositoryError(err, "cannot acquire connection")
+	}
+	defer repo.pool.Release(nodeId)
+
+	domain, err := conn.LookupDomainByUUIDString(id)
+	if err != nil {
+		return repositoryError(err, "domain lookup failed")
+	}
+	return repositoryError(domain.Shutdown(), "virDomainShutdown")
+}

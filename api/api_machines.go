@@ -17,7 +17,7 @@ type apiActionInput struct {
 	SubmissionInput
 	VM   string `path:"vm"`
 	Body struct {
-		Action string `json:"action" enum:"start,reboot,poweroff" doc:"poweroff is libvirt Destroy, a hard power-off."`
+		Action string `json:"action" enum:"start,reboot,shutdown,poweroff" doc:"shutdown requests graceful guest shutdown; poweroff is libvirt Destroy, a hard power-off."`
 	}
 }
 type apiAttachDiskInput struct {
@@ -61,7 +61,7 @@ func (e *Environ) registerVMOperations(api huma.API) {
 	registerAPI(api, "DELETE", path, "delete-vm", "Queue VM deletion; attached disk deletion requires delete_volumes=true", func(ctx context.Context, in *apiDeleteVMInput) (*apiAccepted, error) {
 		return e.submitTask(ctx, in.IdempotencyKey, "machine.delete", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, DeleteVolumes: in.DeleteVolumes})
 	})
-	registerAPI(api, "POST", path+"/actions", "vm-action", "Queue a start, reboot or hard power-off", func(ctx context.Context, in *apiActionInput) (*apiAccepted, error) {
+	registerAPI(api, "POST", path+"/actions", "vm-action", "Queue a start, reboot, graceful shutdown or hard power-off", func(ctx context.Context, in *apiActionInput) (*apiAccepted, error) {
 		return e.submitTask(ctx, in.IdempotencyKey, "machine."+in.Body.Action, compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM})
 	})
 	registerAPI(api, "POST", path+"/disks/attach", "attach-disk", "Queue disk attachment", func(ctx context.Context, in *apiAttachDiskInput) (*apiAccepted, error) {
