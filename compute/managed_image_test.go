@@ -28,6 +28,7 @@ type imageBackend struct {
 	volumes                   map[string]*compute.Volume
 	creates, uploads, deletes int
 	bytes                     atomic.Uint64
+	readNotify                chan<- struct{}
 	uploadFail                bool
 	fingerprint               string
 }
@@ -62,12 +63,20 @@ func (b *imageBackend) UploadImage(ctx context.Context, binding compute.ImageBin
 	fail := b.uploadFail
 	b.mu.Unlock()
 	buf := make([]byte, 4096)
+	notified := false
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		n, err := r.Read(buf)
 		b.bytes.Add(uint64(n))
+		if n > 0 && !notified && b.readNotify != nil {
+			notified = true
+			select {
+			case b.readNotify <- struct{}{}:
+			default:
+			}
+		}
 		time.Sleep(time.Millisecond)
 		if fail {
 			return errors.New("simulated upload failure")
@@ -162,22 +171,24 @@ func waitImage(t *testing.T, s *tasks.Service, id string) tasks.Task {
 func TestImageStreamingSharingAndNodeIsolation(t *testing.T) {
 	data := []byte(strings.Repeat("diskbytes", 32768))
 	var requests atomic.Int32
-	var backend *imageBackend
+	uploadRead := make(chan struct{}, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
 		w.Header().Set("Content-Length", fmt.Sprint(len(data)))
-		for offset := 0; offset < len(data); offset += 4096 {
-			w.Write(data[offset:min(offset+4096, len(data))])
-			w.(http.Flusher).Flush()
-			time.Sleep(time.Millisecond * 2)
-		}
-		if backend.bytes.Load() == 0 {
-			t.Error("upload did not overlap upstream download")
+		w.Write(data[:4096])
+		w.(http.Flusher).Flush()
+		// Withhold the rest until the backend consumes the prefix. This proves
+		// streaming without assuming the worker starts before a fixed delay.
+		select {
+		case <-uploadRead:
+			w.Write(data[4096:])
+		case <-r.Context().Done():
+			t.Error("upstream request ended before the upload consumed its prefix")
 		}
 	}))
 	defer server.Close()
-	images, b, repo, i := imageSetup(t, server.URL, data)
-	backend = b
+	images, backend, repo, i := imageSetup(t, server.URL, data)
+	backend.readNotify = uploadRead
 	binding, _ := images.Bind("one", i)
 	state, _ := images.Status(binding, i)
 	if state != "downloadable" || requests.Load() != 0 {
