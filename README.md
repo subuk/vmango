@@ -76,36 +76,27 @@ Use the Ubuntu 22.04 Jammy package from the release PPA, following the
 The repository suite must remain `jammy`, not the Debian codename. Package
 validation checks installation and startup on both Debian versions.
 
-## Hypervisor configuration
+## Configure a cloud
 
-Install libvirt and qemu-kvm.
+Administrators prepare the hypervisors, libvirt connections, active storage pools
+and networks outside Vmango. They then define image requirements, instance types,
+availability zones, logical networks, storage classes and private host bindings
+in the configuration. Vmango does not provision hosts or create their pools and
+networks.
 
-Ubuntu:
+Follow the [configured-cloud guide](docs/content/en/docs/clouds.md)
+([website](https://vmango.org/docs/clouds/)) and the
+[managed-image guide](docs/content/en/docs/images.md)
+([website](https://vmango.org/docs/images/)). The shipped configuration includes
+pinned downloadable images that are prepared lazily on the selected hypervisor;
+manual image downloads are not required for that catalog. Administrators may
+also register an existing source volume as described in the image guide.
 
-    sudo apt-get install libvirt-bin qemu-kvm qemu-system
-
-Centos:
-
-    yum install -y libvirt qemu-kvm
-    systemctl enable --now libvirtd
-
-Allow your user to access libvirt socket:
-
-    sudo usermod -aG libvirtd [username]
-    newgrp libvirtd
-
-Download vm images to default libvirt pool location:
-
-    cd /var/lib/libvirt/images/
-    wget https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1901.qcow2
-    wget https://cloud-images.ubuntu.com/minimal/releases/bionic/release/ubuntu-18.04-minimal-cloudimg-amd64.img
-
-Define default volume pool (if not exists) and start it:
-
-    virsh pool-define-as default dir --target /var/lib/libvirt/images/
-    virsh pool-start default
-    virsh pool-autostart default
-
+Users select a cloud, image, instance type, availability zone, logical network
+and storage class. The scheduler chooses the host. Creation accepts catalog
+references, SSH keys and optional cloud-init user data; it does not accept raw
+pool names, image paths or image-policy overrides. See the
+[API creation example](docs/API.md#create-a-vm) for automation.
 
 ## Local run
 
@@ -135,15 +126,20 @@ Requests without either browser header are treated as non-browser requests;
 Bearer authentication is still required for protected resource routes.
 
 
-### Dependencies for Ubuntu 14.04+
+### Dependencies for Linux
 
-Install libvirt and kvm
+Install a C compiler, pkg-config and the libvirt development libraries alongside
+Go 1.26 or newer, Python 3 and the pinned Node toolchain. For example, on Ubuntu
+24.04 the native build and ISO tools are:
 
-    sudo apt-get install libvirt-dev libvirt-bin qemu-kvm qemu-system genisoimage
+```sh
+sudo apt-get install build-essential pkg-config libvirt-dev genisoimage
+```
 
-Install Go compiler.
-Configure libvirt as described above.
-Now you can use your own computer as hypervisor.
+Building the application does not configure a hypervisor. Use an existing local
+or remote libvirt host and define the cloud catalog and private bindings as
+[described above](#configure-a-cloud). See the maintained
+[source-build guide](docs/content/en/docs/build.md) for build and verification steps.
 
 ### Dependencies for MacOS
 
