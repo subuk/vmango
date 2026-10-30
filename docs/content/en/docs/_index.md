@@ -24,6 +24,8 @@ and manage machines from your browser.
   logical networks, storage classes and automatic placement.
 - [Cloud images and provisioning](/docs/images/): choose an OS image, register
   it in Vmango and create your first machine.
+- [Automation API](/docs/api/): open Swagger UI, create an API token and
+  automate machine and volume operations.
 - [Build from source](/docs/build/): build and run Vmango for development.
 
 The [example configuration](https://github.com/subuk/vmango/blob/master/vmango.dist.conf)

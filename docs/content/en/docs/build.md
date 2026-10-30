@@ -1,7 +1,7 @@
 ---
 title: "Build from source"
 description: "Build and run Vmango for local development."
-weight: 4
+weight: 5
 ---
 
 Building requires Go 1.26 or newer, a C compiler, pkg-config and the libvirt

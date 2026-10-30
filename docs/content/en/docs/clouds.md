@@ -147,10 +147,10 @@ The old `/api/v1/nodes/...` and global `/vms`, `/volumes` and `/networks` endpoi
 are removed. Read-only administrative diagnostics use `/api/v1/hosts/...`.
 Authentication, keys and task history remain application-wide.
 
-The application serves interactive API documentation at `/api/docs`, authenticated
-OpenAPI at `/api/openapi.json`, and the console protocol at `/api/console-protocol`.
-The repository's [API reference](https://github.com/subuk/vmango/blob/master/docs/API.md)
-lists the routes, task behavior, authentication and console examples. Binary
+See [Automation API](/docs/api/) for Swagger UI, authentication and an overview
+of supported operations. The repository's
+[API reference](https://github.com/subuk/vmango/blob/master/docs/API.md) lists the
+routes, task behavior and console examples. Binary
 archives include `QUICKSTART.md`, `API.md`, `CLOUDS.md`, `IMAGES.md`, `TASKS.md`
 and `MIGRATION.md` for offline reference. They use the maintained repository
 guides, with internal guide links adjusted to the archive filenames.

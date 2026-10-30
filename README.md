@@ -217,9 +217,11 @@ distribution packages.
 ## Automation API
 
 Vmango provides a versioned JSON API with JWT Bearer authentication, generated
-OpenAPI and locally bundled Swagger UI at `/api/docs`. See [API documentation](docs/API.md)
-for VM/cloud-init examples, durable asynchronous task semantics and serial/VNC
-clients with reusable signed browser links.
+OpenAPI and locally bundled Swagger UI at `/api/docs`. Start with the
+[API guide](https://vmango.org/docs/api/) for Swagger access and authentication.
+See the [API reference](docs/API.md) for VM/cloud-init examples, durable
+asynchronous task semantics and serial/VNC clients with reusable signed browser
+links.
 
 
 ## Frontend development and authentication migration
