@@ -28,6 +28,10 @@ def package(version, target, binary, runtime=None):
         shutil.copy2(root / "docs/content/en/docs/start.md", stage / "QUICKSTART.md")
         shutil.copy2(root / "docs/UI-MIGRATION.md", stage / "MIGRATION.md")
         shutil.copy2(root / "docs/API.md", stage / "API.md")
+        shutil.copy2(root / "docs/content/en/docs/images.md", stage / "IMAGES.md")
+        provenance = stage / "docs/data"
+        provenance.mkdir(parents=True)
+        shutil.copy2(root / "docs/data/image-sources.json", provenance)
         # Embedded Go and browser dependencies retain their upstream notices.
         notices = stage / "licenses"
         notices.mkdir(exist_ok=True)

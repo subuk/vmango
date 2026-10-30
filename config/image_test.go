@@ -97,7 +97,13 @@ func TestManagedSourceConfiguration(t *testing.T) {
 }
 
 func TestShippedManagedCatalogMatchesVerifiedProvenance(t *testing.T) {
-	data, err := os.ReadFile("../vmango.dist.conf")
+	// Go package tests run in config/, while packaged Windows test binaries
+	// run beside vmango.dist.conf in the extracted runtime directory.
+	root := ".."
+	if _, err := os.Stat(filepath.Join(root, "vmango.dist.conf")); os.IsNotExist(err) {
+		root = "."
+	}
+	data, err := os.ReadFile(filepath.Join(root, "vmango.dist.conf"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +130,7 @@ func TestShippedManagedCatalogMatchesVerifiedProvenance(t *testing.T) {
 		Features  uint64 `json:"incompatible_features"`
 		Publisher string `json:"publisher_checksums"`
 	}
-	data, err = os.ReadFile("../docs/data/image-sources.json")
+	data, err = os.ReadFile(filepath.Join(root, "docs", "data", "image-sources.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
