@@ -253,3 +253,19 @@ it.each(["catalog", "running", "unmanaged", "busy", "unavailable"])(
         expect(state.request).not.toHaveBeenCalled();
     },
 );
+
+it("shows loading feedback until instance types arrive", () => {
+    state.types = undefined;
+    const view = show();
+    expect(screen.getByRole("status").textContent).toContain(
+        "Loading instance types",
+    );
+    expect(screen.queryByRole("combobox")).toBeNull();
+    state.types = [
+        { id: "small", name: "Small" },
+        { id: "large", name: "Large" },
+    ];
+    view.refresh();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByRole("combobox")).toBeTruthy();
+});

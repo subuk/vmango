@@ -7,6 +7,7 @@ import {
     Box,
     Button,
     Checkbox,
+    CircularProgress,
     FormControlLabel,
     Link,
     MenuItem,
@@ -807,12 +808,27 @@ function EditForm({ vm }: { vm: VM }) {
                         cause an error.
                     </Typography>
                     <ErrorMessage error={clouds.error} />
-                    <Choice
-                        label="Instance type"
-                        value={selectedType}
-                        entries={instanceTypes}
-                        set={setType}
-                    />
+                    {!clouds.data && !clouds.error ? (
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{ alignItems: "center" }}
+                            role="status"
+                        >
+                            <CircularProgress
+                                size={20}
+                                aria-label="Loading instance types"
+                            />
+                            <Typography>Loading instance types…</Typography>
+                        </Stack>
+                    ) : (
+                        <Choice
+                            label="Instance type"
+                            value={selectedType}
+                            entries={instanceTypes}
+                            set={setType}
+                        />
+                    )}
                     <Button
                         variant="contained"
                         disabled={cannotChange}
