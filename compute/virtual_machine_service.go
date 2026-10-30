@@ -70,3 +70,16 @@ type VirtualMachineCapabilities struct {
 	Graphics        []GraphicType
 	VideoModels     []VideoModel
 }
+
+// MachineResourceRepository preserves all non-resource guest configuration when
+// applying an explicit instance type, including backend-only XML attributes.
+type MachineResourceRepository interface {
+	SaveResources(vm *VirtualMachine) error
+}
+
+func (s *VirtualMachineService) SaveResources(vm *VirtualMachine) error {
+	if repo, ok := s.VirtualMachineRepository.(MachineResourceRepository); ok {
+		return repo.SaveResources(vm)
+	}
+	return fmt.Errorf("%w: resource-only machine updates are unavailable", ErrUnavailable)
+}

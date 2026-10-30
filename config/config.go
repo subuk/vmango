@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"net"
 	"strings"
 	"subuk/vmango/auth"
 	"subuk/vmango/compute"
@@ -80,6 +81,8 @@ type ImageConfig struct {
 	DiskBus          string `hcl:"disk_bus"`
 	DiskController   string `hcl:"disk_controller"`
 	NICModel         string `hcl:"nic_model"`
+	Graphics         string `hcl:"graphics"`
+	VideoModel       string `hcl:"video_model"`
 	GuestAgent       *bool  `hcl:"guest_agent"`
 	Initialization   string `hcl:"initialization"`
 	MinimumMemoryMiB int64  `hcl:"minimum_memory_mib"`
@@ -142,7 +145,7 @@ func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeM
 			name = entry.ID
 		}
 		i := compute.Image{ID: entry.ID, Name: name, OSName: entry.OsName, OSVersion: entry.OsVersion, Arch: compute.NewArch(entry.OsArch), SourcePath: path,
-			Defaults:           compute.ImageDefaults{Firmware: firmware, DiskBus: bus, DiskController: entry.DiskController, NICModel: entry.NICModel, GuestAgent: entry.GuestAgent, Initialization: entry.Initialization},
+			Defaults:           compute.ImageDefaults{Firmware: firmware, DiskBus: bus, DiskController: entry.DiskController, NICModel: entry.NICModel, GuestAgent: entry.GuestAgent, Graphics: entry.Graphics, VideoModel: entry.VideoModel, Initialization: entry.Initialization},
 			MinimumMemoryBytes: uint64(entry.MinimumMemoryMiB) << 20, MinimumDiskBytes: uint64(entry.MinimumDiskGiB) << 30}
 		if entry.SourceSizeBytes < 0 {
 			return nil, nil, fmt.Errorf("image %q: source_size_bytes must be positive", entry.ID)
@@ -192,6 +195,7 @@ type LibvirtConfig struct {
 	ConfigDrivePool        string `hcl:"config_drive_pool"`
 	ConfigDriveWriteFormat string `hcl:"config_drive_write_format"`
 	Emulator               string `hcl:"emulator"`
+	GraphicsListen         string `hcl:"graphics_listen"`
 	QcowPreallocMetadata   bool   `hcl:"qcow_prealloc_metadata"`
 	Cache                  bool   `hcl:"cache"`
 }
@@ -302,6 +306,9 @@ func Parse(filename string) (*Config, error) {
 	libvirt_ids := map[string]struct{}{}
 	for index := range config.Libvirts {
 		libvirt := &config.Libvirts[index]
+		if libvirt.GraphicsListen != "" && net.ParseIP(libvirt.GraphicsListen) == nil {
+			return nil, fmt.Errorf("libvirt %s: graphics_listen must be empty or an IP address", libvirt.Name)
+		}
 		if libvirt.ImagePool == "" {
 			libvirt.ImagePool = "default"
 		}

@@ -155,7 +155,7 @@ func TestAPISpecificationContract(t *testing.T) {
 			}
 		}
 	}
-	for _, id := range []string{"create-cloud-machine", "list-clouds", "get-cloud", "list-cloud-machines", "change-instance-type", "adopt-machine", "create-machine-disk", "update-vm", "get-vm", "delete-vm", "vm-action", "attach-disk", "detach-disk", "attach-interface", "detach-interface", "clone-volume", "resize-volume", "delete-volume", "get-volume", "list-keys", "get-key", "add-key", "delete-key", "list-hosts", "get-host", "list-networks", "list-pools", "list-images", "get-capabilities", "create-console-link", "connect-console"} {
+	for _, id := range []string{"create-cloud-machine", "list-clouds", "get-cloud", "list-cloud-machines", "change-instance-type", "adopt-machine", "create-machine-disk", "get-vm", "delete-vm", "vm-action", "attach-disk", "detach-disk", "attach-interface", "detach-interface", "clone-volume", "resize-volume", "delete-volume", "get-volume", "list-keys", "get-key", "add-key", "delete-key", "list-hosts", "get-host", "list-networks", "list-pools", "list-images", "get-capabilities", "create-console-link", "connect-console"} {
 		if !ids[id] {
 			t.Errorf("missing operation %s", id)
 		}
@@ -225,22 +225,14 @@ func TestAPIPatchAndErrors(t *testing.T) {
 	cfg := apiTestConfig(t)
 	repo := &apiVMRepo{vm: compute.VirtualMachine{VCpus: 4, Memory: compute.NewSize(2, compute.SizeUnitG), GuestAgent: true, Autostart: true, Hugepages: true, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc}, VideoModel: compute.VideoModelNone}}
 	h := newTestAPI(t, cfg, zerolog.Nop(), nil, nil, nil, nil, nil, compute.NewVirtualMachineService(repo), nil, nil)
-	w := apiRequest(h, "PATCH", "/api/v1/clouds/local/machines/n/v", `{"autostart":false}`, true)
-	if w.Code != 202 {
-		t.Fatalf("%d %s", w.Code, w.Body)
-	}
-	awaitAPITask(t, h, w)
-	if repo.vm.Autostart || !repo.vm.GuestAgent || !repo.vm.Hugepages || repo.vm.VCpus != 4 || repo.vm.Memory.Bytes() != 2<<30 {
-		t.Fatalf("omitted fields changed: %+v", repo.vm)
-	}
-	for _, body := range []string{`{"vcpus":0}`, `{"graphics":"bad"}`, `{"memory_bytes":-1}`, `{"unexpected":true}`, `broken`} {
+	for _, body := range []string{`{"autostart":false}`, `{"guest_agent":false}`, `{"graphics":"vnc","graphics_listen":"0.0.0.0","video_model":"qxl"}`} {
 		w := apiRequest(h, "PATCH", "/api/v1/clouds/local/machines/n/v", body, true)
-		if w.Code != 422 && w.Code != 400 {
-			t.Fatalf("invalid %s: %d", body, w.Code)
+		if w.Code != 405 {
+			t.Fatalf("removed PATCH accepted: %d %s", w.Code, w.Body)
 		}
 	}
-	if repo.saves != 1 {
-		t.Fatalf("invalid requests mutated VM %d", repo.saves)
+	if repo.saves != 0 {
+		t.Fatal("removed PATCH mutated machine")
 	}
 	for _, tt := range []struct {
 		err    error
@@ -543,5 +535,20 @@ func TestAttachInterfaceRejectsUnsupportedFields(t *testing.T) {
 	observed := vmDTO(&compute.VirtualMachine{Memory: compute.NewSize(1, compute.SizeUnitG), Interfaces: []*compute.VirtualMachineAttachedInterface{{LogicalNetwork: "lan", Model: "virtio", AccessVlan: 7}}})
 	if observed.Interfaces[0].Model != "virtio" || observed.Interfaces[0].VLAN != 7 {
 		t.Fatalf("observed network diagnostics lost: %+v", observed.Interfaces)
+	}
+}
+
+func TestCatalogOperationsRejectPolicyOverrides(t *testing.T) {
+	h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil)
+	for _, field := range []string{`"autostart":true`, `"guest_agent":false`, `"graphics":"none"`, `"graphics_listen":"127.0.0.2"`, `"video_model":"qxl"`} {
+		for _, input := range []struct{ path, body string }{
+			{"/api/v1/clouds/local/machines", `{"id":"v","image":"image","instance_type":"small","zone":"z","network":"lan","storage_class":"fast","start":false,` + field + `}`},
+			{"/api/v1/clouds/local/machines/n/v/instance-type", `{"instance_type":"small",` + field + `}`},
+		} {
+			w := apiRequest(h, "POST", input.path, input.body, true)
+			if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "unexpected property") {
+				t.Fatalf("policy override accepted: %s %s: %d %s", input.path, field, w.Code, w.Body)
+			}
+		}
 	}
 }

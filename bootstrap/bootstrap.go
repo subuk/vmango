@@ -84,6 +84,9 @@ func Web(configFilename string) {
 	vmRepSettings := map[string]libvirt.NodeSettings{}
 	vmManSettings := map[string]compute.VirtualMachineManagerNodeSettings{}
 	for _, c := range cfg.Libvirts {
+		if err := libvirt.ValidateGraphicsListen(c.GraphicsListen); err != nil {
+			logger.Fatal().Err(err).Str("node", c.Name).Msg("invalid graphics listener")
+		}
 		nodeUri[c.Name] = c.Uri
 		scopeHash := sha256.Sum256([]byte(c.Uri))
 		nodeScopes[c.Name] = "libvirt:" + hex.EncodeToString(scopeHash[:])
@@ -99,6 +102,7 @@ func Web(configFilename string) {
 		vmRepSettings[c.Name] = libvirt.NodeSettings{
 			CdSuffix:             c.ConfigDriveSuffix,
 			Emulator:             c.Emulator,
+			GraphicsListen:       c.GraphicsListen,
 			QcowPreallocMetadata: c.QcowPreallocMetadata,
 			Cache:                c.Cache,
 		}
@@ -146,6 +150,9 @@ func Web(configFilename string) {
 	defer artifactRepo.Close()
 	imageBindings := map[string]compute.ImageBinding{}
 	for _, c := range cfg.Libvirts {
+		if err := libvirt.ValidateGraphicsListen(c.GraphicsListen); err != nil {
+			logger.Fatal().Err(err).Str("node", c.Name).Msg("invalid graphics listener")
+		}
 		imageBindings[c.Name] = compute.ImageBinding{Scope: nodeScopes[c.Name], Pool: c.ImagePool}
 	}
 	images.ManagedSources = compute.NewManagedImageService(volumeRepo, artifactRepo, imageBindings, compute.ImageTransferLimits{MaxBytes: uint64(cfg.ImageTransfers.MaxBytes), Timeout: time.Duration(cfg.ImageTransfers.TimeoutSeconds) * time.Second, IdleTimeout: time.Duration(cfg.ImageTransfers.IdleTimeoutSeconds) * time.Second})

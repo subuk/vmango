@@ -14,7 +14,7 @@ func TestImageConversion(t *testing.T) {
 	text := `
 image "/images/legacy" { os_name = "Ubuntu" os_arch = "aarch64" efi = true protected = true }
 image "normal" { path = "/images/shared" os_name = "Ubuntu" os_arch = "aarch64" }
-image "custom" { path = "/images/shared" name = "Custom Ubuntu" os_arch = "aarch64" guest_agent = false initialization = "none" disk_bus = "scsi" disk_controller = "virtio-scsi" minimum_memory_mib = 512 minimum_disk_gib = 10 }
+image "custom" { path = "/images/shared" name = "Custom Ubuntu" os_arch = "aarch64" guest_agent = false graphics = "spice" video_model = "qxl" initialization = "none" disk_bus = "scsi" disk_controller = "virtio-scsi" minimum_memory_mib = 512 minimum_disk_gib = 10 }
 image "/dev/private" { hidden = true }
 volume "/images/shared" { protected = true }
 volume "/ordinary" { protected = true hidden = true }
@@ -42,6 +42,9 @@ volume "/ordinary" { protected = true hidden = true }
 	if images[1].Defaults.GuestAgent != nil || images[2].Defaults.GuestAgent == nil || *images[2].Defaults.GuestAgent {
 		t.Fatal("omitted and false were conflated")
 	}
+	if images[2].Defaults.Graphics != "spice" || images[2].Defaults.VideoModel != "qxl" {
+		t.Fatal("image display policy lost")
+	}
 	if images[2].Defaults.Initialization != "none" || images[2].Defaults.DiskBus != compute.DeviceBusScsi || images[2].MinimumMemoryBytes != 512<<20 || images[2].MinimumDiskBytes != 10<<30 {
 		t.Fatalf("custom = %+v", images[2])
 	}
@@ -51,7 +54,7 @@ volume "/ordinary" { protected = true hidden = true }
 }
 
 func TestInvalidImageConfiguration(t *testing.T) {
-	for _, options := range []string{`disk_bus = "banana"`, `initialization = "invalid"`, `efi = true firmware = "bios"`, `disk_controller = "virtio-scsi"`, `minimum_disk_gib = 18446744073709551615`} {
+	for _, options := range []string{`graphics = "bad"`, `video_model = "bad"`, `graphics = "none" video_model = "qxl"`, `disk_bus = "banana"`, `initialization = "invalid"`, `efi = true firmware = "bios"`, `disk_controller = "virtio-scsi"`, `minimum_disk_gib = 18446744073709551615`} {
 		t.Run(options, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "test.conf")
 			os.WriteFile(path, []byte(`image "test" { path = "/base" os_arch = "x86_64" `+options+` }`), 0600)
@@ -180,6 +183,21 @@ func TestConflictingSharedArtifactDefinitions(t *testing.T) {
 		os.WriteFile(path, []byte(text), 0600)
 		if _, err := Parse(path); err == nil {
 			t.Fatal("conflicting artifact definitions accepted")
+		}
+	}
+}
+
+func TestPrivateGraphicsListenerValidation(t *testing.T) {
+	for _, address := range []string{"", "127.0.0.1", "0.0.0.0", "::1", "::", "not-an-ip", "127.0.0.1:5900"} {
+		path := filepath.Join(t.TempDir(), "listener.conf")
+		os.WriteFile(path, []byte(`libvirt "host" { uri="qemu:///session" graphics_listen="`+address+`" }`), 0600)
+		cfg, err := Parse(path)
+		valid := address != "not-an-ip" && address != "127.0.0.1:5900"
+		if valid && (err != nil || cfg.Libvirts[0].GraphicsListen != address) {
+			t.Fatalf("valid binding %q: %v", address, err)
+		}
+		if !valid && err == nil {
+			t.Fatalf("invalid binding %q accepted", address)
 		}
 	}
 }

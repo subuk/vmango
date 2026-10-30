@@ -170,6 +170,18 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 				return nil, nil, e
 			}
 		}
+		if common.Graphics != "" && i.Defaults.Graphics != "" && common.Graphics != i.Defaults.Graphics {
+			return nil, nil, fmt.Errorf("conflicting image graphics requirements")
+		}
+		if common.VideoModel != "" && i.Defaults.VideoModel != "" && common.VideoModel != i.Defaults.VideoModel {
+			return nil, nil, fmt.Errorf("conflicting image video requirements")
+		}
+		if i.Defaults.Graphics != "" {
+			common.Graphics = i.Defaults.Graphics
+		}
+		if i.Defaults.VideoModel != "" {
+			common.VideoModel = i.Defaults.VideoModel
+		}
 		if overrides.GuestAgent == nil && i.Defaults.GuestAgent != nil {
 			if common.GuestAgent != nil && *common.GuestAgent != *i.Defaults.GuestAgent {
 				return nil, nil, fmt.Errorf("conflicting image defaults for guest agent; specify an override")
@@ -236,6 +248,7 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 	if vm.Firmware == "auto" {
 		vm.Firmware = ""
 	}
+	vm.Graphic.Type, vm.VideoModel = common.Display()
 	vm.DiskController = common.DiskController
 	vm.GuestAgent = true
 	if common.GuestAgent != nil {

@@ -143,6 +143,8 @@ type apiImageDefaults struct {
 	DiskBus        string `json:"disk_bus,omitempty" enum:"virtio,scsi,ide"`
 	DiskController string `json:"disk_controller,omitempty" enum:"virtio-scsi"`
 	NICModel       string `json:"nic_model,omitempty" enum:"virtio,e1000,rtl8139"`
+	Graphics       string `json:"graphics" enum:"none,vnc,spice"`
+	VideoModel     string `json:"video_model" enum:"none,cirrus,qxl"`
 	GuestAgent     *bool  `json:"guest_agent,omitempty"`
 	Initialization string `json:"initialization,omitempty" enum:"none,nocloud,openstack"`
 }

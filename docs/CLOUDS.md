@@ -18,7 +18,10 @@ of a newly provisioned boot disk (`boot_disk_gib`). CPU requests must be positiv
 and no greater than the vCPU count; they do not configure CPU quotas, shares or
 runtime guarantees. Memory requests default to the limit and must equal it;
 memory overselling and automatic ballooning are unsupported. Images own boot
-requirements and device defaults. A type too small for the image is rejected,
+requirements and device defaults (`guest_agent`, `graphics`, `video_model`).
+Images default to guest agent enabled, VNC and no video device. Types own
+`autostart`, which defaults to `false`. The create request's `start` flag requests
+a one-time start and does not override autostart. A type too small for the image is rejected,
 including when the image's actual virtual disk capacity exceeds the boot disk.
 
 Host CPU and RAM reserves reduce allocatable budgets. Every create inventories
@@ -99,7 +102,20 @@ Change instance type only while a managed VM is stopped. Admission replaces its
 old requests with the proposed requests on its current host. If that host has
 insufficient resources, the command fails even if another host has capacity.
 There is no automatic stop, migration or restart. Existing disk sizes stay intact;
-growth is a separate explicit operation. Current image defaults are not reapplied.
+growth is a separate explicit operation. Current image defaults are not reapplied. The selected type's autostart policy
+is applied while the current guest/device settings and graphics listener remain
+unchanged. Adoption also preserves these settings. Configuration edits affect
+future explicit operations; accepted tasks retain their policy and backend
+binding snapshots.
+
+Configure `graphics_listen` only inside the private `libvirt` connection block.
+Omission preserves libvirt's listener default. Explicit values must be IP
+addresses (IPv4 or IPv6), not hostnames or host:port strings. The backend resolves
+the selected host's binding before writing its XML. Console forwarding uses the
+observed listener; wildcard addresses use loopback through SSH or the remote
+connection host for direct connections. Remote loopback listeners require SSH.
+Remote console access through Vmango requires HTTPS. These policy settings have
+no per-machine write API; effective values remain read-only diagnostics.
 
 ## API migration
 

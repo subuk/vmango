@@ -135,8 +135,7 @@ export interface paths {
         delete: operations["delete-vm"];
         options?: never;
         head?: never;
-        /** Queue a persistent configuration update; omitted fields are preserved */
-        patch: operations["update-vm"];
+        patch?: never;
         trace?: never;
     };
     "/api/v1/clouds/{cloud}/machines/{node}/{vm}/actions": {
@@ -831,11 +830,15 @@ export interface components {
             disk_controller?: "virtio-scsi";
             /** @enum {string} */
             firmware?: "auto" | "bios" | "efi";
+            /** @enum {string} */
+            graphics: "none" | "vnc" | "spice";
             guest_agent?: boolean;
             /** @enum {string} */
             initialization?: "none" | "nocloud" | "openstack";
             /** @enum {string} */
             nic_model?: "virtio" | "e1000" | "rtl8139";
+            /** @enum {string} */
+            video_model: "none" | "cirrus" | "qxl";
         };
         ApiInterface: {
             mac?: string;
@@ -906,16 +909,6 @@ export interface components {
             numa: components["schemas"]["ApiNUMA"][];
             /** Format: int64 */
             threads_per_core: number;
-        };
-        ApiPatchVM: {
-            autostart?: boolean;
-            /** @enum {string} */
-            graphics?: "none" | "vnc" | "spice";
-            /** @description Backend listen address; Vmango still proxies console access. */
-            graphics_listen?: string;
-            guest_agent?: boolean;
-            /** @enum {string} */
-            video_model?: "none" | "cirrus" | "qxl";
         };
         ApiPlacementCapabilities: {
             attributes: string[];
@@ -1125,6 +1118,7 @@ export interface components {
             name?: string;
         };
         InstanceType: {
+            autostart: boolean;
             /** Format: int64 */
             boot_disk_bytes: number;
             /** Format: int64 */
@@ -1886,110 +1880,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Accepted */
-            202: {
-                headers: {
-                    Location?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiTaskReference"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-        };
-    };
-    "update-vm": {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
-                "Idempotency-Key": string;
-            };
-            path: {
-                cloud: string;
-                node: string;
-                vm: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ApiPatchVM"];
-            };
-        };
         responses: {
             /** @description Accepted */
             202: {

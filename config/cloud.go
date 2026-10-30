@@ -18,6 +18,7 @@ type InstanceTypeConfig struct {
 	MemoryMiB        int64  `hcl:"memory_mib"`
 	MemoryRequestMiB *int64 `hcl:"memory_request_mib"`
 	BootDiskGiB      int64  `hcl:"boot_disk_gib"`
+	Autostart        bool   `hcl:"autostart"`
 	Hugepages        bool   `hcl:"hugepages"`
 }
 type CloudConfig struct {
@@ -120,7 +121,7 @@ func (cfg *Config) CloudDefinitions() ([]compute.Cloud, error) {
 			if t.CPURequest != nil {
 				cpuRequest = *t.CPURequest
 			}
-			c.InstanceTypes = append(c.InstanceTypes, compute.InstanceType{ID: t.ID, Name: displayName(t.ID, t.Name), VCPUs: t.CPU, CPURequest: cpuRequest, MemoryBytes: memory, MemoryRequestBytes: request, BootDiskBytes: disk, Hugepages: t.Hugepages})
+			c.InstanceTypes = append(c.InstanceTypes, compute.InstanceType{ID: t.ID, Name: displayName(t.ID, t.Name), VCPUs: t.CPU, CPURequest: cpuRequest, MemoryBytes: memory, MemoryRequestBytes: request, BootDiskBytes: disk, Hugepages: t.Hugepages, Autostart: t.Autostart})
 		}
 		for _, h := range entry.Hosts {
 			uri := knownNodes[h.Node]

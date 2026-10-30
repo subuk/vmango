@@ -16,82 +16,44 @@ func VolumeRef(node, path string) tasks.ResourceRef {
 	return tasks.ResourceRef{Kind: "volume", Scope: node, ID: path}
 }
 
-type MachinePatch struct {
-	VCPUs          *int    `json:"vcpus,omitempty"`
-	MemoryBytes    *uint64 `json:"memory_bytes,omitempty"`
-	Autostart      *bool   `json:"autostart,omitempty"`
-	GuestAgent     *bool   `json:"guest_agent,omitempty"`
-	Hugepages      *bool   `json:"hugepages,omitempty"`
-	Graphics       *string `json:"graphics,omitempty"`
-	GraphicsListen *string `json:"graphics_listen,omitempty"`
-	VideoModel     *string `json:"video_model,omitempty"`
-}
-
-func (p MachinePatch) Apply(vm *VirtualMachine) {
-	if p.VCPUs != nil {
-		vm.VCpus = *p.VCPUs
-	}
-	if p.MemoryBytes != nil {
-		vm.Memory = NewSize(*p.MemoryBytes, SizeUnitB)
-	}
-	if p.Autostart != nil {
-		vm.Autostart = *p.Autostart
-	}
-	if p.GuestAgent != nil {
-		vm.GuestAgent = *p.GuestAgent
-	}
-	if p.Hugepages != nil {
-		vm.Hugepages = *p.Hugepages
-	}
-	if p.Graphics != nil {
-		vm.Graphic.Type = NewGraphicType(*p.Graphics)
-	}
-	if p.GraphicsListen != nil {
-		vm.Graphic.Listen = *p.GraphicsListen
-	}
-	if p.VideoModel != nil {
-		vm.VideoModel = NewVideoModel(*p.VideoModel)
-	}
-}
-
 // InfrastructureCommand is a private, versioned desired command. Read models
 // and command payloads are deliberately separate from the public task schema.
 type InfrastructureCommand struct {
-	CloudID        string
-	Catalog        *Cloud             `json:",omitempty"`
-	CreateSpec     *MachineCreateSpec `json:",omitempty"`
-	VolumeSpec     *CloudVolumeSpec   `json:",omitempty"`
-	InstanceType   string
-	StorageClass   string
-	AcceptedScopes map[string]string `json:",omitempty"`
-	AcceptedKeys   []*Key            `json:",omitempty"`
-	SelectedType   *InstanceType     `json:",omitempty"`
-	Adoption       *MachineMetadata  `json:",omitempty"`
-	NewDisk        *DataDiskSpec     `json:",omitempty"`
-	Version        int
-	Node           string
-	VM             string
-	Machine        *VirtualMachine `json:",omitempty"`
-	Patch          *MachinePatch   `json:",omitempty"`
-	Defaults       ImageDefaults
-	Clones         []VirtualMachineManagerClonedVolumeParams
-	NewVolumes     []VirtualMachineManagerCreatedVolumeParams
-	Start          bool
-	KeyIDs         []string
-	DeleteVolumes  bool
-	Disks          []*VirtualMachineAttachedVolume
-	Disk           *VirtualMachineAttachedVolume    `json:",omitempty"`
-	Interface      *VirtualMachineAttachedInterface `json:",omitempty"`
-	InterfaceCount int
-	MAC            string
-	Path           string
-	CreateVolume   *VolumeCreateParams `json:",omitempty"`
-	CloneVolume    *VolumeCloneParams  `json:",omitempty"`
-	Size           Size
-	Settings       VirtualMachineManagerNodeSettings
-	Images         []Image                 `json:",omitempty"`
-	ImageBindings  map[string]ImageBinding `json:",omitempty"`
-	AutoImageSizes []bool                  `json:",omitempty"`
+	CreationBindings map[string]json.RawMessage `json:",omitempty"`
+	CloudID          string
+	Catalog          *Cloud             `json:",omitempty"`
+	CreateSpec       *MachineCreateSpec `json:",omitempty"`
+	VolumeSpec       *CloudVolumeSpec   `json:",omitempty"`
+	InstanceType     string
+	StorageClass     string
+	AcceptedScopes   map[string]string `json:",omitempty"`
+	AcceptedKeys     []*Key            `json:",omitempty"`
+	SelectedType     *InstanceType     `json:",omitempty"`
+	Adoption         *MachineMetadata  `json:",omitempty"`
+	NewDisk          *DataDiskSpec     `json:",omitempty"`
+	Version          int
+	Node             string
+	VM               string
+	Machine          *VirtualMachine `json:",omitempty"`
+	Defaults         ImageDefaults
+	Clones           []VirtualMachineManagerClonedVolumeParams
+	NewVolumes       []VirtualMachineManagerCreatedVolumeParams
+	Start            bool
+	KeyIDs           []string
+	DeleteVolumes    bool
+	Disks            []*VirtualMachineAttachedVolume
+	Disk             *VirtualMachineAttachedVolume    `json:",omitempty"`
+	Interface        *VirtualMachineAttachedInterface `json:",omitempty"`
+	InterfaceCount   int
+	MAC              string
+	Path             string
+	CreateVolume     *VolumeCreateParams `json:",omitempty"`
+	CloneVolume      *VolumeCloneParams  `json:",omitempty"`
+	Size             Size
+	Settings         VirtualMachineManagerNodeSettings
+	Images           []Image                 `json:",omitempty"`
+	ImageBindings    map[string]ImageBinding `json:",omitempty"`
+	AutoImageSizes   []bool                  `json:",omitempty"`
 }
 
 func NewCommand(kind string, c InfrastructureCommand) tasks.Command {
@@ -275,17 +237,6 @@ func (h *CommandHandler) Prepare(command tasks.Command) (tasks.Command, error) {
 			add(VolumeRef(c.Node, disk.Path))
 		}
 		switch command.Kind {
-		case "machine.update":
-			if c.Patch == nil {
-				return command, ErrInvalid
-			}
-			c.Patch.Apply(vm)
-			if err := ValidateVM(vm); err != nil {
-				return command, err
-			}
-			// Persist only the requested patch. Execution reads the current
-			// configuration so omitted fields cannot become stale queued writes.
-			c.Machine = nil
 		case "machine.delete":
 			c.Disks = vm.Volumes
 		case "machine.start":
@@ -511,34 +462,6 @@ func (h *CommandHandler) Execute(ctx context.Context, command tasks.Command, pro
 		})
 	}
 	switch command.Kind {
-	case "machine.update":
-		if c.Patch == nil {
-			return ErrInvalid
-		}
-		var current *VirtualMachine
-		if err := progress.Stage("read-current-configuration", &ref, false, func() error {
-			var err error
-			current, err = h.VMs.Get(c.VM, c.Node)
-			if err != nil {
-				return err
-			}
-			c.Patch.Apply(current)
-			return ValidateVM(current)
-		}); err != nil {
-			return err
-		}
-		if err := stage("update-configuration", func() error {
-			if err := h.VMs.Save(current); err != nil {
-				return err
-			}
-			return effect(ref, "configuration-written")
-		}); err != nil {
-			return err
-		}
-		return checkVM(func(vm *VirtualMachine) bool {
-			expected := current
-			return vm.VCpus == expected.VCpus && vm.Memory.Bytes() == expected.Memory.Bytes() && vm.Autostart == expected.Autostart && vm.GuestAgent == expected.GuestAgent && vm.Hugepages == expected.Hugepages && vm.Graphic.Type == expected.Graphic.Type && (expected.Graphic.Type == GraphicTypeNone || expected.Graphic.Listen == "" || vm.Graphic.Listen == expected.Graphic.Listen) && vm.VideoModel == expected.VideoModel
-		})
 	case "machine.delete":
 		if err := stage("delete-machine", func() error {
 			if err := h.VMs.Delete(c.VM, c.Node); err != nil {

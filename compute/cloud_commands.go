@@ -57,6 +57,14 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 			return command, c, err
 		}
 		c.Images = []Image{image}
+		c.CreationBindings = map[string]json.RawMessage{}
+		for _, host := range cloud.Hosts {
+			binding, err := h.VMs.SnapshotCreationBinding(host.Node)
+			if err != nil {
+				return command, c, err
+			}
+			c.CreationBindings[host.Node] = binding
+		}
 		for _, id := range c.CreateSpec.KeyIDs {
 			key, err := h.Keys.Get(id)
 			if err != nil {
@@ -203,9 +211,6 @@ func (h *CommandHandler) checkCloudMutation(kind string, c *InfrastructureComman
 			return err
 		}
 	}
-	if kind == "machine.update" && c.Patch != nil && (c.Patch.VCPUs != nil || c.Patch.MemoryBytes != nil || c.Patch.Hugepages != nil) {
-		return invalid("instance_type", "Use the explicit instance type change command for machine resources.")
-	}
 	if kind == "volume.create" || kind == "volume.clone" {
 		var pool string
 		var bytes uint64
@@ -284,7 +289,7 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		var resolved InfrastructureCommand
 		if err := p.Stage("schedule-machine", nil, false, func() error {
 			var err error
-			resolved, err = h.Clouds.ResolveCreate(cloud, *c.CreateSpec, images, inventory)
+			resolved, err = h.Clouds.ResolveCreate(cloud, *c.CreateSpec, images, inventory, c.CreationBindings)
 			return err
 		}); err != nil {
 			return err
@@ -462,12 +467,13 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		current.VCpus = t.VCPUs
 		current.Memory = NewSize(t.MemoryBytes, SizeUnitB)
 		current.Hugepages = t.Hugepages
+		current.Autostart = t.Autostart
 		metadata := *current.Metadata
 		metadata.InstanceType = t.ID
 		metadata.CPURequest = t.CPURequest
 		metadata.MemoryRequestBytes = t.MemoryBytes
 		current.Metadata = &metadata
-		if err = h.VMs.Save(current); err != nil {
+		if err = h.VMs.SaveResources(current); err != nil {
 			return err
 		}
 		if err = p.Effect(ref, "instance-type-changed"); err != nil {
@@ -477,7 +483,7 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		if err != nil {
 			return err
 		}
-		if actual.VCpus != t.VCPUs || actual.Memory.Bytes() != t.MemoryBytes || actual.Metadata == nil || actual.Metadata.CPURequest != t.CPURequest || actual.Metadata.InstanceType != t.ID {
+		if actual.Autostart != t.Autostart || actual.VCpus != t.VCPUs || actual.Memory.Bytes() != t.MemoryBytes || actual.Metadata == nil || actual.Metadata.CPURequest != t.CPURequest || actual.Metadata.InstanceType != t.ID {
 			return fmt.Errorf("instance type change was not confirmed")
 		}
 		return nil

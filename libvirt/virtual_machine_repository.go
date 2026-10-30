@@ -358,20 +358,26 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compu
 		return nil, repositoryError(err, "cannot parse domain xml")
 	}
 	graphicPort := 0
+	graphicListen := ""
 	for _, graphic := range virDomainConfig.Devices.Graphics {
 		if graphic.VNC != nil {
 			graphicPort = graphic.VNC.Port
+			graphicListen = graphicsListenerAddress(graphic.VNC.Listen, graphic.VNC.Listeners)
 		}
 	}
 	if graphicPort <= 0 {
 		return nil, fmt.Errorf("%w: no graphic port found", compute.ErrConflict)
 	}
 
+	consoleHost, err := graphicsDialHost(graphicListen, connUri)
+	if err != nil {
+		return nil, err
+	}
 	if strings.Contains(connUri.Scheme, "ssh") {
 		portStr := fmt.Sprintf("%d", graphicPort)
 		args := []string{
 			"ssh", "-l", connUri.User.Username(), connUri.Hostname(),
-			"if (command -v socat) >/dev/null 2>&1; then socat - TCP:localhost:" + portStr + "; else nc localhost " + portStr + "; fi",
+			graphicsForwardCommand(consoleHost, portStr),
 		}
 		cmd := exec.Command(args[0], args[1:]...)
 		repo.logger.Debug().Strs("args", cmd.Args).Msg("executing ssh forwarding command")
@@ -398,7 +404,7 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compu
 		}(cmd)
 		return &cmdIoWrapper{stdin: stdin, stdout: stdout, cmd: cmd}, nil
 	}
-	addr := fmt.Sprintf("%s:%d", connUri.Hostname(), graphicPort)
+	addr := net.JoinHostPort(consoleHost, strconv.Itoa(graphicPort))
 	repo.logger.Debug().Str("addr", addr).Msg("connecting directly to console")
 	return net.DialTimeout("tcp", addr, 10*time.Second)
 }
@@ -456,7 +462,15 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 	return virDomainConfig
 }
 
-func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) (err error) {
+func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
+	return repo.save(vm, false)
+}
+
+func (repo *VirtualMachineRepository) SaveResources(vm *compute.VirtualMachine) error {
+	return repo.save(vm, true)
+}
+
+func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resourcesOnly bool) (err error) {
 	ref := compute.VMRef(vm.NodeId, vm.Id)
 	var effects []tasks.Effect
 	defer func() { err = mutationError(err, "domain.save", ref, effects) }()
@@ -489,6 +503,9 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) (err erro
 		isNewVm = true
 	}
 
+	if isNewVm && resourcesOnly {
+		return compute.ErrNotFound
+	}
 	if isNewVm {
 		newVirDomainConfig, err := repo.generateNewDomainConfig(conn, vm)
 		if err != nil {
@@ -496,7 +513,11 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) (err erro
 		}
 		virDomainConfig = newVirDomainConfig
 	} else {
-		virDomainXml, err := existingVirDomain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
+		flags := libvirt.DOMAIN_XML_INACTIVE
+		if resourcesOnly {
+			flags |= libvirt.DOMAIN_XML_SECURE
+		}
+		virDomainXml, err := existingVirDomain.GetXMLDesc(flags)
 		if err != nil {
 			return repositoryError(err, "cannot fetch xml")
 		}
@@ -506,69 +527,7 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) (err erro
 		}
 	}
 
-	applyDomainResources(virDomainConfig, vm, capsConfig)
-
-	if vm.GuestAgent {
-		hasGuestAgent := false
-		for _, channel := range virDomainConfig.Devices.Channels {
-			if channel.Target != nil && channel.Target.VirtIO != nil && channel.Target.VirtIO.Name == "org.qemu.guest_agent.0" {
-				hasGuestAgent = true
-				break
-			}
-		}
-		if !hasGuestAgent {
-			virDomainConfig.Devices.Channels = append(virDomainConfig.Devices.Channels, libvirtxml.DomainChannel{
-				Protocol: &libvirtxml.DomainChardevProtocol{Type: "unix"},
-				Target:   &libvirtxml.DomainChannelTarget{VirtIO: &libvirtxml.DomainChannelTargetVirtIO{Name: "org.qemu.guest_agent.0"}},
-				Source:   &libvirtxml.DomainChardevSource{UNIX: &libvirtxml.DomainChardevSourceUNIX{}},
-			})
-		}
-	} else {
-		newChannels := []libvirtxml.DomainChannel{}
-		for _, channel := range virDomainConfig.Devices.Channels {
-			if channel.Target != nil && channel.Target.VirtIO != nil && channel.Target.VirtIO.Name == "org.qemu.guest_agent.0" {
-				continue
-			}
-			newChannels = append(newChannels, channel)
-		}
-		virDomainConfig.Devices.Channels = newChannels
-	}
-
-	switch vm.Graphic.Type {
-	default:
-		panic("unknown graphic type")
-	case compute.GraphicTypeNone:
-		virDomainConfig.Devices.Graphics = nil
-	case compute.GraphicTypeVnc:
-		vncGraphic := &libvirtxml.DomainGraphicVNC{Port: -1, AutoPort: "yes", Listen: vm.Graphic.Listen}
-		virDomainConfig.Devices.Graphics = []libvirtxml.DomainGraphic{
-			libvirtxml.DomainGraphic{
-				VNC: vncGraphic,
-			},
-		}
-	case compute.GraphicTypeSpice:
-		spiceGraphic := &libvirtxml.DomainGraphicSpice{Port: -1, AutoPort: "yes", Listen: vm.Graphic.Listen}
-		virDomainConfig.Devices.Graphics = []libvirtxml.DomainGraphic{
-			libvirtxml.DomainGraphic{
-				Spice: spiceGraphic,
-			},
-		}
-	}
-
-	switch vm.VideoModel {
-	default:
-		panic("unknown video model")
-	case compute.VideoModelQxl:
-		virDomainConfig.Devices.Videos = []libvirtxml.DomainVideo{
-			libvirtxml.DomainVideo{Model: libvirtxml.DomainVideoModel{Type: "qxl"}},
-		}
-	case compute.VideoModelCirrus:
-		virDomainConfig.Devices.Videos = []libvirtxml.DomainVideo{
-			libvirtxml.DomainVideo{Model: libvirtxml.DomainVideoModel{Type: "cirrus"}},
-		}
-	case compute.VideoModelNone:
-		virDomainConfig.Devices.Videos = nil
-	}
+	applyDomainPolicy(virDomainConfig, vm, capsConfig, resourcesOnly)
 
 	if isNewVm {
 		namer := NewDeviceNamer()

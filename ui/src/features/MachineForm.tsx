@@ -745,7 +745,8 @@ function EditForm({ vm }: { vm: VM }) {
                 <>
                     <Typography>
                         The machine must be stopped. The change stays on this
-                        host and preserves all disk sizes. Insufficient host
+                        host, applies its autostart policy and preserves guest devices
+                        and all disk sizes. Insufficient host
                         resources cause an error.
                     </Typography>
                     <ErrorMessage error={clouds.error} />

@@ -54,7 +54,7 @@ func setup(t *testing.T, defs ...compute.Image) (*compute.VirtualMachineManager,
 		t.Fatal(err)
 	}
 	vol := &volumes{source: compute.Volume{NodeId: "selected", Path: "/base", Size: compute.NewSize(4, compute.SizeUnitG), Format: compute.VolumeFormatQcow2}}
-	caps := compute.VirtualMachineCapabilities{Arch: compute.ArchAmd64, MaxVCPUs: 8, Graphics: []compute.GraphicType{compute.GraphicTypeNone}, VideoModels: []compute.VideoModel{compute.VideoModelNone}, Firmwares: []string{"bios", "efi"}, DiskBuses: []compute.DeviceBus{compute.DeviceBusVirtio, compute.DeviceBusScsi}, NICModels: []string{"virtio", "e1000"}, DiskControllers: []string{"virtio-scsi"}}
+	caps := compute.VirtualMachineCapabilities{Arch: compute.ArchAmd64, MaxVCPUs: 8, Graphics: []compute.GraphicType{compute.GraphicTypeNone, compute.GraphicTypeVnc}, VideoModels: []compute.VideoModel{compute.VideoModelNone}, Firmwares: []string{"bios", "efi"}, DiskBuses: []compute.DeviceBus{compute.DeviceBusVirtio, compute.DeviceBusScsi}, NICModels: []string{"virtio", "e1000"}, DiskControllers: []string{"virtio-scsi"}}
 	m := compute.NewVirtualMachineManager(compute.NewVirtualMachineService(machines{caps: caps}), compute.NewVolumeService(vol), nil, map[string]compute.VirtualMachineManagerNodeSettings{"selected": {CdFormat: configdrive.FormatOpenstack}}, compute.NewImageService(repo))
 	vm := &compute.VirtualMachine{Id: "test", NodeId: "selected", Arch: compute.ArchAmd64, VCpus: 2, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone, Memory: compute.NewSize(2, compute.SizeUnitG), Config: &compute.VirtualMachineConfig{Hostname: "test"}, Interfaces: []*compute.VirtualMachineAttachedInterface{{NetworkName: "default"}}}
 	clone := []compute.VirtualMachineManagerClonedVolumeParams{{ImageID: defs[0].ID, NewName: "test_root", NewPool: "pool"}}
@@ -67,7 +67,7 @@ func TestImageDefaultResolution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !prepared.GuestAgent || prepared.Config.Initialization != "openstack" || prepared.Interfaces[0].Model != "virtio" || disks[0].DeviceBus != compute.DeviceBusVirtio || disks[0].NewSize.G() != 4 || disks[0].NewName != "test_root" {
+	if prepared.Graphic.Type != compute.GraphicTypeVnc || prepared.VideoModel != compute.VideoModelNone || !prepared.GuestAgent || prepared.Config.Initialization != "openstack" || prepared.Interfaces[0].Model != "virtio" || disks[0].DeviceBus != compute.DeviceBusVirtio || disks[0].NewSize.G() != 4 || disks[0].NewName != "test_root" {
 		t.Fatalf("defaults: %+v %+v", prepared, disks)
 	}
 	if len(vol.reads) != 1 || vol.reads[0] != "selected:/base" {
@@ -96,7 +96,7 @@ func TestImageExplicitDefaultsAndOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !prepared.GuestAgent || prepared.Config.Initialization != "nocloud" || prepared.Firmware != "bios" || prepared.DiskController != "" || disks[0].DeviceBus != compute.DeviceBusVirtio || prepared.Interfaces[0].Model != "virtio" {
+	if prepared.Graphic.Type != compute.GraphicTypeVnc || prepared.VideoModel != compute.VideoModelNone || !prepared.GuestAgent || prepared.Config.Initialization != "nocloud" || prepared.Firmware != "bios" || prepared.DiskController != "" || disks[0].DeviceBus != compute.DeviceBusVirtio || prepared.Interfaces[0].Model != "virtio" {
 		t.Fatal("overrides lost")
 	}
 }

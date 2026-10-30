@@ -80,7 +80,7 @@ and invalid types are rejected. Paths below are relative to `/api/v1`.
 | --- | --- |
 | `/clouds`, `/clouds/{cloud}` | GET catalogs, compatible offers and placement capabilities |
 | `/clouds/{cloud}/machines` | GET managed/unmanaged inventory, POST scheduled creation |
-| `/clouds/{cloud}/machines/{node}/{vm}` | GET, PATCH supported configuration, DELETE |
+| `/clouds/{cloud}/machines/{node}/{vm}` | GET, DELETE |
 | `/clouds/{cloud}/machines/{node}/{vm}/actions` | POST `start`, `reboot`, `poweroff` |
 | `/clouds/{cloud}/machines/{node}/{vm}/instance-type` | POST explicit stopped, same-host type change |
 | `/clouds/{cloud}/machines/{node}/{vm}/adopt` | POST explicit adoption |
@@ -133,10 +133,13 @@ deleted, protected volumes cannot be resized, and resizing cannot shrink a disk.
 `poweroff` is a **hard power-off**, not graceful shutdown. Configuration changes
 are persistent and may require stopping and starting a VM.
 
-PATCH preserves omitted fields; optional null fields are treated as omitted.
-False is distinct from omission. CPU, RAM and hugepages changes use the explicit
-instance-type command, not PATCH. Attachment
-changes have dedicated routes. Unknown fields and invalid requests are rejected
+Machine policy has no PATCH endpoint. Images own `guest_agent`, `graphics` and
+`video_model`; instance types own `autostart`, CPU, RAM and hugepages. The private
+libvirt connection owns `graphics_listen`. Creation accepts catalog references,
+not per-machine policy overrides. The explicit instance-type command applies its
+autostart policy without starting or stopping the VM and preserves applied guest
+devices, graphics listener and disk sizes. `start` on creation is a separate
+one-time action. Attachment changes have dedicated routes. Unknown fields and invalid requests are rejected
 before acceptance with field errors where available. Dynamic backend conditions
 are rechecked during execution where appropriate and can fail an accepted task.
 

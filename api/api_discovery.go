@@ -202,7 +202,8 @@ func (e *Environ) registerDiscovery(api huma.API) {
 			if i.Defaults.DiskBus != compute.DeviceBusUnknown {
 				bus = i.Defaults.DiskBus.String()
 			}
-			dto := apiImage{ID: i.ID, Name: i.Name, OSName: i.OSName, OSVersion: i.OSVersion, Arch: i.Arch.String(), VolumeID: volumeID(i.SourcePath), MinimumMemoryBytes: i.MinimumMemoryBytes, MinimumDiskBytes: i.MinimumDiskBytes, Defaults: apiImageDefaults{i.Defaults.Firmware, bus, i.Defaults.DiskController, i.Defaults.NICModel, i.Defaults.GuestAgent, i.Defaults.Initialization}, SourceMode: "local", State: "ready"}
+			graphics, video := i.Defaults.Display()
+			dto := apiImage{ID: i.ID, Name: i.Name, OSName: i.OSName, OSVersion: i.OSVersion, Arch: i.Arch.String(), VolumeID: volumeID(i.SourcePath), MinimumMemoryBytes: i.MinimumMemoryBytes, MinimumDiskBytes: i.MinimumDiskBytes, Defaults: apiImageDefaults{i.Defaults.Firmware, bus, i.Defaults.DiskController, i.Defaults.NICModel, graphics.String(), video.String(), i.Defaults.GuestAgent, i.Defaults.Initialization}, SourceMode: "local", State: "ready"}
 			if i.Managed() {
 				dto.SourceMode = "download"
 				dto.VolumeID = ""

@@ -92,9 +92,19 @@ claim ownership of pre-existing disks. Deleting an adopted VM preserves unowned
 disks. Preserve the private volume ownership metadata alongside task history.
 
 An explicit instance type change requires a stopped managed VM, stays on its
-current host and preserves all disk sizes. If that host lacks resources, the task
+current host, applies the selected type's `autostart` policy and preserves all
+disk sizes, applied guest devices and graphics listener bindings. If that host lacks resources, the task
 fails; there is no automatic migration, stop or restart. Catalog edits never
-silently resize existing machines or disks.
+silently resize or reconfigure existing machines or disks.
+
+Set `autostart` in `instance_type` blocks (default `false`). Image settings
+`guest_agent`, `graphics` and `video_model` control guest integration and devices;
+their defaults are `true`, `vnc` and `none`. The private `libvirt` connection
+sets `graphics_listen` as an IP address, with omission preserving the backend
+default. Creation's `start` flag is a separate one-time action. Adoption preserves
+existing policy and devices, and accepted tasks snapshot policy and private host
+bindings. None of these five settings accepts per-machine overrides; the machine
+PATCH endpoint is removed and effective values remain read-only.
 
 ## API and migration
 
