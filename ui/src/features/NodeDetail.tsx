@@ -15,15 +15,20 @@ import {
     esc,
     machineURL,
     useResource,
+    type Network,
     type Node,
     type Pool,
 } from "../api/hooks";
+import { ResourceTable } from "../components/ResourceTable";
 import { bytes, PageTitle, QueryState } from "../components/common";
 
 export function NodeDetail() {
     const { node = "" } = useParams();
     const q = useResource<Node>(`/api/v1/hosts/${esc(node)}`);
     const pools = useResource<Pool[]>(`/api/v1/hosts/${esc(node)}/pools`);
+    const networks = useResource<Network[]>(
+        `/api/v1/hosts/${esc(node)}/networks`,
+    );
     return (
         <>
             <Breadcrumbs sx={{ mb: 2 }}>
@@ -159,6 +164,28 @@ export function NodeDetail() {
                     </Stack>
                 )}
             </QueryState>
+            <Box sx={{ mt: 4 }}>
+                <Typography variant="h2" sx={{ mb: 2 }}>
+                    Backend networks (read-only diagnostics)
+                </Typography>
+                <QueryState query={networks}>
+                    {(rows) => (
+                        <ResourceTable
+                            rows={rows}
+                            rowKey={(n) => n.name}
+                            search={(n) => n.name}
+                            columns={[
+                                {
+                                    id: "name",
+                                    label: "Backend network",
+                                    value: (n) => n.name,
+                                },
+                            ]}
+                            empty="No backend networks are available on this host."
+                        />
+                    )}
+                </QueryState>
+            </Box>
             <Box sx={{ mt: 4 }}>
                 <Typography variant="h2" sx={{ mb: 2 }}>
                     Storage pools

@@ -70,23 +70,6 @@ export function useVolumes() {
         },
     });
 }
-export function useNetworks() {
-    return useQuery({
-        queryKey: ["host-networks"],
-        queryFn: async () => {
-            const hosts = await request<Node[]>("/api/v1/hosts");
-            return (
-                await Promise.all(
-                    hosts.map((h) =>
-                        request<Network[]>(
-                            `/api/v1/hosts/${esc(h.id)}/networks`,
-                        ),
-                    ),
-                )
-            ).flat();
-        },
-    });
-}
 export function useOperation<T>(execute: (input: T) => Promise<unknown>) {
     const queries = useQueryClient();
     return useMutation({

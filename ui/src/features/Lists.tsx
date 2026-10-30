@@ -5,7 +5,6 @@ import { Link as RouterLink, useSearchParams } from "react-router";
 import {
     machineURL,
     useMachines,
-    useNetworks,
     useNodes,
     useOperation,
     useResource,
@@ -383,23 +382,65 @@ export function Nodes() {
     );
 }
 export function Networks() {
-    const q = useNetworks();
+    const [params, setParams] = useSearchParams();
+    const clouds = useResource<Cloud[]>("/api/v1/clouds");
+    const cloudID = params.get("cloud") || clouds.data?.[0]?.id || "";
+    const cloud = clouds.data?.find((c) => c.id === cloudID);
     return (
         <>
-            <PageTitle title="Networks" count={q.data?.length} />
-            <QueryState query={q}>
-                {(rows) => (
-                    <ResourceTable
-                        rows={rows}
-                        rowKey={(n) => `${n.node}/${n.name}`}
-                        search={(n) => `${n.name} ${n.node}`}
-                        node={(n) => n.node}
-                        columns={[
-                            { id: "name", label: "Name", value: (n) => n.name },
-                            { id: "node", label: "Node", value: (n) => n.node },
-                        ]}
-                        empty="No networks are available."
-                    />
+            <PageTitle title="Networks" count={cloud?.networks.length} />
+            <QueryState query={clouds}>
+                {(catalogs) => (
+                    <>
+                        {catalogs.length === 0 ? (
+                            <Alert severity="info">
+                                No clouds are configured. Contact your
+                                administrator.
+                            </Alert>
+                        ) : (
+                            <>
+                                <TextField
+                                    select
+                                    label="Cloud"
+                                    value={cloud ? cloudID : ""}
+                                    onChange={(e) =>
+                                        setParams({ cloud: e.target.value })
+                                    }
+                                >
+                                    {catalogs.map((c) => (
+                                        <MenuItem key={c.id} value={c.id}>
+                                            {c.name}
+                                        </MenuItem>
+                                    ))}
+                                </TextField>
+                                {cloud ? (
+                                    <ResourceTable
+                                        rows={cloud.networks}
+                                        rowKey={(n) => n.id}
+                                        search={(n) => `${n.id} ${n.name}`}
+                                        columns={[
+                                            {
+                                                id: "name",
+                                                label: "Name",
+                                                value: (n) => n.name,
+                                            },
+                                            {
+                                                id: "id",
+                                                label: "Network ID",
+                                                value: (n) => n.id,
+                                            },
+                                        ]}
+                                        empty="No logical networks are configured in this cloud."
+                                    />
+                                ) : (
+                                    <Alert severity="info">
+                                        Select a configured cloud to view its
+                                        logical networks.
+                                    </Alert>
+                                )}
+                            </>
+                        )}
+                    </>
                 )}
             </QueryState>
         </>

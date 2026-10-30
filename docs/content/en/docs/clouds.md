@@ -79,6 +79,14 @@ host-bound after detachment. A new disk for an existing machine uses that machin
 host. Selecting existing local disks during creation constrains placement to their
 owning host; disks from different hosts cannot be combined or silently copied.
 
+The main **Networks** page lists the selected cloud’s logical network catalog,
+including display names and network IDs. Its cloud selector scopes the list;
+multiple host bindings for one logical network appear as one entry. Backend
+libvirt network names are shown as read-only diagnostics on each **Hosts** detail
+page and remain available through the read-only host diagnostic API
+under `/api/v1/hosts/{node}/networks`. Administrators provision those networks
+outside Vmango.
+
 Interfaces select a configured logical network, resolved on the existing host.
 Interface attachment accepts `network` (a logical network ID) and optional `mac`.
 NIC model and VLAN are selected by the administrator's host network binding;
