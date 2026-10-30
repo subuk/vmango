@@ -76,10 +76,8 @@ it("preserves entered values and flags an incompatible image after changing node
         </QueryClientProvider>,
     );
     const user = userEvent.setup();
-    await user.type(
-        screen.getByRole("textbox", { name: "Machine name" }),
-        "preserved-vm",
-    );
+    await user.click(screen.getByRole("textbox", { name: "Machine name" }));
+    await user.paste("preserved-vm");
     await user.click(
         screen.getByRole("textbox", { name: "Cloud-init user-data" }),
     );
@@ -128,10 +126,8 @@ it("keeps an uncertain submission and draft visible without submitting twice", a
         </QueryClientProvider>,
     );
     const user = userEvent.setup();
-    await user.type(
-        screen.getByRole("textbox", { name: "Machine name" }),
-        "partial-vm",
-    );
+    await user.click(screen.getByRole("textbox", { name: "Machine name" }));
+    await user.paste("partial-vm");
     for (const [label, option] of [
         ["Image", /Ubuntu.*24.04/],
         ["Storage pool", "pool1"],
@@ -190,10 +186,8 @@ it("opens accepted creation progress before the machine exists", async () => {
         </QueryClientProvider>,
     );
     const user = userEvent.setup();
-    await user.type(
-        screen.getByRole("textbox", { name: "Machine name" }),
-        "pending-vm",
-    );
+    await user.click(screen.getByRole("textbox", { name: "Machine name" }));
+    await user.paste("pending-vm");
     for (const [label, option] of [
         ["Image", /Ubuntu.*24.04/],
         ["Storage pool", "pool1"],
