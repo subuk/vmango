@@ -165,6 +165,7 @@ type LibvirtConfig struct {
 }
 
 type Config struct {
+	Tasks      TaskConfig        `hcl:"tasks"`
 	LogLevel   string            `hcl:"log_level"`
 	Images     []ImageConfig     `hcl:"image"`
 	Volumes    []VolumeConfig    `hcl:"volume"`
@@ -181,8 +182,15 @@ type Config struct {
 	LegacyBridges                       []string `hcl:"bridges"`
 }
 
+type TaskConfig struct {
+	Directory     string `hcl:"directory"`
+	Workers       int    `hcl:"workers"`
+	RetentionDays int    `hcl:"retention_days"`
+}
+
 func Default() *Config {
 	return &Config{
+		Tasks:    TaskConfig{Directory: "~/.vmango/tasks", Workers: 2},
 		LogLevel: "info",
 		KeyFile:  "~/.vmango/authorized_keys",
 		API: APIConfig{
@@ -284,6 +292,12 @@ func Parse(filename string) (*Config, error) {
 	}
 	if config.API.SessionDir == config.API.TokenDir {
 		return nil, fmt.Errorf("api.session_dir and api.token_dir must be separate directories")
+	}
+	if config.Tasks.Workers < 1 || config.Tasks.Workers > 32 || config.Tasks.RetentionDays < 0 || config.Tasks.RetentionDays > 36500 {
+		return nil, fmt.Errorf("tasks.workers must be 1..32 and retention_days must be 0..36500 (0 retains history indefinitely)")
+	}
+	if util.ExpandHomeDir(config.Tasks.Directory) == util.ExpandHomeDir(config.API.SessionDir) || util.ExpandHomeDir(config.Tasks.Directory) == util.ExpandHomeDir(config.API.TokenDir) {
+		return nil, fmt.Errorf("task and credential stores must use separate directories")
 	}
 	if config.API.ConsoleLinkLifetimeSeconds < 1 || config.API.ConsoleLinkLifetimeSeconds > 86400*30 {
 		return nil, fmt.Errorf("console_link_lifetime_seconds must be between 1 and 2592000")

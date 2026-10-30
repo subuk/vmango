@@ -6,7 +6,7 @@ GO = go
 INSTALL = install
 GO_SOURCES = $(shell find . -path './ui/node_modules' -prune -o -path './ui/dist' -prune -o -path './vendor' -prune -o -name '*.go' -print)
 UNAME_S := $(shell uname -s)
-TARBALL_SOURCES = main.go bootstrap/ compute/ auth/ api/ ui/ filesystem/ libvirt/ config/ configdrive/ catalog/ util/ acceptance/ Makefile README.md LICENSE docs/API.md docs/UI-MIGRATION.md vmango.dist.conf vmango.quickstart.conf vmango.service vendor/ go.mod go.sum scripts/version.sh scripts/ui-assets.py
+TARBALL_SOURCES = main.go bootstrap/ compute/ tasks/ auth/ api/ ui/ filesystem/ libvirt/ config/ configdrive/ catalog/ util/ acceptance/ Makefile README.md LICENSE docs/API.md docs/UI-MIGRATION.md docs/TASKS.md vmango.dist.conf vmango.quickstart.conf vmango.service vendor/ go.mod go.sum scripts/version.sh scripts/ui-assets.py
 UI_PREBUILT ?= 0
 
 # Release workflows can override this before the release tag exists.

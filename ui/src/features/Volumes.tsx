@@ -11,6 +11,8 @@ import {
     type Pool,
     type Volume,
 } from "../api/hooks";
+import { useResourceBusy, volumeResource } from "../api/tasks";
+import { ResourceTasks } from "./Tasks";
 import { request } from "../api/client";
 import { bytes, Confirm, PageTitle, QueryState } from "../components/common";
 import { ResourceTable } from "../components/ResourceTable";
@@ -42,7 +44,23 @@ export function Volumes() {
                         node={(v) => v.node}
                         pool={(v) => v.pool}
                         columns={[
-                            { id: "name", label: "Name", value: (v) => v.name },
+                            {
+                                id: "name",
+                                label: "Name",
+                                value: (v) => v.name,
+                                render: (v) => (
+                                    <>
+                                        {v.name}
+                                        <ResourceTasks
+                                            compact
+                                            resource={volumeResource(
+                                                v.node,
+                                                v.id,
+                                            )}
+                                        />
+                                    </>
+                                ),
+                            },
                             { id: "node", label: "Node", value: (v) => v.node },
                             { id: "pool", label: "Pool", value: (v) => v.pool },
                             {
@@ -85,12 +103,15 @@ export function Volumes() {
 }
 
 function VolumeActions({ volume: v }: { volume: Volume }) {
+    const blocked = useResourceBusy(volumeResource(v.node, v.id));
+    const conflict = !!blocked.task || blocked.unavailable;
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const [mode, setMode] = useState<string>();
     const queries = useQueryClient();
     return (
         <>
             <Button
+                disabled={conflict}
                 aria-label={`Actions for ${v.name}`}
                 aria-haspopup="menu"
                 onClick={(e) => setAnchor(e.currentTarget)}
@@ -106,8 +127,9 @@ function VolumeActions({ volume: v }: { volume: Volume }) {
                     <MenuItem
                         key={action}
                         disabled={
-                            action === "delete" &&
-                            (v.protected || !!v.attached_to)
+                            conflict ||
+                            (action === "delete" &&
+                                (v.protected || !!v.attached_to))
                         }
                         onClick={() => {
                             setMode(action);

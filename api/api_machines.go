@@ -47,6 +47,7 @@ type apiCreateVM struct {
 	Interfaces  []apiInterface   `json:"interfaces,omitempty"`
 }
 type apiCreateVMInput struct {
+	SubmissionInput
 	Node string `path:"node"`
 	Body apiCreateVM
 }
@@ -61,16 +62,19 @@ type apiPatchVM struct {
 	VideoModel     *string `json:"video_model,omitempty" enum:"none,cirrus,qxl"`
 }
 type apiPatchVMInput struct {
+	SubmissionInput
 	Node string `path:"node"`
 	VM   string `path:"vm"`
 	Body apiPatchVM
 }
 type apiDeleteVMInput struct {
+	SubmissionInput
 	Node          string `path:"node"`
 	VM            string `path:"vm"`
 	DeleteVolumes bool   `query:"delete_volumes" default:"false" doc:"Explicit opt-in to deleting attached disks."`
 }
 type apiActionInput struct {
+	SubmissionInput
 	Node string `path:"node"`
 	VM   string `path:"vm"`
 	Body struct {
@@ -78,21 +82,25 @@ type apiActionInput struct {
 	}
 }
 type apiAttachDiskInput struct {
+	SubmissionInput
 	Node string `path:"node"`
 	VM   string `path:"vm"`
 	Body apiDisk
 }
 type apiDetachDiskInput struct {
+	SubmissionInput
 	Node   string `path:"node"`
 	VM     string `path:"vm"`
 	Volume string `path:"volume" doc:"Volume ID, not the guest device name."`
 }
 type apiAttachInterfaceInput struct {
+	SubmissionInput
 	Node string `path:"node"`
 	VM   string `path:"vm"`
 	Body apiInterface
 }
 type apiDetachInterfaceInput struct {
+	SubmissionInput
 	Node string `path:"node"`
 	VM   string `path:"vm"`
 	MAC  string `path:"mac"`
@@ -125,28 +133,15 @@ func (e *Environ) registerVMOperations(api huma.API) {
 	registerAPI(api, "GET", path+"/{vm}", "get-vm", "Get virtual machine", func(ctx context.Context, in *apiVMInput) (*apiResult[apiVM], error) {
 		return e.apiGetVM(in.VM, in.Node)
 	})
-	registerAPI(api, "POST", path, "create-vm", "Create VM, provision cloud-init and optionally start", func(ctx context.Context, in *apiCreateVMInput) (*apiResult[apiVM], error) {
+	registerAPI(api, "POST", path, "create-vm", "Create VM, provision cloud-init and optionally start", func(ctx context.Context, in *apiCreateVMInput) (*apiAccepted, error) {
 		b := in.Body
 		vm := &compute.VirtualMachine{GuestAgent: true, Config: &compute.VirtualMachineConfig{Hostname: b.ID}, Id: b.ID, NodeId: in.Node, Arch: compute.NewArch(b.Arch), VCpus: b.VCPUs, Memory: compute.NewSize(b.MemoryBytes, compute.SizeUnitB), Autostart: b.Autostart, Hugepages: b.Hugepages, Graphic: compute.VirtualMachineGraphic{Type: compute.NewGraphicType(b.Graphics)}, VideoModel: compute.NewVideoModel(b.VideoModel)}
-		if vm.Arch == compute.ArchUnknown && len(b.CloneDisks) == 0 {
-			n, err := e.nodes.Get(in.Node, compute.NodeGetOptions{NoPins: true})
-			if err != nil {
-				return nil, apiError(err)
-			}
-			vm.Arch = n.CpuArch
-		}
 		if b.CloudInit != nil {
 			vm.Config = &compute.VirtualMachineConfig{Hostname: b.CloudInit.Hostname, Userdata: []byte(b.CloudInit.UserData)}
 			if vm.Config.Hostname == "" {
 				vm.Config.Hostname = vm.Id
 			}
-			for _, fp := range b.CloudInit.Keys {
-				k, err := e.keys.Get(fp)
-				if err != nil {
-					return nil, apiError(err)
-				}
-				vm.Config.Keys = append(vm.Config.Keys, k)
-			}
+
 		}
 		for _, d := range b.Disks {
 			v, err := d.domain()
@@ -166,80 +161,40 @@ func (e *Environ) registerVMOperations(api huma.API) {
 		for _, d := range b.NewDisks {
 			disks = append(disks, compute.VirtualMachineManagerCreatedVolumeParams{Name: d.Name, Pool: d.Pool, Format: compute.NewVolumeFormat(d.Format), Size: compute.NewSize(d.SizeBytes, compute.SizeUnitB), Alias: d.Alias, DeviceType: compute.NewDeviceType(d.Device), DeviceBus: compute.NewDeviceBus(d.Bus)})
 		}
-		if err := e.vmanager.CreateWithImageDefaults(vm, clones, disks, b.Start, b.Defaults.domain()); err != nil {
-			return nil, apiError(err)
+		command := compute.InfrastructureCommand{Node: in.Node, VM: vm.Id, Machine: vm, Clones: clones, NewVolumes: disks, Start: b.Start, Defaults: b.Defaults.domain()}
+		if b.CloudInit != nil {
+			command.KeyIDs = b.CloudInit.Keys
 		}
-		return e.apiGetVM(vm.Id, vm.NodeId)
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.create", command)
 	})
-	registerAPI(api, "PATCH", path+"/{vm}", "update-vm", "Update persistent VM configuration; omitted fields are preserved", func(ctx context.Context, in *apiPatchVMInput) (*apiResult[apiVM], error) {
-		vm, err := e.vms.Get(in.VM, in.Node)
+	registerAPI(api, "PATCH", path+"/{vm}", "update-vm", "Queue a persistent configuration update; omitted fields are preserved", func(ctx context.Context, in *apiPatchVMInput) (*apiAccepted, error) {
+		patch := compute.MachinePatch(in.Body)
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.update", compute.InfrastructureCommand{Node: in.Node, VM: in.VM, Patch: &patch})
+	})
+	registerAPI(api, "DELETE", path+"/{vm}", "delete-vm", "Queue VM deletion; attached disk deletion requires delete_volumes=true", func(ctx context.Context, in *apiDeleteVMInput) (*apiAccepted, error) {
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.delete", compute.InfrastructureCommand{Node: in.Node, VM: in.VM, DeleteVolumes: in.DeleteVolumes})
+	})
+	registerAPI(api, "POST", path+"/{vm}/actions", "vm-action", "Queue a start, reboot or hard power-off", func(ctx context.Context, in *apiActionInput) (*apiAccepted, error) {
+		return e.submitTask(ctx, in.IdempotencyKey, "machine."+in.Body.Action, compute.InfrastructureCommand{Node: in.Node, VM: in.VM})
+	})
+	registerAPI(api, "POST", path+"/{vm}/disks", "attach-disk", "Queue disk attachment", func(ctx context.Context, in *apiAttachDiskInput) (*apiAccepted, error) {
+		disk, err := in.Body.domain()
 		if err != nil {
 			return nil, apiError(err)
 		}
-		b := in.Body
-		if b.VCPUs != nil {
-			vm.VCpus = *b.VCPUs
-		}
-		if b.MemoryBytes != nil {
-			vm.Memory = compute.NewSize(*b.MemoryBytes, compute.SizeUnitB)
-		}
-		if b.Autostart != nil {
-			vm.Autostart = *b.Autostart
-		}
-		if b.GuestAgent != nil {
-			vm.GuestAgent = *b.GuestAgent
-		}
-		if b.Hugepages != nil {
-			vm.Hugepages = *b.Hugepages
-		}
-		if b.Graphics != nil {
-			vm.Graphic.Type = compute.NewGraphicType(*b.Graphics)
-		}
-		if b.GraphicsListen != nil {
-			vm.Graphic.Listen = *b.GraphicsListen
-		}
-		if b.VideoModel != nil {
-			vm.VideoModel = compute.NewVideoModel(*b.VideoModel)
-		}
-		if err := e.vms.Save(vm); err != nil {
-			return nil, apiError(err)
-		}
-		return e.apiGetVM(in.VM, in.Node)
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.attach-disk", compute.InfrastructureCommand{Node: in.Node, VM: in.VM, Disk: disk})
 	})
-	registerAPI(api, "DELETE", path+"/{vm}", "delete-vm", "Delete VM; disk deletion requires delete_volumes=true", func(ctx context.Context, in *apiDeleteVMInput) (*apiEmpty, error) {
-		if _, err := e.vms.Get(in.VM, in.Node); err != nil {
-			return nil, apiError(err)
-		}
-		return nil, apiError(e.vmanager.Delete(in.VM, in.Node, in.DeleteVolumes))
-	})
-	registerAPI(api, "POST", path+"/{vm}/actions", "vm-action", "Start, reboot or hard power-off a VM", func(ctx context.Context, in *apiActionInput) (*apiEmpty, error) {
-		vm, err := e.vms.Get(in.VM, in.Node)
+	registerAPI(api, "DELETE", path+"/{vm}/disks/{volume}", "detach-disk", "Queue disk detachment without deletion", func(ctx context.Context, in *apiDetachDiskInput) (*apiAccepted, error) {
+		path, err := volumePath(in.Volume)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		if (in.Body.Action == "start" && vm.IsRunning()) || (in.Body.Action != "start" && !vm.IsRunning()) {
-			return nil, apiError(compute.ErrConflict)
-		}
-		return nil, apiError(e.vms.Action(in.VM, in.Node, in.Body.Action))
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.detach-disk", compute.InfrastructureCommand{Node: in.Node, VM: in.VM, Path: path})
 	})
-	registerAPI(api, "POST", path+"/{vm}/disks", "attach-disk", "Attach an existing disk", func(ctx context.Context, in *apiAttachDiskInput) (*apiEmpty, error) {
-		d, err := in.Body.domain()
-		if err != nil {
-			return nil, apiError(err)
-		}
-		return nil, apiError(e.vmanager.AttachVolume(in.VM, in.Node, d))
+	registerAPI(api, "POST", path+"/{vm}/interfaces", "attach-interface", "Queue network interface attachment", func(ctx context.Context, in *apiAttachInterfaceInput) (*apiAccepted, error) {
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.attach-interface", compute.InfrastructureCommand{Node: in.Node, VM: in.VM, Interface: in.Body.domain()})
 	})
-	registerAPI(api, "DELETE", path+"/{vm}/disks/{volume}", "detach-disk", "Detach disk without deleting it", func(ctx context.Context, in *apiDetachDiskInput) (*apiEmpty, error) {
-		p, err := volumePath(in.Volume)
-		if err != nil {
-			return nil, apiError(err)
-		}
-		return nil, apiError(e.vms.DetachVolume(in.VM, in.Node, p))
-	})
-	registerAPI(api, "POST", path+"/{vm}/interfaces", "attach-interface", "Attach a network interface", func(ctx context.Context, in *apiAttachInterfaceInput) (*apiEmpty, error) {
-		return nil, apiError(e.vms.AttachInterface(in.VM, in.Node, in.Body.domain()))
-	})
-	registerAPI(api, "DELETE", path+"/{vm}/interfaces/{mac}", "detach-interface", "Detach a network interface", func(ctx context.Context, in *apiDetachInterfaceInput) (*apiEmpty, error) {
-		return nil, apiError(e.vms.DetachInterface(in.VM, in.Node, in.MAC))
+	registerAPI(api, "DELETE", path+"/{vm}/interfaces/{mac}", "detach-interface", "Queue network interface detachment", func(ctx context.Context, in *apiDetachInterfaceInput) (*apiAccepted, error) {
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.detach-interface", compute.InfrastructureCommand{Node: in.Node, VM: in.VM, MAC: in.MAC})
 	})
 }

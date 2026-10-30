@@ -19,25 +19,22 @@ import (
 
 type apiUserContext struct{}
 
-type apiProvisioning struct {
-	Stage            string   `json:"stage"`
-	Node             string   `json:"node"`
-	VM               string   `json:"vm"`
-	VMCreated        bool     `json:"vm_created"`
-	Volumes          []string `json:"volumes" nullable:"false"`
-	OutcomeUncertain bool     `json:"outcome_uncertain" doc:"Reconcile resource state before retrying a mutation."`
-}
-
 type apiProblem struct {
 	huma.ErrorModel
-	Provisioning            *apiProvisioning `json:"provisioning,omitempty"`
-	Code                    string           `json:"code,omitempty" doc:"Stable authentication/service error code when applicable."`
-	RejectedBeforeExecution bool             `json:"rejected_before_execution,omitempty" doc:"Authentication guard rejected the request before any domain handler ran."`
+	Code                    string `json:"code,omitempty" doc:"Stable authentication/service error code when applicable."`
+	RejectedBeforeExecution bool   `json:"rejected_before_execution,omitempty" doc:"Authentication guard rejected the request before any domain handler ran."`
+	TaskID                  string `json:"task_id,omitempty"`
+	TaskURL                 string `json:"task_url,omitempty"`
 }
 
 func apiError(err error) error {
 	if err == nil {
 		return nil
+	}
+	// A wrapped validation cause cannot erase already confirmed side effects.
+	var partial *compute.ProvisioningError
+	if errors.As(err, &partial) {
+		return huma.Error500InternalServerError("Partial provisioning; inspect the durable task and resource state before retrying.")
 	}
 	status, detail := 500, "Operation failed; inspect resource state before retrying."
 	switch {
@@ -49,10 +46,6 @@ func apiError(err error) error {
 		status, detail = 503, "Backend unavailable."
 	case errors.Is(err, compute.ErrInvalid), errors.Is(err, compute.ErrInvalidImageRequest):
 		status, detail = 422, "Request violates resource validation or backend capability constraints."
-	}
-	var partial *compute.ProvisioningError
-	if errors.As(err, &partial) {
-		return &apiProblem{ErrorModel: huma.ErrorModel{Type: "about:blank", Title: "Provisioning failed", Status: 500, Detail: "Partial provisioning; reconcile resources before retrying. No automatic rollback was performed."}, Provisioning: &apiProvisioning{partial.Stage, partial.Node, partial.VM, partial.VMCreated, volumeIDs(partial.Volumes), true}}
 	}
 	var validation *compute.ValidationError
 	if errors.As(err, &validation) {
@@ -152,6 +145,9 @@ func registerAPI[I, O any](api huma.API, method, path, id, summary string, handl
 	if strings.HasPrefix(id, "create-") || id == "add-key" || id == "clone-volume" {
 		status = 201
 	}
+	if reflect.TypeOf((*O)(nil)).Elem() == reflect.TypeOf(apiAccepted{}) {
+		status = 202
+	}
 	huma.Register(api, huma.Operation{DefaultStatus: status, Method: method, Path: "/api/v1" + path, OperationID: id, Summary: summary, Tags: []string{strings.Split(strings.TrimPrefix(path, "/"), "/")[0]}, Errors: []int{400, 401, 403, 404, 409, 422, 500, 503}, MaxBodyBytes: 2 << 20}, handler)
 }
 
@@ -190,16 +186,17 @@ func (e *Environ) registerAPI() {
 	cfg.RejectUnknownQueryParameters = true
 	cfg.Components.SecuritySchemes = map[string]*huma.SecurityScheme{"bearer": {Type: "http", Scheme: "bearer", BearerFormat: "JWT"}}
 	cfg.Security = []map[string][]string{{"bearer": {}}}
-	cfg.Info.Description = "Synchronous VM automation. Sizes are bytes. Partial failures and disconnected requests may have side effects; reconcile state before retrying. poweroff is a hard power-off. See /api/console-protocol for binary WebSocket framing."
+	cfg.Info.Description = "Durable asynchronous infrastructure commands return 202 and a task status URL. An Idempotency-Key is required; reuse it after a lost response. Task history survives restart. Sizes are bytes. poweroff is a hard power-off. See /api/console-protocol for binary WebSocket framing."
 	api := humamux.New(router, cfg)
 	e.registerAuth(api)
+	e.registerTasks(api)
 	e.registerGlobalLists(api)
 	e.registerDiscovery(api)
 	e.registerVMOperations(api)
 	e.registerVolumeOperations(api)
 	e.registerKeyOperations(api)
 	e.registerConsoles(api, router)
-	partialSchema := api.OpenAPI().Components.Schemas.Schema(reflect.TypeOf(apiProblem{}), true, "ProvisioningProblem")
+	problemSchema := api.OpenAPI().Components.Schemas.Schema(reflect.TypeOf(apiProblem{}), true, "ProblemDetails")
 	for _, p := range api.OpenAPI().Paths {
 		for _, op := range []*huma.Operation{p.Get, p.Head, p.Post, p.Put, p.Patch, p.Delete, p.Options} {
 			if op == nil {
@@ -207,7 +204,7 @@ func (e *Environ) registerAPI() {
 			}
 			for status, response := range op.Responses {
 				if status == "default" || strings.HasPrefix(status, "4") || strings.HasPrefix(status, "5") {
-					response.Content = map[string]*huma.MediaType{"application/problem+json": {Schema: partialSchema}}
+					response.Content = map[string]*huma.MediaType{"application/problem+json": {Schema: problemSchema}}
 				}
 			}
 		}

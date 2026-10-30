@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
     Alert,
+    Link,
     Box,
     Button,
     CircularProgress,
@@ -15,7 +16,7 @@ import {
 } from "@mui/material";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { APIError } from "../api/client";
-import { useBlocker } from "react-router";
+import { Link as RouterLink, useBlocker } from "react-router";
 
 export const bytes = (n: number) => {
     const units = ["B", "KiB", "MiB", "GiB", "TiB"];
@@ -74,18 +75,13 @@ export function ErrorMessage({ error }: { error: unknown }) {
                     {d.location?.replace(/^body\.?/, "")}: {d.message}
                 </Typography>
             ))}
-            {p?.provisioning && (
-                <Box sx={{ mt: 1 }}>
-                    <Typography variant="body2">
-                        Provisioning stopped at {p.provisioning.stage}. Machine:{" "}
-                        {p.provisioning.node}/{p.provisioning.vm}.{" "}
-                        {p.provisioning.vm_created
-                            ? "The machine was created."
-                            : "Machine creation is not confirmed."}{" "}
-                        Created volumes: {p.provisioning.volumes.length}.
-                        Refresh the machine and volumes before retrying.
-                    </Typography>
-                </Box>
+            {p?.task_id && (
+                <Link
+                    component={RouterLink}
+                    to={`/tasks/${encodeURIComponent(p.task_id)}/`}
+                >
+                    Inspect blocking task
+                </Link>
             )}
         </Alert>
     );
@@ -212,7 +208,7 @@ export function Confirm({
         >
             <DialogTitle id="confirm-title">{title}</DialogTitle>
             <DialogContent>
-                <Typography>{children}</Typography>
+                <Box>{children}</Box>
                 {extra && (
                     <FormControlLabel
                         control={
@@ -227,8 +223,8 @@ export function Confirm({
                 <ErrorMessage error={error} />
                 {uncertain && (
                     <Alert severity="warning">
-                        Inspect refreshed resource state before repeating this
-                        operation.
+                        Submission status is unknown. Recover the original
+                        submission using its saved idempotency key.
                     </Alert>
                 )}
                 {uncertain && (
@@ -244,13 +240,22 @@ export function Confirm({
                 <Button
                     color="error"
                     variant="contained"
-                    disabled={busy || uncertain}
+                    disabled={
+                        busy ||
+                        (uncertain &&
+                            !(error instanceof APIError && error.recover))
+                    }
                     onClick={async () => {
                         if (busy) return;
+                        const recovery =
+                            error instanceof APIError
+                                ? error.recover
+                                : undefined;
                         setBusy(true);
                         setError(undefined);
                         try {
-                            await run(checked);
+                            if (recovery) await recovery();
+                            else await run(checked);
                             onClose();
                         } catch (e) {
                             setError(e);
@@ -259,7 +264,11 @@ export function Confirm({
                         }
                     }}
                 >
-                    {busy ? "Working…" : action}
+                    {busy
+                        ? "Submitting…"
+                        : error instanceof APIError && error.recover
+                          ? "Recover submission"
+                          : action}
                 </Button>
             </DialogActions>
         </Dialog>

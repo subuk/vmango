@@ -10,6 +10,7 @@ import (
 	"strings"
 	"subuk/vmango/compute"
 	"subuk/vmango/configdrive"
+	"subuk/vmango/tasks"
 	"sync"
 	"time"
 
@@ -443,7 +444,11 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 	return virDomainConfig
 }
 
-func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
+func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) (err error) {
+	ref := compute.VMRef(vm.NodeId, vm.Id)
+	var effects []tasks.Effect
+	defer func() { err = mutationError(err, "domain.save", ref, effects) }()
+
 	conn, err := repo.pool.Acquire(vm.NodeId)
 	if err != nil {
 		return repositoryError(err, "cannot acquire libvirt connection")
@@ -597,6 +602,7 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 	if _, err := conn.DomainDefineXML(virDomainXml); err != nil {
 		return repositoryError(err, "cannot define new domain")
 	}
+	effects = append(effects, confirmed(ref, "configuration-defined"))
 	virDomain, err := conn.LookupDomainByName(vm.Id)
 	if err != nil {
 		return repositoryError(err, "cannot lookup domain after define")
@@ -613,7 +619,11 @@ func (repo *VirtualMachineRepository) Save(vm *compute.VirtualMachine) error {
 	return nil
 }
 
-func (repo *VirtualMachineRepository) Delete(id, nodeId string) error {
+func (repo *VirtualMachineRepository) Delete(id, nodeId string) (err error) {
+	ref := compute.VMRef(nodeId, id)
+	var effects []tasks.Effect
+	defer func() { err = mutationError(err, "domain.delete", ref, effects) }()
+
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return repositoryError(err, "cannot acquire libvirt connection")
@@ -640,6 +650,7 @@ func (repo *VirtualMachineRepository) Delete(id, nodeId string) error {
 		if err := virDomain.Destroy(); err != nil {
 			return repositoryError(err, "cannot destroy domain")
 		}
+		effects = append(effects, confirmed(ref, "powered-off"))
 	}
 	if err := virDomain.UndefineFlags(libvirt.DOMAIN_UNDEFINE_NVRAM); err != nil {
 		return repositoryError(err, "cannot undefine domain")
@@ -723,21 +734,48 @@ func (repo *VirtualMachineRepository) Poweroff(id, nodeId string) error {
 	if err != nil {
 		return repositoryError(err, "domain lookup failed")
 	}
-	return domain.Destroy()
+	return repositoryError(domain.Destroy(), "virDomainDestroy")
 }
 
 func (repo *VirtualMachineRepository) Reboot(id, nodeId string) error {
+	if err := ensureEventLoop(); err != nil {
+		return repositoryError(err, "initialize reboot observation")
+	}
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return repositoryError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(nodeId)
-
 	domain, err := conn.LookupDomainByName(id)
 	if err != nil {
+		repo.pool.Release(nodeId)
 		return repositoryError(err, "domain lookup failed")
 	}
-	return domain.Reboot(libvirt.DOMAIN_REBOOT_DEFAULT)
+	defer domain.Free()
+	observed := make(chan struct{}, 1)
+	callback, err := conn.DomainEventRebootRegister(domain, func(_ *libvirt.Connect, _ *libvirt.Domain) {
+		select {
+		case observed <- struct{}{}:
+		default:
+		}
+	})
+	if err != nil {
+		repo.pool.Release(nodeId)
+		return repositoryError(err, "register reboot confirmation")
+	}
+	defer conn.DomainEventDeregister(callback)
+	err = domain.Reboot(libvirt.DOMAIN_REBOOT_DEFAULT)
+	repo.pool.Release(nodeId)
+	if err != nil {
+		return repositoryError(err, "virDomainReboot")
+	}
+	timer := time.NewTimer(2 * time.Minute)
+	defer timer.Stop()
+	select {
+	case <-observed:
+		return nil
+	case <-timer.C:
+		return fmt.Errorf("reboot was requested but no libvirt reboot event was observed within two minutes; the backend outcome is uncertain")
+	}
 }
 
 func (repo *VirtualMachineRepository) Start(id, nodeId string) error {
@@ -751,7 +789,7 @@ func (repo *VirtualMachineRepository) Start(id, nodeId string) error {
 	if err != nil {
 		return repositoryError(err, "domain lookup failed")
 	}
-	return domain.Create()
+	return repositoryError(domain.Create(), "virDomainCreate")
 }
 
 func (repo *VirtualMachineRepository) attachVolume(conn *libvirt.Connect, virDomainConfig *libvirtxml.Domain, attachedVolume *compute.VirtualMachineAttachedVolume, namer *DeviceNamer) error {

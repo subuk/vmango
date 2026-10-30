@@ -31,6 +31,9 @@ type VolumeListOptions struct {
 }
 
 type VolumeRepository interface {
+	// ResolvePath maps a prospective pool/name to its backend path without writes.
+	// It ensures create, attach, resize and delete commands share one lock identity.
+	ResolvePath(node, pool, name string) (string, error)
 	ValidateCreate(params VolumeCreateParams) error
 	Get(path, node string) (*Volume, error)
 	Create(params VolumeCreateParams) (*Volume, error)

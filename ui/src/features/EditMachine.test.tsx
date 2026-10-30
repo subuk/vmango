@@ -29,6 +29,14 @@ vi.mock("../api/client", async (original) => ({
     ...(await original<typeof import("../api/client")>()),
     request: state.request,
 }));
+vi.mock("../api/tasks", async (original) => ({
+    ...(await original<typeof import("../api/tasks")>()),
+    useResourceBusy: () => ({ task: undefined, unavailable: false }),
+    useResourceTasks: () => ({
+        data: { items: [], active: 0 },
+        isError: false,
+    }),
+}));
 afterEach(cleanup);
 it("preserves edits across resource refreshes, patches only user changes and focuses server field errors", async () => {
     const router = createMemoryRouter(

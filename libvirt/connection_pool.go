@@ -3,6 +3,7 @@ package libvirt
 import (
 	"subuk/vmango/compute"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -22,7 +23,27 @@ type ConnectionPool struct {
 	cacheMu   *sync.RWMutex
 }
 
+var eventLoopOnce sync.Once
+var eventLoopError error
+
+func ensureEventLoop() error {
+	eventLoopOnce.Do(func() {
+		eventLoopError = libvirt.EventRegisterDefaultImpl()
+		if eventLoopError == nil {
+			go func() {
+				for {
+					if libvirt.EventRunDefaultImpl() != nil {
+						time.Sleep(time.Second)
+					}
+				}
+			}()
+		}
+	})
+	return eventLoopError
+}
+
 func NewConnectionPool(nodeUri map[string]string, nodeOrder []string, logger zerolog.Logger) *ConnectionPool {
+	_ = ensureEventLoop()
 	return &ConnectionPool{
 		nodeUri:   nodeUri,
 		nodeOrder: nodeOrder,
@@ -72,7 +93,7 @@ func (p *ConnectionPool) Acquire(node string) (*libvirt.Connect, error) {
 
 	p.cache[uri].Mu.Lock()
 	if p.cache[uri].Conn == nil {
-		p.logger.Debug().Str("uri", uri).Msg("establishing new connection")
+		p.logger.Debug().Str("node", node).Msg("establishing new connection")
 		newConn, err := libvirt.NewConnect(uri)
 		if err != nil {
 			p.cache[uri].Mu.Unlock()

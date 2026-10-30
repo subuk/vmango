@@ -50,7 +50,9 @@ rejects an insufficient
 RAM request before creating a disk, and exercises two catalog IDs referencing
 one source disk. It creates and deletes a VM with initialization disabled, then
 clones the image and
-creates the VM and config drive through the JWT Bearer-authenticated JSON API.
+creates the VM and config drive through the JWT Bearer-authenticated JSON API. Mutations assert 202 acceptance,
+then poll the durable task until success before inspecting the real backend.
+The harness uses a dedicated task directory under its own artifact directory.
 It also checks API discovery, duplicate-create conflicts and partial updates. It checks the image-selected SCSI/virtio-scsi configuration, explicit guest agent
 disablement and presence/absence of the config drive. It checks the generated domain
 uses hardware acceleration, starts it through HTTP and checks libvirt reports

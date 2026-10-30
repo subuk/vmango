@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+    Box,
     Button,
     Dialog,
     DialogActions,
@@ -17,12 +18,14 @@ export function OperationDialog({
     onClose,
     run,
     children,
+    disabled = false,
 }: {
     title: string;
     action: string;
     onClose: () => void;
     run: () => Promise<unknown>;
     children: (error: unknown) => ReactNode;
+    disabled?: boolean;
 }) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<unknown>();
@@ -51,11 +54,19 @@ export function OperationDialog({
                 ref={form}
                 onSubmit={async (e) => {
                     e.preventDefault();
-                    if (busy || uncertain) return;
+                    if (
+                        busy ||
+                        ((uncertain || disabled) &&
+                            !(error instanceof APIError && error.recover))
+                    )
+                        return;
+                    const recovery =
+                        error instanceof APIError ? error.recover : undefined;
                     setBusy(true);
                     setError(undefined);
                     try {
-                        await run();
+                        if (recovery) await recovery();
+                        else await run();
                         await queries.invalidateQueries();
                         onClose();
                     } catch (e) {
@@ -68,7 +79,27 @@ export function OperationDialog({
                 <DialogTitle id="operation-title">{title}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2.5} sx={{ pt: 1 }}>
-                        {children(error)}
+                        <Box
+                            component="fieldset"
+                            disabled={
+                                busy ||
+                                ((uncertain || disabled) &&
+                                    !(
+                                        error instanceof APIError &&
+                                        error.recover
+                                    ))
+                            }
+                            sx={{
+                                border: 0,
+                                p: 0,
+                                m: 0,
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 2.5,
+                            }}
+                        >
+                            {children(error)}
+                        </Box>
                     </Stack>
                     <ErrorMessage error={error} />
                     {uncertain && (
@@ -84,9 +115,17 @@ export function OperationDialog({
                     <Button
                         type="submit"
                         variant="contained"
-                        disabled={busy || uncertain}
+                        disabled={
+                            busy ||
+                            ((uncertain || disabled) &&
+                                !(error instanceof APIError && error.recover))
+                        }
                     >
-                        {busy ? "Working…" : action}
+                        {busy
+                            ? "Submitting…"
+                            : error instanceof APIError && error.recover
+                              ? "Recover submission"
+                              : action}
                     </Button>
                 </DialogActions>
             </form>

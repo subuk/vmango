@@ -11,6 +11,8 @@ import {
     vmPath,
     type VM,
 } from "../api/hooks";
+import { useResourceBusy } from "../api/tasks";
+import { ResourceTasks } from "./Tasks";
 import { APIError, request } from "../api/client";
 import {
     bytes,
@@ -71,7 +73,19 @@ export function Machines() {
                                 id: "state",
                                 label: "State",
                                 value: (v) => v.state,
-                                render: (v) => <State value={v.state} />,
+                                render: (v) => (
+                                    <>
+                                        <State value={v.state} />
+                                        <ResourceTasks
+                                            compact
+                                            resource={{
+                                                kind: "machine",
+                                                scope: v.node,
+                                                id: v.id,
+                                            }}
+                                        />
+                                    </>
+                                ),
                             },
                             {
                                 id: "cpu",
@@ -117,6 +131,12 @@ export function MachineActions({
     vm: VM;
     full?: boolean;
 }) {
+    const blocked = useResourceBusy({
+        kind: "machine",
+        scope: vm.node,
+        id: vm.id,
+    });
+    const conflict = !!blocked.task || blocked.unavailable;
     const queries = useQueryClient();
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const [confirm, setConfirm] = useState<string>();
@@ -134,10 +154,18 @@ export function MachineActions({
             )}
             {vm.state === "stopped" ? (
                 <Button
-                    disabled={op.isPending || uncertain}
+                    disabled={
+                        op.isPending ||
+                        ((conflict || uncertain) &&
+                            !(op.error instanceof APIError && op.error.recover))
+                    }
                     onClick={() => op.mutate("start")}
                 >
-                    {op.isPending ? "Starting…" : "Start"}
+                    {op.isPending
+                        ? "Submitting…"
+                        : op.error instanceof APIError && op.error.recover
+                          ? "Recover submission"
+                          : "Start"}
                 </Button>
             ) : (
                 vm.state === "running" && (
@@ -163,6 +191,7 @@ export function MachineActions({
                 onClose={() => setAnchor(null)}
             >
                 <MenuItem
+                    disabled={conflict}
                     component={RouterLink}
                     to={`${machineURL(vm.node, vm.id)}update/`}
                 >
@@ -172,6 +201,7 @@ export function MachineActions({
                     ["reboot", "poweroff"].map((action) => (
                         <MenuItem
                             key={action}
+                            disabled={conflict}
                             onClick={() => {
                                 setAnchor(null);
                                 setConfirm(action);
@@ -183,6 +213,7 @@ export function MachineActions({
                         </MenuItem>
                     ))}
                 <MenuItem
+                    disabled={conflict}
                     sx={{ color: "error.main" }}
                     onClick={() => {
                         setAnchor(null);
@@ -196,6 +227,7 @@ export function MachineActions({
                 <Button
                     component={RouterLink}
                     to={`${machineURL(vm.node, vm.id)}update/`}
+                    disabled={conflict}
                 >
                     Edit
                 </Button>

@@ -2,8 +2,10 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"net"
 	"net/http"
@@ -12,6 +14,7 @@ import (
 	"strings"
 	"subuk/vmango/compute"
 	"subuk/vmango/config"
+	"subuk/vmango/tasks"
 	"sync"
 	"testing"
 	"time"
@@ -41,6 +44,9 @@ func apiRequest(h http.Handler, method, path, body string, auth bool) *httptest.
 	r := httptest.NewRequest(method, "https://vmango.test"+path, strings.NewReader(body))
 	if body != "" {
 		r.Header.Set("Content-Type", "application/json")
+	}
+	if method != "GET" && strings.Contains(path, "/nodes/") {
+		r.Header.Set("Idempotency-Key", uuid.NewString())
 	}
 	if auth {
 		r.Header.Set("Authorization", "Bearer "+testWebToken())
@@ -101,7 +107,7 @@ func TestAPIAuthenticationAndOrigins(t *testing.T) {
 		}
 	}
 	cfg.API.APIDisabled = true
-	if _, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, testAuthService(t, cfg)); err == nil {
+	if _, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, testAuthService(t, cfg), nil); err == nil {
 		t.Fatal("silently enabled disabled API")
 	}
 }
@@ -214,9 +220,10 @@ func TestAPIPatchAndErrors(t *testing.T) {
 	repo := &apiVMRepo{vm: compute.VirtualMachine{VCpus: 4, Memory: compute.NewSize(2, compute.SizeUnitG), GuestAgent: true, Autostart: true, Hugepages: true, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc}, VideoModel: compute.VideoModelNone}}
 	h := newTestAPI(t, cfg, zerolog.Nop(), nil, nil, nil, nil, nil, compute.NewVirtualMachineService(repo), nil, nil)
 	w := apiRequest(h, "PATCH", "/api/v1/nodes/n/vms/v", `{"autostart":false}`, true)
-	if w.Code != 200 {
+	if w.Code != 202 {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
+	awaitAPITask(t, h, w)
 	if repo.vm.Autostart || !repo.vm.GuestAgent || !repo.vm.Hugepages || repo.vm.VCpus != 4 || repo.vm.Memory.Bytes() != 2<<30 {
 		t.Fatalf("omitted fields changed: %+v", repo.vm)
 	}
@@ -371,28 +378,6 @@ func TestConsoleRejectsOriginAndMalformedUpgradeBeforeBackend(t *testing.T) {
 
 func (r *apiVMRepo) ValidateNew(*compute.VirtualMachine) error { return r.getErr }
 
-func TestAPIProvisioningProblem(t *testing.T) {
-	cfg := apiTestConfig(t)
-	repo := &apiVMRepo{getErr: &compute.ProvisioningError{Stage: "created-event", Node: "n", VM: "v", VMCreated: true, Volumes: []string{"/pool/root"}, Cause: fmt.Errorf("private hook output")}}
-	vms := compute.NewVirtualMachineService(repo)
-	manager := compute.NewVirtualMachineManager(vms, nil, nil, nil, nil)
-	h := newTestAPI(t, cfg, zerolog.Nop(), nil, nil, nil, nil, nil, vms, manager, nil)
-	w := apiRequest(h, "POST", "/api/v1/nodes/n/vms", `{"id":"v","arch":"x86_64","vcpus":2,"memory_bytes":1073741824}`, true)
-	if w.Code != 500 {
-		t.Fatalf("%d %s", w.Code, w.Body)
-	}
-	var problem apiProblem
-	if err := json.Unmarshal(w.Body.Bytes(), &problem); err != nil {
-		t.Fatal(err)
-	}
-	if problem.Provisioning == nil || problem.Provisioning.Stage != "created-event" || !problem.Provisioning.VMCreated || len(problem.Provisioning.Volumes) != 1 || problem.Provisioning.Volumes[0] != volumeID("/pool/root") {
-		t.Fatalf("%s", w.Body)
-	}
-	if strings.Contains(w.Body.String(), "private hook") || strings.Contains(w.Body.String(), "$schema") {
-		t.Fatal("unexpected internal fields in response")
-	}
-}
-
 func TestBridgeRejectsTextAndClosesOnBackendEOF(t *testing.T) {
 	for _, mode := range []string{"text", "eof", "oversized"} {
 		t.Run(mode, func(t *testing.T) {
@@ -483,9 +468,48 @@ func testAuthService(t *testing.T, cfg *config.Config) *auth.Service {
 }
 func newTestAPI(t *testing.T, cfg *config.Config, logger zerolog.Logger, networks *compute.NetworkService, keys *compute.KeyService, pools *compute.VolumePoolService, nodes *compute.NodeService, volumes *compute.VolumeService, vms *compute.VirtualMachineService, manager *compute.VirtualMachineManager, images *compute.ImageService) http.Handler {
 	t.Helper()
-	h, err := New(cfg, logger, networks, keys, pools, nodes, volumes, vms, manager, images, testAuthService(t, cfg))
+	h, err := New(cfg, logger, networks, keys, pools, nodes, volumes, vms, manager, images, testAuthService(t, cfg), newTestTaskService(t, &compute.CommandHandler{Manager: manager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return h
+}
+
+func newTestTaskService(t *testing.T, handler tasks.Handler) *tasks.Service {
+	t.Helper()
+	repo, err := filesystem.NewTaskRepository(filepath.Join(t.TempDir(), "tasks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := tasks.New(repo, handler, zerolog.Nop())
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := service.Start(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cancel(); service.Wait(); repo.Close() })
+	return service
+}
+func awaitAPITask(t *testing.T, h http.Handler, accepted *httptest.ResponseRecorder) tasks.Task {
+	t.Helper()
+	var ref apiTaskReference
+	if err := json.Unmarshal(accepted.Body.Bytes(), &ref); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		response := apiRequest(h, "GET", ref.StatusURL, "", true)
+		var task tasks.Task
+		if err := json.Unmarshal(response.Body.Bytes(), &task); err != nil {
+			t.Fatal(err)
+		}
+		if task.State.Terminal() {
+			if task.State != tasks.Succeeded {
+				t.Fatalf("task failed: %+v", task)
+			}
+			return task
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("task did not finish")
+	return tasks.Task{}
 }

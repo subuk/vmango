@@ -1055,9 +1055,6 @@
             "format": "uri",
             "type": "string"
           },
-          "provisioning": {
-            "$ref": "#/components/schemas/ApiProvisioning"
-          },
           "rejected_before_execution": {
             "description": "Authentication guard rejected the request before any domain handler ran.",
             "type": "boolean"
@@ -1069,6 +1066,12 @@
             ],
             "format": "int64",
             "type": "integer"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "task_url": {
+            "type": "string"
           },
           "title": {
             "description": "A short, human-readable summary of the problem type. This value should not change between occurrences of the error.",
@@ -1087,42 +1090,6 @@
             "type": "string"
           }
         },
-        "type": "object"
-      },
-      "ApiProvisioning": {
-        "additionalProperties": false,
-        "properties": {
-          "node": {
-            "type": "string"
-          },
-          "outcome_uncertain": {
-            "description": "Reconcile resource state before retrying a mutation.",
-            "type": "boolean"
-          },
-          "stage": {
-            "type": "string"
-          },
-          "vm": {
-            "type": "string"
-          },
-          "vm_created": {
-            "type": "boolean"
-          },
-          "volumes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "stage",
-          "node",
-          "vm",
-          "vm_created",
-          "volumes",
-          "outcome_uncertain"
-        ],
         "type": "object"
       },
       "ApiReadInterface": {
@@ -1152,6 +1119,22 @@
         "required": [
           "network",
           "ip_addresses"
+        ],
+        "type": "object"
+      },
+      "ApiTaskReference": {
+        "additionalProperties": false,
+        "properties": {
+          "status_url": {
+            "type": "string"
+          },
+          "task": {
+            "$ref": "#/components/schemas/Task"
+          }
+        },
+        "required": [
+          "task",
+          "status_url"
         ],
         "type": "object"
       },
@@ -1468,6 +1451,54 @@
         ],
         "type": "object"
       },
+      "Diagnostic": {
+        "additionalProperties": false,
+        "properties": {
+          "backend": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/ResourceRef"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "Effect": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/ResourceRef"
+          }
+        },
+        "required": [
+          "resource",
+          "action",
+          "at"
+        ],
+        "type": "object"
+      },
       "ErrorDetail": {
         "additionalProperties": false,
         "properties": {
@@ -1483,6 +1514,225 @@
             "description": "The value at the given location"
           }
         },
+        "type": "object"
+      },
+      "Identity": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "Page": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "next": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "active"
+        ],
+        "type": "object"
+      },
+      "Release": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "by": {
+            "$ref": "#/components/schemas/Identity"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "at",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ReleaseInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "description": "Operator confirmation after manually inspecting backend resources; never include secrets.",
+            "maxLength": 500,
+            "minLength": 3,
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ResourceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "scope",
+          "id"
+        ],
+        "type": "object"
+      },
+      "Stage": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/Diagnostic"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "started_at",
+          "state"
+        ],
+        "type": "object"
+      },
+      "Task": {
+        "additionalProperties": false,
+        "properties": {
+          "blocks_resources": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "effects": {
+            "items": {
+              "$ref": "#/components/schemas/Effect"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "error": {
+            "$ref": "#/components/schemas/Diagnostic"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "initiator": {
+            "$ref": "#/components/schemas/Identity"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "lock_release": {
+            "$ref": "#/components/schemas/Release"
+          },
+          "outcome_uncertain": {
+            "type": "boolean"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceRef"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/Stage"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "transitions": {
+            "items": {
+              "$ref": "#/components/schemas/Transition"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "initiator",
+          "created_at",
+          "resources",
+          "stages",
+          "transitions",
+          "effects",
+          "outcome_uncertain",
+          "blocks_resources"
+        ],
         "type": "object"
       },
       "TokenMetadata": {
@@ -1522,6 +1772,26 @@
           "status"
         ],
         "type": "object"
+      },
+      "Transition": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "at"
+        ],
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -1533,7 +1803,7 @@
     }
   },
   "info": {
-    "description": "Synchronous VM automation. Sizes are bytes. Partial failures and disconnected requests may have side effects; reconcile state before retrying. poweroff is a hard power-off. See /api/console-protocol for binary WebSocket framing.",
+    "description": "Durable asynchronous infrastructure commands return 202 and a task status URL. An Idempotency-Key is required; reuse it after a lost response. Task history survives restart. Sizes are bytes. poweroff is a hard power-off. See /api/console-protocol for binary WebSocket framing.",
     "title": "Vmango API",
     "version": "1.0.0"
   },
@@ -3196,6 +3466,18 @@
         "operationId": "create-vm",
         "parameters": [
           {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
             "in": "path",
             "name": "node",
             "required": true,
@@ -3215,15 +3497,22 @@
           "required": true
         },
         "responses": {
-          "201": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiVM"
+                  "$ref": "#/components/schemas/ApiTaskReference"
                 }
               }
             },
-            "description": "Created"
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -3317,6 +3606,18 @@
         "operationId": "delete-vm",
         "parameters": [
           {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
             "in": "path",
             "name": "node",
             "required": true,
@@ -3345,8 +3646,22 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "No Content"
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTaskReference"
+                }
+              }
+            },
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -3429,7 +3744,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Delete VM; disk deletion requires delete_volumes=true",
+        "summary": "Queue VM deletion; attached disk deletion requires delete_volumes=true",
         "tags": [
           "nodes"
         ]
@@ -3557,6 +3872,18 @@
         "operationId": "update-vm",
         "parameters": [
           {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
             "in": "path",
             "name": "node",
             "required": true,
@@ -3584,15 +3911,22 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiVM"
+                  "$ref": "#/components/schemas/ApiTaskReference"
                 }
               }
             },
-            "description": "OK"
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -3675,7 +4009,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Update persistent VM configuration; omitted fields are preserved",
+        "summary": "Queue a persistent configuration update; omitted fields are preserved",
         "tags": [
           "nodes"
         ]
@@ -3685,6 +4019,18 @@
       "post": {
         "operationId": "vm-action",
         "parameters": [
+          {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "node",
@@ -3713,8 +4059,22 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No Content"
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTaskReference"
+                }
+              }
+            },
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -3797,7 +4157,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Start, reboot or hard power-off a VM",
+        "summary": "Queue a start, reboot or hard power-off",
         "tags": [
           "nodes"
         ]
@@ -4052,6 +4412,18 @@
         "operationId": "attach-disk",
         "parameters": [
           {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
             "in": "path",
             "name": "node",
             "required": true,
@@ -4079,8 +4451,22 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No Content"
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTaskReference"
+                }
+              }
+            },
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -4163,7 +4549,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Attach an existing disk",
+        "summary": "Queue disk attachment",
         "tags": [
           "nodes"
         ]
@@ -4173,6 +4559,18 @@
       "delete": {
         "operationId": "detach-disk",
         "parameters": [
+          {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "node",
@@ -4201,8 +4599,22 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "No Content"
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTaskReference"
+                }
+              }
+            },
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -4285,7 +4697,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Detach disk without deleting it",
+        "summary": "Queue disk detachment without deletion",
         "tags": [
           "nodes"
         ]
@@ -4295,6 +4707,18 @@
       "post": {
         "operationId": "attach-interface",
         "parameters": [
+          {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "node",
@@ -4323,8 +4747,22 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No Content"
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTaskReference"
+                }
+              }
+            },
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -4407,7 +4845,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Attach a network interface",
+        "summary": "Queue network interface attachment",
         "tags": [
           "nodes"
         ]
@@ -4417,6 +4855,18 @@
       "delete": {
         "operationId": "detach-interface",
         "parameters": [
+          {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "node",
@@ -4443,8 +4893,22 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "No Content"
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTaskReference"
+                }
+              }
+            },
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -4527,7 +4991,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Detach a network interface",
+        "summary": "Queue network interface detachment",
         "tags": [
           "nodes"
         ]
@@ -4669,6 +5133,18 @@
         "operationId": "create-volume",
         "parameters": [
           {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
             "in": "path",
             "name": "node",
             "required": true,
@@ -4688,15 +5164,22 @@
           "required": true
         },
         "responses": {
-          "201": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiVolume"
+                  "$ref": "#/components/schemas/ApiTaskReference"
                 }
               }
             },
-            "description": "Created"
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -4779,7 +5262,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Create volume",
+        "summary": "Queue volume creation",
         "tags": [
           "nodes"
         ]
@@ -4789,6 +5272,18 @@
       "delete": {
         "operationId": "delete-volume",
         "parameters": [
+          {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "node",
@@ -4807,8 +5302,22 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "No Content"
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTaskReference"
+                }
+              }
+            },
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -4891,7 +5400,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Delete an unprotected, unattached volume",
+        "summary": "Queue deletion of an unattached volume",
         "tags": [
           "nodes"
         ]
@@ -5019,6 +5528,18 @@
         "operationId": "clone-volume",
         "parameters": [
           {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
             "in": "path",
             "name": "node",
             "required": true,
@@ -5046,15 +5567,22 @@
           "required": true
         },
         "responses": {
-          "201": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiVolume"
+                  "$ref": "#/components/schemas/ApiTaskReference"
                 }
               }
             },
-            "description": "Created"
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -5137,7 +5665,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Clone volume",
+        "summary": "Queue volume cloning",
         "tags": [
           "nodes"
         ]
@@ -5147,6 +5675,18 @@
       "post": {
         "operationId": "resize-volume",
         "parameters": [
+          {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "node",
@@ -5175,8 +5715,22 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No Content"
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTaskReference"
+                }
+              }
+            },
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -5259,9 +5813,529 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Grow a volume",
+        "summary": "Queue volume growth",
         "tags": [
           "nodes"
+        ]
+      }
+    },
+    "/api/v1/tasks": {
+      "get": {
+        "operationId": "list-tasks",
+        "parameters": [
+          {
+            "description": "Comma-separated lifecycle states.",
+            "explode": false,
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "description": "Comma-separated lifecycle states.",
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "resource_kind",
+            "schema": {
+              "enum": [
+                "machine",
+                "volume"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "resource_scope",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Machine identifier or backend volume path, matching task resource references.",
+            "explode": false,
+            "in": "query",
+            "name": "resource_id",
+            "schema": {
+              "description": "Machine identifier or backend volume path, matching task resource references.",
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "blocking",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Opaque next cursor from the preceding page.",
+            "explode": false,
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "description": "Opaque next cursor from the preceding page.",
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 25,
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List durable task history",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/v1/tasks/{task}": {
+      "get": {
+        "operationId": "get-task",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Inspect a durable task and execution timeline",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/v1/tasks/{task}/cancel": {
+      "post": {
+        "operationId": "cancel-task",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Cancel a queued task before execution",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/v1/tasks/{task}/release": {
+      "post": {
+        "operationId": "release-task-locks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Release uncertain resource locks after manual inspection",
+        "tags": [
+          "tasks"
         ]
       }
     },

@@ -23,6 +23,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppearance } from "./theme";
 import { useMe } from "./Auth";
+import { TaskMonitor, Tasks, TaskDetail } from "../features/Tasks";
 import { logout } from "../api/client";
 
 const Machines = lazy(() =>
@@ -74,6 +75,7 @@ const sections = [
     ["Volumes", "/volumes/"],
     ["Networks", "/networks/"],
     ["Keys", "/keys/"],
+    ["Tasks", "/tasks/"],
 ];
 
 function ThemeChoice() {
@@ -281,6 +283,7 @@ function Shell() {
                         {error}
                     </Alert>
                 )}
+                <TaskMonitor />
                 <Suspense
                     fallback={
                         <Typography role="status">Loading page…</Typography>
@@ -322,6 +325,8 @@ function Shell() {
                             path="/machines/:node/:id/vnc/"
                             element={<Console />}
                         />
+                        <Route path="/tasks/" element={<Tasks />} />
+                        <Route path="/tasks/:id/" element={<TaskDetail />} />
                         <Route path="/volumes/" element={<Volumes />} />
                         <Route path="/networks/" element={<Networks />} />
                         <Route path="/keys/" element={<Keys />} />

@@ -7,7 +7,15 @@ import { MachineActions } from "./Lists";
 import { Console } from "../consoles/Console";
 import type { VM } from "../api/hooks";
 
-const request = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const request = vi.hoisted(() =>
+    vi
+        .fn()
+        .mockImplementation((path: string) =>
+            Promise.resolve(
+                path.includes("/tasks?") ? { items: [], active: 0 } : undefined,
+            ),
+        ),
+);
 vi.mock("../api/client", async (original) => ({
     ...(await original<typeof import("../api/client")>()),
     request,
@@ -15,6 +23,14 @@ vi.mock("../api/client", async (original) => ({
 vi.mock("../api/hooks", async (original) => ({
     ...(await original<typeof import("../api/hooks")>()),
     useResource: () => ({ data: { graphics: "vnc" } }),
+}));
+vi.mock("../api/tasks", async (original) => ({
+    ...(await original<typeof import("../api/tasks")>()),
+    useResourceBusy: () => ({ task: undefined, unavailable: false }),
+    useResourceTasks: () => ({
+        data: { items: [], active: 0 },
+        isError: false,
+    }),
 }));
 afterEach(() => {
     cleanup();
@@ -49,7 +65,11 @@ it.each([false, true])(
             name: "Also delete attached disks (permanent)",
         }) as HTMLInputElement;
         expect(choice.checked).toBe(false);
-        expect(request).not.toHaveBeenCalled();
+        expect(
+            request.mock.calls.filter(
+                ([, method]) => method && method !== "GET",
+            ),
+        ).toHaveLength(0);
         expect(
             screen.getByText(/Permanently remove node-a\/example/),
         ).toBeTruthy();
@@ -80,8 +100,12 @@ it("requires explicit serial takeover and permits cancelling without issuing a l
             /Disconnect any existing serial client for node-a\/example/,
         ),
     ).toBeTruthy();
-    expect(request).not.toHaveBeenCalled();
+    expect(
+        request.mock.calls.filter(([, method]) => method && method !== "GET"),
+    ).toHaveLength(0);
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(request).not.toHaveBeenCalled();
+    expect(
+        request.mock.calls.filter(([, method]) => method && method !== "GET"),
+    ).toHaveLength(0);
 });

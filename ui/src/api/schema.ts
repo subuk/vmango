@@ -269,11 +269,11 @@ export interface paths {
         get: operations["get-vm"];
         put?: never;
         post?: never;
-        /** Delete VM; disk deletion requires delete_volumes=true */
+        /** Queue VM deletion; attached disk deletion requires delete_volumes=true */
         delete: operations["delete-vm"];
         options?: never;
         head?: never;
-        /** Update persistent VM configuration; omitted fields are preserved */
+        /** Queue a persistent configuration update; omitted fields are preserved */
         patch: operations["update-vm"];
         trace?: never;
     };
@@ -286,7 +286,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start, reboot or hard power-off a VM */
+        /** Queue a start, reboot or hard power-off */
         post: operations["vm-action"];
         delete?: never;
         options?: never;
@@ -359,7 +359,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Attach an existing disk */
+        /** Queue disk attachment */
         post: operations["attach-disk"];
         delete?: never;
         options?: never;
@@ -377,7 +377,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Detach disk without deleting it */
+        /** Queue disk detachment without deletion */
         delete: operations["detach-disk"];
         options?: never;
         head?: never;
@@ -393,7 +393,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Attach a network interface */
+        /** Queue network interface attachment */
         post: operations["attach-interface"];
         delete?: never;
         options?: never;
@@ -411,7 +411,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Detach a network interface */
+        /** Queue network interface detachment */
         delete: operations["detach-interface"];
         options?: never;
         head?: never;
@@ -428,7 +428,7 @@ export interface paths {
         /** List visible volumes */
         get: operations["list-volumes"];
         put?: never;
-        /** Create volume */
+        /** Queue volume creation */
         post: operations["create-volume"];
         delete?: never;
         options?: never;
@@ -447,7 +447,7 @@ export interface paths {
         get: operations["get-volume"];
         put?: never;
         post?: never;
-        /** Delete an unprotected, unattached volume */
+        /** Queue deletion of an unattached volume */
         delete: operations["delete-volume"];
         options?: never;
         head?: never;
@@ -463,7 +463,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Clone volume */
+        /** Queue volume cloning */
         post: operations["clone-volume"];
         delete?: never;
         options?: never;
@@ -480,8 +480,76 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Grow a volume */
+        /** Queue volume growth */
         post: operations["resize-volume"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List durable task history */
+        get: operations["list-tasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect a durable task and execution timeline */
+        get: operations["get-task"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a queued task before execution */
+        post: operations["cancel-task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release uncertain resource locks after manual inspection */
+        post: operations["release-task-locks"];
         delete?: never;
         options?: never;
         head?: never;
@@ -881,7 +949,6 @@ export interface components {
              * @example https://example.com/error-log/abc123
              */
             instance?: string;
-            provisioning?: components["schemas"]["ApiProvisioning"];
             /** @description Authentication guard rejected the request before any domain handler ran. */
             rejected_before_execution?: boolean;
             /**
@@ -890,6 +957,8 @@ export interface components {
              * @example 400
              */
             status?: number;
+            task_id?: string;
+            task_url?: string;
             /**
              * @description A short, human-readable summary of the problem type. This value should not change between occurrences of the error.
              * @example Bad Request
@@ -903,15 +972,6 @@ export interface components {
              */
             type?: string;
         };
-        ApiProvisioning: {
-            node: string;
-            /** @description Reconcile resource state before retrying a mutation. */
-            outcome_uncertain: boolean;
-            stage: string;
-            vm: string;
-            vm_created: boolean;
-            volumes: string[];
-        };
         ApiReadInterface: {
             ip_addresses: string[];
             mac?: string;
@@ -919,6 +979,10 @@ export interface components {
             network: string;
             /** Format: int64 */
             vlan?: number;
+        };
+        ApiTaskReference: {
+            status_url: string;
+            task: components["schemas"]["Task"];
         };
         ApiTokenCreateInputBody: {
             /**
@@ -1003,6 +1067,20 @@ export interface components {
             Unparsed: string[] | null;
             Value: string;
         };
+        Diagnostic: {
+            backend?: string;
+            code?: string;
+            domain?: string;
+            message: string;
+            operation?: string;
+            resource?: components["schemas"]["ResourceRef"];
+        };
+        Effect: {
+            action: string;
+            /** Format: date-time */
+            at: string;
+            resource: components["schemas"]["ResourceRef"];
+        };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
             location?: string;
@@ -1010,6 +1088,61 @@ export interface components {
             message?: string;
             /** @description The value at the given location */
             value?: unknown;
+        };
+        Identity: {
+            id: string;
+            name?: string;
+        };
+        Page: {
+            /** Format: int64 */
+            active: number;
+            items: components["schemas"]["Task"][] | null;
+            next?: string;
+        };
+        Release: {
+            /** Format: date-time */
+            at: string;
+            by: components["schemas"]["Identity"];
+            reason: string;
+        };
+        ReleaseInputBody: {
+            /** @description Operator confirmation after manually inspecting backend resources; never include secrets. */
+            reason: string;
+        };
+        ResourceRef: {
+            id: string;
+            kind: string;
+            scope: string;
+        };
+        Stage: {
+            error?: components["schemas"]["Diagnostic"];
+            /** Format: date-time */
+            finished_at?: string;
+            name: string;
+            resource?: components["schemas"]["ResourceRef"];
+            /** Format: date-time */
+            started_at: string;
+            state: string;
+        };
+        Task: {
+            blocks_resources: boolean;
+            /** Format: date-time */
+            created_at: string;
+            effects: components["schemas"]["Effect"][] | null;
+            error?: components["schemas"]["Diagnostic"];
+            /** Format: date-time */
+            finished_at?: string;
+            id: string;
+            initiator: components["schemas"]["Identity"];
+            kind: string;
+            lock_release?: components["schemas"]["Release"];
+            outcome_uncertain: boolean;
+            resources: components["schemas"]["ResourceRef"][] | null;
+            stages: components["schemas"]["Stage"][] | null;
+            /** Format: date-time */
+            started_at?: string;
+            state: string;
+            transitions: components["schemas"]["Transition"][] | null;
         };
         TokenMetadata: {
             /** Format: date-time */
@@ -1022,6 +1155,12 @@ export interface components {
             name: string;
             owner: string;
             status: string;
+        };
+        Transition: {
+            /** Format: date-time */
+            at: string;
+            reason?: string;
+            state: string;
         };
     };
     responses: never;
@@ -2387,7 +2526,10 @@ export interface operations {
     "create-vm": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
             };
@@ -2399,13 +2541,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created */
-            201: {
+            /** @description Accepted */
+            202: {
                 headers: {
+                    Location?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiVM"];
+                    "application/json": components["schemas"]["ApiTaskReference"];
                 };
             };
             /** @description Bad Request */
@@ -2583,7 +2726,10 @@ export interface operations {
                 /** @description Explicit opt-in to deleting attached disks. */
                 delete_volumes?: boolean;
             };
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
                 vm: string;
@@ -2592,12 +2738,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description Accepted */
+            202: {
                 headers: {
+                    Location?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTaskReference"];
+                };
             };
             /** @description Bad Request */
             400: {
@@ -2676,7 +2825,10 @@ export interface operations {
     "update-vm": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
                 vm: string;
@@ -2689,13 +2841,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Accepted */
+            202: {
                 headers: {
+                    Location?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiVM"];
+                    "application/json": components["schemas"]["ApiTaskReference"];
                 };
             };
             /** @description Bad Request */
@@ -2775,7 +2928,10 @@ export interface operations {
     "vm-action": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
                 vm: string;
@@ -2788,12 +2944,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description Accepted */
+            202: {
                 headers: {
+                    Location?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTaskReference"];
+                };
             };
             /** @description Bad Request */
             400: {
@@ -3041,7 +3200,10 @@ export interface operations {
     "attach-disk": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
                 vm: string;
@@ -3054,12 +3216,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description Accepted */
+            202: {
                 headers: {
+                    Location?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTaskReference"];
+                };
             };
             /** @description Bad Request */
             400: {
@@ -3138,7 +3303,10 @@ export interface operations {
     "detach-disk": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
                 vm: string;
@@ -3149,12 +3317,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description Accepted */
+            202: {
                 headers: {
+                    Location?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTaskReference"];
+                };
             };
             /** @description Bad Request */
             400: {
@@ -3233,7 +3404,10 @@ export interface operations {
     "attach-interface": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
                 vm: string;
@@ -3246,12 +3420,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description Accepted */
+            202: {
                 headers: {
+                    Location?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTaskReference"];
+                };
             };
             /** @description Bad Request */
             400: {
@@ -3330,7 +3507,10 @@ export interface operations {
     "detach-interface": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
                 vm: string;
@@ -3340,12 +3520,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description Accepted */
+            202: {
                 headers: {
+                    Location?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTaskReference"];
+                };
             };
             /** @description Bad Request */
             400: {
@@ -3521,7 +3704,10 @@ export interface operations {
     "create-volume": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
             };
@@ -3533,13 +3719,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created */
-            201: {
+            /** @description Accepted */
+            202: {
                 headers: {
+                    Location?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiVolume"];
+                    "application/json": components["schemas"]["ApiTaskReference"];
                 };
             };
             /** @description Bad Request */
@@ -3714,7 +3901,10 @@ export interface operations {
     "delete-volume": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
                 volume: string;
@@ -3723,12 +3913,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description Accepted */
+            202: {
                 headers: {
+                    Location?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ApiTaskReference"];
+                };
             };
             /** @description Bad Request */
             400: {
@@ -3807,7 +4000,10 @@ export interface operations {
     "clone-volume": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
                 volume: string;
@@ -3820,13 +4016,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created */
-            201: {
+            /** @description Accepted */
+            202: {
                 headers: {
+                    Location?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiVolume"];
+                    "application/json": components["schemas"]["ApiTaskReference"];
                 };
             };
             /** @description Bad Request */
@@ -3906,7 +4103,10 @@ export interface operations {
     "resize-volume": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+            };
             path: {
                 node: string;
                 volume: string;
@@ -3919,12 +4119,404 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTaskReference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "list-tasks": {
+        parameters: {
+            query?: {
+                /** @description Comma-separated lifecycle states. */
+                state?: string;
+                resource_kind?: "machine" | "volume";
+                resource_scope?: string;
+                /** @description Machine identifier or backend volume path, matching task resource references. */
+                resource_id?: string;
+                blocking?: boolean;
+                /** @description Opaque next cursor from the preceding page. */
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "get-task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "cancel-task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "release-task-locks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
             };
             /** @description Bad Request */
             400: {

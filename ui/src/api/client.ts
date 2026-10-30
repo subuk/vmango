@@ -1,23 +1,18 @@
 import createClient from "openapi-fetch";
-import type { paths } from "./schema";
+import type { components, paths } from "./schema";
 
 export type Problem = {
     status?: number;
     title?: string;
     detail?: string;
     code?: string;
+    task_id?: string;
+    task_url?: string;
     rejected_before_execution?: boolean;
     errors?: { location?: string; message?: string }[];
-    provisioning?: {
-        stage: string;
-        node: string;
-        vm: string;
-        vm_created: boolean;
-        volumes: string[];
-        outcome_uncertain: boolean;
-    };
 };
 export class APIError extends Error {
+    recover?: () => Promise<unknown>;
     constructor(
         public status: number,
         public problem: Problem = {},
@@ -25,11 +20,7 @@ export class APIError extends Error {
         super(problem.detail || problem.title || "Request failed.");
     }
     get uncertain() {
-        return (
-            this.status === 0 ||
-            this.status >= 500 ||
-            !!this.problem.provisioning?.outcome_uncertain
-        );
+        return this.status === 0 || this.status >= 500;
     }
 }
 
@@ -206,29 +197,113 @@ export async function authenticatedFetch(
 
 // Generated OpenAPI request/response types remain the contract for resource hooks.
 export const api = createClient<paths>({ fetch: authenticatedFetch });
+export type TaskReference = components["schemas"]["ApiTaskReference"];
+export function onTaskAccepted(fn: (task: TaskReference) => void) {
+    const listener = (event: Event) =>
+        fn((event as CustomEvent<TaskReference>).detail);
+    events.addEventListener("task-accepted", listener);
+    return () => events.removeEventListener("task-accepted", listener);
+}
+const submissionKeys = new Map<string, string>();
+async function submissionKey(path: string, method: string, body: unknown) {
+    const command = JSON.stringify([path, method, body]);
+    const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(command),
+    );
+    const name =
+        "vmango.submission." +
+        Array.from(new Uint8Array(digest), (b) =>
+            b.toString(16).padStart(2, "0"),
+        ).join("");
+    let key = submissionKeys.get(name);
+    try {
+        key ||= sessionStorage.getItem(name) || undefined;
+    } catch {
+        /* Memory retains recovery when session storage is unavailable. */
+    }
+    if (!key) key = crypto.randomUUID();
+    submissionKeys.set(name, key);
+    try {
+        sessionStorage.setItem(name, key);
+    } catch {
+        /* See above. */
+    }
+    return {
+        key,
+        clear: () => {
+            submissionKeys.delete(name);
+            try {
+                sessionStorage.removeItem(name);
+            } catch {
+                /* See above. */
+            }
+        },
+    };
+}
 export async function request<T>(
     path: string,
     method = "GET",
     body?: unknown,
 ): Promise<T> {
-    const response = await authenticatedFetch(path, {
-        method,
-        headers:
-            body === undefined ? {} : { "Content-Type": "application/json" },
-        body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    if (!response.ok) throw await responseProblem(response);
-    if (
-        response.status === 204 ||
-        response.headers.get("Content-Length") === "0"
-    )
-        return undefined as T;
+    const infrastructure =
+        method !== "GET" &&
+        !new URL(path, location.href).pathname.includes("/consoles/") &&
+        /^\/api\/v1\/nodes\/[^/]+\/(vms|volumes)(\/|\?|$)/.test(
+            new URL(path, location.href).pathname,
+        );
+    const submission = infrastructure
+        ? await submissionKey(path, method, body)
+        : undefined;
     try {
-        return await response.json();
-    } catch {
-        throw new APIError(0, {
-            detail: "Response could not be read. Refresh resource state before retrying.",
+        const headers = new Headers(
+            body === undefined ? {} : { "Content-Type": "application/json" },
+        );
+        if (submission) headers.set("Idempotency-Key", submission.key);
+        const response = await authenticatedFetch(path, {
+            method,
+            headers,
+            body: body === undefined ? undefined : JSON.stringify(body),
         });
+        if (!response.ok) {
+            const error = await responseProblem(response);
+            if (response.status < 500) submission?.clear();
+            throw error;
+        }
+        if (
+            response.status === 204 ||
+            response.headers.get("Content-Length") === "0"
+        )
+            return undefined as T;
+        let result: T;
+        try {
+            result = await response.json();
+        } catch {
+            throw new APIError(0, { detail: "Response could not be read." });
+        }
+        if (response.status === 202 && submission) {
+            const accepted = result as TaskReference;
+            if (!accepted?.task?.id || !accepted.status_url)
+                throw new APIError(0, {
+                    detail: "Task acceptance response could not be read.",
+                });
+            submission.clear();
+            events.dispatchEvent(
+                new CustomEvent("task-accepted", { detail: accepted }),
+            );
+        }
+        return result;
+    } catch (error) {
+        if (submission && error instanceof APIError && error.uncertain) {
+            const uncertain = new APIError(error.status, {
+                ...error.problem,
+                code: "task_submission_uncertain",
+                detail: "Submission status is unknown. Recover using the same command and idempotency key to find the accepted task safely.",
+            });
+            uncertain.recover = () => request(path, method, body);
+            throw uncertain;
+        }
+        throw error;
     }
 }
 export const transientReadRetry = (failures: number, error: Error) =>

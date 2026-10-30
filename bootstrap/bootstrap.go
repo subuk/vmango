@@ -1,9 +1,13 @@
 package bootstrap
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"subuk/vmango/api"
 	"subuk/vmango/auth"
 	"subuk/vmango/catalog"
@@ -13,7 +17,9 @@ import (
 	"subuk/vmango/configdrive"
 	"subuk/vmango/filesystem"
 	"subuk/vmango/libvirt"
+	"subuk/vmango/tasks"
 	"subuk/vmango/util"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -72,11 +78,15 @@ func Web(configFilename string) {
 	}
 
 	nodeUri := map[string]string{}
+	nodeScopes := map[string]string{}
+
 	nodeOrder := []string{}
 	vmRepSettings := map[string]libvirt.NodeSettings{}
 	vmManSettings := map[string]compute.VirtualMachineManagerNodeSettings{}
 	for _, c := range cfg.Libvirts {
 		nodeUri[c.Name] = c.Uri
+		scopeHash := sha256.Sum256([]byte(c.Uri))
+		nodeScopes[c.Name] = "libvirt:" + hex.EncodeToString(scopeHash[:])
 		nodeOrder = append(nodeOrder, c.Name)
 		configDriveWriteFormat := configdrive.NewFormat(c.ConfigDriveWriteFormat)
 		if configDriveWriteFormat == configdrive.FormatUnknown {
@@ -139,7 +149,32 @@ func Web(configFilename string) {
 			}
 		}
 	}()
-	apiEnv, err := api.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager, images, authentication)
+	taskRepo, err := filesystem.NewTaskRepository(util.ExpandHomeDir(cfg.Tasks.Directory))
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cannot initialize durable task storage")
+	}
+	defer taskRepo.Close()
+	taskService := tasks.New(taskRepo, &compute.CommandHandler{Manager: vmanager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys, Scopes: nodeScopes}, logger.With().Str("component", "tasks").Logger())
+	executionContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := taskService.Start(executionContext, cfg.Tasks.Workers); err != nil {
+		logger.Fatal().Err(err).Msg("cannot start task executor")
+	}
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-executionContext.Done():
+				return
+			case now := <-ticker.C:
+				if err := taskService.Cleanup(now, time.Duration(cfg.Tasks.RetentionDays)*24*time.Hour); err != nil {
+					logger.Error().Msg("task history cleanup failed")
+				}
+			}
+		}
+	}()
+	apiEnv, err := api.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager, images, authentication, taskService)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot initialize API")
 	}
@@ -147,9 +182,17 @@ func Web(configFilename string) {
 		Addr:    cfg.API.Listen,
 		Handler: apiEnv,
 	}
-	logger.Info().Str("addr", server.Addr).Msg("staring server")
-	if err := server.ListenAndServe(); err != nil {
+	go func() {
+		<-executionContext.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = server.Shutdown(ctx)
+	}()
+	logger.Info().Str("addr", server.Addr).Msg("starting server")
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Error().Err(err).Msg("serve failed")
-		os.Exit(1)
+		stop()
 	}
+	stop()
+	taskService.Wait()
 }

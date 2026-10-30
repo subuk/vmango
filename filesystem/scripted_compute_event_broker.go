@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -48,18 +49,16 @@ func (epub *ScriptedComputeEventBroker) Publish(event compute.Event) error {
 		}
 		cmd.Env = env
 		epub.logger.Info().
-			Str("script", sub.Script).
 			Str("event", event.Name()).
 			Msg("running script")
 
-		out, err := cmd.CombinedOutput()
+		cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
+		err := cmd.Run()
 		if err != nil {
 			if sub.Mandatory {
-				return util.NewError(err, "cannot run mandatory script: %s", strings.TrimSpace(string(out)))
+				return util.NewError(err, "mandatory %s hook failed (output omitted because it may contain secrets)", event.Name())
 			}
 			epub.logger.Warn().Err(err).
-				Str("out", string(out)).
-				Str("script", sub.Script).
 				Str("event", event.Name()).
 				Msg("cannot run script")
 		}

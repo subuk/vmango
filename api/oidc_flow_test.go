@@ -66,7 +66,7 @@ func TestOIDCCallbackRefreshAndVerifiedIdentity(t *testing.T) {
 	cfg.API.Oidc.AllowedEmails = []string{"allowed@example.com"}
 	cfg.API.BaseUrl = "https://vmango.test"
 	service := testAuthService(t, cfg)
-	h, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, service)
+	h, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, service, newTestTaskService(t, nil))
 	if err != nil {
 		t.Fatal(err)
 	}

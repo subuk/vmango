@@ -25,6 +25,8 @@ import {
     type Network,
     type Capabilities,
 } from "../api/hooks";
+import { useResourceBusy } from "../api/tasks";
+import { ResourceTasks } from "./Tasks";
 import { request } from "../api/client";
 import {
     bytes,
@@ -55,6 +57,7 @@ export function MachineDetail() {
                 <Typography>{node}</Typography>
                 <Typography>{id}</Typography>
             </Breadcrumbs>
+            <ResourceTasks resource={{ kind: "machine", scope: node, id }} />
             <QueryState query={q}>
                 {(vm) => (
                     <>
@@ -206,6 +209,12 @@ function Overview({ vm }: { vm: VM }) {
     );
 }
 function Disks({ vm }: { vm: VM }) {
+    const blocked = useResourceBusy({
+        kind: "machine",
+        scope: vm.node,
+        id: vm.id,
+    });
+    const conflict = !!blocked.task || blocked.unavailable;
     const volumes = useResource<Volume[]>(
         `/api/v1/nodes/${esc(vm.node)}/volumes`,
     );
@@ -221,7 +230,7 @@ function Disks({ vm }: { vm: VM }) {
         <>
             <Button
                 onClick={() => setAdd(true)}
-                disabled={vm.state !== "stopped"}
+                disabled={conflict || vm.state !== "stopped"}
                 sx={{ mb: 2 }}
             >
                 Attach disk
@@ -274,7 +283,7 @@ function Disks({ vm }: { vm: VM }) {
                 ]}
                 actions={(d) => (
                     <Button
-                        disabled={vm.state !== "stopped"}
+                        disabled={conflict || vm.state !== "stopped"}
                         onClick={() => setRemove(d.volume_id)}
                     >
                         Detach
@@ -322,6 +331,11 @@ function DiskLabel({
     );
 }
 function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
+    const blocked = useResourceBusy({
+        kind: "machine",
+        scope: vm.node,
+        id: vm.id,
+    });
     const q = useResource<Volume[]>(
         `/api/v1/nodes/${esc(vm.node)}/volumes?usage=attachable`,
         true,
@@ -333,6 +347,7 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
     const [bus, setBus] = useState("virtio");
     return (
         <OperationDialog
+            disabled={!!blocked.task || blocked.unavailable}
             title={`Attach disk to ${vm.id}`}
             action="Attach disk"
             onClose={onClose}
@@ -403,13 +418,19 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
     );
 }
 function Interfaces({ vm }: { vm: VM }) {
+    const blocked = useResourceBusy({
+        kind: "machine",
+        scope: vm.node,
+        id: vm.id,
+    });
+    const conflict = !!blocked.task || blocked.unavailable;
     const [add, setAdd] = useState(false);
     const [remove, setRemove] = useState<string>();
     const queries = useQueryClient();
     return (
         <>
             <Button
-                disabled={vm.state !== "stopped"}
+                disabled={conflict || vm.state !== "stopped"}
                 onClick={() => setAdd(true)}
                 sx={{ mb: 2 }}
             >
@@ -452,7 +473,7 @@ function Interfaces({ vm }: { vm: VM }) {
                 ]}
                 actions={(i) => (
                     <Button
-                        disabled={vm.state !== "stopped" || !i.mac}
+                        disabled={conflict || vm.state !== "stopped" || !i.mac}
                         onClick={() => setRemove(i.mac)}
                     >
                         Detach
@@ -482,6 +503,11 @@ function Interfaces({ vm }: { vm: VM }) {
     );
 }
 function AttachInterface({ vm, onClose }: { vm: VM; onClose: () => void }) {
+    const blocked = useResourceBusy({
+        kind: "machine",
+        scope: vm.node,
+        id: vm.id,
+    });
     const networks = useResource<Network[]>(
         `/api/v1/nodes/${esc(vm.node)}/networks`,
         true,
@@ -504,6 +530,7 @@ function AttachInterface({ vm, onClose }: { vm: VM; onClose: () => void }) {
     ];
     return (
         <OperationDialog
+            disabled={!!blocked.task || blocked.unavailable}
             title={`Attach interface to ${vm.id}`}
             action="Attach interface"
             onClose={onClose}

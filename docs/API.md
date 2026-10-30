@@ -1,7 +1,7 @@
 # VM automation API v1
 
 The JSON API powers the embedded React UI. Existing users retain application-wide
-resource permissions; RBAC and background jobs are outside v1. The UI requires
+resource permissions; RBAC is outside v1; infrastructure mutations use durable asynchronous tasks. The UI requires
 the API; the legacy `web` block and `api_disabled=true` fail with a migration
 instruction. See [upgrade and authentication migration](UI-MIGRATION.md).
 
@@ -92,35 +92,36 @@ Enums are strings. Unknown fields and invalid types are rejected.
 | `/keys` | GET list, POST add public key |
 | `/keys/{fingerprint}` | GET, DELETE |
 
-Creation returns 201 and the resource. Reads and PATCH return 200. Actions and
-deletes return 204. `DELETE` is explicit destructive intent; deleting a VM keeps
-its disks unless `?delete_volumes=true` is supplied. Protected or attached volumes
-cannot be deleted, protected volumes cannot be resized, and resizing cannot
-shrink a disk. `poweroff` calls libvirt Destroy: it is a **hard power-off**, not a
-graceful shutdown. Configuration changes affect persistent domain settings and
-may require a restart, as with the UI.
+Infrastructure mutations return **202 Accepted** with a task and `status_url`,
+and require an `Idempotency-Key` header. Reads return 200. Key creation and
+console link issuance remain synchronous (201); key deletion returns 204.
+Use authenticated `GET /api/v1/tasks/{id}` to observe execution and
+`GET /api/v1/tasks` for persistent paginated history. See [task contracts,
+completion, restart, authorization and retention](TASKS.md).
 
-PATCH preserves omitted fields; optional null fields are also treated as omitted.
-False and zero are distinct from omission (zero vCPUs/memory are rejected).
-Devices are changed through dedicated attachment routes. Repeating creation of
-an existing VM or volume returns 409. There is no `Idempotency-Key` support in v1.
+`DELETE` is explicit destructive intent; deleting a VM keeps its disks unless
+`?delete_volumes=true` is supplied. Protected or attached volumes cannot be
+deleted, protected volumes cannot be resized, and resizing cannot shrink a disk.
+`poweroff` is a **hard power-off**, not graceful shutdown. Configuration changes
+are persistent and may require stopping and starting a VM.
 
-Operations run synchronously until the domain/backend operation returns. The
-request body has a 2 MiB limit and Huma's body-read timeout; there is no added
-operation timeout that would imply cancellation of a blocking libvirt call.
-Client/proxy timeouts and disconnects do **not** imply cancellation or rollback.
-Do not retry a mutation automatically after an ambiguous timeout; discover the
-current state first. Configure proxy read timeouts for long disk cloning and
-cloud-init provisioning. Concurrent updates have no revision preconditions.
+PATCH preserves omitted fields; optional null fields are treated as omitted.
+False is distinct from omission; zero vCPUs/memory are rejected. Attachment
+changes have dedicated routes. Unknown fields and invalid requests are rejected
+before acceptance with field errors where available. Dynamic backend conditions
+are rechecked during execution where appropriate and can fail an accepted task.
 
-Errors use `application/problem+json`: 400 malformed input, 401 authentication,
-403 origin/transport, 404 missing resource, 409 conflict, 422 validation,
-503 unavailable backend, and 500 other failures. A failed VM provisioning request
-returns 500 with `provisioning.stage`, `node`, `vm`, `vm_created`, `volumes` and
-`outcome_uncertain`. The volume list contains opaque volume IDs. These describe confirmed successful steps; the failed backend
-call may also have changed state. No automatic rollback is performed, including
-on event-hook or start failure. Inspect the VM and volumes before retrying or
-removing resources. Error bodies do not include cloud-init user-data or credentials.
+Errors before acceptance use `application/problem+json`: 400 malformed input,
+401 authentication, 403 origin/transport, 404 missing resource, 409 conflict,
+422 validation, 503 backend/storage unavailable, and 500 other failures.
+Conflicting mutations return 409 and the blocking `task_id`/`task_url`.
+Reuse of an idempotency key with a different command returns 409. Reuse with the
+same command returns the original task even after failure or interruption.
+
+After acceptance, inspect the task's stages, confirmed effects and sanitized
+backend error, including libvirt message/code/domain. Browser disconnection does
+not cancel execution. Do not automatically resubmit failed/interrupted work;
+inspect its outcome first. No rollback is performed on hook or start failure.
 
 ## Create a VM
 
@@ -132,7 +133,7 @@ text; key fingerprints refer to `/api/v1/keys`.
 
 ```sh
 curl --config ~/.config/vmango/curl.conf https://vmango.example/api/v1/nodes/local/images
-curl --config ~/.config/vmango/curl.conf --json @vm.json https://vmango.example/api/v1/nodes/local/vms
+curl --config ~/.config/vmango/curl.conf -H "Idempotency-Key: demo-create-001" --json @vm.json https://vmango.example/api/v1/nodes/local/vms
 ```
 
 The protected curl configuration (mode 0600) contains
@@ -256,5 +257,5 @@ Authentication Problem Details include stable `code` values:
 specific codes. Resource-guard 401 responses include
 `rejected_before_execution=true`. Only `access_token_expired` with that proof
 permits one coordinated refresh and mutation replay. Never refresh automatically
-on 403, replay a timeout/5xx/uncertain mutation, or treat a 503 auth-store error
+on 403, replay an uncertain mutation with a new idempotency key, or treat a 503 auth-store error
 as revoked credentials. Refresh/bootstrap 401 requires login.

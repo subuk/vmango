@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useResourceBusy } from "../api/tasks";
+import { ResourceTasks } from "./Tasks";
+import { flushSync } from "react-dom";
 import {
     Accordion,
     AccordionDetails,
@@ -24,7 +27,7 @@ import {
     useSearchParams,
 } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { APIError, request } from "../api/client";
+import { APIError, request, type TaskReference } from "../api/client";
 import {
     esc,
     machineURL,
@@ -306,7 +309,12 @@ export function CreateMachine() {
                 onChange={() => setDirty(true)}
                 onSubmit={async (e) => {
                     e.preventDefault();
-                    if (busy || uncertainty) return;
+                    if (
+                        busy ||
+                        (uncertainty &&
+                            !(error instanceof APIError && error.recover))
+                    )
+                        return;
                     if (!validate()) {
                         form.current
                             ?.querySelector<HTMLElement>(
@@ -393,14 +401,19 @@ export function CreateMachine() {
                         })),
                     };
                     try {
-                        const vm = await request<VM>(
-                            `/api/v1/nodes/${esc(node)}/vms`,
-                            "POST",
-                            body,
-                        );
-                        setDirty(false);
+                        const accepted =
+                            error instanceof APIError && error.recover
+                                ? ((await error.recover()) as TaskReference)
+                                : await request<TaskReference>(
+                                      `/api/v1/nodes/${esc(node)}/vms`,
+                                      "POST",
+                                      body,
+                                  );
+                        flushSync(() => setDirty(false));
                         await queries.invalidateQueries();
-                        navigate(machineURL(vm.node, vm.id));
+                        navigate(
+                            `/tasks/${encodeURIComponent(accepted.task.id)}/`,
+                        );
                     } catch (e) {
                         setError(e);
                     } finally {
@@ -1286,8 +1299,9 @@ export function CreateMachine() {
                         <ErrorMessage error={error} />
                         {uncertainty && (
                             <Alert severity="warning">
-                                Do not submit again until you have inspected the
-                                machine and volumes.{" "}
+                                Recover the original submission with the same
+                                idempotency key. The accepted task may already
+                                be running.{" "}
                                 <Link
                                     component={RouterLink}
                                     to={`/machines/?node=${esc(node)}`}
@@ -1300,9 +1314,21 @@ export function CreateMachine() {
                             <Button
                                 variant="contained"
                                 type="submit"
-                                disabled={busy || uncertainty || !node}
+                                disabled={
+                                    busy ||
+                                    (uncertainty &&
+                                        !(
+                                            error instanceof APIError &&
+                                            error.recover
+                                        )) ||
+                                    !node
+                                }
                             >
-                                {busy ? "Creating…" : "Create machine"}
+                                {busy
+                                    ? "Submitting…"
+                                    : error instanceof APIError && error.recover
+                                      ? "Recover submission"
+                                      : "Create machine"}
                             </Button>
                             <Button
                                 component={RouterLink}
@@ -1364,6 +1390,12 @@ export function EditMachine() {
     );
 }
 function EditForm({ vm }: { vm: VM }) {
+    const blocked = useResourceBusy({
+        kind: "machine",
+        scope: vm.node,
+        id: vm.id,
+    });
+    const conflict = !!blocked.task || blocked.unavailable;
     const [initial] = useState(vm);
     const form = useRef<HTMLFormElement>(null);
     const [values, set] = useState({
@@ -1409,6 +1441,9 @@ function EditForm({ vm }: { vm: VM }) {
                 <Typography>Edit</Typography>
             </Breadcrumbs>
             <PageTitle title={`Edit ${vm.id}`} />
+            <ResourceTasks
+                resource={{ kind: "machine", scope: vm.node, id: vm.id }}
+            />
             <Typography color="text.secondary" sx={{ mb: 3 }}>
                 Persistent configuration on {vm.node}. Some settings take effect
                 after stopping and starting the machine.
@@ -1418,7 +1453,12 @@ function EditForm({ vm }: { vm: VM }) {
                 ref={form}
                 onSubmit={async (e) => {
                     e.preventDefault();
-                    if (busy || uncertain) return;
+                    if (
+                        busy ||
+                        ((uncertain || conflict) &&
+                            !(error instanceof APIError && error.recover))
+                    )
+                        return;
                     setBusy(true);
                     setError(undefined);
                     const patch: PatchVM = {};
@@ -1443,10 +1483,19 @@ function EditForm({ vm }: { vm: VM }) {
                             Number(values.memory_bytes) * MiB,
                         );
                     try {
-                        await request(vmPath(vm.node, vm.id), "PATCH", patch);
-                        setDirty(false);
+                        const accepted =
+                            error instanceof APIError && error.recover
+                                ? ((await error.recover()) as TaskReference)
+                                : await request<TaskReference>(
+                                      vmPath(vm.node, vm.id),
+                                      "PATCH",
+                                      patch,
+                                  );
+                        flushSync(() => setDirty(false));
                         await queries.invalidateQueries();
-                        navigate(machineURL(vm.node, vm.id));
+                        navigate(
+                            `/tasks/${encodeURIComponent(accepted.task.id)}/`,
+                        );
                     } catch (e) {
                         setError(e);
                     } finally {
@@ -1547,9 +1596,20 @@ function EditForm({ vm }: { vm: VM }) {
                         <Button
                             type="submit"
                             variant="contained"
-                            disabled={busy || uncertain}
+                            disabled={
+                                busy ||
+                                ((uncertain || conflict) &&
+                                    !(
+                                        error instanceof APIError &&
+                                        error.recover
+                                    ))
+                            }
                         >
-                            {busy ? "Saving…" : "Save changes"}
+                            {busy
+                                ? "Submitting…"
+                                : error instanceof APIError && error.recover
+                                  ? "Recover submission"
+                                  : "Save changes"}
                         </Button>
                         <Button
                             component={RouterLink}

@@ -1,6 +1,7 @@
 package libvirt
 
 import (
+	vir "libvirt.org/go/libvirt"
 	libvirtxml "libvirt.org/go/libvirtxml"
 	"slices"
 	"strings"
@@ -39,6 +40,12 @@ func TestUserNetworkUsesGuestArchitecture(t *testing.T) {
 		args := config.QEMUCommandline.Args
 		if !strings.HasPrefix(args[len(args)-1].Value, want) {
 			t.Fatalf("%s: %v", arch, args)
+		}
+		config.VCPU = &libvirtxml.DomainVCPU{Value: 2}
+		config.Memory = &libvirtxml.DomainMemory{Value: 1024, Unit: "MiB"}
+		observed, err := VirtualMachineFromDomainConfig(config, &vir.DomainInfo{State: vir.DOMAIN_SHUTOFF})
+		if err != nil || len(observed.Interfaces) != 1 || observed.Interfaces[0].NetworkName != "qemu-usernet" || observed.Interfaces[0].Model != "virtio" {
+			t.Fatalf("QEMU network did not retain domain meaning: %+v, %v", observed, err)
 		}
 	}
 }

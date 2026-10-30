@@ -8,6 +8,7 @@ import (
 	"subuk/vmango/auth"
 	"subuk/vmango/compute"
 	"subuk/vmango/config"
+	"subuk/vmango/tasks"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gorilla/mux"
@@ -30,6 +31,7 @@ type Environ struct {
 	vmanager *compute.VirtualMachineManager
 	cfg      *config.APIConfig
 	auth     *auth.Service
+	tasks    *tasks.Service
 	oauth2   *oauth2.Config
 	oidcp    *oidc.Provider
 }
@@ -40,6 +42,7 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	volumes *compute.VolumeService, vms *compute.VirtualMachineService,
 	vmanager *compute.VirtualMachineManager, images *compute.ImageService,
 	authentication *auth.Service,
+	taskService *tasks.Service,
 ) (http.Handler, error) {
 	if cfg.API.APIDisabled {
 		return nil, fmt.Errorf("the frontend requires the API; remove api_disabled after reviewing the migration guide")
@@ -47,13 +50,16 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	if authentication == nil {
 		return nil, fmt.Errorf("authentication service is required")
 	}
+	if taskService == nil {
+		return nil, fmt.Errorf("durable task service is required")
+	}
 	if err := auth.ValidateKey(cfg.API.ConsoleSigningKey); err != nil {
 		return nil, fmt.Errorf("console_signing_key: %w", err)
 	}
 	if cfg.API.ConsoleSigningKey == cfg.API.JWTSigningKey {
 		return nil, fmt.Errorf("console_signing_key must differ from jwt_signing_key")
 	}
-	env := &Environ{cfg: &cfg.API, logger: logger, router: mux.NewRouter(), networks: networks, keys: keys, volpools: volpools, nodes: nodes, volumes: volumes, vms: vms, vmanager: vmanager, images: images, auth: authentication}
+	env := &Environ{cfg: &cfg.API, logger: logger, router: mux.NewRouter(), networks: networks, keys: keys, volpools: volpools, nodes: nodes, volumes: volumes, vms: vms, vmanager: vmanager, images: images, auth: authentication, tasks: taskService}
 	if cfg.API.Oidc.ClientId != "" {
 		provider, err := oidc.NewProvider(context.Background(), cfg.API.Oidc.IssuerUrl)
 		if err != nil {

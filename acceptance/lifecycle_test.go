@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"subuk/vmango/tasks"
 	"testing"
 	"time"
 
@@ -214,6 +215,7 @@ libvirt "acceptance" {
 }
 image "boot" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q protected = true disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false initialization = %q minimum_memory_mib = 1024 minimum_disk_gib = 8 }
 image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q initialization = "none" }
+tasks { directory = %q workers = 2 }
 api {
  listen = %q
  jwt_signing_key = %q
@@ -222,7 +224,7 @@ api {
  token_dir = %q
  user "acceptance" { hashed_password = %q }
 }
-`, filepath.Join(root, "keys"), uri, name, base, arch, firmware, initialization, base, arch, firmware, address, uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString(), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash)))
+`, filepath.Join(root, "keys"), uri, name, base, arch, firmware, initialization, base, arch, firmware, filepath.Join(root, "tasks"), address, uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString(), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash)))
 	log, err := os.Create(filepath.Join(root, "vmango.log"))
 	if err != nil {
 		t.Fatal(err)
@@ -281,6 +283,9 @@ api {
 			t.Fatal(err)
 		}
 		req.Header.Set("Content-Type", "application/json")
+		if method != "GET" && strings.Contains(path, "/nodes/") && !strings.Contains(path, "/consoles/") {
+			req.Header.Set("Idempotency-Key", uuid.NewString())
+		}
 		if access != "" {
 			req.Header.Set("Authorization", "Bearer "+access)
 		}
@@ -294,6 +299,42 @@ api {
 			t.Fatalf("%s %s: %d, want %d: %s", method, path, response.StatusCode, status, body)
 		}
 		return body
+	}
+	// Infrastructure commands must be durably accepted before observation.
+	apiCommand := func(method, path string, value any) []byte {
+		t.Helper()
+		raw := apiRequest(method, path, value, 202)
+		var accepted struct {
+			Task      tasks.Task `json:"task"`
+			StatusURL string     `json:"status_url"`
+		}
+		if err := json.Unmarshal(raw, &accepted); err != nil || accepted.StatusURL == "" {
+			t.Fatalf("invalid task response: %s", raw)
+		}
+		deadline := time.Now().Add(2 * time.Minute)
+		for time.Now().Before(deadline) {
+			var task tasks.Task
+			if err := json.Unmarshal(apiRequest("GET", accepted.StatusURL, nil, 200), &task); err != nil {
+				t.Fatal(err)
+			}
+			if task.State.Terminal() {
+				if task.State != tasks.Succeeded {
+					t.Fatalf("infrastructure task %s: %+v", task.ID, task)
+				}
+				if strings.HasPrefix(task.Kind, "volume.") && (task.Kind == "volume.create" || task.Kind == "volume.clone") {
+					for _, effect := range task.Effects {
+						if effect.Action == "created" && effect.Resource.Kind == "volume" {
+							return apiRequest("GET", "/api/v1/nodes/acceptance/volumes/"+base64.RawURLEncoding.EncodeToString([]byte(effect.Resource.ID)), nil, 200)
+						}
+					}
+					t.Fatal("created volume missing from task effects")
+				}
+				return raw
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Fatal("infrastructure task did not finish")
+		return nil
 	}
 	var credentials struct {
 		AccessToken string `json:"access_token"`
@@ -316,19 +357,19 @@ api {
 	}
 	aliasBody["memory_bytes"] = uint64(2 << 30)
 	aliasBody["clone_disks"] = []any{map[string]any{"image_id": "no-init", "name": name + "_root", "pool": name, "size_bytes": uint64(8 << 30)}}
-	apiRequest("POST", "/api/v1/nodes/acceptance/vms", aliasBody, 201)
+	apiCommand("POST", "/api/v1/nodes/acceptance/vms", aliasBody)
 	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
 	noInitXML := mustVir("dumpxml", name)
 	if strings.Contains(noInitXML, "_config.iso") || !strings.Contains(noInitXML, "org.qemu.guest_agent.0") {
 		t.Fatal("no-init alias defaults were not applied")
 	}
-	apiRequest("DELETE", "/api/v1/nodes/acceptance/vms/"+name+"?delete_volumes=true", nil, 204)
+	apiCommand("DELETE", "/api/v1/nodes/acceptance/vms/"+name+"?delete_volumes=true", nil)
 	domainUUID = ""
 	apiVMPath := "/api/v1/nodes/acceptance/vms/" + name
 	createBody := map[string]any{"id": name, "arch": arch, "vcpus": 2, "memory_bytes": uint64(2 << 30), "cloud_init": map[string]any{"user_data": userdata}, "clone_disks": []any{map[string]any{"image_id": "boot", "name": name + "_root", "pool": name, "size_bytes": uint64(8 << 30)}}, "interfaces": []any{map[string]any{"network": "qemu-usernet"}}}
-	apiRequest("POST", "/api/v1/nodes/acceptance/vms", createBody, 201)
+	apiCommand("POST", "/api/v1/nodes/acceptance/vms", createBody)
 	apiRequest("POST", "/api/v1/nodes/acceptance/vms", createBody, 409)
-	apiRequest("PATCH", apiVMPath, map[string]any{"autostart": false}, 200)
+	apiCommand("PATCH", apiVMPath, map[string]any{"autostart": false})
 	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
 	write(filepath.Join(root, "resources.txt"), "pool="+name+"\npool_uuid="+poolUUID+"\npool_path="+poolDir+"\nvm_uuid="+domainUUID+"\n")
 	path := "/machines/acceptance/" + name + "/"
@@ -342,7 +383,7 @@ api {
 	}
 	request(path, 200)
 	t.Log("created VM and cloud-init disk through HTTP; starting guest")
-	apiRequest("POST", apiVMPath+"/actions", map[string]string{"action": "start"}, 204)
+	apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "start"})
 	if state := strings.TrimSpace(mustVir("domstate", name)); state != "running" {
 		t.Fatalf("expected running, got %s", state)
 	}
@@ -435,7 +476,7 @@ api {
 		}
 	}
 	t.Log("signed serial/VNC links reconnected; second serial client rejected")
-	apiRequest("POST", apiVMPath+"/actions", map[string]string{"action": "poweroff"}, 204)
+	apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "poweroff"})
 	if state := strings.TrimSpace(mustVir("domstate", name)); state != "shut off" {
 		t.Fatalf("expected shut off, got %s", state)
 	}
@@ -444,27 +485,27 @@ api {
 	var disk struct {
 		ID string `json:"id"`
 	}
-	rawDisk := apiRequest("POST", volumeBase, map[string]any{"name": "extra", "pool": name, "format": "qcow2", "size_bytes": 16 << 20}, 201)
+	rawDisk := apiCommand("POST", volumeBase, map[string]any{"name": "extra", "pool": name, "format": "qcow2", "size_bytes": 16 << 20})
 	if err := json.Unmarshal(rawDisk, &disk); err != nil {
 		t.Fatal(err)
 	}
 	apiRequest("GET", volumeBase+"/"+disk.ID, nil, 200)
-	apiRequest("POST", volumeBase+"/"+disk.ID+"/resize", map[string]any{"size_bytes": 32 << 20}, 204)
+	apiCommand("POST", volumeBase+"/"+disk.ID+"/resize", map[string]any{"size_bytes": 32 << 20})
 	var clone struct {
 		ID string `json:"id"`
 	}
-	rawClone := apiRequest("POST", volumeBase+"/"+disk.ID+"/clone", map[string]any{"name": "extra-clone", "pool": name, "format": "qcow2", "size_bytes": 32 << 20}, 201)
+	rawClone := apiCommand("POST", volumeBase+"/"+disk.ID+"/clone", map[string]any{"name": "extra-clone", "pool": name, "format": "qcow2", "size_bytes": 32 << 20})
 	if err := json.Unmarshal(rawClone, &clone); err != nil {
 		t.Fatal(err)
 	}
-	apiRequest("POST", apiVMPath+"/disks", map[string]any{"volume_id": disk.ID}, 204)
+	apiCommand("POST", apiVMPath+"/disks", map[string]any{"volume_id": disk.ID})
 	apiRequest("DELETE", volumeBase+"/"+disk.ID, nil, 409)
-	apiRequest("DELETE", apiVMPath+"/disks/"+disk.ID, nil, 204)
-	apiRequest("DELETE", volumeBase+"/"+disk.ID, nil, 204)
-	apiRequest("DELETE", volumeBase+"/"+clone.ID, nil, 204)
+	apiCommand("DELETE", apiVMPath+"/disks/"+disk.ID, nil)
+	apiCommand("DELETE", volumeBase+"/"+disk.ID, nil)
+	apiCommand("DELETE", volumeBase+"/"+clone.ID, nil)
 	apiRequest("DELETE", volumeBase+"/"+base64.RawURLEncoding.EncodeToString([]byte(base)), nil, 409)
-	apiRequest("POST", apiVMPath+"/interfaces", map[string]any{"network": "qemu-usernet", "mac": "52:54:00:ab:cd:01", "model": "virtio"}, 204)
-	apiRequest("DELETE", apiVMPath+"/interfaces/52:54:00:ab:cd:01", nil, 204)
+	apiCommand("POST", apiVMPath+"/interfaces", map[string]any{"network": "qemu-usernet", "mac": "52:54:00:ab:cd:01", "model": "virtio"})
+	apiCommand("DELETE", apiVMPath+"/interfaces/52:54:00:ab:cd:01", nil)
 	public, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -480,7 +521,7 @@ api {
 	apiRequest("POST", "/api/v1/keys", map[string]string{"public_key": key}, 409)
 	apiRequest("DELETE", "/api/v1/keys/"+fp, nil, 204)
 	apiRequest("GET", "/api/v1/keys/"+fp, nil, 404)
-	apiRequest("DELETE", apiVMPath+"?delete_volumes=true", nil, 204)
+	apiCommand("DELETE", apiVMPath+"?delete_volumes=true", nil)
 	if _, err := vir("dominfo", name); err == nil {
 		t.Fatal("VM still exists after HTTP delete")
 	}

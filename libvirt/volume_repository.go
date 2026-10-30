@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"subuk/vmango/compute"
+	"subuk/vmango/tasks"
 	"subuk/vmango/util"
 	"sync"
 	"time"
@@ -15,6 +17,31 @@ import (
 
 	libvirt "libvirt.org/go/libvirt"
 )
+
+func (repo *VolumeRepository) ResolvePath(node, pool, name string) (string, error) {
+	conn, err := repo.pool.Acquire(node)
+	if err != nil {
+		return "", repositoryError(err, "resolve storage destination")
+	}
+	defer repo.pool.Release(node)
+	p, err := conn.LookupStoragePoolByName(pool)
+	if err != nil {
+		return "", repositoryError(err, "lookup destination pool")
+	}
+	defer p.Free()
+	xml, err := p.GetXMLDesc(0)
+	if err != nil {
+		return "", repositoryError(err, "read destination pool")
+	}
+	var config libvirtxml.StoragePool
+	if err := config.Unmarshal(xml); err != nil {
+		return "", err
+	}
+	if config.Target == nil || config.Target.Path == "" || path.Base(name) != name {
+		return "", fmt.Errorf("%w: storage pool needs a file destination", compute.ErrInvalid)
+	}
+	return path.Join(config.Target.Path, name), nil
+}
 
 type VolumeRepository struct {
 	pool     *ConnectionPool
@@ -197,7 +224,11 @@ func (repo *VolumeRepository) List(options compute.VolumeListOptions) ([]*comput
 	return result, nil
 }
 
-func (repo *VolumeRepository) Create(params compute.VolumeCreateParams) (*compute.Volume, error) {
+func (repo *VolumeRepository) Create(params compute.VolumeCreateParams) (result *compute.Volume, err error) {
+	var effects []tasks.Effect
+	ref := compute.VolumeRef(params.NodeId, params.Name)
+	defer func() { err = mutationError(err, "storage-volume.create", ref, effects) }()
+
 	conn, err := repo.pool.Acquire(params.NodeId)
 	if err != nil {
 		return nil, repositoryError(err, "cannot acquire connection")
@@ -238,10 +269,18 @@ func (repo *VolumeRepository) Create(params compute.VolumeCreateParams) (*comput
 	if err != nil {
 		return nil, repositoryError(err, "cannot create volume")
 	}
+	if path, e := virVolume.GetPath(); e == nil {
+		ref = compute.VolumeRef(params.NodeId, path)
+		effects = append(effects, confirmed(ref, "created"))
+	}
 	return repo.virVolumeToVolume(params.NodeId, virPool, virVolume)
 }
 
-func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (*compute.Volume, error) {
+func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (result *compute.Volume, err error) {
+	var effects []tasks.Effect
+	ref := compute.VolumeRef(params.NodeId, params.NewName)
+	defer func() { err = mutationError(err, "storage-volume.clone", ref, effects) }()
+
 	conn, err := repo.pool.Acquire(params.NodeId)
 	if err != nil {
 		return nil, repositoryError(err, "cannot acquire connection")
@@ -308,6 +347,10 @@ func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (*compute.
 	virVolume, err := virPool.StorageVolCreateXMLFrom(virVolumeXml, originalVirVolume, virVolCreateFlags)
 	if err != nil {
 		return nil, repositoryError(err, "cannot clone volume")
+	}
+	if path, e := virVolume.GetPath(); e == nil {
+		ref = compute.VolumeRef(params.NodeId, path)
+		effects = append(effects, confirmed(ref, "created"))
 	}
 
 	if params.Format == compute.VolumeFormatQcow2 && originalVirVolumeInfo.Capacity < params.NewSize.Bytes() {

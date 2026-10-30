@@ -57,8 +57,8 @@ are opaque, rotating HttpOnly host-only cookies scoped to `/api/v1/auth/`, with
 SameSite=Lax and Secure for HTTPS. A refresh family expires 7 days after login;
 rotation never extends it. Tabs coordinate refresh through Web Locks. Reload
 obtains a new access JWT before loading protected resources. Neither access nor
-refresh tokens are kept in localStorage/sessionStorage. Only the non-sensitive
-Light/Dark/System preference uses browser storage.
+refresh tokens are kept in localStorage/sessionStorage. The non-sensitive Light/Dark/System preference and uncertain task submission keys
+(indexed by command hashes, without payloads) use browser storage.
 
 Refresh records contain hashes and bounded rotation history. Rotation is durable
 before a response is issued. Authentic reuse of an old credential revokes its
@@ -145,3 +145,13 @@ includes source, lockfile, licenses and dist in both archive paths. Downstream
 RPM/DEB compile/install/Go-test targets use `UI_PREBUILT=1` and Python manifest
 validation without Node/npm or network. Verify an extracted archive in that mode;
 Debian clean must preserve its packaged dist.
+
+## Asynchronous infrastructure operations
+
+VM and volume mutations now require an Idempotency-Key and return 202 with a
+persistent task reference. Update scripts to poll status_url and inspect final
+state; a 202 response is not operation completion. There are no legacy synchronous
+mutation endpoints. Configure a dedicated tasks directory; package examples use
+/var/lib/vmango/tasks. The UI provides Tasks, resource history links and progress
+that survives navigation and reload. See [task storage and restart semantics](TASKS.md)
+for interruption, manual lock release, private payload cleanup and retention.

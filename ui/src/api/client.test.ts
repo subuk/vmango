@@ -32,6 +32,76 @@ async function loggedIn() {
 }
 
 describe("credential and mutation behavior", () => {
+    it("keeps console link issuance synchronous without task submission keys", async () => {
+        await loggedIn();
+        fetchMock.mockResolvedValueOnce(
+            response(
+                {
+                    url: "/console/local/v/vnc#test",
+                    expires_at: "2026-10-30T16:00:00Z",
+                },
+                201,
+            ),
+        );
+        const result = await client.request<{ url: string }>(
+            "http://localhost/api/v1/nodes/local/vms/v/consoles/vnc/links",
+            "POST",
+            {},
+        );
+        expect(result.url).toContain("/console/");
+        expect(
+            (fetchMock.mock.calls[0][0] as Request).headers.get(
+                "Idempotency-Key",
+            ),
+        ).toBeNull();
+    });
+    it("recovers an uncertain infrastructure submission with the same key and private command", async () => {
+        await loggedIn();
+        const accepted = vi.fn();
+        const stop = client.onTaskAccepted(accepted);
+        const path = "http://localhost/api/v1/nodes/n/vms";
+        const body = {
+            id: "pending",
+            cloud_init: { user_data: "private-bootstrap-secret" },
+        };
+        fetchMock.mockRejectedValueOnce(new TypeError("Response lost"));
+        let failure: InstanceType<typeof client.APIError> | undefined;
+        try {
+            await client.request(path, "POST", body);
+        } catch (error) {
+            failure = error as typeof failure;
+        }
+        expect(failure?.problem.code).toBe("task_submission_uncertain");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const first = fetchMock.mock.calls[0][0] as Request;
+        const key = first.headers.get("Idempotency-Key");
+        expect(key).toBeTruthy();
+        const stored = Array.from({ length: sessionStorage.length }, (_, i) => {
+            const name = sessionStorage.key(i)!;
+            return name + sessionStorage.getItem(name);
+        }).join(" ");
+        expect(stored).not.toContain("private-bootstrap-secret");
+        expect(stored).not.toContain("cloud_init");
+        fetchMock.mockResolvedValueOnce(
+            response(
+                {
+                    task: { id: "saved-task", state: "running" },
+                    status_url: "/api/v1/tasks/saved-task",
+                },
+                202,
+            ),
+        );
+        await failure?.recover?.();
+        const recovered = fetchMock.mock.calls[1][0] as Request;
+        expect(recovered.headers.get("Idempotency-Key")).toBe(key);
+        expect(await recovered.json()).toEqual(body);
+        expect(accepted).toHaveBeenCalledWith(
+            expect.objectContaining({
+                task: expect.objectContaining({ id: "saved-task" }),
+            }),
+        );
+        stop();
+    });
     it("requires a new login after losing a refresh response", async () => {
         const signedOut = vi.fn();
         const stop = client.onLogout(signedOut);
@@ -99,7 +169,7 @@ describe("credential and mutation behavior", () => {
             expect(fetchMock).toHaveBeenCalledTimes(1);
         },
     );
-    it("retains partial-provisioning details and never retries a disconnect", async () => {
+    it("retains service error details and never retries a disconnect", async () => {
         await loggedIn();
         fetchMock.mockRejectedValueOnce(new TypeError("Network error"));
         await expect(
@@ -110,13 +180,6 @@ describe("credential and mutation behavior", () => {
             response(
                 {
                     detail: "Partial provisioning",
-                    provisioning: {
-                        stage: "created-event",
-                        vm: "test",
-                        vm_created: true,
-                        volumes: ["opaque-volume"],
-                        outcome_uncertain: true,
-                    },
                 },
                 500,
             ),
@@ -125,7 +188,7 @@ describe("credential and mutation behavior", () => {
             client.request("http://localhost/api/v1/test", "POST", {}),
         ).rejects.toMatchObject({
             uncertain: true,
-            problem: { provisioning: { stage: "created-event" } },
+            problem: { detail: "Partial provisioning" },
         });
     });
     it("treats a temporary refresh failure as a service error and a reused cookie as login required", async () => {

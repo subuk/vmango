@@ -221,7 +221,7 @@ distribution packages.
 
 Vmango provides a versioned JSON API with JWT Bearer authentication, generated
 OpenAPI and locally bundled Swagger UI at `/api/docs`. See [API documentation](docs/API.md)
-for VM/cloud-init examples, synchronous operation semantics and serial/VNC
+for VM/cloud-init examples, durable asynchronous task semantics and serial/VNC
 clients with reusable signed browser links.
 
 

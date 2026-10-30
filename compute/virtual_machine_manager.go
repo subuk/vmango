@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"subuk/vmango/configdrive"
+	"subuk/vmango/tasks"
 	"subuk/vmango/util"
 	"sync"
 
@@ -81,16 +82,65 @@ func (manager *VirtualMachineManager) AttachVolume(id, node string, disk *Virtua
 	return manager.vms.AttachVolume(id, node, disk)
 }
 
-func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool, overrides ImageDefaults) (err error) {
+func (manager *VirtualMachineManager) PrepareCreation(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, overrides ImageDefaults) (*VirtualMachine, []VirtualMachineManagerClonedVolumeParams, error) {
 	if vm == nil || vm.Id == "" || vm.NodeId == "" {
-		return fmt.Errorf("%w: VM name and node are required", ErrInvalid)
+		return nil, nil, ErrInvalid
 	}
+	if err := manager.vms.ValidateNew(vm); err != nil {
+		return nil, nil, err
+	}
+	prepared, clones, err := manager.PrepareImages(vm, cloneVols, newVols, overrides)
+	if err != nil {
+		return nil, nil, err
+	}
+	vm, cloneVols = prepared, clones
+	if err := ValidateVM(vm); err != nil {
+		return nil, nil, err
+	}
+	if !resourceName.MatchString(vm.Id) {
+		return nil, nil, fmt.Errorf("%w: invalid VM name", ErrInvalid)
+	}
+	for _, v := range vm.Volumes {
+		if err := ValidateVolumeAttachment(v); err != nil {
+			return nil, nil, err
+		}
+		if err := manager.volumes.ValidateAttachable(v.Path, vm.NodeId, manager.images); err != nil {
+			return nil, nil, err
+		}
+	}
+	for _, n := range vm.Interfaces {
+		if err := ValidateInterface(n); err != nil {
+			return nil, nil, err
+		}
+	}
+	for _, p := range newVols {
+		if err := validateVolumeCreate(VolumeCreateParams{NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}); err != nil {
+			return nil, nil, err
+		}
+		if err := manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}); err != nil {
+			return nil, nil, err
+		}
+	}
+	if vm.Config != nil && vm.Config.Initialization != "" && configdrive.NewFormat(vm.Config.Initialization) == configdrive.FormatUnknown {
+		return nil, nil, fmt.Errorf("%w: invalid initialization", ErrInvalid)
+	}
+	return vm, cloneVols, nil
+}
+
+func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool, overrides ImageDefaults) error {
 	manager.createMu.Lock()
 	defer manager.createMu.Unlock()
-	if err := manager.vms.ValidateNew(vm); err != nil {
+	vm, cloneVols, err := manager.PrepareCreation(vm, cloneVols, newVols, overrides)
+	if err != nil {
 		return err
 	}
-	failure := &ProvisioningError{Stage: "prepare", Node: vm.NodeId, VM: vm.Id, Volumes: []string{}}
+	return manager.createPrepared(vm, cloneVols, newVols, start, manager.settings[vm.NodeId], nil)
+}
+
+// createPrepared executes the accepted snapshot without reapplying a changed
+// catalog after restart. Progress writes precede every provisioning side effect.
+func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool, settings VirtualMachineManagerNodeSettings, progress *tasks.Execution) (err error) {
+	failure := &ProvisioningError{Node: vm.NodeId, VM: vm.Id, Volumes: []string{}}
 	mutated := false
 	defer func() {
 		if err != nil && mutated {
@@ -98,148 +148,176 @@ func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine
 			err = failure
 		}
 	}()
-	prepared, clones, err := manager.PrepareImages(vm, cloneVols, newVols, overrides)
-	if err != nil {
-		return err
+	vmRef := VMRef(vm.NodeId, vm.Id)
+	stage := func(name string, ref tasks.ResourceRef, mutation bool, run func() error) error {
+		failure.Stage = name
+		mutated = mutated || mutation
+		if progress == nil {
+			return run()
+		}
+		return progress.Stage(name, &ref, mutation, run)
 	}
-	vm, cloneVols = prepared, clones
-	if err := ValidateVM(vm); err != nil {
-		return err
+	effect := func(ref tasks.ResourceRef, action string) error {
+		if progress == nil {
+			return nil
+		}
+		return progress.Effect(ref, action)
 	}
-	if !resourceName.MatchString(vm.Id) {
-		return fmt.Errorf("%w: invalid VM name", ErrInvalid)
-	}
-	for _, v := range vm.Volumes {
-		if err := ValidateVolumeAttachment(v); err != nil {
+	if progress != nil {
+		// Queued work may execute after downtime. Recheck mutable backend
+		// prerequisites without reapplying catalog defaults to the snapshot.
+		if err := stage("validate-creation", vmRef, false, func() error {
+			if err := manager.vms.ValidateNew(vm); err != nil {
+				return err
+			}
+			for _, disk := range vm.Volumes {
+				if err := manager.volumes.ValidateAttachable(disk.Path, vm.NodeId, manager.images); err != nil {
+					return err
+				}
+			}
+			for _, disk := range cloneVols {
+				if err := manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Pool: disk.NewPool, Name: disk.NewName, Size: disk.NewSize, Format: disk.NewFormat}); err != nil {
+					return err
+				}
+			}
+			for _, disk := range newVols {
+				if err := manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Pool: disk.Pool, Name: disk.Name, Size: disk.Size, Format: disk.Format}); err != nil {
+					return err
+				}
+			}
+			if vm.Config != nil {
+				return manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Pool: settings.CdPool, Name: vm.Id + settings.CdSuffix, Format: VolumeFormatIso})
+			}
+			return nil
+		}); err != nil {
 			return err
 		}
-		if err := manager.volumes.ValidateAttachable(v.Path, vm.NodeId, manager.images); err != nil {
-			return err
-		}
-	}
-	for _, n := range vm.Interfaces {
-		if err := ValidateInterface(n); err != nil {
-			return err
-		}
-	}
-	for _, p := range newVols {
-		if err := validateVolumeCreate(VolumeCreateParams{NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}); err != nil {
-			return err
-		}
-		if err := manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}); err != nil {
-			return err
-		}
-	}
-	if vm.Config != nil && vm.Config.Initialization != "" && configdrive.NewFormat(vm.Config.Initialization) == configdrive.FormatUnknown {
-		return fmt.Errorf("%w: invalid initialization", ErrInvalid)
 	}
 	for _, p := range cloneVols {
-		params := VolumeCloneParams{
-			NodeId:       vm.NodeId,
-			Format:       p.NewFormat,
-			OriginalPath: p.OriginalPath,
-			NewName:      p.NewName,
-			NewPool:      p.NewPool,
-			NewSize:      p.NewSize,
+		params := VolumeCloneParams{NodeId: vm.NodeId, Format: p.NewFormat, OriginalPath: p.OriginalPath, NewName: p.NewName, NewPool: p.NewPool, NewSize: p.NewSize}
+		if err := stage("clone-volume", vmRef, true, func() error {
+			volume, err := manager.volumes.Clone(params)
+			if err != nil {
+				return err
+			}
+			failure.Volumes = append(failure.Volumes, volume.Path)
+			vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{Path: volume.Path, Alias: p.Alias, DeviceType: p.DeviceType, DeviceBus: p.DeviceBus})
+			return effect(VolumeRef(vm.NodeId, volume.Path), "created")
+		}); err != nil {
+			return err
 		}
-		failure.Stage = "clone-volume"
-		mutated = true
-		volume, err := manager.volumes.Clone(params)
-		if err != nil {
-			return util.NewError(err, "cannot clone volume")
-		}
-		failure.Volumes = append(failure.Volumes, volume.Path)
-		vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{
-			Path:       volume.Path,
-			Alias:      p.Alias,
-			DeviceType: p.DeviceType,
-			DeviceBus:  p.DeviceBus,
-		})
 	}
 	for _, p := range newVols {
-		params := VolumeCreateParams{
-			NodeId: vm.NodeId,
-			Name:   p.Name,
-			Pool:   p.Pool,
-			Format: p.Format,
-			Size:   p.Size,
+		params := VolumeCreateParams{NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}
+		if err := stage("create-volume", vmRef, true, func() error {
+			volume, err := manager.volumes.Create(params)
+			if err != nil {
+				return err
+			}
+			failure.Volumes = append(failure.Volumes, volume.Path)
+			vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{Path: volume.Path, Alias: p.Alias, DeviceType: p.DeviceType, DeviceBus: p.DeviceBus})
+			return effect(VolumeRef(vm.NodeId, volume.Path), "created")
+		}); err != nil {
+			return err
 		}
-		failure.Stage = "create-volume"
-		mutated = true
-		volume, err := manager.volumes.Create(params)
-		if err != nil {
-			return util.NewError(err, "cannot create volume")
-		}
-		failure.Volumes = append(failure.Volumes, volume.Path)
-		vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{
-			Path:       volume.Path,
-			Alias:      p.Alias,
-			DeviceType: p.DeviceType,
-			DeviceBus:  p.DeviceBus,
-		})
 	}
-	failure.Stage = "define-vm"
-	mutated = true
-	if err := manager.vms.Save(vm); err != nil {
+	if err := stage("define-vm", vmRef, true, func() error {
+		if err := manager.vms.Save(vm); err != nil {
+			return err
+		}
+		failure.VMCreated = true
+		return effect(vmRef, "created")
+	}); err != nil {
 		return err
 	}
-	failure.VMCreated = true
-	settings := manager.settings[vm.NodeId]
 	if vm.Config != nil {
 		format := settings.CdFormat
 		if vm.Config.Initialization != "" {
 			format = configdrive.NewFormat(vm.Config.Initialization)
 		}
-		failure.Stage = "generate-config-drive"
-		cdFile, err := manager.generateConfigDrive(vm.Config, format)
-		if err != nil {
-			return util.NewError(err, "cannot generate configdrive")
+		var cdFile *os.File
+		var cdLen int64
+		defer func() {
+			if cdFile != nil {
+				cdFile.Close()
+				os.Remove(cdFile.Name())
+			}
+		}()
+		if err := stage("generate-config-drive", vmRef, false, func() error {
+			var err error
+			cdFile, err = manager.generateConfigDrive(vm.Config, format)
+			if err != nil {
+				return err
+			}
+			cdLen, err = cdFile.Seek(0, io.SeekEnd)
+			if err != nil {
+				return err
+			}
+			_, err = cdFile.Seek(0, io.SeekStart)
+			return err
+		}); err != nil {
+			return err
 		}
-		defer os.Remove(cdFile.Name())
-		defer cdFile.Close()
-		cdLen, err := cdFile.Seek(0, io.SeekEnd)
-		if err != nil {
-			return util.NewError(err, "cannot get configdrive length")
+		var cdVolume *Volume
+		if err := stage("create-config-drive", vmRef, true, func() error {
+			var err error
+			cdVolume, err = manager.volumes.Create(VolumeCreateParams{NodeId: vm.NodeId, Name: vm.Id + settings.CdSuffix, Pool: settings.CdPool, Format: VolumeFormatIso, Size: NewSize(uint64(cdLen), SizeUnitB)})
+			if err != nil {
+				return err
+			}
+			failure.Volumes = append(failure.Volumes, cdVolume.Path)
+			return effect(VolumeRef(vm.NodeId, cdVolume.Path), "created")
+		}); err != nil {
+			return err
 		}
-		if _, err := cdFile.Seek(0, io.SeekStart); err != nil {
-			return util.NewError(err, "configdrive seek to start failed")
+		cdRef := VolumeRef(vm.NodeId, cdVolume.Path)
+		if err := stage("upload-config-drive", cdRef, true, func() error {
+			if err := manager.volumes.Upload(cdVolume.Path, cdVolume.NodeId, cdFile, cdVolume.Size.Bytes()); err != nil {
+				return err
+			}
+			return effect(cdRef, "uploaded")
+		}); err != nil {
+			return err
 		}
-		cdVolumeParams := VolumeCreateParams{
-			NodeId: vm.NodeId,
-			Name:   vm.Id + settings.CdSuffix,
-			Pool:   settings.CdPool,
-			Format: VolumeFormatIso,
-			Size:   NewSize(uint64(cdLen), SizeUnitB),
-		}
-		failure.Stage = "create-config-drive"
-		cdVolume, err := manager.volumes.Create(cdVolumeParams)
-		if err != nil {
-			return util.NewError(err, "cannot create configdrive volume")
-		}
-		failure.Volumes = append(failure.Volumes, cdVolume.Path)
-		failure.Stage = "upload-config-drive"
-		if err := manager.volumes.Upload(cdVolume.Path, cdVolume.NodeId, cdFile, cdVolume.Size.Bytes()); err != nil {
-			return util.NewError(err, "cannot upload configdrive volume")
-		}
-		attachedVolume := &VirtualMachineAttachedVolume{
-			Path:       cdVolume.Path,
-			Alias:      "configdrive",
-			DeviceType: DeviceTypeDisk,
-			DeviceBus:  DeviceBusVirtio,
-		}
-		failure.Stage = "attach-config-drive"
-		if err := manager.vms.AttachVolume(vm.Id, vm.NodeId, attachedVolume); err != nil {
-			return util.NewError(err, "cannot attach configdrive volume")
+		if err := stage("attach-config-drive", vmRef, true, func() error {
+			if err := manager.vms.AttachVolume(vm.Id, vm.NodeId, &VirtualMachineAttachedVolume{Path: cdVolume.Path, Alias: "configdrive", DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio}); err != nil {
+				return err
+			}
+			return effect(cdRef, "attached")
+		}); err != nil {
+			return err
 		}
 	}
-	failure.Stage = "created-event"
-	if err := manager.epub.Publish(NewEventVirtualMachineCreated(vm)); err != nil {
-		return util.NewError(err, "cannot publish event virtual machine created")
+	if progress != nil {
+		if err := stage("verify-vm", vmRef, true, func() error {
+			observed, err := manager.vms.Get(vm.Id, vm.NodeId)
+			if err != nil {
+				return err
+			}
+			if observed.VCpus != vm.VCpus || observed.Memory.Bytes() != vm.Memory.Bytes() || observed.Autostart != vm.Autostart {
+				return fmt.Errorf("VM configuration does not match the accepted command")
+			}
+			for _, disk := range vm.Volumes {
+				if observed.AttachmentInfo(disk.Path) == nil {
+					return fmt.Errorf("requested disk attachment is not confirmed")
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+	if err := stage("created-event", vmRef, true, func() error { return manager.epub.Publish(NewEventVirtualMachineCreated(vm)) }); err != nil {
+		return err
 	}
 	if start {
-		failure.Stage = "start-vm"
-		if err := manager.vms.Start(vm.Id, vm.NodeId); err != nil {
-			return util.NewError(err, "cannot start vm")
+		if err := stage("start-vm", vmRef, true, func() error {
+			if err := manager.vms.Start(vm.Id, vm.NodeId); err != nil {
+				return err
+			}
+			return effect(vmRef, "start-request-completed")
+		}); err != nil {
+			return err
 		}
 	}
 	return nil

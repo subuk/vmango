@@ -246,9 +246,24 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 			}
 		}
 		for netdevName, netdev := range qemuNetdevs {
+			network, model := netdevName, netdev["model"]
+			// Vmango's command-line networks use generated netdev IDs and
+			// architecture-specific QEMU models. Expose their domain meaning
+			// consistently so read-back can confirm attachment commands.
+			if strings.HasPrefix(netdevName, "vmngmcos") {
+				switch netdev["type"] {
+				case "user":
+					network = "qemu-usernet"
+				case "socket":
+					network = "macos-socket-vmnet"
+				}
+				if strings.HasPrefix(model, "virtio-net-") {
+					model = "virtio"
+				}
+			}
 			iface := &compute.VirtualMachineAttachedInterface{
-				NetworkName: netdevName,
-				Model:       netdev["model"],
+				NetworkName: network,
+				Model:       model,
 				Mac:         netdev["mac"],
 			}
 			vm.Interfaces = append(vm.Interfaces, iface)

@@ -108,7 +108,7 @@ it("preserves entered values and flags an incompatible image after changing node
     expect(screen.getByRole("option", { name: "special-mode" })).toBeTruthy();
 });
 
-it("keeps a partial creation result and the draft visible without submitting twice", async () => {
+it("keeps an uncertain submission and draft visible without submitting twice", async () => {
     const router = createMemoryRouter(
         [{ path: "*", element: <CreateMachine /> }],
         { initialEntries: ["/machines/add/?node=n1"] },
@@ -141,32 +141,17 @@ it("keeps a partial creation result and the draft visible without submitting twi
     await user.click(screen.getByRole("button", { name: "Create machine" }));
     expect(
         screen
-            .getByRole("button", { name: "Creating…" })
+            .getByRole("button", { name: "Submitting…" })
             .hasAttribute("disabled"),
     ).toBe(true);
     fireEvent.submit(
         screen.getByRole("textbox", { name: "Machine name" }).closest("form")!,
     );
     expect(request).toHaveBeenCalledTimes(1);
-    reject(
-        new APIError(500, {
-            detail: "Machine created but start failed",
-            provisioning: {
-                stage: "start",
-                node: "n1",
-                vm: "partial-vm",
-                vm_created: true,
-                volumes: ["root-volume"],
-                outcome_uncertain: true,
-            },
-        }),
-    );
+    reject(new APIError(0, { detail: "Submission status is unknown" }));
     await waitFor(() =>
-        expect(
-            screen.getByText("Machine created but start failed"),
-        ).toBeTruthy(),
+        expect(screen.getByText("Submission status is unknown")).toBeTruthy(),
     );
-    expect(screen.getByText(/Provisioning stopped at start/)).toBeTruthy();
     expect(
         (
             screen.getByRole("textbox", {
@@ -180,4 +165,41 @@ it("keeps a partial creation result and the draft visible without submitting twi
             .hasAttribute("disabled"),
     ).toBe(true);
     expect(request).toHaveBeenCalledTimes(1);
+});
+
+it("opens accepted creation progress before the machine exists", async () => {
+    const router = createMemoryRouter(
+        [
+            { path: "/machines/add/", element: <CreateMachine /> },
+            { path: "/tasks/:id/", element: <p>Accepted task progress</p> },
+        ],
+        { initialEntries: ["/machines/add/?node=n1"] },
+    );
+    render(
+        <QueryClientProvider client={new QueryClient()}>
+            <RouterProvider router={router} />
+        </QueryClientProvider>,
+    );
+    const user = userEvent.setup();
+    await user.type(
+        screen.getByRole("textbox", { name: "Machine name" }),
+        "pending-vm",
+    );
+    for (const [label, option] of [
+        ["Image", /Ubuntu.*24.04/],
+        ["Storage pool", "pool1"],
+        ["Network", "net1"],
+    ] as const) {
+        await user.click(screen.getByRole("combobox", { name: label }));
+        await user.click(screen.getByRole("option", { name: option }));
+    }
+    request.mockResolvedValueOnce({
+        task: { id: "accepted-creation", state: "queued" },
+        status_url: "/api/v1/tasks/accepted-creation",
+    });
+    await user.click(screen.getByRole("button", { name: "Create machine" }));
+    await screen.findByText("Accepted task progress");
+    expect(router.state.location.pathname).toBe("/tasks/accepted-creation/");
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/machine created/i)).toBeNull();
 });
