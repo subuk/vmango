@@ -717,6 +717,17 @@ function EditForm({ vm }: { vm: VM }) {
     const [type, setType] = useState(vm.instance_type || "");
     const [open, setOpen] = useState(false);
     const catalog = clouds.data?.find((c) => c.id === vm.cloud);
+    const instanceTypes = catalog?.instance_types || [];
+    const selectedType = validOrFirst(type, instanceTypes);
+    const cannotChange =
+        !vm.managed ||
+        vm.state !== "stopped" ||
+        !selectedType ||
+        !!blocked.task ||
+        blocked.unavailable;
+    useEffect(() => {
+        if (clouds.data) setType(selectedType);
+    }, [clouds.data, selectedType]);
     return (
         <Stack spacing={3} sx={{ maxWidth: 760 }}>
             <PageTitle title={`Change instance type for ${vm.id}`} />
@@ -740,18 +751,13 @@ function EditForm({ vm }: { vm: VM }) {
                     <ErrorMessage error={clouds.error} />
                     <Choice
                         label="Instance type"
-                        value={type}
-                        entries={catalog?.instance_types || []}
+                        value={selectedType}
+                        entries={instanceTypes}
                         set={setType}
                     />
                     <Button
                         variant="contained"
-                        disabled={
-                            vm.state !== "stopped" ||
-                            !type ||
-                            !!blocked.task ||
-                            blocked.unavailable
-                        }
+                        disabled={cannotChange}
                         onClick={() => setOpen(true)}
                     >
                         Change instance type
@@ -760,6 +766,7 @@ function EditForm({ vm }: { vm: VM }) {
             )}
             {open && (
                 <OperationDialog
+                    disabled={cannotChange}
                     title="Change instance type?"
                     action="Change instance type"
                     onClose={() => setOpen(false)}
@@ -767,14 +774,14 @@ function EditForm({ vm }: { vm: VM }) {
                         request(
                             `/api/v1/clouds/${esc(vm.cloud)}/machines/${esc(vm.node)}/${esc(vm.id)}/instance-type`,
                             "POST",
-                            { instance_type: type },
+                            { instance_type: selectedType },
                         )
                     }
                 >
                     {() => (
                         <Typography>
-                            Apply {type} to {vm.id} on {vm.node}. Disk sizes
-                            remain unchanged.
+                            Apply {selectedType} to {vm.id} on {vm.node}. Disk
+                            sizes remain unchanged.
                         </Typography>
                     )}
                 </OperationDialog>
