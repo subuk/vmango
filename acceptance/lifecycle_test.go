@@ -713,7 +713,8 @@ cloud "acceptance" {
 	} else {
 		apiRequest("DELETE", volumeBase+"/"+base64.RawURLEncoding.EncodeToString([]byte(base)), nil, 404)
 	}
-	apiCommand("POST", apiVMPath+"/interfaces", map[string]any{"network": "lan", "mac": "52:54:00:ab:cd:01", "model": "virtio"})
+	apiRequest("POST", apiVMPath+"/interfaces", map[string]any{"network": "lan", "model": "virtio"}, 422)
+	apiCommand("POST", apiVMPath+"/interfaces", map[string]any{"network": "lan", "mac": "52:54:00:ab:cd:01"})
 	apiCommand("DELETE", apiVMPath+"/interfaces/52:54:00:ab:cd:01", nil)
 	public, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
