@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { TaskDetail, Tasks } from "./Tasks";
+import { TaskDetail, Tasks, TaskMonitor } from "./Tasks";
 import { APIError } from "../api/client";
 import type { Task } from "../api/tasks";
 
@@ -15,6 +15,7 @@ vi.mock("../api/client", async (original) => ({
 afterEach(() => {
     cleanup();
     request.mockReset();
+    localStorage.clear();
 });
 const base: Task = {
     id: "persisted-task",
@@ -194,9 +195,7 @@ it("preserves typed resource filters until explicitly applied", async () => {
         ).value,
     ).toBe("pending-vm");
     expect(view.router.state.location.search).toBe("");
-    await user.click(
-        screen.getByRole("button", { name: "Apply" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Apply" }));
     await waitFor(() =>
         expect(
             new URLSearchParams(view.router.state.location.search).get(
@@ -261,4 +260,58 @@ it("does not turn placement requests and cloud capacity into volume links", asyn
         screen.getByRole("link", { name: "Cloud local" }).getAttribute("href"),
     ).toBe("/machines/?cloud=local");
     expect(screen.queryByRole("link", { name: "local/capacity" })).toBeNull();
+});
+
+it("hides released failures from the global monitor", async () => {
+    const released = {
+        ...base,
+        state: "failed",
+        blocks_resources: false,
+        lock_release: {
+            by: { id: "admin" },
+            at: base.created_at,
+            reason: "Inspected",
+        },
+    };
+    request.mockResolvedValue({ items: [released], active: 0 });
+    render(
+        <QueryClientProvider client={new QueryClient()}>
+            <RouterProvider
+                router={createMemoryRouter([
+                    { path: "/", element: <TaskMonitor /> },
+                ])}
+            />
+        </QueryClientProvider>,
+    );
+    await screen.findByText("0 active");
+    expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("keeps a dismissed failure hidden after remounting the monitor", async () => {
+    request.mockImplementation(async (path: string) =>
+        path.includes("state=")
+            ? { items: [], active: 0 }
+            : { items: [{ ...base, state: "failed" }], active: 0 },
+    );
+    function monitor() {
+        return render(
+            <QueryClientProvider client={new QueryClient()}>
+                <RouterProvider
+                    router={createMemoryRouter([
+                        { path: "/", element: <TaskMonitor /> },
+                    ])}
+                />
+            </QueryClientProvider>,
+        );
+    }
+    const first = monitor();
+    await screen.findByRole("alert");
+    await userEvent
+        .setup()
+        .click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    first.unmount();
+    monitor();
+    await screen.findByText("0 active");
+    expect(screen.queryByRole("alert")).toBeNull();
 });

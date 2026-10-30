@@ -60,7 +60,18 @@ export function TaskMonitor() {
     const queries = useQueryClient();
     const previous = useRef(new Map<string, string>());
     const [accepted, setAccepted] = useState<TaskReference>();
-    const [dismissed, setDismissed] = useState<string[]>([]);
+    const [dismissed, setDismissed] = useState<string[]>(() => {
+        try {
+            const saved: unknown = JSON.parse(
+                localStorage.getItem("vmango.dismissedTasks") || "[]",
+            );
+            return Array.isArray(saved)
+                ? saved.filter((id): id is string => typeof id === "string")
+                : [];
+        } catch {
+            return [];
+        }
+    });
     useEffect(
         () =>
             onTaskAccepted((task) => {
@@ -127,6 +138,7 @@ export function TaskMonitor() {
     const failures = observed.filter(
         (t, index) =>
             ["failed", "interrupted"].includes(t.state) &&
+            !t.lock_release &&
             !dismissed.includes(t.id) &&
             observed.findIndex((other) => other.id === t.id) === index,
     );
@@ -188,12 +200,27 @@ export function TaskMonitor() {
                     severity={
                         task.state === "interrupted" ? "warning" : "error"
                     }
-                    onClose={() => setDismissed((old) => [...old, task.id])}
+                    onClose={() =>
+                        setDismissed((old) => {
+                            const next = [...old, task.id];
+                            try {
+                                localStorage.setItem(
+                                    "vmango.dismissedTasks",
+                                    JSON.stringify(next),
+                                );
+                            } catch {
+                                /* Storage may be unavailable. */
+                            }
+                            return next;
+                        })
+                    }
                 >
                     <TaskLink task={task} />
-                    {task.outcome_uncertain
-                        ? ". Backend outcome is uncertain; inspect the task."
-                        : ". See failure details."}
+                    {task.blocks_resources
+                        ? ". Action required: open task details, inspect the affected resources, then click Release resource locks at the top of the page."
+                        : task.outcome_uncertain
+                          ? ". Backend outcome is uncertain; inspect the task."
+                          : ". See failure details."}
                 </Alert>
             ))}
         </Stack>
@@ -220,9 +247,11 @@ export function ResourceTasks({
             {current.map((task) => (
                 <Typography key={task.id} variant="body2">
                     <TaskLink task={task} />
-                    {task.outcome_uncertain
-                        ? " · Manual inspection required"
-                        : " · Conflicting changes are disabled"}
+                    {terminal(task)
+                        ? ". Action required: open task details, inspect the affected resources, then click Release resource locks at the top of the page."
+                        : task.outcome_uncertain
+                          ? " · Manual inspection required"
+                          : " · Conflicting changes are disabled"}
                 </Typography>
             ))}
             {query.isError && (
@@ -384,14 +413,15 @@ export function Tasks() {
                                                     size="small"
                                                     label={task.state}
                                                 />
-                                                {task.outcome_uncertain && (
-                                                    <Typography
-                                                        variant="caption"
-                                                        component="div"
-                                                    >
-                                                        Outcome uncertain
-                                                    </Typography>
-                                                )}
+                                                {task.outcome_uncertain &&
+                                                    !task.lock_release && (
+                                                        <Typography
+                                                            variant="caption"
+                                                            component="div"
+                                                        >
+                                                            Outcome uncertain
+                                                        </Typography>
+                                                    )}
                                             </TableCell>
                                             <TableCell>
                                                 {task.stages?.length
@@ -600,7 +630,23 @@ export function TaskDetail() {
                                             : "Operation failed. Review the diagnostic and any confirmed changes below."}
                             </Typography>
                         </Box>
-                        {task.outcome_uncertain && (
+                        <Stack direction="row" spacing={2}>
+                            {task.state === "queued" && (
+                                <Button onClick={() => setConfirm("cancel")}>
+                                    Cancel queued task
+                                </Button>
+                            )}
+                            {task.blocks_resources && terminal(task) && (
+                                <Button
+                                    variant="contained"
+                                    color="warning"
+                                    onClick={() => setConfirm("release")}
+                                >
+                                    Release resource locks…
+                                </Button>
+                            )}
+                        </Stack>
+                        {task.outcome_uncertain && !task.lock_release && (
                             <Alert severity="warning">
                                 Backend outcome is uncertain. Inspect resources
                                 manually before attempting recovery. Closing
@@ -609,8 +655,10 @@ export function TaskDetail() {
                         )}
                         {task.blocks_resources && terminal(task) && (
                             <Alert severity="warning">
-                                Affected resources remain blocked until an
-                                operator confirms manual inspection.
+                                Action required: inspect the affected resources
+                                on the backend, then click Release resource
+                                locks above and enter your inspection reason.
+                                Resources remain blocked until you confirm.
                             </Alert>
                         )}
                         {task.error && (
@@ -888,21 +936,6 @@ export function TaskDetail() {
                             </Alert>
                         )}
                         <ErrorMessage error={error} />
-                        <Stack direction="row" spacing={2}>
-                            {task.state === "queued" && (
-                                <Button onClick={() => setConfirm("cancel")}>
-                                    Cancel queued task
-                                </Button>
-                            )}
-                            {task.blocks_resources && terminal(task) && (
-                                <Button
-                                    color="warning"
-                                    onClick={() => setConfirm("release")}
-                                >
-                                    Release resource locks…
-                                </Button>
-                            )}
-                        </Stack>
                         {confirm && (
                             <Confirm
                                 title={
