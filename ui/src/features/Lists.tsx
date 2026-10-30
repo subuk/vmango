@@ -402,6 +402,7 @@ export function Networks() {
                                 <TextField
                                     select
                                     label="Cloud"
+                                    sx={{ mb: 2 }}
                                     value={cloud ? cloudID : ""}
                                     onChange={(e) =>
                                         setParams({ cloud: e.target.value })
