@@ -175,7 +175,9 @@ func (e *Environ) machineDTO(vm *compute.VirtualMachine) apiVM {
 		d.CPURequest = vm.VCpus
 		d.MemoryRequestBytes = vm.Memory.Bytes()
 	}
-	if e.clouds != nil && d.Cloud == "" {
+	// Resource routes follow the host's current cloud and zone; allocation
+	// metadata remains an applied snapshot and may predate catalog changes.
+	if e.clouds != nil {
 		if c, h, err := e.clouds.ForNode(vm.NodeId); err == nil {
 			d.Cloud = c.ID
 			d.Zone = h.Zone

@@ -81,6 +81,66 @@ func TestCloudListsScopeHostsAndReportFailures(t *testing.T) {
 	}
 }
 
+func TestMachineReadsUseCurrentHostCloudAndZone(t *testing.T) {
+	for _, storedCloud := range []string{"personal", "other", "lanst", ""} {
+		t.Run("stored-cloud="+storedCloud, func(t *testing.T) {
+			vm := compute.VirtualMachine{Id: "vm", NodeId: "lanst", State: compute.StateRunning, VCpus: 8, Memory: compute.NewSize(16, compute.SizeUnitG)}
+			if storedCloud != "" {
+				vm.Metadata = &compute.MachineMetadata{Cloud: storedCloud, Zone: "old-zone", InstanceType: "retired-type", Image: "retired-image", CPURequest: 4, MemoryRequestBytes: 16 << 30}
+			}
+			repo := &apiVMRepo{vm: vm}
+			clouds := &compute.CloudService{Definitions: []compute.Cloud{
+				{ID: "lanst", Hosts: []compute.CloudHost{{Node: "lanst", Zone: "ber1"}}},
+				{ID: "other", Hosts: []compute.CloudHost{{Node: "other-host", Zone: "other-zone"}}},
+			}}
+			h := newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, nil, nil, nil, compute.NewVirtualMachineService(repo), &compute.VirtualMachineManager{Clouds: clouds}, nil)
+			for _, path := range []string{"/api/v1/clouds/lanst/machines", "/api/v1/clouds/lanst/machines/vm"} {
+				w := apiRequest(h, "GET", path, "", true)
+				if w.Code != 200 {
+					t.Fatalf("%s: %d %s", path, w.Code, w.Body)
+				}
+				var got apiVM
+				if path == "/api/v1/clouds/lanst/machines" {
+					var list apiMachineList
+					if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+						t.Fatal(err)
+					}
+					if len(list.Items) != 1 || len(list.UnavailableHosts) != 0 {
+						t.Fatalf("machine disappeared from inventory: %s", w.Body)
+					}
+					got = list.Items[0]
+				} else if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+					t.Fatal(err)
+				}
+				if got.Cloud != "lanst" || got.Zone != "ber1" || got.State != "running" {
+					t.Fatalf("%s: machine location/state is not current: %+v", path, got)
+				}
+				if got.Managed != (vm.Metadata != nil) {
+					t.Fatal("machine management status changed")
+				}
+				if m := vm.Metadata; m != nil {
+					if got.InstanceType != m.InstanceType || got.Image != m.Image || got.CPURequest != m.CPURequest || got.MemoryRequestBytes != m.MemoryRequestBytes {
+						t.Fatal("applied allocation snapshot changed", got)
+					}
+					if m.Cloud != storedCloud || m.Zone != "old-zone" {
+						t.Fatal("read mutated stored metadata")
+					}
+				} else if got.CPURequest != vm.VCpus || got.MemoryRequestBytes != vm.Memory.Bytes() {
+					t.Fatal("unmanaged resource requests lost", got)
+				}
+			}
+			w := apiRequest(h, "GET", "/api/v1/clouds/other/machines", "", true)
+			var other apiMachineList
+			if err := json.Unmarshal(w.Body.Bytes(), &other); err != nil || w.Code != 200 || len(other.Items) != 0 {
+				t.Fatalf("machine appeared in another cloud: %d %s", w.Code, w.Body)
+			}
+			if repo.saves != 0 {
+				t.Fatal("read persisted changes")
+			}
+		})
+	}
+}
+
 func TestReadModelKeepsInterfaceAddressesPinningAndKeyAvailability(t *testing.T) {
 	v := &compute.VirtualMachine{Memory: compute.NewSize(1, compute.SizeUnitG), Graphic: compute.VirtualMachineGraphic{Listen: "127.0.0.1"}, Interfaces: []*compute.VirtualMachineAttachedInterface{{NetworkName: "default", Mac: "52:54:00:12:34:56", IpAddressList: []string{"192.0.2.4"}}}, Cpupin: &compute.VirtualMachineCpuPin{Emulator: []uint{3}, Vcpus: map[uint][]uint{2: {4}, 0: {1, 2}}}}
 	d := vmDTO(v)
