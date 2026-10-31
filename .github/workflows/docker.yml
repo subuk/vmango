@@ -1,0 +1,52 @@
+name: Build Docker image
+
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+      - name: Resolve image source revision
+        id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v4
+      - name: Build image with embedded frontend and run Go tests
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: vmango:tested
+          build-args: |
+            VERSION=${{ inputs.version }}
+            REVISION=${{ steps.source.outputs.sha }}
+          cache-from: type=gha,scope=vmango-docker
+          cache-to: type=gha,mode=max,scope=vmango-docker
+      - name: Check container runtime
+        env:
+          VERSION: ${{ inputs.version }}
+        run: python3 scripts/release/docker-smoke.py vmango:tested "$VERSION"
+      - name: Export tested image
+        run: docker save --output "$RUNNER_TEMP/vmango-image.tar" vmango:tested
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: ${{ runner.temp }}/vmango-image.tar
+          if-no-files-found: error
+          retention-days: 7

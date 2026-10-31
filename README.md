@@ -76,6 +76,48 @@ Use the Ubuntu 22.04 Jammy package from the release PPA, following the
 The repository suite must remain `jammy`, not the Debian codename. Package
 validation checks installation and startup on both Debian versions.
 
+### Docker (Linux amd64)
+
+Release images are published to [Docker Hub](https://hub.docker.com/r/subuk/vmango)
+as `subuk/vmango:VERSION`; `latest` tracks the latest stable GitHub release.
+Prereleases have only their version tag. The image includes libvirt clients,
+SSH, CA certificates, ISO tools and the embedded frontend. It connects to
+existing hypervisors and does not run a libvirt daemon.
+
+Copy `vmango.dist.conf` to `vmango.conf`, configure your cloud's host connections,
+and add an administrator password hash generated with:
+
+```sh
+docker run --rm -it subuk/vmango:latest genpw
+```
+
+Keep state paths under `/var/lib/vmango` and `api.listen = ":8080"`. Set
+`api.base_url` to your public HTTPS URL and `api.session_secure = true`, then
+place an HTTPS reverse proxy in front of the container's HTTP port. Docker
+forwards a non-loopback peer address, so the API requires this HTTPS setup even
+when the host port is bound to localhost. For remote hypervisors, use a libvirt
+URI such as `qemu+ssh://vmango@hypervisor/system` and
+mount SSH keys and a verified `known_hosts` file at `/var/lib/vmango/.ssh`.
+Bind-mounted files must be readable by container UID/GID `10001:10001`.
+The configured SSH account needs permission to use libvirt on the hypervisor.
+For a local host's `qemu:///system`, mount its libvirt socket and grant the
+container user access to the socket's group.
+
+```sh
+docker volume create vmango-data
+docker run -d --name vmango --restart unless-stopped \
+  -p 127.0.0.1:8080:8080 \
+  -v "$PWD/vmango.conf:/etc/vmango.conf:ro" \
+  -v vmango-data:/var/lib/vmango \
+  subuk/vmango:latest
+```
+
+Point your HTTPS reverse proxy at `http://127.0.0.1:8080`, preserve `Host` and
+browser origin headers, then open the configured public HTTPS URL.
+Preserve the data volume across upgrades: it contains signing keys, credentials,
+SSH key records and durable task/image/volume metadata. Pin a version tag when
+you need controlled upgrades.
+
 ## Configure a cloud
 
 Administrators prepare the hypervisors, libvirt connections, active storage pools

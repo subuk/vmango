@@ -41,3 +41,8 @@ jobs:
     with:
       source_ref: ${{ github.sha }}
       version: ci-${{ github.run_number }}
+  docker:
+    uses: ./.github/workflows/docker.yml
+    with:
+      source_ref: ${{ github.sha }}
+      version: ci-${{ github.run_number }}

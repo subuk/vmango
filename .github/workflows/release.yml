@@ -130,3 +130,11 @@ jobs:
       COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
       PPA_GPG_PRIVATE_KEY: ${{ secrets.PPA_GPG_PRIVATE_KEY }}
       PPA_GPG_PASSPHRASE: ${{ secrets.PPA_GPG_PASSPHRASE }}
+
+  docker:
+    needs: publish
+    uses: ./.github/workflows/publish-docker.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
