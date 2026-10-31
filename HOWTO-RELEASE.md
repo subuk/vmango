@@ -13,6 +13,10 @@ creates a release or pushes a tag.
   binary and compiled Go tests run on a Windows Server 2022 runner. The ZIP
   includes runtime DLLs, `virsh.exe`, upstream notices and package versions.
 
+CI also calls `docker.yml` to build and test Linux amd64 and arm64 runtime images
+on native Ubuntu runners (`ubuntu-24.04` and `ubuntu-24.04-arm`).
+PRs and pushes to `master` never log in to Docker Hub or publish images.
+
 Go comes from `go.mod`; modules are vendored and `GOTOOLCHAIN=local` prevents
 implicit compiler downloads during builds. Build dependencies are installed by
 the workflow. Windows cross-compilation uses a Fedora container on the build
@@ -75,6 +79,68 @@ publication leaves a draft, inspect it and either complete publication manually
 or delete the incomplete draft before rerunning. Investigate a tag mismatch
 instead of force-pushing. Concurrent runs for the same version are serialized.
 The publication job builds no code and uses only artifacts from its own run.
+
+## Docker Hub publication
+
+After publishing GitHub assets, `release.yml` calls `publish-docker.yml` to
+publish `subuk/vmango:VERSION` to [Docker Hub](https://hub.docker.com/r/subuk/vmango).
+Configure the repository Actions secret `DOCKERHUB_TOKEN` with a Docker Hub
+access token for `subuk` that can write to `subuk/vmango`. This secret is available
+only to the upload job; source compilation and runtime tests have no publication
+credentials. Use the maintained `master` workflow and trusted source commits.
+
+The workflow verifies an existing published release and resolves its tag to an
+exact SHA. `docker.yml` builds that source using the Node version in `ui/.nvmrc`
+and Go 1.26 with vendored modules and `GOTOOLCHAIN=local`. Updating either toolchain
+requires updating the matching Dockerfile image. The frontend is built from
+source and its manifest verified before Go compilation. The build runs Go tests;
+the final Debian Bookworm image includes libvirt, SSH, CA certificates and ISO
+tools, runs as UID/GID `10001:10001` and stores state in `/var/lib/vmango`.
+
+For each architecture, `scripts/release/docker-smoke.py` checks the image's OS
+and architecture, startup, JWT login, embedded UI/version, a `test:///default`
+libvirt host, and signing key persistence across restart. It uses its own
+temporary container and named volume, never host VM storage. This does not
+establish real KVM operation or SSH/TLS access to production hypervisors.
+The smoke test configures the private HTTP backend for a trusted HTTPS reverse
+proxy, since Docker-forwarded requests do not arrive from loopback. It does not
+test TLS termination; container deployments must configure their HTTPS proxy.
+
+Source compilation runs inside Docker. Runtime verification uses separate jobs
+that load the exported images and check out the workflow's exact commit
+(`github.workflow_sha`) for runner-side scripts and test configuration, rather
+than executing scripts from the selectable `source_ref`. Docker layer caches
+and the Buildx binary cache are not shared through GitHub Actions. This prevents
+source-selected test code from poisoning the default-branch cache.
+
+The upload job loads both tested image artifacts, verifies their OS/architecture
+and source/version labels, and pushes `VERSION-amd64` and `VERSION-arm64` without
+rebuilding. It combines the exact uploaded digests into a common `VERSION` tag
+and verifies that the manifest contains both Linux platforms. Only after both
+platforms are published can the workflow update `latest`. Only the version
+currently marked as GitHub's latest stable release updates `subuk/vmango:latest`.
+Prereleases and reruns for older versions publish only version-specific tags.
+Publication jobs are serialized to avoid competing `latest` updates.
+
+Run **Actions → Publish Docker image → Run workflow** with an existing release
+version, without `v`, to retry Docker publication independently. The source tag
+must contain a compatible Dockerfile and frontend manifest support. A missing
+token, build/test failure or push failure fails the workflow; a published GitHub release
+is not rolled back. Inspect the completed job and Docker Hub digest after upload.
+GitHub assets, Docker Hub and distribution packages are separate destinations.
+
+To build and verify locally from the repository root:
+
+```sh
+docker build --build-arg VERSION=0.13.0 \
+  --build-arg REVISION="$(git rev-parse HEAD)" -t vmango:tested .
+python3 scripts/release/docker-smoke.py vmango:tested 0.13.0
+```
+
+See the [Docker installation instructions](README.md#docker-linux-amd64-and-arm64) for
+configuration, state persistence and libvirt connectivity. The build context
+allows only application inputs and excludes local configuration, Git metadata
+and generated assets.
 
 ## Automatic build versions
 

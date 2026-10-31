@@ -1,0 +1,106 @@
+name: Publish Docker image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Existing published release version without v'
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    secrets:
+      DOCKERHUB_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-publication
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Validate published release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]
+          gh release view "v$VERSION" --json isDraft \
+            --jq 'if .isDraft then error("Expected a published release") else . end'
+          sha=$(gh api "repos/$GH_REPO/commits/v$VERSION" --jq .sha)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    uses: ./.github/workflows/docker.yml
+    with:
+      source_ref: ${{ needs.prepare.outputs.sha }}
+      version: ${{ inputs.version }}
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: docker-image-*
+          path: ${{ runner.temp }}/images
+      - uses: docker/setup-buildx-action@v4
+        with:
+          cache-binary: false
+      - name: Load and verify tested image
+        env:
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          for arch in amd64 arm64; do
+            docker load --input "$RUNNER_TEMP/images/docker-image-$arch/vmango-image.tar"
+            image="vmango:tested-$arch"
+            test "$(docker inspect --format '{{.Os}}/{{.Architecture}}' "$image")" = "linux/$arch"
+            test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$image")" = "$VERSION"
+            test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image")" = "$SOURCE_SHA"
+          done
+      - uses: docker/login-action@v4
+        with:
+          username: subuk
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Push release image and update latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          refs=()
+          for arch in amd64 arm64; do
+            tag="subuk/vmango:$VERSION-$arch"
+            docker tag "vmango:tested-$arch" "$tag"
+            docker push "$tag"
+            ref=$(docker inspect --format '{{json .RepoDigests}}' "$tag" \
+              | jq -er '.[] | select(startswith("subuk/vmango@sha256:"))')
+            [[ "$ref" =~ ^subuk/vmango@sha256:[0-9a-f]{64}$ ]]
+            refs+=("$ref")
+          done
+          # Assemble only the exact platform digests that were just pushed.
+          docker buildx imagetools create --tag "subuk/vmango:$VERSION" "${refs[@]}"
+          docker buildx imagetools inspect --raw "subuk/vmango:$VERSION" \
+            | jq -e '[.manifests[].platform | .os + "/" + .architecture] | sort == ["linux/amd64", "linux/arm64"]'
+          # Re-publishing an older release must not roll latest back.
+          if [[ "$VERSION" != *-* ]]; then
+            latest=$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)
+            if [ "$latest" = "v$VERSION" ]; then
+              docker buildx imagetools create --tag subuk/vmango:latest "subuk/vmango:$VERSION"
+            fi
+          fi
