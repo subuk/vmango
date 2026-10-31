@@ -8,7 +8,8 @@ import (
 )
 
 func TestSchedulerMetadataRoundTripPreservesOtherNamespaces(t *testing.T) {
-	d := &xml.Domain{Metadata: &xml.DomainMetadata{XML: `<other xmlns="urn:other"><value>unchanged</value></other>`}}
+	const other = `<other xmlns="urn:other" xmlns:ref="urn:references" ref:type="ref:owner"><value>unchanged</value></other>`
+	d := &xml.Domain{Metadata: &xml.DomainMetadata{XML: other}}
 	m := &compute.MachineMetadata{Cloud: "cloud", Zone: "z", InstanceType: "small", Image: "image", CPURequest: 2, MemoryRequestBytes: 4 << 30}
 	if err := writeSchedulerMetadata(d, m); err != nil {
 		t.Fatal(err)
@@ -18,7 +19,7 @@ func TestSchedulerMetadataRoundTripPreservesOtherNamespaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	actual, err := readSchedulerMetadata(d)
-	if err != nil || actual.CPURequest != 1 || actual.InstanceType != "small" || !strings.Contains(d.Metadata.XML, "unchanged") || strings.Count(d.Metadata.XML, "<allocation") != 1 {
+	if err != nil || actual.CPURequest != 1 || actual.InstanceType != "small" || !strings.Contains(d.Metadata.XML, other) || strings.Count(d.Metadata.XML, "<allocation") != 1 {
 		t.Fatalf("metadata corrupted: %s %v", d.Metadata.XML, err)
 	}
 	actual.CPURequest = 9

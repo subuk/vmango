@@ -178,7 +178,12 @@ Unmanaged machines are visible and count toward admission but are read-only.
 Interactive consoles and other mutating commands require adoption.
 Explicit adoption records management identity without changing resources, power
 state, disk sizes, guest initialization or placement. It does not claim existing
-disks. Adoption is a durable asynchronous command, including for running machines.
+disks. It normalizes the persistent power policy to poweroff/crash = destroy and
+reboot = restart, and enables missing ACPI/APIC features for x86 HVM guests.
+Existing platform features and device settings are preserved. For running
+machines, these settings take effect after a full shutdown and start; a guest
+reboot does not reload the virtual hardware. Adoption is a durable asynchronous
+command, including for running machines.
 
 Change instance type only while a managed VM is stopped. Admission replaces its
 old requests with the proposed requests on its current host. If that host has
@@ -186,7 +191,7 @@ insufficient resources, the command fails even if another host has capacity.
 There is no automatic stop, migration or restart. Existing disk sizes stay intact;
 growth is a separate explicit operation. Current image defaults are not reapplied. The selected type's autostart policy
 is applied while the current guest/device settings and graphics listener remain
-unchanged. Adoption also preserves these settings. Configuration edits affect
+unchanged. Adoption also preserves these device settings. Configuration edits affect
 future explicit operations; accepted tasks retain their policy and backend
 binding snapshots.
 

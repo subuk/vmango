@@ -71,6 +71,16 @@ this does not test graceful shutdown. The suite does not yet test reboot, SSH,
 guest-agent integration, browser interaction, external networking or Linux KVM
 when run on a Mac.
 
+For the legacy x86 power-management regression, add `ACCEPTANCE_ADOPT_POWER=1`
+to an x86_64 run with a guest that handles ACPI power-button events, such as
+Ubuntu cloud. The test keeps the guest agent disabled, so a minimal image without
+an ACPI event handler will time out on shutdown even with correct virtual hardware.
+Before booting its isolated VM, the suite removes ACPI/APIC,
+sets poweroff/crash to restart and removes management metadata. It then adopts
+the VM through HTTP, checks the repaired persistent settings, boots the guest,
+requests graceful shutdown and verifies it stays off. It also starts it again
+and checks hard power-off. This mode never changes existing user machines.
+
 To exercise the OpenStack config drive instead of NoCloud:
 
 ```sh

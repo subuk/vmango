@@ -26,7 +26,9 @@ type VirtualMachineRepository interface {
 	Start(id, node string) error
 }
 
-// MachineAdoptionRepository records management metadata without reconfiguring a VM.
+// MachineAdoptionRepository records management identity and applies standard
+// power management settings without changing resources, disks or power state.
+// Hardware settings on running guests take effect on their next full start.
 type MachineAdoptionRepository interface {
 	Adopt(id, node string, metadata *MachineMetadata) error
 }

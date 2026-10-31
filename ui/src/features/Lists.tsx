@@ -412,7 +412,7 @@ export function MachineActions({
                     }}
                 >
                     {confirm === "adopt"
-                        ? "Take this machine under management without changing its configuration or claiming ownership of its existing disks."
+                        ? "Take this machine under management and apply standard power management settings. Resources and existing disks are preserved. Power settings take effect after a full shutdown and start."
                         : confirm === "delete"
                           ? `Permanently remove ${vm.node}/${vm.name}. Attached disks are kept unless you explicitly choose to delete them.`
                           : confirm === "poweroff"

@@ -439,20 +439,10 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 	if vm.Firmware != "" {
 		virDomainConfig.OS.Firmware = vm.Firmware
 	}
-	// PC guests need ACPI/APIC for CPU discovery and power management.
-	// Select by guest architecture, not the host (which may also run ARM VMs).
-	if domCapsConfig.Arch == "x86_64" || domCapsConfig.Arch == "i686" {
-		virDomainConfig.Features = &libvirtxml.DomainFeatureList{
-			ACPI: &libvirtxml.DomainFeature{},
-			APIC: &libvirtxml.DomainFeatureAPIC{},
-		}
-	}
 	virDomainConfig.CPU = &libvirtxml.DomainCPU{}
 	virDomainConfig.CPU.Mode = "maximum"
 	virDomainConfig.Clock = &libvirtxml.DomainClock{Offset: "utc"}
-	virDomainConfig.OnPoweroff = "destroy"
-	virDomainConfig.OnReboot = "restart"
-	virDomainConfig.OnCrash = "destroy"
+	applyDomainPowerPolicy(virDomainConfig)
 	virDomainConfig.Devices = &libvirtxml.DomainDeviceList{Emulator: domCapsConfig.Path}
 	if vm.DiskController != "" {
 		virDomainConfig.Devices.Controllers = append(virDomainConfig.Devices.Controllers, libvirtxml.DomainController{Type: "scsi", Model: vm.DiskController})

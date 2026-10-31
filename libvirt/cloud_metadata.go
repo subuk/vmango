@@ -67,10 +67,10 @@ func writeSchedulerMetadata(config *xmlmodel.Domain, metadata *compute.MachineMe
 	// Preserve unrelated metadata content, replacing only our namespaced element.
 	var preserved strings.Builder
 	if config.Metadata != nil {
-		d := xml.NewDecoder(strings.NewReader("<metadata>" + config.Metadata.XML + "</metadata>"))
-		enc := xml.NewEncoder(&preserved)
-		depth := 0
+		original := config.Metadata.XML
+		d := xml.NewDecoder(strings.NewReader(original))
 		for {
+			start := d.InputOffset()
 			token, err := d.Token()
 			if err == io.EOF {
 				break
@@ -78,30 +78,17 @@ func writeSchedulerMetadata(config *xmlmodel.Domain, metadata *compute.MachineMe
 			if err != nil {
 				return err
 			}
-			switch t := token.(type) {
-			case xml.StartElement:
-				if depth == 1 && t.Name.Space == schedulerNamespace && t.Name.Local == "allocation" {
-					if err = d.Skip(); err != nil {
-						return err
-					}
-					continue
+			if element, ok := token.(xml.StartElement); ok {
+				if err := d.Skip(); err != nil {
+					return err
 				}
-				depth++
-				if depth == 1 {
-					continue
-				}
-			case xml.EndElement:
-				depth--
-				if depth == 0 {
+				if element.Name.Space == schedulerNamespace && element.Name.Local == "allocation" {
 					continue
 				}
 			}
-			if err = enc.EncodeToken(token); err != nil {
-				return err
-			}
-		}
-		if err := enc.Flush(); err != nil {
-			return err
+			// Keep unrelated namespaces and prefixes verbatim. Re-encoding tokens
+			// can duplicate xmlns attributes or invalidate QName attribute values.
+			preserved.WriteString(original[start:d.InputOffset()])
 		}
 	}
 	payload, err := json.Marshal(metadata)
@@ -116,7 +103,8 @@ func writeSchedulerMetadata(config *xmlmodel.Domain, metadata *compute.MachineMe
 	return nil
 }
 
-// Adopt changes only our namespaced metadata, including for a running domain.
+// Adopt records management identity and normalizes persistent power settings.
+// A running guest keeps its current hardware until its next full start.
 func (repo *VirtualMachineRepository) Adopt(id, node string, m *compute.MachineMetadata) error {
 	conn, err := repo.pool.Acquire(node)
 	if err != nil {
@@ -128,13 +116,30 @@ func (repo *VirtualMachineRepository) Adopt(id, node string, m *compute.MachineM
 		return repositoryError(err, "lookup adoption target")
 	}
 	defer domain.Free()
-	data, err := json.Marshal(m)
+	// Read the persistent secure XML so running device state and redacted
+	// credentials cannot replace the configuration for the next start.
+	description, err := domain.GetXMLDesc(vir.DOMAIN_XML_INACTIVE | vir.DOMAIN_XML_SECURE)
+	if err != nil {
+		return repositoryError(err, "read adoption configuration")
+	}
+	config := &xmlmodel.Domain{}
+	if err := config.Unmarshal(description); err != nil {
+		return repositoryError(err, "parse adoption configuration")
+	}
+	applyDomainPowerPolicy(config)
+	if err := writeSchedulerMetadata(config, m); err != nil {
+		return err
+	}
+	description, err = config.Marshal()
 	if err != nil {
 		return err
 	}
-	element, err := xml.Marshal(schedulerXML{Version: 1, Snapshot: string(data)})
+	// Define metadata and power policy together; do not report a partially
+	// adopted machine if validation rejects the updated configuration.
+	defined, err := conn.DomainDefineXML(description)
 	if err != nil {
-		return err
+		return repositoryError(err, "define adoption configuration")
 	}
-	return repositoryError(domain.SetMetadata(vir.DOMAIN_METADATA_ELEMENT, string(element), "vmango", schedulerNamespace, vir.DOMAIN_AFFECT_CONFIG), "write adoption metadata")
+	defer defined.Free()
+	return nil
 }

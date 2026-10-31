@@ -29,6 +29,7 @@ import (
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/ssh"
+	"libvirt.org/go/libvirtxml"
 )
 
 // TestLifecycle boots a real guest. Explicit opt-in and a local libvirt URI are
@@ -76,6 +77,10 @@ func TestLifecycle(t *testing.T) {
 		if arch != "x86_64" && arch != "aarch64" {
 			t.Fatal("remote acceptance needs ACCEPTANCE_ARCH")
 		}
+	}
+	adoptPower := os.Getenv("ACCEPTANCE_ADOPT_POWER") == "1"
+	if adoptPower && arch != "x86_64" {
+		t.Fatal("ACCEPTANCE_ADOPT_POWER requires an x86_64 guest")
 	}
 	expectedType := "kvm"
 	firmware := "auto"
@@ -653,6 +658,35 @@ cloud "offline" {
 	if !strings.Contains(xml, "virtio-scsi") || strings.Contains(xml, "org.qemu.guest_agent.0") || !strings.Contains(xml, "_config.iso") {
 		t.Fatal("image launch defaults did not reach domain XML")
 	}
+	if adoptPower {
+		// Reproduce a legacy guest without ACPI/APIC using only this run's
+		// isolated VM. Adoption must repair it before the first guest boot.
+		legacy := &libvirtxml.Domain{}
+		if err := legacy.Unmarshal(xml); err != nil {
+			t.Fatal(err)
+		}
+		legacy.Features = nil
+		legacy.OnPoweroff, legacy.OnReboot, legacy.OnCrash = "restart", "restart", "restart"
+		legacyXML, err := legacy.Marshal()
+		if err != nil {
+			t.Fatal(err)
+		}
+		legacyPath := filepath.Join(root, "legacy-domain.xml")
+		write(legacyPath, legacyXML)
+		mustVir("define", legacyPath)
+		mustVir("metadata", name, "--config", "--uri", "https://vmango.org/xmlns/scheduler/1", "--remove")
+		apiCommand("POST", apiVMPath+"/adopt", map[string]any{})
+		xml = mustVir("dumpxml", name, "--inactive")
+		write(filepath.Join(root, "adopted-domain.xml"), xml)
+		adopted := &libvirtxml.Domain{}
+		if err := adopted.Unmarshal(xml); err != nil {
+			t.Fatal(err)
+		}
+		if adopted.Features == nil || adopted.Features.ACPI == nil || adopted.Features.APIC == nil || adopted.OnPoweroff != "destroy" || adopted.OnReboot != "restart" || adopted.OnCrash != "destroy" {
+			t.Fatal("adoption did not repair legacy power settings")
+		}
+		t.Log("adoption repaired legacy ACPI/APIC and power lifecycle settings")
+	}
 	request(path, 200)
 	t.Log("created VM and cloud-init disk through HTTP; starting guest")
 	apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "start"})
@@ -748,6 +782,24 @@ cloud "offline" {
 		}
 	}
 	t.Log("signed serial/VNC links reconnected; second serial client rejected")
+	if adoptPower {
+		apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "shutdown"})
+		for deadline := time.Now().Add(90 * time.Second); ; {
+			if strings.TrimSpace(mustVir("domstate", name)) == "shut off" {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("adopted guest did not shut down gracefully")
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		time.Sleep(2 * time.Second)
+		if strings.TrimSpace(mustVir("domstate", name)) != "shut off" {
+			t.Fatal("adopted guest restarted after shutdown")
+		}
+		t.Log("adopted guest shut down gracefully and stayed powered off")
+		apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "start"})
+	}
 	apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "poweroff"})
 	if state := strings.TrimSpace(mustVir("domstate", name)); state != "shut off" {
 		t.Fatalf("expected shut off, got %s", state)
