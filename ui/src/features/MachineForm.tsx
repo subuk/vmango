@@ -823,7 +823,10 @@ function EditForm({ vm }: { vm: VM }) {
                         <Choice
                             label="Instance type"
                             value={selectedType}
-                            entries={instanceTypes}
+                            entries={instanceTypes.map((type) => ({
+                                id: type.id,
+                                name: `${type.name} — ${type.vcpus} vCPU, ${bytes(type.memory_bytes)} RAM`,
+                            }))}
                             set={setType}
                         />
                     )}

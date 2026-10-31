@@ -14,9 +14,11 @@ import { EditMachine } from "./MachineForm";
 const state = vi.hoisted(() => ({
     request: vi.fn(),
     types: [
-        { id: "small", name: "Small" },
-        { id: "large", name: "Large" },
-    ] as { id: string; name: string }[] | undefined,
+        { id: "small", name: "Small", vcpus: 2, memory_bytes: 2 * 2 ** 30 },
+        { id: "large", name: "Large", vcpus: 8, memory_bytes: 16 * 2 ** 30 },
+    ] as
+        | { id: string; name: string; vcpus: number; memory_bytes: number }[]
+        | undefined,
     unavailable: false,
     busy: false,
     vm: {
@@ -63,8 +65,8 @@ afterEach(() => {
         managed: true,
     };
     state.types = [
-        { id: "small", name: "Small" },
-        { id: "large", name: "Large" },
+        { id: "small", name: "Small", vcpus: 2, memory_bytes: 2 * 2 ** 30 },
+        { id: "large", name: "Large", vcpus: 8, memory_bytes: 16 * 2 ** 30 },
     ];
     state.busy = false;
     state.unavailable = false;
@@ -117,7 +119,9 @@ it("submits an explicit type change and retains backend errors", async () => {
     await userEvent.click(
         screen.getByRole("combobox", { name: "Instance type" }),
     );
-    await userEvent.click(screen.getByRole("option", { name: "Large" }));
+    await userEvent.click(
+        screen.getByRole("option", { name: "Large — 8 vCPU, 16 GiB RAM" }),
+    );
     await userEvent.click(
         screen.getByRole("button", { name: "Change instance type" }),
     );
@@ -133,6 +137,28 @@ it("submits an explicit type change and retains backend errors", async () => {
         { instance_type: "large" },
     );
     expect(screen.queryByRole("spinbutton", { name: "vCPUs" })).toBeNull();
+});
+it("shows CPU and memory for every type and the selected value", async () => {
+    show();
+    const selector = screen.getByRole("combobox", { name: "Instance type" });
+    expect(selector.textContent).toBe("Small — 2 vCPU, 2 GiB RAM");
+    await userEvent.click(selector);
+    expect(
+        screen.getByRole("option", { name: "Small — 2 vCPU, 2 GiB RAM" }),
+    ).toBeTruthy();
+    await userEvent.click(
+        screen.getByRole("option", { name: "Large — 8 vCPU, 16 GiB RAM" }),
+    );
+    expect(selector.textContent).toBe("Large — 8 vCPU, 16 GiB RAM");
+});
+it("formats memory below one GiB for a sole type", () => {
+    state.types = [
+        { id: "micro", name: "Micro", vcpus: 1, memory_bytes: 512 * 2 ** 20 },
+    ];
+    show();
+    expect(
+        screen.getByText("Instance type: Micro — 1 vCPU, 512 MiB RAM"),
+    ).toBeTruthy();
 });
 it("requires a stopped machine", () => {
     state.vm.state = "running";
@@ -175,9 +201,18 @@ it.each(["", "removed"])(
     "selects and submits the sole catalog type for applied ID %s",
     async (applied) => {
         state.vm.instance_type = applied;
-        state.types = [{ id: "large", name: "Large" }];
+        state.types = [
+            {
+                id: "large",
+                name: "Large",
+                vcpus: 8,
+                memory_bytes: 16 * 2 ** 30,
+            },
+        ];
         show();
-        expect(screen.getByText("Instance type: Large")).toBeTruthy();
+        expect(
+            screen.getByText("Instance type: Large — 8 vCPU, 16 GiB RAM"),
+        ).toBeTruthy();
         expect(screen.queryByRole("combobox")).toBeNull();
         expect(changeButton().disabled).toBe(false);
         await submitType("large");
@@ -190,17 +225,30 @@ it.each(["", "removed"])(
         state.types = undefined;
         const view = show();
         expect(changeButton().disabled).toBe(true);
-        state.types = [{ id: "large", name: "Large" }];
+        state.types = [
+            {
+                id: "large",
+                name: "Large",
+                vcpus: 8,
+                memory_bytes: 16 * 2 ** 30,
+            },
+        ];
         view.refresh();
-        expect(screen.getByText("Instance type: Large")).toBeTruthy();
+        expect(
+            screen.getByText("Instance type: Large — 8 vCPU, 16 GiB RAM"),
+        ).toBeTruthy();
         await submitType("large");
     },
 );
 it("updates removed selections and disables submission when no types remain", async () => {
     const view = show();
-    state.types = [{ id: "large", name: "Large" }];
+    state.types = [
+        { id: "large", name: "Large", vcpus: 8, memory_bytes: 16 * 2 ** 30 },
+    ];
     view.refresh();
-    expect(screen.getByText("Instance type: Large")).toBeTruthy();
+    expect(
+        screen.getByText("Instance type: Large — 8 vCPU, 16 GiB RAM"),
+    ).toBeTruthy();
     state.types = [];
     view.refresh();
     expect(changeButton().disabled).toBe(true);
@@ -211,7 +259,9 @@ it.each(["busy", "unavailable"] as const)(
     (guard) => {
         state[guard] = true;
         state.vm.instance_type = "";
-        state.types = [{ id: "small", name: "Small" }];
+        state.types = [
+            { id: "small", name: "Small", vcpus: 2, memory_bytes: 2 * 2 ** 30 },
+        ];
         show();
         expect(changeButton().disabled).toBe(true);
     },
@@ -222,15 +272,17 @@ it("preserves a valid user selection when the catalog changes", async () => {
     await userEvent.click(
         screen.getByRole("combobox", { name: "Instance type" }),
     );
-    await userEvent.click(screen.getByRole("option", { name: "Large" }));
+    await userEvent.click(
+        screen.getByRole("option", { name: "Large — 8 vCPU, 16 GiB RAM" }),
+    );
     state.types = [
-        { id: "new", name: "New" },
-        { id: "large", name: "Large" },
+        { id: "new", name: "New", vcpus: 1, memory_bytes: 512 * 2 ** 20 },
+        { id: "large", name: "Large", vcpus: 8, memory_bytes: 16 * 2 ** 30 },
     ];
     view.refresh();
     expect(
         screen.getByRole("combobox", { name: "Instance type" }).textContent,
-    ).toBe("Large");
+    ).toBe("Large — 8 vCPU, 16 GiB RAM");
     await submitType("large");
 });
 
@@ -262,8 +314,8 @@ it("shows loading feedback until instance types arrive", () => {
     );
     expect(screen.queryByRole("combobox")).toBeNull();
     state.types = [
-        { id: "small", name: "Small" },
-        { id: "large", name: "Large" },
+        { id: "small", name: "Small", vcpus: 2, memory_bytes: 2 * 2 ** 30 },
+        { id: "large", name: "Large", vcpus: 8, memory_bytes: 16 * 2 ** 30 },
     ];
     view.refresh();
     expect(screen.queryByRole("status")).toBeNull();
