@@ -69,7 +69,7 @@ def smoke(image, version, architecture=None):
                 with urllib.request.urlopen(request, timeout=10) as response:
                     return json.load(response)
 
-            if get("/api/v1/hosts/local")["id"] != "local":
+            if get("/api/v1/administration/clouds/local/hosts/local")["id"] != "local":
                 raise RuntimeError("Libvirt test node was not returned")
             if get("/api/v1/me")["version"] != version:
                 raise RuntimeError("Embedded application version differs from the image version")

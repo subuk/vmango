@@ -2,7 +2,6 @@
 """Exercise the extracted release with the documented config and libvirt test driver."""
 import http.cookiejar
 import json
-import secrets
 import re
 import os
 import pathlib
@@ -37,11 +36,8 @@ def smoke(archive):
         config = (directory / "vmango.quickstart.conf").read_text()
         config = config.replace("qemu:///system", "test:///default")
         config = config.replace("8080", str(port))
-        config = config.replace("REPLACE_WITH_RANDOM_SECRET", secrets.token_hex(32))
-        config = config.replace("REPLACE_WITH_SEPARATE_RANDOM_SECRET", secrets.token_hex(32))
-        config = config.replace('session_dir = "~/.vmango/sessions"', f'session_dir = "{(directory / "sessions").as_posix()}"')
-        config = config.replace('token_dir = "~/.vmango/tokens"', f'token_dir = "{(directory / "tokens").as_posix()}"')
-        config = config.replace('directory = "~/.vmango/tasks"', f'directory = "{(directory / "tasks").as_posix()}"')
+        # Keep signing keys and all other state inside the temporary extraction.
+        config = config.replace("~/.vmango/", directory.as_posix() + "/")
         # This test-only hash is the existing sample password "admin".
         config = config.replace("REPLACE_WITH_GENPW_OUTPUT", "$2a$10$igHQGROHntvl05AztpfMeONSBDUsEbZHxayc5DOPTKIFX50WrHURS")
         (directory / "vmango.conf").write_text(config)
@@ -63,7 +59,7 @@ def smoke(archive):
                 credentials = json.dumps({"username": "admin", "password": "admin"}).encode()
                 request = urllib.request.Request(base + "/api/v1/auth/login", credentials, {"Content-Type": "application/json"})
                 token = json.load(client.open(request, timeout=10))["access_token"]
-                request = urllib.request.Request(base + "/api/v1/hosts/local", headers={"Authorization": "Bearer " + token})
+                request = urllib.request.Request(base + "/api/v1/administration/clouds/local/hosts/local", headers={"Authorization": "Bearer " + token})
                 node = json.load(client.open(request, timeout=10))
                 if node["id"] != "local":
                     raise RuntimeError("Libvirt test node was not returned")
