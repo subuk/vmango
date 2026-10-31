@@ -45,7 +45,8 @@ Enter an administrator password in the interactive terminal. In `vmango.conf`,
 add a `user "admin"` block inside the existing `api` block and paste the printed
 bcrypt hash into `hashed_password`. Preserve its `$` characters.
 
-Keep `api.listen = ":8080"` and set `api.base_url` to your public HTTPS URL.
+For deployment behind an HTTPS reverse proxy, keep `api.listen = ":8080"`
+and set `api.base_url` to your public HTTPS URL.
 The following shows the relevant API settings; edit the existing block rather
 than appending a second one:
 
@@ -69,6 +70,17 @@ Keep the shipped `image`, `cloud` and `tasks` blocks and the state paths under
 `/var/lib/vmango`. Configure the existing storage pools and networks for each
 host, following [configured clouds and scheduling](/docs/clouds/). The
 [image guide](/docs/images/) explains the managed image catalog.
+
+To terminate HTTPS in Vmango instead, set `tls_cert_file` and `tls_key_file`
+inside the existing `api` block and mount their containing directory read-only
+into the container, for example `-v "$PWD/tls:/etc/vmango/tls:ro"`. Use container
+paths such as `/etc/vmango/tls/fullchain.pem` and `/etc/vmango/tls/privkey.pem` in
+the configuration. The existing `:8080` listener then serves HTTPS only; the
+published port mapping can stay the same. Set `base_url` to the public HTTPS URL
+with its external port. Secure cookies and console WSS connections are
+automatic. Files must be readable by the container's Vmango user. After
+externally renewing the certificate, restart the container to reload it. See
+[native HTTPS configuration](/docs/start/#https).
 
 ## Connect a libvirt host
 

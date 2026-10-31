@@ -165,6 +165,50 @@ The host name `local` is its stable identity; connection and backend settings
 belong directly in that host block. Use an existing, active storage pool for
 `config_drive_pool`. For example, check `virsh -c URI pool-list --all`.
 
+### HTTPS
+
+For access from other computers, configure HTTPS either directly in Vmango or
+through an HTTPS reverse proxy. Native HTTPS uses the existing `api.listen`
+address; edit the `api` block in your configuration:
+
+```hcl
+api {
+    listen = ":8443"
+    base_url = "https://vmango.example.com:8443"
+    tls_cert_file = "/etc/vmango/tls/fullchain.pem"
+    tls_key_file = "/etc/vmango/tls/privkey.pem"
+    # Preserve your users, signing-key paths and credential-store settings.
+}
+```
+
+`tls_cert_file` contains the PEM server certificate followed by its intermediate
+certificates, and `tls_key_file` contains its matching unencrypted PEM private
+key. Use a certificate valid for the hostname clients connect to and trusted by
+their browsers. Both files must be readable by the process user (`vmango` for
+RPM/DEB services); restrict access to the private key. Absolute paths are
+recommended; `~/` paths are expanded using the process user's home directory.
+
+Setting both fields enables HTTPS only on that address, with TLS 1.2 or newer.
+There is no separate HTTP listener or automatic redirect. Leaving both empty
+preserves HTTP. Setting just one field, or supplying unreadable, malformed or
+mismatched files, prevents startup. Port 8443 works without privileged-port
+permissions in packaged services.
+
+Secure authentication cookies and console `wss://` connections are automatic
+with native HTTPS; `session_secure = true` is not required. If `base_url` is set,
+it must be an absolute HTTPS URL. Set it to the public URL, including a
+nonstandard port, for OIDC callbacks and absolute shared console links.
+
+Certificate issuance and renewal are managed externally. Vmango loads the
+certificate and key once at startup; replace them and restart Vmango after
+renewal. For a packaged service, use `systemctl restart vmango`.
+
+Behind an HTTPS reverse proxy, leave the TLS file fields empty to keep the
+upstream listener on HTTP, set `base_url` to the public HTTPS URL and enable
+`session_secure`. Bind the upstream to loopback or a private network. The proxy
+must preserve the public `Host`, `Origin` and `Sec-Fetch-Site` headers and support
+WebSocket upgrades.
+
 ### Manage multiple hosts
 
 One Vmango instance can manage virtual machines across multiple local or remote
@@ -245,9 +289,10 @@ then create machines from catalog references; they do not select raw pools or
 image paths. The binary archive does not configure KVM, pools or networks for you;
 a missing downloadable image is prepared when an accepted create task needs it.
 
-For remote browser access, serve Vmango through HTTPS, set `api.base_url` to
-that public URL and enable `api.session_secure`. Preserve `Host`, `Origin` and
-`Sec-Fetch-Site` in the reverse proxy. Remote VNC access needs HTTPS too.
+For remote browser access, use [native HTTPS](#https) or an HTTPS reverse proxy
+and set `api.base_url` to the public URL. Behind a proxy, enable
+`api.session_secure` and preserve `Host`, `Origin` and `Sec-Fetch-Site`.
+Remote VNC access needs HTTPS too.
 SSH console forwarding also needs `ssh` locally and `socat` or `nc` on the
 hypervisor. TLS-connected consoles require network reachability to the host's
 VNC port; a successful libvirt TLS connection alone does not tunnel VNC.

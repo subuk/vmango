@@ -23,7 +23,10 @@ func main() {
 	}
 	switch {
 	case webCommand.Happened():
-		bootstrap.Web(*configFilename)
+		if err := bootstrap.Web(*configFilename); err != nil {
+			fmt.Fprintf(os.Stderr, "Web server error: %s\n", err)
+			os.Exit(1)
+		}
 	case genpwCommand.Happened():
 		bootstrap.GenPassword()
 	}

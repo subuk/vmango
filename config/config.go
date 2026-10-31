@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"math"
 	"net"
+	"net/url"
 	"strings"
 	"subuk/vmango/auth"
 	"subuk/vmango/compute"
@@ -45,6 +46,8 @@ type APIConfig struct {
 	ConsoleSigningKey          string          `hcl:"-"`
 	ConsoleLinkLifetimeSeconds int             `hcl:"console_link_lifetime_seconds"`
 	Listen                     string          `hcl:"listen"`
+	TLSCertFile                string          `hcl:"tls_cert_file"`
+	TLSKeyFile                 string          `hcl:"tls_key_file"`
 	Debug                      bool            `hcl:"debug"`
 	BaseUrl                    string          `hcl:"base_url"`
 	JWTSigningKey              string          `hcl:"-"`
@@ -63,6 +66,19 @@ func (c *APIConfig) AuthPolicy() auth.IdentityPolicy {
 		p.Users = append(p.Users, auth.LocalUser{ID: u.Id, Name: u.FullName, Email: u.Email, PasswordHash: u.HashedPassword})
 	}
 	return p
+}
+
+func (c *APIConfig) ValidateTLS() error {
+	if (c.TLSCertFile == "") != (c.TLSKeyFile == "") {
+		return fmt.Errorf("api.tls_cert_file and api.tls_key_file must be configured together")
+	}
+	if c.TLSCertFile != "" && c.BaseUrl != "" {
+		u, err := url.Parse(c.BaseUrl)
+		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("api.base_url must be an absolute HTTPS URL when native TLS is enabled")
+		}
+	}
+	return nil
 }
 
 type ImageConfig struct {
@@ -288,6 +304,9 @@ func Parse(filename string) (*Config, error) {
 	}
 	if err := mergo.Merge(config, Default()); err != nil {
 		return nil, util.NewError(err, "cannot apply default configuration value")
+	}
+	if err := config.API.ValidateTLS(); err != nil {
+		return nil, err
 	}
 	if len(config.LegacyBridges) > 0 {
 		fmt.Println(OLD_BRIDGES_WARNING)

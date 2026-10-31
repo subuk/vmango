@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,7 +26,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func Web(configFilename string) {
+func Web(configFilename string) error {
 	zerolog.DurationFieldInteger = true
 	fmt.Fprintf(os.Stderr, "Using configuration file '%s'\n", configFilename)
 
@@ -50,6 +51,15 @@ func Web(configFilename string) {
 	}
 
 	logger.Info().Str("filename", configFilename).Msg("using configuration file")
+	server, err := newWebServer(&cfg.API)
+	if err != nil {
+		return err
+	}
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		return fmt.Errorf("listen on %s: %w", server.Addr, err)
+	}
+	defer listener.Close()
 
 	definitions, volumeMetadata, err := cfg.ImageDefinitions()
 	if err != nil {
@@ -228,21 +238,23 @@ func Web(configFilename string) {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot initialize API")
 	}
-	server := http.Server{
-		Addr:    cfg.API.Listen,
-		Handler: apiEnv,
-	}
+	server.Handler = apiEnv
 	go func() {
 		<-executionContext.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = server.Shutdown(ctx)
 	}()
-	logger.Info().Str("addr", server.Addr).Msg("starting server")
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Error().Err(err).Msg("serve failed")
-		stop()
+	scheme := "http"
+	if server.TLSConfig != nil {
+		scheme = "https"
 	}
+	logger.Info().Str("addr", listener.Addr().String()).Str("scheme", scheme).Msg("starting server")
+	err = serveWebServer(server, listener)
 	stop()
 	taskService.Wait()
+	if err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("serve %s: %w", scheme, err)
+	}
+	return nil
 }

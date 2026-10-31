@@ -101,3 +101,40 @@ func TestLegacyWebConfigurationFails(t *testing.T) {
 		t.Fatal("missing migration instruction", err)
 	}
 }
+
+func TestNativeTLSConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, wantError string
+	}{
+		{"HTTP defaults", ``, ""},
+		{"proxy HTTPS", `base_url = "https://vmango.test" session_secure = true`, ""},
+		{"certificate only", `tls_cert_file = "cert.pem"`, "configured together"},
+		{"key only", `tls_key_file = "key.pem"`, "configured together"},
+		{"native TLS", `tls_cert_file = "cert.pem" tls_key_file = "key.pem"`, ""},
+		{"native public URL", `tls_cert_file = "cert.pem" tls_key_file = "key.pem" base_url = "https://vmango.test:8443"`, ""},
+		{"HTTP public URL", `tls_cert_file = "cert.pem" tls_key_file = "key.pem" base_url = "http://vmango.test"`, "absolute HTTPS URL"},
+		{"relative public URL", `tls_cert_file = "cert.pem" tls_key_file = "key.pem" base_url = "/vmango"`, "absolute HTTPS URL"},
+		{"missing public host", `tls_cert_file = "cert.pem" tls_key_file = "key.pem" base_url = "https:///"`, "absolute HTTPS URL"},
+		{"malformed public URL", `tls_cert_file = "cert.pem" tls_key_file = "key.pem" base_url = "https://["`, "absolute HTTPS URL"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			file := filepath.Join(t.TempDir(), "vmango.conf")
+			if err := os.WriteFile(file, []byte("api { "+tc.body+" }"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := Parse(file)
+			if tc.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("expected %q, got %v", tc.wantError, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.API.Listen != Default().API.Listen || strings.Contains(tc.body, "tls_cert_file") && (cfg.API.TLSCertFile != "cert.pem" || cfg.API.TLSKeyFile != "key.pem") {
+				t.Fatalf("TLS settings/defaults were lost: %+v", cfg.API)
+			}
+		})
+	}
+}

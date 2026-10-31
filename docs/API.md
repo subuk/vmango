@@ -50,8 +50,12 @@ its context on a temporary refresh failure. See the migration guide for identity
 key rotation, storage permissions, locking, cleanup and backup semantics.
 
 Remote clients must use HTTPS/WSS. HTTP/WS is allowed for loopback development.
-For TLS termination, set `api.base_url` to the public HTTPS origin and
-`api.session_secure=true`, preserve Host/Origin/Sec-Fetch-Site, and keep the
+For native HTTPS, configure both `api.tls_cert_file` and `api.tls_key_file` with
+the PEM certificate chain and matching private key. They enable TLS on
+`api.listen`; Secure cookies are automatic. Restart Vmango after renewing the
+certificate. Set `api.base_url` to the public HTTPS URL for OIDC and shared links.
+For TLS termination at a reverse proxy, set `api.base_url` to the public HTTPS
+origin and `api.session_secure=true`, preserve Host/Origin/Sec-Fetch-Site, and keep the
 unencrypted backend inaccessible to untrusted clients. Arbitrary forwarded
 headers are not trusted. Cross-origin resource requests and WS upgrades are
 rejected. The OIDC callback is a state/PKCE-validated cross-site GET.

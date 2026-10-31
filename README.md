@@ -166,6 +166,27 @@ The VNC console uses noVNC 1.7 and requires a modern browser. For remote access,
 serve Vmango over HTTPS; browser APIs used by noVNC require a secure context
 (localhost is also supported).
 
+Vmango can serve HTTPS directly. Set both `api.tls_cert_file` (PEM certificate
+chain) and `api.tls_key_file` (PEM private key), for example:
+
+```hcl
+api {
+    listen = ":8443"
+    base_url = "https://vmango.example.com:8443"
+    tls_cert_file = "/etc/vmango/tls/fullchain.pem"
+    tls_key_file = "/etc/vmango/tls/privkey.pem"
+}
+```
+
+Edit the existing `api` block and keep its authentication settings. With both
+TLS fields empty, the listener continues to serve HTTP. With both set, it serves
+only HTTPS, including secure WebSockets for consoles; Secure cookies are
+automatic. A partially configured pair or an unreadable, malformed or mismatched
+certificate/key prevents startup. Make the files readable by the service user
+(`vmango` in packaged installations), restrict private-key access, and restart
+Vmango after replacing certificates. Certificate issuance and renewal are
+managed externally. See the [HTTPS setup guide](docs/content/en/docs/start.md#https).
+
 CSRF protection uses Go's `net/http.CrossOriginProtection`: browser requests
 are checked using `Sec-Fetch-Site` and `Origin`, without form tokens. Reverse
 proxies must preserve these headers and the public `Host`. Set `api.base_url`
