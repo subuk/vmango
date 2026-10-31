@@ -134,11 +134,11 @@ func TestAPISpecificationContract(t *testing.T) {
 	}
 	ids := map[string]bool{}
 	for path, ops := range spec.Paths {
-		if strings.HasPrefix(path, "/api/v1/nodes") || path == "/api/v1/vms" || path == "/api/v1/volumes" || path == "/api/v1/networks" {
+		if strings.HasPrefix(path, "/api/v1/nodes") || strings.HasPrefix(path, "/api/v1/hosts") || path == "/api/v1/vms" || path == "/api/v1/volumes" || path == "/api/v1/networks" {
 			t.Fatalf("retired infrastructure route in OpenAPI: %s", path)
 		}
 		for method, op := range ops {
-			if strings.HasPrefix(path, "/api/v1/hosts") && method != "get" {
+			if strings.HasPrefix(path, "/api/v1/administration/") && method != "get" {
 				t.Fatalf("host diagnostics must be read-only: %s %s", method, path)
 			}
 			if op.OperationID == "" || ids[op.OperationID] {
@@ -155,7 +155,7 @@ func TestAPISpecificationContract(t *testing.T) {
 			}
 		}
 	}
-	for _, id := range []string{"create-cloud-machine", "list-clouds", "get-cloud", "list-cloud-machines", "change-instance-type", "adopt-machine", "create-machine-disk", "get-vm", "delete-vm", "vm-action", "attach-disk", "detach-disk", "attach-interface", "detach-interface", "clone-volume", "resize-volume", "delete-volume", "get-volume", "list-keys", "get-key", "add-key", "delete-key", "list-hosts", "get-host", "list-networks", "list-pools", "list-images", "get-capabilities", "create-console-link", "connect-console"} {
+	for _, id := range []string{"create-cloud-machine", "list-clouds", "get-cloud", "list-cloud-machines", "change-instance-type", "adopt-machine", "create-machine-disk", "get-vm", "delete-vm", "vm-action", "attach-disk", "detach-disk", "attach-interface", "detach-interface", "clone-volume", "resize-volume", "delete-volume", "get-volume", "list-keys", "get-key", "add-key", "delete-key", "list-administration-hosts", "get-administration-host", "list-administration-host-networks", "list-administration-host-pools", "list-administration-images", "get-administration-host-capabilities", "get-administration-configuration", "get-administration-cloud-configuration", "get-administration-image", "get-administration-image-availability", "create-console-link", "connect-console"} {
 		if !ids[id] {
 			t.Errorf("missing operation %s", id)
 		}

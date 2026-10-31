@@ -31,7 +31,7 @@ import {
     type ResourceRef,
     type Task,
 } from "../api/tasks";
-import { machineURL, useHostCloud } from "../api/hooks";
+import { machineURL } from "../api/hooks";
 import {
     Confirm,
     Copy,
@@ -93,6 +93,7 @@ export function TaskMonitor() {
             ) {
                 void queries.invalidateQueries({
                     predicate: (q) =>
+                        q.queryKey[0] !== "administration" &&
                         !String(q.queryKey[0]).startsWith("/api/v1/tasks"),
                 });
             }
@@ -118,6 +119,7 @@ export function TaskMonitor() {
                         );
                         void queries.invalidateQueries({
                             predicate: (q) =>
+                                q.queryKey[0] !== "administration" &&
                                 !String(q.queryKey[0]).startsWith(
                                     "/api/v1/tasks",
                                 ),
@@ -476,15 +478,13 @@ function ResourceLink({
     resource,
     deleted,
     available = true,
+    cloudID,
 }: {
     resource: ResourceRef;
     deleted: boolean;
     available?: boolean;
+    cloudID?: string;
 }) {
-    const cloud = useHostCloud(
-        resource.scope,
-        resource.kind === "machine" && !deleted && available,
-    );
     const label = `${resource.scope}/${resource.id}`;
     if (resource.kind === "machine-request")
         return <span>Requested machine: {resource.id}</span>;
@@ -502,14 +502,14 @@ function ResourceLink({
     if (!available && !deleted)
         return <span>{label} (existence not confirmed)</span>;
     if (deleted) return <span>{label} (deleted)</span>;
-    if (resource.kind === "machine" && !cloud.data) return <span>{label}</span>;
+    if (!cloudID) return <span>{label}</span>;
     return (
         <Link
             component={RouterLink}
             to={
                 resource.kind === "machine"
-                    ? machineURL(cloud.data!.cloud, resource.id)
-                    : `/volumes/?node=${encodeURIComponent(resource.scope)}`
+                    ? machineURL(cloudID!, resource.id)
+                    : `/volumes/?cloud=${encodeURIComponent(cloudID!)}`
             }
         >
             {label}
@@ -566,6 +566,7 @@ export function TaskDetail() {
         if (task && terminal(task) && previous.current !== task.state) {
             void queries.invalidateQueries({
                 predicate: (q) =>
+                    q.queryKey[0] !== "administration" &&
                     !String(q.queryKey[0]).startsWith("/api/v1/tasks"),
             });
         }
@@ -866,6 +867,16 @@ export function TaskDetail() {
                                     {time(effect.at)} ·{" "}
                                     {stageLabel(effect.action)} ·{" "}
                                     <ResourceLink
+                                        cloudID={
+                                            task.resources?.find(
+                                                (r) => r.kind === "cloud",
+                                            )?.scope ||
+                                            task.resources?.find(
+                                                (r) =>
+                                                    r.kind ===
+                                                    "machine-request",
+                                            )?.scope
+                                        }
                                         resource={effect.resource}
                                         deleted={effect.action === "deleted"}
                                     />
@@ -891,6 +902,16 @@ export function TaskDetail() {
                                     }}
                                 >
                                     <ResourceLink
+                                        cloudID={
+                                            task.resources?.find(
+                                                (r) => r.kind === "cloud",
+                                            )?.scope ||
+                                            task.resources?.find(
+                                                (r) =>
+                                                    r.kind ===
+                                                    "machine-request",
+                                            )?.scope
+                                        }
                                         resource={resource}
                                         available={
                                             task.state === "succeeded" ||
@@ -958,7 +979,11 @@ export function TaskDetail() {
                                                 ? { reason }
                                                 : undefined,
                                         );
-                                        await queries.invalidateQueries();
+                                        await queries.invalidateQueries({
+                                            predicate: (q) =>
+                                                q.queryKey[0] !==
+                                                "administration",
+                                        });
                                     } catch (e) {
                                         setError(e);
                                         throw e;

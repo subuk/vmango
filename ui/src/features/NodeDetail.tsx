@@ -1,6 +1,7 @@
 import {
     Box,
     Breadcrumbs,
+    Button,
     Link,
     Stack,
     Table,
@@ -14,36 +15,71 @@ import { Link as RouterLink, useParams } from "react-router";
 import {
     esc,
     machineURL,
-    useHostCloud,
-    useResource,
     type Network,
     type Node,
     type Pool,
 } from "../api/hooks";
+import {
+    adminCloudPath,
+    adminCloudURL,
+    useAdministration,
+} from "../api/administration";
+import type { components } from "../api/schema";
 import { Capacity, DetailSection, Summary } from "../components/Information";
 import { ResourceTable } from "../components/ResourceTable";
+import { APIError } from "../api/client";
 import { bytes, PageTitle, QueryState } from "../components/common";
 
 export function NodeDetail() {
-    const { node = "" } = useParams();
-    const cloud = useHostCloud(node);
-    const q = useResource<Node>(`/api/v1/hosts/${esc(node)}`);
-    const pools = useResource<Pool[]>(`/api/v1/hosts/${esc(node)}/pools`);
-    const networks = useResource<Network[]>(
-        `/api/v1/hosts/${esc(node)}/networks`,
+    const { node = "", cloud = "" } = useParams();
+    const base = `${adminCloudPath(cloud)}/hosts/${esc(node)}`;
+    const q = useAdministration<Node>(base);
+    const pools = useAdministration<Pool[]>(`${base}/pools`);
+    const networks = useAdministration<Network[]>(`${base}/networks`);
+    const capabilities = useAdministration<
+        components["schemas"]["ApiCapabilities"]
+    >(`${base}/capabilities`);
+    const catalog = useAdministration<components["schemas"]["HostCatalog"]>(
+        `${base}/catalog`,
     );
+    if (q.error instanceof APIError && [403, 404].includes(q.error.status))
+        return <QueryState query={q}>{() => null}</QueryState>;
     return (
         <>
             <Breadcrumbs sx={{ mb: 2 }}>
-                <Link component={RouterLink} to="/nodes/">
+                <Link
+                    component={RouterLink}
+                    to={`${adminCloudURL(cloud)}hosts/`}
+                >
                     Hosts
                 </Link>
                 <Typography>{node}</Typography>
             </Breadcrumbs>
             <PageTitle
                 title={node}
-                description="Host hardware, resource topology and backend diagnostics."
+                description="Live host hardware, resource topology and backend diagnostics."
+                action={
+                    <Button
+                        onClick={() => {
+                            void q.refetch();
+                            void pools.refetch();
+                            void networks.refetch();
+                            void capabilities.refetch();
+                            void catalog.refetch();
+                        }}
+                    >
+                        Refresh observations
+                    </Button>
+                }
             />
+            <Box sx={{ mb: 3 }}>
+                <Link
+                    component={RouterLink}
+                    to={`${adminCloudURL(cloud)}configuration/hosts/${esc(node)}/`}
+                >
+                    Open configured host settings
+                </Link>
+            </Box>
             <QueryState query={q}>
                 {(n) => (
                     <Stack spacing={3}>
@@ -75,7 +111,7 @@ export function NodeDetail() {
                             ]}
                         />
                         <DetailSection
-                            title="Host configuration"
+                            title="Live diagnostics"
                             description="Hardware identity and virtualization capabilities."
                         >
                             <Box component="dl" className="details">
@@ -132,15 +168,13 @@ export function NodeDetail() {
                                                 <TableCell>
                                                     {cpu.pins.map((pin, i) => (
                                                         <div key={i}>
-                                                            {cloud.data ? (
+                                                            {cloud ? (
                                                                 <Link
                                                                     component={
                                                                         RouterLink
                                                                     }
                                                                     to={machineURL(
-                                                                        cloud
-                                                                            .data
-                                                                            .cloud,
+                                                                        cloud,
                                                                         pin.vm,
                                                                     )}
                                                                 >
@@ -290,6 +324,59 @@ export function NodeDetail() {
                                         ))}
                                     </TableBody>
                                 </Table>
+                            </Box>
+                        )}
+                    </QueryState>
+                </DetailSection>
+            </Box>
+            <Box sx={{ mt: 3 }}>
+                <DetailSection title="Live launch capabilities">
+                    <QueryState query={capabilities}>
+                        {(c) => (
+                            <Box component="dl" className="details">
+                                {Object.entries(c).map(([key, value]) => (
+                                    <Box
+                                        component="div"
+                                        key={key}
+                                        sx={{ display: "contents" }}
+                                    >
+                                        <dt>{key.replaceAll("_", " ")}</dt>
+                                        <dd>
+                                            {Array.isArray(value)
+                                                ? value.join(", ")
+                                                : typeof value === "object"
+                                                  ? Object.entries(value || {})
+                                                        .map(
+                                                            ([id, models]) =>
+                                                                `${id}: ${(models as string[]).join(", ")}`,
+                                                        )
+                                                        .join("; ")
+                                                  : String(value)}
+                                        </dd>
+                                    </Box>
+                                ))}
+                            </Box>
+                        )}
+                    </QueryState>
+                </DetailSection>
+            </Box>
+            <Box sx={{ mt: 3 }}>
+                <DetailSection title="Live logical catalog">
+                    <QueryState query={catalog}>
+                        {(c) => (
+                            <Box component="dl" className="details">
+                                <dt>Networks</dt>
+                                <dd>
+                                    {(c.networks || [])
+                                        .map((n) => n.name)
+                                        .join(", ") || "None"}
+                                </dd>
+                                <dt>Storage classes</dt>
+                                <dd>
+                                    {(c.storage_classes || [])
+                                        .map((s) => s.name)
+                                        .join(", ") || "None"}
+                                </dd>
                             </Box>
                         )}
                     </QueryState>

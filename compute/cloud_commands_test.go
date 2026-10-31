@@ -154,7 +154,7 @@ func (cloudEvents) Publish(compute.Event) error { return nil }
 func cloudFixture(t *testing.T, cpus int) (*tasks.Service, *cloudVMBackend, *cloudVolumeBackend, compute.Cloud) {
 	t.Helper()
 	off := false
-	imageRepo, err := catalog.NewImageRepository([]compute.Image{{ID: "image", Name: "Image", OSName: "Linux", Arch: compute.ArchAmd64, SourcePath: "/source", Defaults: compute.ImageDefaults{Initialization: "none", Graphics: "spice", VideoModel: "qxl", GuestAgent: &off}}})
+	imageRepo, err := catalog.NewImageRepository([]compute.Image{{CloudID: "c", ID: "image", Name: "Image", OSName: "Linux", Arch: compute.ArchAmd64, SourcePath: "/source", Defaults: compute.ImageDefaults{Initialization: "none", Graphics: "spice", VideoModel: "qxl", GuestAgent: &off}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +483,7 @@ func TestCreateStartIsIndependentOfAutostart(t *testing.T) {
 func TestUnsupportedDisplayIsNotOfferedOrProvisioned(t *testing.T) {
 	s, backend, volumes, cloud := cloudFixture(t, 4)
 	backend.unsupportedDisplay = true
-	repo, err := catalog.NewImageRepository([]compute.Image{{ID: "image", Arch: compute.ArchAmd64, SourcePath: "/source", Defaults: compute.ImageDefaults{Graphics: "spice", VideoModel: "qxl", Initialization: "none"}}})
+	repo, err := catalog.NewImageRepository([]compute.Image{{CloudID: "c", ID: "image", Arch: compute.ArchAmd64, SourcePath: "/source", Defaults: compute.ImageDefaults{Graphics: "spice", VideoModel: "qxl", Initialization: "none"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

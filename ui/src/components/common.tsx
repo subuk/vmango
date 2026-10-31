@@ -128,7 +128,11 @@ export function QueryState<T>({
                 <Typography>Loading…</Typography>
             </Stack>
         );
-    if (query.data === undefined)
+    if (
+        query.data === undefined ||
+        (query.error instanceof APIError &&
+            [403, 404].includes(query.error.status))
+    )
         return (
             <>
                 <ErrorMessage error={query.error} />

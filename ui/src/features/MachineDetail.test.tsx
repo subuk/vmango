@@ -59,11 +59,10 @@ it("groups machine placement, access and hardware and explains absent addresses 
     const placement = screen.getByRole("region", {
         name: "Identity and placement",
     });
+    expect(within(placement).getByText("host-a")).toBeTruthy();
     expect(
-        within(placement)
-            .getByRole("link", { name: "host-a" })
-            .getAttribute("href"),
-    ).toBe("/nodes/host-a/");
+        within(placement).queryByRole("link", { name: "host-a" }),
+    ).toBeNull();
     expect(within(placement).getByText("ubuntu")).toBeTruthy();
     expect(
         within(
@@ -71,10 +70,8 @@ it("groups machine placement, access and hardware and explains absent addresses 
         ).getByText("No IP addresses reported."),
     ).toBeTruthy();
     expect(
-        within(
-            screen.getByRole("region", { name: "Console and CPU placement" }),
-        ).getAllByText("Not pinned"),
-    ).toHaveLength(2);
+        screen.queryByRole("region", { name: "Console and CPU placement" }),
+    ).toBeNull();
     expect(screen.getByText("No configured keys.")).toBeTruthy();
 });
 it("distinguishes unavailable key data from an empty key configuration and keeps read-only status visible", () => {

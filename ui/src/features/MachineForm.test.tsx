@@ -61,24 +61,27 @@ vi.mock("../api/hooks", async (original) => ({
             path === "/api/v1/clouds"
                 ? [catalog]
                 : path.includes("/volumes")
-                  ? [
-                        {
-                            id: "one",
-                            node: "a",
-                            name: "Disk A",
-                            cloud: "local",
-                            zone: "z",
-                            size_bytes: 2 ** 30,
-                        },
-                        {
-                            id: "two",
-                            node: "b",
-                            name: "Disk B",
-                            cloud: "local",
-                            zone: "z",
-                            size_bytes: 2 ** 30,
-                        },
-                    ]
+                  ? {
+                        items: [
+                            {
+                                id: "one",
+                                node: "a",
+                                name: "Disk A",
+                                cloud: "local",
+                                zone: "z",
+                                size_bytes: 2 ** 30,
+                            },
+                            {
+                                id: "two",
+                                node: "b",
+                                name: "Disk B",
+                                cloud: "local",
+                                zone: "z",
+                                size_bytes: 2 ** 30,
+                            },
+                        ],
+                        unavailable_hosts: [],
+                    }
                   : [],
         isError: false,
         isPending: false,

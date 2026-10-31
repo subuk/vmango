@@ -25,3 +25,6 @@ type Volume struct {
 func (volume *Volume) Base() string {
 	return filepath.Base(volume.Path)
 }
+
+// VolumePolicyKey scopes image-derived policy to its configured backend host.
+func VolumePolicyKey(node, path string) string { return node + "\x00" + path }

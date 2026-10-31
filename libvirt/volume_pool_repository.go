@@ -107,7 +107,7 @@ func (repo *VolumePoolRepository) List(options compute.VolumePoolListOptions) ([
 		nodeStart := time.Now()
 		nodeVolumePools, err := repo.listNode(nodeId)
 		if err != nil {
-			repo.logger.Warn().Err(err).Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("cannot list volume pools")
+			repo.logger.Warn().Err(administrationFailure(err)).Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("cannot list volume pools")
 			return nil, err
 		}
 		volumePools = append(volumePools, nodeVolumePools...)

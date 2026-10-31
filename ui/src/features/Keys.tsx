@@ -126,7 +126,10 @@ export function Keys() {
                             `/api/v1/keys/${esc(remove.fingerprint)}`,
                             "DELETE",
                         );
-                        await queries.invalidateQueries();
+                        await queries.invalidateQueries({
+                            predicate: (q) =>
+                                q.queryKey[0] !== "administration",
+                        });
                     }}
                 >
                     Remove {remove.comment || remove.fingerprint} from the key

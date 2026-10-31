@@ -77,6 +77,11 @@ func (repo *NetworkRepository) listNode(nodeId string) ([]*compute.Network, erro
 }
 
 func (repo *NetworkRepository) List(options compute.NetworkListOptions) ([]*compute.Network, error) {
+	// A single-host diagnostics request must distinguish an empty inventory from
+	// a failed read. Multi-host discovery retains its existing best-effort scope.
+	if len(options.NodeIds) == 1 {
+		return repo.listNode(options.NodeIds[0])
+	}
 	result := []*compute.Network{}
 	mu := &sync.Mutex{}
 	nodes := repo.pool.Nodes(options.NodeIds)

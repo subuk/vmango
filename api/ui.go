@@ -31,7 +31,7 @@ func (e *Environ) serveIndex(w http.ResponseWriter, r *http.Request) {
 func frontendRoute(p string) bool {
 	parts := strings.Split(strings.Trim(p, "/"), "/")
 	switch parts[0] {
-	case "", "login", "nodes", "machines", "volumes", "networks", "keys", "tokens", "console", "tasks":
+	case "", "login", "administration", "machines", "volumes", "networks", "keys", "tokens", "console", "tasks":
 		return true
 	}
 	return false
@@ -64,7 +64,7 @@ func (e *Environ) registerUI() {
 				return
 			}
 		}
-		if strings.HasPrefix(p, "/assets/") || strings.HasPrefix(p, "/vendor/") || path.Ext(p) != "" || !frontendRoute(p) {
+		if strings.HasPrefix(p, "/assets/") || strings.HasPrefix(p, "/vendor/") || !frontendRoute(p) {
 			http.NotFound(w, r)
 			return
 		}

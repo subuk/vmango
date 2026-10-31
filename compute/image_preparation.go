@@ -45,8 +45,23 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		config := *input.Config
 		vm.Config = &config
 	}
-	if m.images != nil {
-		paths, e := m.images.SourcePaths()
+	images := m.images
+	cloud := ""
+	if input.Metadata != nil {
+		cloud = input.Metadata.Cloud
+	}
+	if cloud == "" && m.Clouds != nil {
+		owner, _, e := m.Clouds.ForNode(input.NodeId)
+		if e != nil {
+			return nil, nil, e
+		}
+		cloud = owner.ID
+	}
+	if cloud != "" {
+		images = images.ForCloud(cloud)
+	}
+	if images != nil {
+		paths, e := images.SourcePaths()
 		if e != nil {
 			return nil, nil, e
 		}
@@ -88,7 +103,7 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		if m.images == nil {
 			return nil, nil, fmt.Errorf("image catalog is unavailable")
 		}
-		i, e := m.images.Get(p.ImageID)
+		i, e := images.Get(p.ImageID)
 		if e != nil {
 			return nil, nil, e
 		}
@@ -98,7 +113,7 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		if i.Arch != vm.Arch {
 			return nil, nil, fmt.Errorf("image %q architecture does not match the VM", i.ID)
 		}
-		source, e := m.images.Source(i, vm.NodeId, m.volumes)
+		source, e := images.Source(i, vm.NodeId, m.volumes)
 		if e != nil {
 			return nil, nil, fmt.Errorf("image %q source unavailable on node %q: %w", i.ID, vm.NodeId, e)
 		}
@@ -140,7 +155,7 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 			return nil, nil, fmt.Errorf("an image must be cloned as a disk")
 		}
 		if p.DeviceBus == DeviceBusUnknown {
-			p.DeviceBus = i.Defaults.DiskBus
+			p.DeviceBus = i.Defaults.BootDiskBus()
 		}
 		if overrides.DiskBus != DeviceBusUnknown {
 			p.DeviceBus = overrides.DiskBus
@@ -250,10 +265,7 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 	}
 	vm.Graphic.Type, vm.VideoModel = common.Display()
 	vm.DiskController = common.DiskController
-	vm.GuestAgent = true
-	if common.GuestAgent != nil {
-		vm.GuestAgent = *common.GuestAgent
-	}
+	vm.GuestAgent = common.GuestAgentEnabled()
 	for _, iface := range vm.Interfaces {
 		if iface.Model == "" {
 			iface.Model = common.NICModel

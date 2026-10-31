@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Button, Menu, MenuItem, TextField, Typography } from "@mui/material";
+import {
+    Alert,
+    Button,
+    Menu,
+    MenuItem,
+    TextField,
+    Typography,
+} from "@mui/material";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
 import {
@@ -8,32 +15,66 @@ import {
     useVolumes,
     volumePath,
     type Volume,
+    type VolumeDetail,
 } from "../api/hooks";
 import { useResourceBusy, volumeResource } from "../api/tasks";
 import { ResourceTasks } from "./Tasks";
 import { request } from "../api/client";
-import { bytes, Confirm, PageTitle, QueryState } from "../components/common";
+import {
+    bytes,
+    Confirm,
+    ErrorMessage,
+    PageTitle,
+    QueryState,
+} from "../components/common";
 import { Summary } from "../components/Information";
 import { ResourceTable } from "../components/ResourceTable";
-import type { Cloud, HostCatalog } from "./MachineForm";
+import type { Cloud } from "./MachineForm";
 import { fieldError, OperationDialog } from "../components/OperationDialog";
 
 export function Volumes() {
-    const q = useVolumes();
+    const [params, setParams] = useSearchParams();
+    const clouds = useResource<Cloud[]>("/api/v1/clouds");
+    const cloudID = params.get("cloud") || clouds.data?.[0]?.id || "";
+    const q = useVolumes(cloudID);
     const [create, setCreate] = useState(false);
-    const [params] = useSearchParams();
     return (
         <>
             <PageTitle
                 title="Volumes"
                 description="Review virtual disks, storage classes and machine attachments."
-                count={q.data?.length}
+                count={q.data?.items.length}
                 action={
                     <Button variant="contained" onClick={() => setCreate(true)}>
                         Create volume
                     </Button>
                 }
             />
+            {clouds.data && clouds.data.length > 1 && (
+                <TextField
+                    select
+                    label="Cloud"
+                    value={cloudID}
+                    sx={{ mb: 3, minWidth: 220 }}
+                    onChange={(e) => setParams({ cloud: e.target.value })}
+                >
+                    {clouds.data.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>
+                            {c.name}
+                        </MenuItem>
+                    ))}
+                </TextField>
+            )}
+            <ErrorMessage error={clouds.error} />
+            {clouds.isSuccess && clouds.data.length === 0 && (
+                <Alert severity="info">No clouds are configured.</Alert>
+            )}
+            {!!q.data?.unavailable_hosts.length && (
+                <Alert severity="warning">
+                    The list is incomplete. Unavailable hosts:{" "}
+                    {q.data.unavailable_hosts.join(", ")}.
+                </Alert>
+            )}
             {q.data && (
                 <Summary
                     label="Volume inventory summary"
@@ -41,7 +82,7 @@ export function Volumes() {
                         {
                             label: "Provisioned size",
                             value: bytes(
-                                q.data.reduce(
+                                q.data.items.reduce(
                                     (sum, v) => sum + v.size_bytes,
                                     0,
                                 ),
@@ -50,88 +91,93 @@ export function Volumes() {
                         },
                         {
                             label: "Attached",
-                            value: q.data.filter((v) => !!v.attached_to).length,
+                            value: q.data.items.filter((v) => !!v.attached_to)
+                                .length,
                             detail: "Connected to machines",
                         },
                         {
                             label: "Unattached",
-                            value: q.data.filter((v) => !v.attached_to).length,
+                            value: q.data.items.filter((v) => !v.attached_to)
+                                .length,
                             detail: "No machine attachment",
                         },
                         {
                             label: "Protected",
-                            value: q.data.filter((v) => v.protected).length,
+                            value: q.data.items.filter((v) => v.protected)
+                                .length,
                             detail: "Protected from deletion",
                         },
                     ]}
                 />
             )}
-            <QueryState query={q}>
-                {(rows) => (
-                    <ResourceTable
-                        rows={rows}
-                        rowKey={(v) => `${v.node}/${v.id}`}
-                        search={(v) =>
-                            `${v.name} ${v.node} ${v.pool} ${v.attached_to || ""}`
-                        }
-                        node={(v) => v.node}
-                        pool={(v) => v.storage_class || "Unmanaged"}
-                        poolLabel="Storage class"
-                        columns={[
-                            {
-                                id: "name",
-                                label: "Name",
-                                value: (v) => v.name,
-                                render: (v) => (
-                                    <>
-                                        {v.name}
-                                        <ResourceTasks
-                                            compact
-                                            resource={volumeResource(
-                                                v.node,
-                                                v.id,
-                                            )}
-                                        />
-                                    </>
-                                ),
-                            },
-                            { id: "node", label: "Host", value: (v) => v.node },
-                            {
-                                id: "pool",
-                                label: "Storage class",
-                                value: (v) => v.storage_class || "Unmanaged",
-                            },
-                            {
-                                id: "format",
-                                label: "Format",
-                                value: (v) => v.format,
-                            },
-                            {
-                                id: "size",
-                                label: "Size",
-                                value: (v) => v.size_bytes,
-                                render: (v) => bytes(v.size_bytes),
-                                numeric: true,
-                            },
-                            {
-                                id: "attachment",
-                                label: "Attached to",
-                                value: (v) => v.attached_to || "—",
-                            },
-                            {
-                                id: "protected",
-                                label: "Protection",
-                                value: (v) => (v.protected ? "Protected" : "—"),
-                            },
-                        ]}
-                        actions={(v) => <VolumeActions volume={v} />}
-                        empty="No visible volumes are available."
-                    />
-                )}
-            </QueryState>
+            {cloudID && (
+                <QueryState query={q}>
+                    {(result) => (
+                        <ResourceTable
+                            rows={result.items}
+                            rowKey={(v) => `${v.cloud}/${v.id}`}
+                            search={(v) =>
+                                `${v.name} ${v.node} ${v.pool} ${v.attached_to || ""}`
+                            }
+                            pool={(v) => v.storage_class || "Unmanaged"}
+                            poolLabel="Storage class"
+                            columns={[
+                                {
+                                    id: "name",
+                                    label: "Name",
+                                    value: (v) => v.name,
+                                    render: (v) => (
+                                        <>
+                                            {v.name}
+                                            <ResourceTasks
+                                                compact
+                                                resource={volumeResource(
+                                                    v.node,
+                                                    v.id,
+                                                )}
+                                            />
+                                        </>
+                                    ),
+                                },
+                                {
+                                    id: "pool",
+                                    label: "Storage class",
+                                    value: (v) =>
+                                        v.storage_class || "Unmanaged",
+                                },
+                                {
+                                    id: "format",
+                                    label: "Format",
+                                    value: (v) => v.format,
+                                },
+                                {
+                                    id: "size",
+                                    label: "Size",
+                                    value: (v) => v.size_bytes,
+                                    render: (v) => bytes(v.size_bytes),
+                                    numeric: true,
+                                },
+                                {
+                                    id: "attachment",
+                                    label: "Attached to",
+                                    value: (v) => v.attached_to || "—",
+                                },
+                                {
+                                    id: "protected",
+                                    label: "Protection",
+                                    value: (v) =>
+                                        v.protected ? "Protected" : "—",
+                                },
+                            ]}
+                            actions={(v) => <VolumeActions volume={v} />}
+                            empty="No visible volumes are available."
+                        />
+                    )}
+                </QueryState>
+            )}
             {create && (
                 <VolumeDialog
-                    nodeContext={params.get("node") || ""}
+                    cloudContext={cloudID}
                     mode="create"
                     onClose={() => setCreate(false)}
                 />
@@ -205,11 +251,11 @@ function VolumeActions({ volume: v }: { volume: Volume }) {
                     action="Delete volume"
                     onClose={() => setMode(undefined)}
                     run={async () => {
-                        await request(
-                            volumePath(v.node, v.id, v.cloud),
-                            "DELETE",
-                        );
-                        await queries.invalidateQueries();
+                        await request(volumePath(v.cloud, v.id), "DELETE");
+                        await queries.invalidateQueries({
+                            predicate: (q) =>
+                                q.queryKey[0] !== "administration",
+                        });
                     }}
                 >
                     Permanently delete {v.node}/{v.pool}/{v.name} (
@@ -230,20 +276,21 @@ function VolumeActions({ volume: v }: { volume: Volume }) {
 export function VolumeDialog({
     mode,
     volume,
-    nodeContext = "",
+    cloudContext = "",
     onClose,
 }: {
     mode: "create" | "clone" | "resize";
     volume?: Volume;
-    nodeContext?: string;
+    cloudContext?: string;
     onClose: () => void;
 }) {
-    const clouds = useResource<Cloud[]>("/api/v1/clouds");
-    const host = useResource<HostCatalog>(
-        `/api/v1/hosts/${esc(volume?.node || nodeContext)}/catalog`,
-        !!(volume?.node || nodeContext),
+    const clouds = useResource<Cloud[]>("/api/v1/clouds", !volume);
+    const detail = useResource<VolumeDetail>(
+        volumePath(volume?.cloud || "", volume?.id || ""),
+        !!volume,
+        false,
     );
-    const [cloudID, setCloud] = useState(volume?.cloud || "");
+    const [cloudID, setCloud] = useState(volume?.cloud || cloudContext);
     const cloud =
         clouds.data?.find((c) => c.id === cloudID) || clouds.data?.[0];
     const [zone, setZone] = useState(volume?.zone || "");
@@ -255,7 +302,7 @@ export function VolumeDialog({
         volume ? String(volume.size_bytes / 2 ** 30) : "10",
     );
     const classes = volume
-        ? host.data?.storage_classes || []
+        ? detail.data?.catalog?.storage_classes || []
         : cloud?.storage_classes.filter((s) =>
               (cloud.storage_availability || []).some(
                   (o) =>
@@ -293,17 +340,23 @@ export function VolumeDialog({
                       : "Create volume"
             }
             onClose={onClose}
-            disabled={mode !== "resize" && (!cloud || !storage || !zone)}
+            disabled={
+                mode === "create"
+                    ? !cloud || !storage || !zone
+                    : mode === "clone"
+                      ? !storage || !detail.data?.catalog
+                      : false
+            }
             run={() =>
                 mode === "resize"
                     ? request(
-                          `${volumePath(volume!.node, volume!.id, volume!.cloud)}/resize`,
+                          `${volumePath(volume!.cloud, volume!.id)}/resize`,
                           "POST",
                           { size_bytes: Math.round(Number(size) * 2 ** 30) },
                       )
                     : request(
                           mode === "clone"
-                              ? `${volumePath(volume!.node, volume!.id, volume!.cloud)}/clone`
+                              ? `${volumePath(volume!.cloud, volume!.id)}/clone`
                               : `/api/v1/clouds/${esc(cloud!.id)}/volumes`,
                           "POST",
                           {
@@ -397,7 +450,32 @@ export function VolumeDialog({
                         {mode === "resize" &&
                             "Extend the guest partition and filesystem separately."}
                     </Typography>
-                    <QueryState query={clouds}>{() => null}</QueryState>
+                    {volume && mode === "clone" && (
+                        <QueryState query={detail}>
+                            {(v) =>
+                                v.catalog === null ? (
+                                    <Alert severity="warning">
+                                        Storage choices are unavailable.{" "}
+                                        <Button
+                                            onClick={() =>
+                                                void detail.refetch()
+                                            }
+                                        >
+                                            Retry
+                                        </Button>
+                                    </Alert>
+                                ) : v.catalog.storage_classes.length === 0 ? (
+                                    <Alert severity="info">
+                                        No storage classes are available for
+                                        cloning.
+                                    </Alert>
+                                ) : null
+                            }
+                        </QueryState>
+                    )}
+                    {!volume && (
+                        <QueryState query={clouds}>{() => null}</QueryState>
+                    )}
                 </>
             )}
         </OperationDialog>

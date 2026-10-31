@@ -32,6 +32,17 @@ type VolumeListOptions struct {
 	PoolNames []string
 }
 
+// VolumeInventory distinguishes an unavailable host from a successfully empty
+// host. Successful rows are fresh observations, never cached replacements.
+type VolumeInventory struct {
+	Volumes          []*Volume
+	UnavailableHosts []string
+}
+
+type VolumeInventoryRepository interface {
+	ListInventory(options VolumeListOptions) (VolumeInventory, error)
+}
+
 type VolumeRepository interface {
 	// ResolvePath maps a prospective pool/name to its backend path without writes.
 	// It ensures create, attach, resize and delete commands share one lock identity.
@@ -55,6 +66,24 @@ func NewVolumeService(repo VolumeRepository) *VolumeService {
 	return &VolumeService{VolumeRepository: repo}
 }
 
+func (s *VolumeService) ListInventory(options VolumeListOptions) (VolumeInventory, error) {
+	if repo, ok := s.VolumeRepository.(VolumeInventoryRepository); ok {
+		return repo.ListInventory(options)
+	}
+	// Repositories whose List reports errors can be read independently per host.
+	// Backends that skip failed reads must implement VolumeInventoryRepository.
+	out := VolumeInventory{Volumes: []*Volume{}, UnavailableHosts: []string{}}
+	for _, node := range options.NodeIds {
+		volumes, err := s.List(VolumeListOptions{NodeIds: []string{node}, PoolNames: options.PoolNames})
+		if err != nil {
+			out.UnavailableHosts = append(out.UnavailableHosts, node)
+			continue
+		}
+		out.Volumes = append(out.Volumes, volumes...)
+	}
+	return out, nil
+}
+
 // Attachable excludes catalog sources independently of image architecture.
 // Protection alone does not make an otherwise eligible volume unattachable.
 func (s *VolumeService) Attachable(options VolumeListOptions, images *ImageService) ([]*Volume, error) {
@@ -62,15 +91,15 @@ func (s *VolumeService) Attachable(options VolumeListOptions, images *ImageServi
 	if err != nil {
 		return nil, err
 	}
-	sources := map[string]bool{}
-	if images != nil {
-		sources, err = images.SourcePaths()
-		if err != nil {
-			return nil, err
-		}
-	}
 	out := []*Volume{}
 	for _, v := range volumes {
+		sources := map[string]bool{}
+		if images != nil {
+			sources, err = images.ForNode(v.NodeId).SourcePaths()
+			if err != nil {
+				return nil, err
+			}
+		}
 		if !v.Metadata.Hidden && v.AttachedTo == "" && !sources[v.Path] {
 			out = append(out, v)
 		}
@@ -85,7 +114,7 @@ func (s *VolumeService) ValidateAttachable(path, node string, images *ImageServi
 	}
 	sources := map[string]bool{}
 	if images != nil {
-		sources, err = images.SourcePaths()
+		sources, err = images.ForNode(node).SourcePaths()
 		if err != nil {
 			return err
 		}

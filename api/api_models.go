@@ -1,14 +1,12 @@
 package api
 
 import (
-	"encoding/base64"
-	"fmt"
 	"sort"
 	"subuk/vmango/compute"
 )
 
 type apiDisk struct {
-	VolumeID string `json:"volume_id" minLength:"1" doc:"Opaque host-local volume identifier returned by cloud discovery."`
+	VolumeID string `json:"volume_id" minLength:"1" doc:"Compound host/path volume identifier returned by cloud discovery."`
 	Alias    string `json:"alias,omitempty"`
 	Device   string `json:"device,omitempty" enum:"disk,cdrom" default:"disk"`
 	Bus      string `json:"bus,omitempty" enum:"virtio,scsi,ide" default:"virtio"`
@@ -71,6 +69,29 @@ type apiVM struct {
 	IPAddresses    []string            `json:"ip_addresses" nullable:"false"`
 }
 
+// Detail DTOs are separate from lightweight list rows: supplemental choices are
+// discovered only for detail reads, and null denotes unavailable discovery.
+type apiMachineCatalog struct {
+	_              struct{}               `nullable:"true"`
+	Networks       []compute.CatalogEntry `json:"networks" nullable:"false"`
+	StorageClasses []compute.CatalogEntry `json:"storage_classes" nullable:"false"`
+}
+type APIVMFields = apiVM
+type APIVolumeFields = apiVolume
+
+type apiVMDetail struct {
+	APIVMFields
+	Catalog *apiMachineCatalog `json:"catalog"`
+}
+type apiVolumeCatalog struct {
+	_              struct{}               `nullable:"true"`
+	StorageClasses []compute.CatalogEntry `json:"storage_classes" nullable:"false"`
+}
+type apiVolumeDetail struct {
+	APIVolumeFields
+	Catalog *apiVolumeCatalog `json:"catalog"`
+}
+
 func vmDTO(vm *compute.VirtualMachine) apiVM {
 	v := apiVM{Node: vm.NodeId, ID: vm.Id, Name: vm.Name, Arch: vm.Arch.String(), State: vm.State.String(), VCPUs: vm.VCpus, MemoryBytes: vm.Memory.Bytes(), Firmware: vm.Firmware, DiskController: vm.DiskController, GuestAgent: vm.GuestAgent, Autostart: vm.Autostart, Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), GraphicsListen: vm.Graphic.Listen, VideoModel: vm.VideoModel.String(), Disks: []apiDisk{}, Interfaces: []apiReadInterface{}, IPAddresses: vm.IpAddressList()}
 	if vm.Cpupin != nil {
@@ -88,7 +109,7 @@ func vmDTO(vm *compute.VirtualMachine) apiVM {
 		v.ConfiguredKeys = &keys
 	}
 	for _, d := range vm.Volumes {
-		v.Disks = append(v.Disks, apiDisk{volumeID(d.Path), d.Alias, d.DeviceType.String(), d.DeviceBus.String()})
+		v.Disks = append(v.Disks, apiDisk{volumeID(vm.NodeId, d.Path), d.Alias, d.DeviceType.String(), d.DeviceBus.String()})
 	}
 	for _, n := range vm.Interfaces {
 		logical := n.LogicalNetwork
@@ -100,20 +121,9 @@ func vmDTO(vm *compute.VirtualMachine) apiVM {
 	return v
 }
 
-func volumeID(path string) string { return base64.RawURLEncoding.EncodeToString([]byte(path)) }
-func volumePath(id string) (string, error) {
-	b, err := base64.RawURLEncoding.DecodeString(id)
-	if err != nil || len(b) == 0 || len(b) > 4096 {
-		return "", fmt.Errorf("%w: invalid volume identifier", compute.ErrInvalid)
-	}
-	return string(b), nil
-}
-func (d apiDisk) domain() (*compute.VirtualMachineAttachedVolume, error) {
-	path, err := volumePath(d.VolumeID)
-	if err != nil {
-		return nil, err
-	}
-	return &compute.VirtualMachineAttachedVolume{Path: path, Alias: d.Alias, DeviceType: compute.NewDeviceType(d.Device), DeviceBus: compute.NewDeviceBus(d.Bus)}, nil
+func volumeID(node, path string) string { return (compute.VolumeAddress{Host: node, Path: path}).ID() }
+func (d apiDisk) domain(path string) *compute.VirtualMachineAttachedVolume {
+	return &compute.VirtualMachineAttachedVolume{Path: path, Alias: d.Alias, DeviceType: compute.NewDeviceType(d.Device), DeviceBus: compute.NewDeviceBus(d.Bus)}
 }
 func (n apiInterface) domain() *compute.VirtualMachineAttachedInterface {
 	return &compute.VirtualMachineAttachedInterface{NetworkName: n.Network, Mac: n.MAC}
@@ -136,7 +146,7 @@ type apiVolume struct {
 }
 
 func volumeDTO(v *compute.Volume) apiVolume {
-	return apiVolume{ID: volumeID(v.Path), Node: v.NodeId, Name: v.Name, Pool: v.Pool, SizeBytes: v.Size.Bytes(), Format: v.Format.String(), AttachedTo: v.AttachedTo, Protected: v.Metadata.Protected}
+	return apiVolume{ID: volumeID(v.NodeId, v.Path), Node: v.NodeId, Name: v.Name, Pool: v.Pool, SizeBytes: v.Size.Bytes(), Format: v.Format.String(), AttachedTo: v.AttachedTo, Protected: v.Metadata.Protected}
 }
 
 type apiImageDefaults struct {

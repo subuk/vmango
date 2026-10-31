@@ -24,7 +24,7 @@ type InstanceTypeConfig struct {
 type CloudConfig struct {
 	ID             string               `hcl:",key"`
 	Name           string               `hcl:"name"`
-	Images         []string             `hcl:"images"`
+	Images         []ImageConfig        `hcl:"image"`
 	Zones          []CatalogEntryConfig `hcl:"zone"`
 	InstanceTypes  []InstanceTypeConfig `hcl:"instance_type"`
 	Networks       []CatalogEntryConfig `hcl:"network"`
@@ -76,35 +76,28 @@ func byteSize(value int64, shift uint) (uint64, error) {
 	return uint64(value) << shift, nil
 }
 func (cfg *Config) CloudDefinitions() ([]compute.Cloud, error) {
+	if _, _, err := cfg.ImageDefinitions(); err != nil {
+		return nil, err
+	}
 	result := []compute.Cloud{}
 	seen := map[string]bool{}
 	nodes := map[string]string{}
 	uris := map[string]string{}
-	images, _, err := cfg.ImageDefinitions()
-	if err != nil {
-		return nil, err
-	}
-	knownImages := map[string]bool{}
-	for _, i := range images {
-		knownImages[i.ID] = true
-	}
 	for _, entry := range cfg.Clouds {
 		if seen[entry.ID] {
 			return nil, fmt.Errorf("duplicate cloud %s", entry.ID)
 		}
 		seen[entry.ID] = true
-		c := compute.Cloud{ID: entry.ID, Name: displayName(entry.ID, entry.Name), Images: entry.Images}
+		c := compute.Cloud{ID: entry.ID, Name: displayName(entry.ID, entry.Name), Images: []string{}}
+		for _, image := range entry.Images {
+			c.Images = append(c.Images, image.ID)
+		}
 		for _, pair := range []struct {
 			from []CatalogEntryConfig
 			to   *[]compute.CatalogEntry
 		}{{entry.Zones, &c.Zones}, {entry.Networks, &c.Networks}, {entry.StorageClasses, &c.StorageClasses}} {
 			for _, e := range pair.from {
 				*pair.to = append(*pair.to, compute.CatalogEntry{ID: e.ID, Name: displayName(e.ID, e.Name)})
-			}
-		}
-		for _, id := range c.Images {
-			if !knownImages[id] {
-				return nil, fmt.Errorf("cloud %s: unknown image %s", c.ID, id)
 			}
 		}
 		for _, t := range entry.InstanceTypes {

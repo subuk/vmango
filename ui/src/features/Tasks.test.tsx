@@ -117,9 +117,11 @@ it("shows interrupted uncertainty, last stage and persisted backend diagnostics 
     expect(
         screen.getByRole("button", { name: "Release resource locks…" }),
     ).toBeTruthy();
-    expect(request.mock.calls.every(([, method]) => method === undefined)).toBe(
-        true,
-    );
+    expect(
+        request.mock.calls.every(
+            ([, method]) => method === undefined || method === "GET",
+        ),
+    ).toBe(true);
 });
 it("loads filtered paginated history and reopens useful backend failure details", async () => {
     const failed = {

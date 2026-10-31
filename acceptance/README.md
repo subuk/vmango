@@ -169,7 +169,24 @@ architecture/backend combination is established by these checks.
 
 Creation now uses `/api/v1/clouds/acceptance/machines`, an instance type,
 logical network and storage class. The harness configures its own cloud, zone
-and host bindings. It also verifies stopped-machine type changes preserve boot
+and host bindings. A second cloud uses a deliberately unreachable socket and
+an independent definition of the same image ID. Its configuration and image
+pages must remain readable while live host/volume inventories explicitly report
+unavailability. The suite verifies that editing the configuration file leaves
+the running accepted snapshot unchanged and that the eight retired host API
+routes and old host UI routes return 404.
+
+Volume checks use flat cloud-scoped routes and canonical compound host/path
+IDs. They verify cross-cloud rejection, rejection of old routes/path-only IDs,
+resource-detail catalogs and consistent VM disk references. After a completed
+attach task, the suite restarts its own Vmango process and checks that task
+history, real references and volume navigation survive unchanged. This restart
+checks completed real-backend operations; the separate
+`TestPreCloudImageCommandRecoversPinnedSourceAndRawLocks` regression uses a
+persisted pre-change command payload and simulated backend to check queued
+recovery with accepted image sources/defaults and original locks.
+
+It also verifies stopped-machine type changes preserve boot
 disk size, explicit adoption preserves resources, and unmanaged commands are
 rejected before mutation. Existing user domains remain part of fresh capacity
 accounting, including inactive domains.
@@ -188,3 +205,22 @@ On `lanst.net.krglv.com`, real Linux/KVM admission correctly rejected placement:
 Only the negative admission check passed there; a successful Linux cloud
 lifecycle still requires a host with sufficient allocatable capacity. Logs are
 retained under `result/krg54-linux/`; original workloads were preserved.
+
+## Administration and volume migration verification, 2026-10-31
+
+The KRG-68 harness passed locally on macOS/libvirt/HVF with both the existing
+Ubuntu ARM64 local cloud image (27.61 seconds) and the pinned Alpine 3.24.3
+ARM64 managed image (61.55 seconds). Both runs checked the offline cloud's
+accepted configuration, independent same-ID image definitions, removed routes,
+compound volume addresses, resource-detail catalogs, guest cloud-init boot,
+VNC/serial, disk operations, process restart/history preservation and cleanup.
+The managed run reported the verified source ready; its saved task records
+showed one 191,823,872-byte stream and verification followed by reuse without a
+second transfer. Final inspection showed the original user machines and default
+pool unchanged and no acceptance VM/pool remaining.
+
+The corresponding ignored artifact directories are
+`result/vmango-acceptance-a42c5506-77a7-4279-9f0c-f68450efb9d6/` and
+`result/vmango-acceptance-73847964-55ae-44a0-a020-71656cf42145/`.
+This verification establishes neither Linux/KVM or remote behavior nor package
+builds/installations. Browser checks are separate from the lifecycle harness.

@@ -26,8 +26,14 @@ export class APIError extends Error {
 
 type Credentials = { access_token: string; expires_in: number };
 let token: string | undefined;
+let identityGeneration = 0;
 let expiresAt = 0;
 let refreshFlight: Promise<void> | undefined;
+let refreshGeneration = -1;
+function requireIdentity(generation: number) {
+    if (generation !== identityGeneration)
+        throw new DOMException("Identity changed", "AbortError");
+}
 const events = new EventTarget();
 const channel =
     typeof BroadcastChannel !== "undefined"
@@ -35,6 +41,7 @@ const channel =
         : undefined;
 channel?.addEventListener("message", (event) => {
     if (event.data?.type === "logout") {
+        identityGeneration++;
         token = undefined;
         expiresAt = 0;
         events.dispatchEvent(new Event("logout"));
@@ -105,16 +112,23 @@ export async function publicRequest<T>(
 }
 
 export async function refresh(): Promise<void> {
-    if (refreshFlight) return refreshFlight;
+    const generation = identityGeneration;
+    if (refreshFlight && refreshGeneration === generation) return refreshFlight;
     const rotate = async () => {
+        requireIdentity(generation);
         // Tabs serialize cookie rotation. Each tab obtains its own in-memory JWT.
         // A lost rotation response deliberately requires login; no token grace window.
         try {
-            accept(
-                await publicRequest<Credentials>("/api/v1/auth/refresh", {}),
+            const credentials = await publicRequest<Credentials>(
+                "/api/v1/auth/refresh",
+                {},
             );
+            requireIdentity(generation);
+            accept(credentials);
         } catch (error) {
+            requireIdentity(generation);
             if (error instanceof APIError && error.status === 0) {
+                identityGeneration++;
                 token = undefined;
                 expiresAt = 0;
                 events.dispatchEvent(new Event("logout"));
@@ -124,6 +138,7 @@ export async function refresh(): Promise<void> {
                 });
             }
             if (error instanceof APIError && error.status === 401) {
+                identityGeneration++;
                 token = undefined;
                 expiresAt = 0;
                 events.dispatchEvent(new Event("logout"));
@@ -136,25 +151,31 @@ export async function refresh(): Promise<void> {
             await navigator.locks.request("vmango.refresh", rotate);
         else await rotate();
     };
-    refreshFlight = coordinated().finally(() => {
-        refreshFlight = undefined;
+    const flight = coordinated().finally(() => {
+        if (refreshFlight === flight) refreshFlight = undefined;
     });
-    return refreshFlight;
+    refreshGeneration = generation;
+    refreshFlight = flight;
+    return flight;
 }
 export async function login(username: string, password: string) {
-    accept(
-        await publicRequest<Credentials>("/api/v1/auth/login", {
-            username,
-            password,
-        }),
-    );
+    const generation = ++identityGeneration;
+    const credentials = await publicRequest<Credentials>("/api/v1/auth/login", {
+        username,
+        password,
+    });
+    requireIdentity(generation);
+    accept(credentials);
 }
 export async function authorization(): Promise<string> {
+    const generation = identityGeneration;
     if (!token || Date.now() > expiresAt - 5000) await refresh();
+    requireIdentity(generation);
     return `Bearer ${token}`;
 }
 export async function logout() {
     await publicRequest("/api/v1/auth/logout", {});
+    identityGeneration++;
     token = undefined;
     expiresAt = 0;
     channel?.postMessage({ type: "logout" });
@@ -165,16 +186,24 @@ export async function authenticatedFetch(
     input: RequestInfo | URL,
     init?: RequestInit,
 ): Promise<Response> {
+    const generation = identityGeneration;
     if (!token || Date.now() > expiresAt - 5000) await refresh();
+    requireIdentity(generation);
     const request = new Request(input, init);
     const send = async () => {
+        requireIdentity(generation);
         const headers = new Headers(request.headers);
         headers.set("Authorization", `Bearer ${token}`);
         try {
-            return await fetch(
+            const response = await fetch(
                 new Request(request.clone(), { headers, credentials: "omit" }),
             );
-        } catch {
+            requireIdentity(generation);
+            return response;
+        } catch (error) {
+            requireIdentity(generation);
+            if (error instanceof DOMException && error.name === "AbortError")
+                throw error;
             throw new APIError(0, {
                 detail: "Connection lost. Refresh resource state before retrying; cancellation does not roll back an operation.",
             });
@@ -183,12 +212,14 @@ export async function authenticatedFetch(
     let response = await send();
     if (response.status === 401) {
         const error = await responseProblem(response.clone());
+        requireIdentity(generation);
         // Only the authentication guard proves no mutation handler ran.
         if (
             error.problem.code === "access_token_expired" &&
             error.problem.rejected_before_execution
         ) {
             await refresh();
+            requireIdentity(generation);
             response = await send();
         }
     }
@@ -245,7 +276,9 @@ export async function request<T>(
     path: string,
     method = "GET",
     body?: unknown,
+    signal?: AbortSignal,
 ): Promise<T> {
+    const generation = identityGeneration;
     const infrastructure =
         method !== "GET" &&
         !new URL(path, location.href).pathname.includes("/consoles/") &&
@@ -255,21 +288,25 @@ export async function request<T>(
     const submission = infrastructure
         ? await submissionKey(path, method, body)
         : undefined;
+    requireIdentity(generation);
     try {
         const headers = new Headers(
             body === undefined ? {} : { "Content-Type": "application/json" },
         );
         if (submission) headers.set("Idempotency-Key", submission.key);
         const response = await authenticatedFetch(path, {
+            signal,
             method,
             headers,
             body: body === undefined ? undefined : JSON.stringify(body),
         });
         if (!response.ok) {
             const error = await responseProblem(response);
+            requireIdentity(generation);
             if (response.status < 500) submission?.clear();
             throw error;
         }
+        requireIdentity(generation);
         if (
             response.status === 204 ||
             response.headers.get("Content-Length") === "0"
@@ -278,7 +315,10 @@ export async function request<T>(
         let result: T;
         try {
             result = await response.json();
-        } catch {
+            requireIdentity(generation);
+        } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError")
+                throw error;
             throw new APIError(0, { detail: "Response could not be read." });
         }
         if (response.status === 202 && submission) {

@@ -15,7 +15,6 @@ import {
     Typography,
 } from "@mui/material";
 import { useSearchParams } from "react-router";
-import { useNodes } from "../api/hooks";
 
 export type Column<T> = {
     id: string;
@@ -48,7 +47,6 @@ export function ResourceTable<T>({
     empty?: string;
 }) {
     const [params, setParams] = useSearchParams();
-    const nodes = useNodes(!!node);
     const update = (key: string, value: string) =>
         setParams(
             (old) => {
@@ -113,12 +111,7 @@ export function ResourceTable<T>({
                         sx={{ width: 210 }}
                     >
                         <MenuItem value="">All hosts</MenuItem>
-                        {[
-                            ...new Set([
-                                ...(nodes.data || []).map((n) => n.id),
-                                ...rows.map(node),
-                            ]),
-                        ].map((n) => (
+                        {[...new Set([...rows.map(node)])].map((n) => (
                             <MenuItem key={n} value={n}>
                                 {n}
                             </MenuItem>

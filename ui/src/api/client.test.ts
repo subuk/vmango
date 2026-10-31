@@ -21,8 +21,24 @@ beforeEach(async () => {
     client = await import("./client");
 });
 afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
 });
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((done) => {
+        resolve = done;
+    });
+    return { promise, resolve };
+}
+async function switchIdentity() {
+    fetchMock.mockResolvedValueOnce(response({}, 204));
+    await client.logout();
+    fetchMock.mockResolvedValueOnce(
+        response({ access_token: "different-user", expires_in: 600 }),
+    );
+    await client.login("other", "password");
+}
 async function loggedIn() {
     fetchMock.mockResolvedValueOnce(
         response({ access_token: "web-secret", expires_in: 600 }),
@@ -59,7 +75,7 @@ describe("credential and mutation behavior", () => {
         "/api/v1/clouds/local/machines",
         "/api/v1/clouds/local/volumes",
         "/api/v1/clouds/local/machines/v/instance-type",
-        "/api/v1/clouds/local/volumes/n/dm9s/clone",
+        "/api/v1/clouds/local/volumes/bg.dm9s/clone",
     ])(
         "recovers an uncertain infrastructure submission at %s with the same key",
         async (route) => {
@@ -217,4 +233,164 @@ describe("credential and mutation behavior", () => {
         expect(logout).toHaveBeenCalledTimes(1);
         unsubscribe();
     });
+});
+
+it("discards a private response that completes after logout and another login", async () => {
+    await loggedIn();
+    let finish!: (value: Response) => void;
+    fetchMock.mockImplementationOnce(
+        () =>
+            new Promise<Response>((resolve) => {
+                finish = resolve;
+            }),
+    );
+    const read = client.request(
+        "http://localhost/api/v1/administration/configuration",
+    );
+    const checked = expect(read).rejects.toMatchObject({ name: "AbortError" });
+    fetchMock.mockResolvedValueOnce(response({}, 204));
+    await client.logout();
+    fetchMock.mockResolvedValueOnce(
+        response({ access_token: "different-user", expires_in: 600 }),
+    );
+    await client.login("other", "password");
+    finish(response({ snapshot_id: "old-private-data" }));
+    await checked;
+});
+
+it("never sends a previous identity's mutation after delayed idempotency hashing", async () => {
+    await loggedIn();
+    const digest = deferred<ArrayBuffer>();
+    vi.spyOn(crypto.subtle, "digest").mockReturnValueOnce(digest.promise);
+    const mutation = client.request(
+        "http://localhost/api/v1/clouds/local/volumes",
+        "POST",
+        { name: "old-command" },
+    );
+    const checked = expect(mutation).rejects.toMatchObject({
+        name: "AbortError",
+    });
+    await switchIdentity();
+    digest.resolve(new Uint8Array(32).buffer);
+    await checked;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(await client.authorization()).toBe("Bearer different-user");
+});
+
+it.each([200, 401])(
+    "does not send an old request or clear the new identity after delayed refresh (%s)",
+    async (status) => {
+        const rotation = deferred<Response>();
+        fetchMock.mockReturnValueOnce(rotation.promise);
+        const mutation = client.request(
+            "http://localhost/api/v1/test",
+            "POST",
+            { action: "old-command" },
+        );
+        const checked = expect(mutation).rejects.toMatchObject({
+            name: "AbortError",
+        });
+        await switchIdentity();
+        rotation.resolve(
+            status === 200
+                ? response({ access_token: "old-rotation", expires_in: 600 })
+                : response({ code: "invalid_credential" }, 401),
+        );
+        await checked;
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(await client.authorization()).toBe("Bearer different-user");
+    },
+);
+
+it("does not refresh an old identity after waiting for another tab's rotation lock", async () => {
+    const released = deferred<void>();
+    Object.defineProperty(navigator, "locks", {
+        configurable: true,
+        value: {
+            request: async (_: string, work: () => Promise<void>) => {
+                await released.promise;
+                return work();
+            },
+        },
+    });
+    const mutation = client.request("http://localhost/api/v1/test", "POST", {
+        action: "old-command",
+    });
+    const checked = expect(mutation).rejects.toMatchObject({
+        name: "AbortError",
+    });
+    await switchIdentity();
+    released.resolve();
+    await checked;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(await client.authorization()).toBe("Bearer different-user");
+});
+
+it("never replays an old mutation after delayed expired-token error parsing", async () => {
+    await loggedIn();
+    const expired = deferred<unknown>();
+    const parsing = deferred<void>();
+    const rejected = response({}, 401);
+    vi.spyOn(rejected, "clone").mockReturnValue({
+        status: 401,
+        json: () => {
+            parsing.resolve();
+            return expired.promise;
+        },
+    } as Response);
+    fetchMock.mockResolvedValueOnce(rejected);
+    const mutation = client.request("http://localhost/api/v1/test", "POST", {
+        action: "old-command",
+    });
+    const checked = expect(mutation).rejects.toMatchObject({
+        name: "AbortError",
+    });
+    await parsing.promise;
+    await switchIdentity();
+    expired.resolve({
+        code: "access_token_expired",
+        rejected_before_execution: true,
+    });
+    await checked;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(await client.authorization()).toBe("Bearer different-user");
+});
+
+it.each([200, 403])(
+    "discards an old private response body parsed after identity change (%s)",
+    async (status) => {
+        await loggedIn();
+        const body = deferred<unknown>();
+        const parsing = deferred<void>();
+        const pending = response({}, status);
+        vi.spyOn(pending, "json").mockImplementation(() => {
+            parsing.resolve();
+            return body.promise;
+        });
+        fetchMock.mockResolvedValueOnce(pending);
+        const read = client.request(
+            "http://localhost/api/v1/administration/configuration",
+        );
+        const checked = expect(read).rejects.toMatchObject({
+            name: "AbortError",
+        });
+        await parsing.promise;
+        await switchIdentity();
+        body.resolve({
+            detail: "old-private-diagnostics",
+            snapshot_id: "old-private-data",
+        });
+        await checked;
+    },
+);
+
+it("does not accept a late login response over a newer identity", async () => {
+    const oldLogin = deferred<Response>();
+    fetchMock.mockReturnValueOnce(oldLogin.promise);
+    const login = client.login("old-user", "password");
+    const checked = expect(login).rejects.toMatchObject({ name: "AbortError" });
+    await switchIdentity();
+    oldLogin.resolve(response({ access_token: "old-user", expires_in: 600 }));
+    await checked;
+    expect(await client.authorization()).toBe("Bearer different-user");
 });

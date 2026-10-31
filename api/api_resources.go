@@ -9,13 +9,11 @@ import (
 
 type apiVolumeInput struct {
 	Cloud  string `path:"cloud"`
-	Node   string `path:"node"`
 	Volume string `path:"volume"`
 }
 type apiVolumeDeleteInput struct {
 	Cloud string `path:"cloud"`
 	SubmissionInput
-	Node   string `path:"node"`
 	Volume string `path:"volume"`
 }
 type apiVolumeCreate struct {
@@ -26,14 +24,12 @@ type apiVolumeCreate struct {
 type apiVolumeCloneInput struct {
 	Cloud string `path:"cloud"`
 	SubmissionInput
-	Node   string `path:"node"`
 	Volume string `path:"volume"`
 	Body   apiVolumeCreate
 }
 type apiVolumeResizeInput struct {
 	Cloud string `path:"cloud"`
 	SubmissionInput
-	Node   string `path:"node"`
 	Volume string `path:"volume"`
 	Body   struct {
 		SizeBytes uint64 `json:"size_bytes" minimum:"1"`
@@ -41,40 +37,40 @@ type apiVolumeResizeInput struct {
 }
 
 func (e *Environ) registerVolumeOperations(api huma.API) {
-	const path = "/clouds/{cloud}/volumes/{node}/{volume}"
-	registerAPI(api, "GET", path, "get-volume", "Get volume", func(ctx context.Context, in *apiVolumeInput) (*apiResult[apiVolume], error) {
-		p, err := volumePath(in.Volume)
+	const path = "/clouds/{cloud}/volumes/{volume}"
+	registerAPI(api, "GET", path, "get-volume", "Get volume and applicable clone choices", func(ctx context.Context, in *apiVolumeInput) (*apiResult[apiVolumeDetail], error) {
+		v, err := e.clouds.GetVolume(in.Cloud, in.Volume)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		v, err := e.volumes.Get(p, in.Node)
-		if err != nil {
-			return nil, apiError(err)
+		out := apiVolumeDetail{APIVolumeFields: e.volumeDTO(v)}
+		if choices, err := e.clouds.VolumeCatalog(in.Cloud, v); err == nil {
+			out.Catalog = &apiVolumeCatalog{StorageClasses: choices}
 		}
-		return &apiResult[apiVolume]{Body: e.volumeDTO(v)}, nil
+		return &apiResult[apiVolumeDetail]{Body: out}, nil
 	})
 	registerAPI(api, "POST", path+"/clone", "clone-volume", "Queue volume cloning", func(ctx context.Context, in *apiVolumeCloneInput) (*apiAccepted, error) {
-		path, err := volumePath(in.Volume)
+		v, err := e.clouds.VolumeAddress(in.Cloud, in.Volume)
 		if err != nil {
 			return nil, apiError(err)
 		}
 		b := in.Body
-		p := compute.VolumeCloneParams{NodeId: in.Node, OriginalPath: path, NewName: b.Name, NewSize: compute.NewSize(b.SizeBytes, compute.SizeUnitB)}
-		return e.submitTask(ctx, in.IdempotencyKey, "volume.clone", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, StorageClass: b.StorageClass, Path: path, CloneVolume: &p})
+		p := compute.VolumeCloneParams{NodeId: v.Host, OriginalPath: v.Path, NewName: b.Name, NewSize: compute.NewSize(b.SizeBytes, compute.SizeUnitB)}
+		return e.submitTask(ctx, in.IdempotencyKey, "volume.clone", compute.InfrastructureCommand{CloudID: in.Cloud, Node: v.Host, StorageClass: b.StorageClass, Path: v.Path, CloneVolume: &p})
 	})
 	registerAPI(api, "POST", path+"/resize", "resize-volume", "Queue volume growth", func(ctx context.Context, in *apiVolumeResizeInput) (*apiAccepted, error) {
-		path, err := volumePath(in.Volume)
+		v, err := e.clouds.VolumeAddress(in.Cloud, in.Volume)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		return e.submitTask(ctx, in.IdempotencyKey, "volume.resize", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, Path: path, Size: compute.NewSize(in.Body.SizeBytes, compute.SizeUnitB)})
+		return e.submitTask(ctx, in.IdempotencyKey, "volume.resize", compute.InfrastructureCommand{CloudID: in.Cloud, Node: v.Host, Path: v.Path, Size: compute.NewSize(in.Body.SizeBytes, compute.SizeUnitB)})
 	})
 	registerAPI(api, "DELETE", path, "delete-volume", "Queue deletion of an unattached volume", func(ctx context.Context, in *apiVolumeDeleteInput) (*apiAccepted, error) {
-		path, err := volumePath(in.Volume)
+		v, err := e.clouds.VolumeAddress(in.Cloud, in.Volume)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		return e.submitTask(ctx, in.IdempotencyKey, "volume.delete", compute.InfrastructureCommand{CloudID: in.Cloud, Node: in.Node, Path: path})
+		return e.submitTask(ctx, in.IdempotencyKey, "volume.delete", compute.InfrastructureCommand{CloudID: in.Cloud, Node: v.Host, Path: v.Path})
 	})
 }
 

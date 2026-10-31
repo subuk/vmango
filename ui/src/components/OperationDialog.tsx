@@ -67,7 +67,10 @@ export function OperationDialog({
                     try {
                         if (recovery) await recovery();
                         else await run();
-                        await queries.invalidateQueries();
+                        await queries.invalidateQueries({
+                            predicate: (q) =>
+                                q.queryKey[0] !== "administration",
+                        });
                         onClose();
                     } catch (e) {
                         setError(e);

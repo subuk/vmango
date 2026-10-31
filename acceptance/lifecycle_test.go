@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	encodingxml "encoding/xml"
 	"fmt"
@@ -284,8 +283,6 @@ func TestLifecycle(t *testing.T) {
 	config := filepath.Join(root, "vmango.conf")
 	write(filepath.Join(root, "keys"), "")
 	configuration := fmt.Sprintf(`key_file = %q
-image "boot" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q protected = true disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" initialization = %q minimum_memory_mib = 1024 minimum_disk_gib = 8 }
-image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q initialization = "none" }
 tasks { directory = %q workers = 2 }
 api {
  listen = %q
@@ -295,11 +292,12 @@ api {
  token_dir = %q
  user "acceptance" { hashed_password = %q }
 }
-`, filepath.Join(root, "keys"), base, arch, firmware, initialization, base, arch, firmware, filepath.Join(root, "tasks"), address, filepath.Join(root, "jwt-key"), filepath.Join(root, "console-key"), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
+`, filepath.Join(root, "keys"), filepath.Join(root, "tasks"), address, filepath.Join(root, "jwt-key"), filepath.Join(root, "console-key"), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
 
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {
- images=["boot","no-init"]
+ image "boot" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q protected = true disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" initialization = %q minimum_memory_mib = 1024 minimum_disk_gib = 8 }
+ image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q initialization = "none" }
  zone "test" {}
  instance_type "small" { cpu=2 memory_mib=2048 boot_disk_gib=8 }
  instance_type "too-small" { cpu=2 memory_mib=512 boot_disk_gib=8 }
@@ -314,7 +312,7 @@ cloud "acceptance" {
  graphics_listen = "127.0.0.1"
  zone="test" labels={rack="test"} network "lan" { network="qemu-usernet" } storage_class "standard" {pool=%q format="qcow2"} }
 }
-`, uri, name, name, name)
+`, base, arch, firmware, initialization, base, arch, firmware, uri, name, name, name)
 	if imageURL != "" {
 		if strings.Contains(imageURL, "alpinelinux.org/") {
 			configuration = strings.ReplaceAll(configuration, `os_name = "Ubuntu"`, `os_name = "Alpine Linux"`)
@@ -324,6 +322,18 @@ cloud "acceptance" {
 			configuration = strings.ReplaceAll(configuration, `source_format = "qcow2"`, fmt.Sprintf(`source_format = "qcow2" source_size_bytes = %d`, sourceBytes))
 		}
 	}
+	// This separate unreachable backend exercises configured-vs-live behavior
+	// without sharing or inspecting another physical host.
+	configuration += fmt.Sprintf(`
+cloud "offline" {
+ image "boot" { name="Offline definition" path=%q os_name="Independent OS" os_arch=%q firmware=%q initialization="none" }
+ zone "offline-zone" {}
+ instance_type "small" { cpu=2 memory_mib=2048 boot_disk_gib=8 }
+ network "lan" {}
+ storage_class "standard" {}
+ host "offline" { uri=%q zone="offline-zone" network "lan" { network="qemu-usernet" } storage_class "standard" {pool="offline" format="qcow2"} }
+}
+`, filepath.Join(root, "offline-source.qcow2"), arch, firmware, "qemu+unix:///session?socket="+filepath.Join(root, "offline.sock"))
 	write(config, configuration)
 	log, err := os.Create(filepath.Join(root, "vmango.log"))
 	if err != nil {
@@ -428,7 +438,7 @@ cloud "acceptance" {
 				if strings.HasPrefix(task.Kind, "volume.") && (task.Kind == "volume.create" || task.Kind == "volume.clone") {
 					for _, effect := range task.Effects {
 						if effect.Action == "created" && effect.Resource.Kind == "volume" {
-							return apiRequest("GET", "/api/v1/clouds/acceptance/volumes/acceptance/"+base64.RawURLEncoding.EncodeToString([]byte(effect.Resource.ID)), nil, 200)
+							return apiRequest("GET", "/api/v1/clouds/acceptance/volumes/"+(compute.VolumeAddress{Host: effect.Resource.Scope, Path: effect.Resource.ID}).ID(), nil, 200)
 						}
 					}
 					t.Fatal("created volume missing from task effects")
@@ -447,20 +457,69 @@ cloud "acceptance" {
 		t.Fatal(err)
 	}
 	access = credentials.AccessToken
-	for _, resource := range []string{"clouds", "clouds/acceptance", "clouds/acceptance/machines", "hosts", "hosts/acceptance", "hosts/acceptance/images", "hosts/acceptance/pools", "hosts/acceptance/networks", "hosts/acceptance/capabilities", "keys", "clouds/acceptance/volumes"} {
+	for _, resource := range []string{"administration/configuration", "administration/clouds", "administration/clouds/acceptance", "administration/clouds/acceptance/configuration", "administration/clouds/acceptance/configuration/hosts", "administration/clouds/acceptance/configuration/hosts/acceptance", "administration/clouds/acceptance/images", "administration/clouds/acceptance/images/boot", "administration/clouds/acceptance/images/boot/availability", "clouds", "clouds/acceptance", "clouds/acceptance/machines", "administration/clouds/acceptance/hosts", "administration/clouds/acceptance/hosts/acceptance", "administration/clouds/acceptance/hosts/acceptance/pools", "administration/clouds/acceptance/hosts/acceptance/networks", "administration/clouds/acceptance/hosts/acceptance/capabilities", "administration/clouds/acceptance/hosts/acceptance/catalog", "keys", "clouds/acceptance/volumes"} {
 		apiRequest("GET", "/api/v1/"+resource, nil, 200)
 	}
+	for _, removed := range []string{"hosts", "hosts/acceptance", "hosts/acceptance/networks", "hosts/acceptance/pools", "hosts/acceptance/capabilities", "hosts/acceptance/catalog", "hosts/acceptance/images", "hosts/acceptance/cloud"} {
+		apiRequest("GET", "/api/v1/"+removed, nil, 404)
+	}
+	request("/nodes/", 404)
+	request("/nodes/acceptance/", 404)
+	request("/administration/clouds/acceptance/images/boot/", 200)
+	var originalSnapshot compute.AdministrationInstallation
+	if err := json.Unmarshal(apiRequest("GET", "/api/v1/administration/configuration", nil, 200), &originalSnapshot); err != nil {
+		t.Fatal(err)
+	}
+	write(config, "log_level=\"debug\"\n"+configuration)
+	var unchangedSnapshot compute.AdministrationInstallation
+	if err := json.Unmarshal(apiRequest("GET", "/api/v1/administration/configuration", nil, 200), &unchangedSnapshot); err != nil {
+		t.Fatal(err)
+	}
+	if originalSnapshot != unchangedSnapshot {
+		t.Fatal("editing configuration changed the accepted running snapshot")
+	}
+	write(config, configuration)
+	var offlineImage compute.AdministrationImage
+	if err := json.Unmarshal(apiRequest("GET", "/api/v1/administration/clouds/offline/images/boot", nil, 200), &offlineImage); err != nil {
+		t.Fatal(err)
+	}
+	if offlineImage.Name != "Offline definition" || offlineImage.CloudID != "offline" || offlineImage.OSName != "Independent OS" {
+		t.Fatal("same-ID image definition crossed cloud scope", offlineImage)
+	}
+	apiRequest("GET", "/api/v1/administration/clouds/offline/configuration/hosts/offline", nil, 200)
+	apiRequest("GET", "/api/v1/administration/clouds/acceptance/hosts/offline", nil, 404)
+	apiRequest("GET", "/api/v1/administration/clouds/offline/hosts/offline", nil, 503)
+	var offlineHosts struct {
+		Items       []json.RawMessage                       `json:"items"`
+		Unavailable []compute.AdministrationUnavailableHost `json:"unavailable_hosts"`
+	}
+	if err := json.Unmarshal(apiRequest("GET", "/api/v1/administration/clouds/offline/hosts", nil, 200), &offlineHosts); err != nil {
+		t.Fatal(err)
+	}
+	if len(offlineHosts.Items) != 0 || len(offlineHosts.Unavailable) != 1 || offlineHosts.Unavailable[0].ID != "offline" {
+		t.Fatal("offline host inventory was treated as confirmed empty", offlineHosts)
+	}
+	var offlineVolumes struct {
+		Items       []json.RawMessage `json:"items"`
+		Unavailable []string          `json:"unavailable_hosts"`
+	}
+	if err := json.Unmarshal(apiRequest("GET", "/api/v1/clouds/offline/volumes", nil, 200), &offlineVolumes); err != nil {
+		t.Fatal(err)
+	}
+	if len(offlineVolumes.Items) != 0 || len(offlineVolumes.Unavailable) != 1 || offlineVolumes.Unavailable[0] != "offline" {
+		t.Fatal("offline volume inventory was treated as confirmed empty", offlineVolumes)
+	}
+	t.Log("Administration retained accepted configuration with an offline cloud, independent same-ID image definitions and explicit unavailable inventory")
 	if imageURL != "" {
 		if _, err := vir("vol-info", base); err == nil {
 			t.Fatal("catalog listing downloaded an image")
 		}
-		var catalog []struct {
-			ID    string `json:"id"`
-			State string `json:"state"`
+		var availability compute.AdministrationImageAvailability
+		if err := json.Unmarshal(apiRequest("GET", "/api/v1/administration/clouds/acceptance/images/boot/availability", nil, 200), &availability); err != nil {
+			t.Fatal(err)
 		}
-		json.Unmarshal(apiRequest("GET", "/api/v1/hosts/acceptance/images", nil, 200), &catalog)
-		if len(catalog) != 2 || catalog[0].State != "downloadable" {
-			t.Fatalf("missing managed image unavailable: %+v", catalog)
+		if availability.Libvirt == nil || len(availability.Libvirt.Hosts) != 1 || availability.Libvirt.Hosts[0].SourceState != "downloadable" {
+			t.Fatalf("missing managed image unavailable: %+v", availability)
 		}
 	}
 	request("/machines/add/?cloud=acceptance", 200)
@@ -514,6 +573,13 @@ cloud "acceptance" {
 	if imageURL != "" {
 		if _, err := vir("vol-info", base); err != nil {
 			t.Fatal("verified image missing", err)
+		}
+		var readyAvailability compute.AdministrationImageAvailability
+		if err := json.Unmarshal(apiRequest("GET", "/api/v1/administration/clouds/acceptance/images/boot/availability", nil, 200), &readyAvailability); err != nil {
+			t.Fatal(err)
+		}
+		if readyAvailability.Libvirt == nil || len(readyAvailability.Libvirt.Hosts) != 1 || readyAvailability.Libvirt.Hosts[0].SourceState != "ready" {
+			t.Fatal("verified reusable cache is not reported ready", readyAvailability)
 		}
 	}
 	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
@@ -687,7 +753,7 @@ cloud "acceptance" {
 		t.Fatalf("expected shut off, got %s", state)
 	}
 	// Exercise the remaining mutating routes only against this isolated VM/pool.
-	volumeBase := "/api/v1/clouds/acceptance/volumes/acceptance"
+	volumeBase := "/api/v1/clouds/acceptance/volumes"
 	var disk struct {
 		ID string `json:"id"`
 	}
@@ -695,7 +761,24 @@ cloud "acceptance" {
 	if err := json.Unmarshal(rawDisk, &disk); err != nil {
 		t.Fatal(err)
 	}
-	apiRequest("GET", volumeBase+"/"+disk.ID, nil, 200)
+	addressed, err := compute.ParseVolumeID(disk.ID)
+	if err != nil || addressed.Host != "acceptance" || addressed.Path == "" {
+		t.Fatal("volume did not expose its canonical compound address", disk.ID, err)
+	}
+	apiRequest("GET", "/api/v1/clouds/offline/volumes/"+disk.ID, nil, 404)
+	apiRequest("GET", volumeBase+"/invalid-path-only-id", nil, 422)
+	apiRequest("GET", volumeBase+"/acceptance/"+disk.ID, nil, 404)
+	var volumeDetail struct {
+		Catalog *struct {
+			StorageClasses []compute.CatalogEntry `json:"storage_classes"`
+		} `json:"catalog"`
+	}
+	if err := json.Unmarshal(apiRequest("GET", volumeBase+"/"+disk.ID, nil, 200), &volumeDetail); err != nil {
+		t.Fatal(err)
+	}
+	if volumeDetail.Catalog == nil || len(volumeDetail.Catalog.StorageClasses) != 1 || volumeDetail.Catalog.StorageClasses[0].ID != "standard" {
+		t.Fatal("volume detail lacks applicable logical choices", volumeDetail)
+	}
 	apiCommand("POST", volumeBase+"/"+disk.ID+"/resize", map[string]any{"size_bytes": 32 << 20})
 	var clone struct {
 		ID string `json:"id"`
@@ -705,14 +788,81 @@ cloud "acceptance" {
 		t.Fatal(err)
 	}
 	apiCommand("POST", apiVMPath+"/disks/attach", map[string]any{"volume_id": disk.ID})
+	var machineDetail struct {
+		Disks []struct {
+			ID string `json:"volume_id"`
+		} `json:"disks"`
+		Catalog *struct {
+			Networks       []compute.CatalogEntry `json:"networks"`
+			StorageClasses []compute.CatalogEntry `json:"storage_classes"`
+		} `json:"catalog"`
+	}
+	if err := json.Unmarshal(apiRequest("GET", apiVMPath, nil, 200), &machineDetail); err != nil {
+		t.Fatal(err)
+	}
+	if machineDetail.Catalog == nil || len(machineDetail.Catalog.Networks) != 1 || len(machineDetail.Catalog.StorageClasses) != 1 {
+		t.Fatal("machine detail lacks applicable logical choices", machineDetail)
+	}
+	attached := false
+	for _, d := range machineDetail.Disks {
+		if d.ID == disk.ID {
+			attached = true
+		}
+	}
+	if !attached {
+		t.Fatal("machine disk ID differs from volume list/detail address", machineDetail.Disks)
+	}
+	// Restart only after the preceding task completed. The dedicated task/auth
+	// directories must retain real references and history across a process restart.
+	historyBefore := apiRequest("GET", "/api/v1/tasks?limit=100", nil, 200)
+	if err := app.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	_ = app.Wait()
+	restarted := exec.Command(binary, "web", "-c", config)
+	restarted.Stdout, restarted.Stderr = log, log
+	if err := restarted.Start(); err != nil {
+		t.Fatal(err)
+	}
+	app = restarted
+	restartedReady := false
+	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); {
+		resp, err := client.Get(origin + "/login/")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				restartedReady = true
+				break
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !restartedReady {
+		t.Fatal("restarted app did not become ready; see vmango.log")
+	}
+	historyAfter := apiRequest("GET", "/api/v1/tasks?limit=100", nil, 200)
+	var beforeHistory, afterHistory tasks.Page
+	if err := json.Unmarshal(historyBefore, &beforeHistory); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(historyAfter, &afterHistory); err != nil {
+		t.Fatal(err)
+	}
+	beforeJSON, _ := json.Marshal(beforeHistory)
+	afterJSON, _ := json.Marshal(afterHistory)
+	if string(beforeJSON) != string(afterJSON) {
+		t.Fatal("restart changed task history/resource references")
+	}
+	apiRequest("GET", volumeBase+"/"+disk.ID, nil, 200)
+	t.Log("process restart retained task history, backend references and compound volume navigation")
 	apiRequest("DELETE", volumeBase+"/"+disk.ID, nil, 409)
 	apiCommand("DELETE", apiVMPath+"/disks/"+disk.ID, nil)
 	apiCommand("DELETE", volumeBase+"/"+disk.ID, nil)
 	apiCommand("DELETE", volumeBase+"/"+clone.ID, nil)
 	if imageURL == "" {
-		apiRequest("DELETE", volumeBase+"/"+base64.RawURLEncoding.EncodeToString([]byte(base)), nil, 409)
+		apiRequest("DELETE", volumeBase+"/"+(compute.VolumeAddress{Host: "acceptance", Path: base}).ID(), nil, 409)
 	} else {
-		apiRequest("DELETE", volumeBase+"/"+base64.RawURLEncoding.EncodeToString([]byte(base)), nil, 404)
+		apiRequest("DELETE", volumeBase+"/"+(compute.VolumeAddress{Host: "acceptance", Path: base}).ID(), nil, 404)
 	}
 	apiRequest("POST", apiVMPath+"/interfaces", map[string]any{"network": "lan", "model": "virtio"}, 422)
 	apiCommand("POST", apiVMPath+"/interfaces", map[string]any{"network": "lan", "mac": "52:54:00:ab:cd:01"})

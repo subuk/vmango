@@ -8,10 +8,9 @@ import (
 )
 
 const cloudConfig = `
-image "linux" { path="/source" os_arch="x86_64" }
 cloud "test" {
+ image "linux" { path="/source" os_arch="x86_64" }
  name="Test cloud"
- images=["linux"]
  zone "zone" { name="Zone" }
  instance_type "small" { cpu=2 cpu_request=1 memory_mib=2048 boot_disk_gib=20 }
  network "lan" { name="LAN" }
@@ -44,7 +43,7 @@ func TestCloudBindingsAndRequests(t *testing.T) {
 	}
 }
 func TestInvalidCloudConfiguration(t *testing.T) {
-	for _, tt := range []struct{ old, new, reason string }{{"memory_mib=2048", "memory_mib=2048 memory_request_mib=1024", "memory overselling is not supported yet"}, {"cpu_request=1", "cpu_request=3", "invalid instance type"}, {"cpu_request=1", "cpu_request=0", "invalid instance type"}, {"zone=\"zone\"", "zone=\"unknown\"", "invalid host"}, {"images=[\"linux\"]", "images=[\"unknown\"]", "unknown image"}, {"pool=\"nvme\"", "pool=\"nvme\" format=\"invalid\"", "invalid storage binding"}, {"qemu+ssh://b/system", "qemu:///session", "exactly one cloud"}, {"memory_mib=2048", "memory_mib=-1", "invalid or overflowing"}} {
+	for _, tt := range []struct{ old, new, reason string }{{"memory_mib=2048", "memory_mib=2048 memory_request_mib=1024", "memory overselling is not supported yet"}, {"cpu_request=1", "cpu_request=3", "invalid instance type"}, {"cpu_request=1", "cpu_request=0", "invalid instance type"}, {"zone=\"zone\"", "zone=\"unknown\"", "invalid host"}, {`image "linux"`, `image "invalid/id"`, "stable catalog ID"}, {"pool=\"nvme\"", "pool=\"nvme\" format=\"invalid\"", "invalid storage binding"}, {"qemu+ssh://b/system", "qemu:///session", "exactly one cloud"}, {"memory_mib=2048", "memory_mib=-1", "invalid or overflowing"}} {
 		t.Run(tt.reason, func(t *testing.T) {
 			_, err := parseCloudTest(t, strings.Replace(cloudConfig, tt.old, tt.new, 1))
 			if err == nil || !strings.Contains(err.Error(), tt.reason) {

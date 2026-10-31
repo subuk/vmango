@@ -133,6 +133,12 @@ func Web(configFilename string) {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("invalid cloud catalog")
 	}
+	images.NodeClouds = map[string]string{}
+	for _, cloud := range cloudDefinitions {
+		for _, host := range cloud.Hosts {
+			images.NodeClouds[host.Node] = cloud.ID
+		}
+	}
 	clouds := &compute.CloudService{Definitions: cloudDefinitions, Nodes: nodes, VMs: vms, Pools: volpools, Volumes: volumes, Manager: vmanager}
 	vmanager.Clouds = clouds
 	vms.CloudMode = true
@@ -208,7 +214,17 @@ func Web(configFilename string) {
 			}
 		}
 	}()
-	apiEnv, err := api.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager, images, authentication, taskService)
+	snapshot, err := cfg.AdministrationSnapshot(api.AppVersion)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("cannot build accepted administration configuration")
+	}
+	observations := &libvirt.AdministrationObservations{Nodes: nodes, NetworksService: network, PoolsService: volpools, VMs: vms, Volumes: volumes, Images: images, Clouds: clouds}
+	administrationBackends := map[string]compute.AdministrationObservations{}
+	for _, cloud := range cloudDefinitions {
+		administrationBackends[cloud.ID] = observations
+	}
+	administration := compute.NewAdministrationService(snapshot, administrationBackends)
+	apiEnv, err := api.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager, images, authentication, taskService, administration)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot initialize API")
 	}

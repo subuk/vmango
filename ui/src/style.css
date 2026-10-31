@@ -351,3 +351,48 @@ a:focus-visible {
         max-width: none;
     }
 }
+
+.administration-layout {
+    display: grid;
+    grid-template-columns: 224px minmax(0, 1fr);
+    gap: 32px;
+    align-items: start;
+}
+.administration-sidebar {
+    position: sticky;
+    top: 24px;
+    min-width: 0;
+    padding-bottom: 12px;
+}
+.administration-content {
+    min-width: 0;
+}
+.administration-overview-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+@media (max-width: 1100px) {
+    .administration-overview-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+@media (max-width: 899px) {
+    .administration-layout {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 24px;
+    }
+    .administration-sidebar {
+        position: static;
+    }
+    .administration-sidebar nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .administration-sidebar nav a {
+        flex: 0 1 auto;
+        margin-bottom: 0;
+    }
+}

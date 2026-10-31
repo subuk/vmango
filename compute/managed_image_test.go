@@ -451,8 +451,10 @@ func (noImageEvents) Publish(compute.Event) error { return nil }
 
 type mutableImageCatalog struct{ image compute.Image }
 
-func (c *mutableImageCatalog) List() ([]compute.Image, error) { return []compute.Image{c.image}, nil }
-func (c *mutableImageCatalog) Get(id string) (compute.Image, error) {
+func (c *mutableImageCatalog) List(cloud string) ([]compute.Image, error) {
+	return []compute.Image{c.image}, nil
+}
+func (c *mutableImageCatalog) Get(cloud, id string) (compute.Image, error) {
 	if id == c.image.ID {
 		return c.image, nil
 	}

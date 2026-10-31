@@ -176,7 +176,7 @@ func (cloudImageVMBackend) Capabilities(node string, arch Arch) (VirtualMachineC
 	return VirtualMachineCapabilities{Arch: arch, MaxVCPUs: 16, DiskBuses: []DeviceBus{DeviceBusVirtio}, NICModels: []string{"virtio"}, Graphics: []GraphicType{GraphicTypeVnc}, VideoModels: []VideoModel{VideoModelNone}}, nil
 }
 func TestMissingRetrievableImageCanBePlacedAndSharesStorageBudget(t *testing.T) {
-	image := Image{ID: "image", Arch: ArchAmd64, Defaults: ImageDefaults{Initialization: "none"}, Download: &ImageDownload{URL: "https://example.org/source", SHA256: strings.Repeat("a", 64), Format: VolumeFormatRaw, SizeBytes: 32 << 20}}
+	image := Image{CloudID: "c", ID: "image", Arch: ArchAmd64, Defaults: ImageDefaults{Initialization: "none"}, Download: &ImageDownload{URL: "https://example.org/source", SHA256: strings.Repeat("a", 64), Format: VolumeFormatRaw, SizeBytes: 32 << 20}}
 	images := NewImageService(pinnedImages{image})
 	images.Preflight = true
 	images.ManagedSources = NewManagedImageService(missingCloudImageBackend{}, missingCloudArtifacts{}, map[string]ImageBinding{"a": {Scope: "a", Pool: "pool"}}, ImageTransferLimits{MaxBytes: 1 << 30})

@@ -1,7 +1,7 @@
-# Replace the quick-start cloud block; keep its image and API settings.
+# Replace the quick-start cloud block; retain its nested images and API settings.
 cloud "local" {
     name = "Local cloud"
-    images = ["ubuntu-24.04-x86_64-bios"]
+    # Keep the nested image definitions from vmango.quickstart.conf here.
 
     zone "local" { name = "Local zone" }
     network "lan" { name = "Private LAN" }

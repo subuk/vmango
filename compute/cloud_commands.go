@@ -29,10 +29,22 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 		c.Catalog = &cloud
 	}
 	cloud = *c.Catalog
-	if c.Node == "" && c.VM != "" {
+	// Disk requests carry their submitted host in Node for fingerprinting. Always
+	// resolve the VM independently before comparing locality; Node cannot bypass
+	// cloud-wide discovery for either disk action.
+	diskAddress := command.Kind == "machine.attach-disk" || command.Kind == "machine.detach-disk"
+	if diskAddress && c.Node != "" {
+		if _, ok := cloud.Host(c.Node); !ok {
+			return command, c, ErrUnknownNode
+		}
+	}
+	if c.VM != "" && (c.Node == "" || diskAddress) {
 		vm, err := h.Clouds.GetMachine(context.Background(), cloud.ID, c.VM)
 		if err != nil {
 			return command, c, err
+		}
+		if diskAddress && c.Node != "" && c.Node != vm.NodeId {
+			return command, c, invalid("volume_id", "The disk and machine must belong to the same host.")
 		}
 		c.Node = vm.NodeId
 		command.Resources = append(command.Resources, VMRef(c.Node, c.VM))
@@ -60,7 +72,7 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 		if err = h.Clouds.ValidateCreate(cloud, *c.CreateSpec); err != nil {
 			return command, c, err
 		}
-		image, err := h.Manager.images.Get(c.CreateSpec.Image)
+		image, err := h.Manager.images.ForCloud(cloud.ID).Get(c.CreateSpec.Image)
 		if err != nil {
 			return command, c, err
 		}
@@ -83,6 +95,9 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 		c.CreateSpec.KeyIDs = nil
 		command.Resources = append(command.Resources, tasks.ResourceRef{Kind: "machine-request", Scope: cloud.ID, ID: c.CreateSpec.Name})
 		for _, disk := range c.CreateSpec.ExistingDisks {
+			if err := h.Volumes.ValidateAttachable(disk.Path, disk.Host, h.Manager.images.ForCloud(cloud.ID)); err != nil {
+				return command, c, err
+			}
 			command.Resources = append(command.Resources, VolumeRef(disk.Host, disk.Path))
 		}
 	} else if c.VolumeSpec != nil {
@@ -290,7 +305,7 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		return err
 	}
 	if c.CreateSpec != nil {
-		images := h.Manager.images.Snapshot(c.Images, nil, true)
+		images := h.Manager.images.ForCloud(cloud.ID).Snapshot(c.Images, nil, true)
 		var resolved InfrastructureCommand
 		if err := p.Stage("schedule-machine", nil, false, func() error {
 			var err error

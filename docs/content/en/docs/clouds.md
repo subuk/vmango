@@ -19,7 +19,7 @@ named `default` and a writable pool named `default`; Vmango does not create them
 ```hcl
 cloud "local" {
     name = "Local cloud"
-    images = ["ubuntu-24.04-x86_64-bios"]
+    # Keep the nested image definitions from vmango.quickstart.conf here.
 
     zone "local" { name = "Local zone" }
     network "lan" { name = "Private LAN" }
@@ -105,7 +105,7 @@ including display names and network IDs. Its cloud selector scopes the list;
 multiple host bindings for one logical network appear as one entry. Backend
 libvirt network names are shown as read-only diagnostics on each **Hosts** detail
 page and remain available through the read-only host diagnostic API
-under `/api/v1/hosts/{node}/networks`. Administrators provision those networks
+under `/api/v1/administration/clouds/{cloud}/hosts/{node}/networks`. Administrators provision those networks
 outside Vmango.
 
 Interfaces select a configured logical network, resolved on the existing host.
@@ -138,13 +138,24 @@ PATCH endpoint is removed and effective values remain read-only.
 ## API and migration
 
 Machine, disk, interface and native console operations use `/api/v1/clouds/{cloud}`.
-Create uses catalog references and an AZ without a host input. Existing resource
-URLs include the observed owning host to distinguish local disks and legacy VM
-names; it cannot be changed to move a resource. Every request validates cloud
-membership. All mutations use durable tasks with visible progress and diagnostics.
+Create uses catalog references and an AZ without a host input. Machine URLs use
+the stable VM UUID. Volumes use `/clouds/{cloud}/volumes/{volume}` with unpadded
+`base64url(node) + "." + base64url(path)` as the compound ID. VM disk references
+and `existing_disks: [{volume_id}]` use that same ID without a separate public
+`host` field. These addresses do not move a resource. Every request validates
+cloud membership. All mutations use durable tasks with visible progress and
+diagnostics.
 
-The old `/api/v1/nodes/...` and global `/vms`, `/volumes` and `/networks` endpoints
-are removed. Read-only administrative diagnostics use `/api/v1/hosts/...`.
+Volumes, like Machines, shows one selected cloud's flat inventory. Both list APIs
+return `{items, unavailable_hosts}`; partial failures preserve successful rows and
+remain explicit even when every host fails. VM/volume detail provides the logical
+catalog needed by ordinary forms. A null catalog means supplemental discovery
+failed; empty arrays mean known-empty choices. Dedicated infrastructure browsing
+is under Administration → Clouds → Cloud; Tasks keeps its existing URLs.
+
+The old `/api/v1/nodes/...`, `/api/v1/hosts/...`, host-segment volume routes and
+global `/vms`, `/volumes` and `/networks` endpoints are removed without aliases. Read-only administrative diagnostics use
+`/api/v1/administration/clouds/{cloud}/hosts/...`.
 Authentication, keys and task history remain application-wide.
 
 See [Automation API](/docs/api/) for Swagger UI, authentication and an overview

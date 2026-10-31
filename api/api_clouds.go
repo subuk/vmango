@@ -7,11 +7,14 @@ import (
 )
 
 type apiCloudImage struct {
-	ID                 string `json:"id"`
-	Name               string `json:"name"`
-	Arch               string `json:"arch"`
-	MinimumMemoryBytes uint64 `json:"minimum_memory_bytes"`
-	MinimumDiskBytes   uint64 `json:"minimum_disk_bytes"`
+	ID                 string           `json:"id"`
+	Name               string           `json:"name"`
+	OSName             string           `json:"os_name"`
+	OSVersion          string           `json:"os_version"`
+	Defaults           apiImageDefaults `json:"defaults"`
+	Arch               string           `json:"arch"`
+	MinimumMemoryBytes uint64           `json:"minimum_memory_bytes"`
+	MinimumDiskBytes   uint64           `json:"minimum_disk_bytes"`
 }
 type apiPlacementCapabilities struct {
 	Attributes []string `json:"attributes" nullable:"false"`
@@ -48,7 +51,7 @@ type apiCloudVolumesInput struct {
 type apiCloudCreateInput struct {
 	SubmissionInput
 	Cloud string `path:"cloud"`
-	Body  compute.MachineCreateSpec
+	Body  apiMachineCreate
 }
 type apiCloudVolumeInput struct {
 	SubmissionInput
@@ -68,34 +71,63 @@ type apiChangeTypeInput struct {
 		InstanceType string `json:"instance_type" minLength:"1"`
 	}
 }
-type apiHostChoicesInput struct {
-	Node string `path:"node"`
+
+// apiMachineCreate is an input projection, deliberately separate from durable
+// MachineCreateSpec so accepted tasks retain their existing host/path payloads.
+type apiMachineCreate struct {
+	Name          string                 `json:"name"`
+	Image         string                 `json:"image"`
+	InstanceType  string                 `json:"instance_type"`
+	Zone          string                 `json:"zone"`
+	Network       string                 `json:"network"`
+	StorageClass  string                 `json:"storage_class"`
+	Placement     compute.Placement      `json:"placement,omitempty"`
+	Start         bool                   `json:"start"`
+	KeyIDs        []string               `json:"keys,omitempty"`
+	UserData      string                 `json:"user_data,omitempty"`
+	Disks         []compute.DataDiskSpec `json:"new_disks,omitempty"`
+	ExistingDisks []apiExistingDisk      `json:"existing_disks,omitempty"`
 }
-type apiHostCloud struct {
-	Cloud string `json:"cloud"`
+type apiExistingDisk struct {
+	VolumeID string `json:"volume_id" minLength:"1"`
 }
 
-type apiHostChoices struct {
-	Cloud          string                 `json:"cloud"`
-	Zone           string                 `json:"zone"`
-	Networks       []compute.CatalogEntry `json:"networks" nullable:"false"`
-	StorageClasses []compute.CatalogEntry `json:"storage_classes" nullable:"false"`
+func (in apiMachineCreate) domain(cloudID string, clouds *compute.CloudService) (compute.MachineCreateSpec, error) {
+	out := compute.MachineCreateSpec{Name: in.Name, Image: in.Image, InstanceType: in.InstanceType, Zone: in.Zone, Network: in.Network, StorageClass: in.StorageClass, Placement: in.Placement, Start: in.Start, KeyIDs: in.KeyIDs, UserData: in.UserData, Disks: in.Disks}
+	for _, disk := range in.ExistingDisks {
+		v, err := clouds.VolumeAddress(cloudID, disk.VolumeID)
+		if err != nil {
+			return out, err
+		}
+		out.ExistingDisks = append(out.ExistingDisks, compute.LocalDiskRef{Host: v.Host, Path: v.Path})
+	}
+	return out, nil
+}
+
+type apiVolumeList struct {
+	Items            []apiVolume `json:"items" nullable:"false"`
+	UnavailableHosts []string    `json:"unavailable_hosts" nullable:"false"`
 }
 
 func (e *Environ) cloudDTO(c compute.Cloud) (apiCloud, error) {
 	d := apiCloud{ID: c.ID, Name: c.Name, Zones: c.Zones, InstanceTypes: c.InstanceTypes, Networks: c.Networks, StorageClasses: c.StorageClasses, Images: []apiCloudImage{}, Placement: apiPlacementCapabilities{Attributes: c.PlacementAttributes(), Modes: []string{"required", "preferred"}, Operators: []string{"equals"}}}
 	for _, id := range c.Images {
-		i, err := e.images.Get(id)
+		i, err := e.images.ForCloud(c.ID).Get(id)
 		if err != nil {
 			return d, err
 		}
-		d.Images = append(d.Images, apiCloudImage{ID: i.ID, Name: i.Name, Arch: i.Arch.String(), MinimumMemoryBytes: i.MinimumMemoryBytes, MinimumDiskBytes: i.MinimumDiskBytes})
+		bus := ""
+		if i.Defaults.DiskBus != compute.DeviceBusUnknown {
+			bus = i.Defaults.DiskBus.String()
+		}
+		graphics, video := i.Defaults.Display()
+		d.Images = append(d.Images, apiCloudImage{ID: i.ID, Name: i.Name, OSName: i.OSName, OSVersion: i.OSVersion, Arch: i.Arch.String(), MinimumMemoryBytes: i.MinimumMemoryBytes, MinimumDiskBytes: i.MinimumDiskBytes, Defaults: apiImageDefaults{i.Defaults.Firmware, bus, i.Defaults.DiskController, i.Defaults.NICModel, graphics.String(), video.String(), i.Defaults.GuestAgent, i.Defaults.Initialization}})
 	}
 	d.Offers, d.StorageAvailability, d.UnavailableHosts = e.clouds.Discover(c)
 	return d, nil
 }
 func (e *Environ) registerClouds(api huma.API) {
-	registerAPI(api, "GET", "/clouds/{cloud}/volumes", "list-cloud-volumes", "List cloud volumes, optionally excluding attached disks and image sources", func(ctx context.Context, in *apiCloudVolumesInput) (*apiResult[[]apiVolume], error) {
+	registerAPI(api, "GET", "/clouds/{cloud}/volumes", "list-cloud-volumes", "List cloud volumes, optionally excluding attached disks and image sources", func(ctx context.Context, in *apiCloudVolumesInput) (*apiResult[apiVolumeList], error) {
 		if e.clouds == nil {
 			return nil, apiError(compute.ErrNotFound)
 		}
@@ -104,17 +136,17 @@ func (e *Environ) registerClouds(api huma.API) {
 				return nil, apiError(err)
 			}
 		}
-		volumes, err := e.clouds.ListVolumes(in.Cloud, in.Usage == "attachable")
+		volumes, err := e.clouds.ListVolumes(in.Cloud, in.Usage == "attachable", in.Host)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		out := []apiVolume{}
-		for _, v := range volumes {
+		out := apiVolumeList{Items: []apiVolume{}, UnavailableHosts: volumes.UnavailableHosts}
+		for _, v := range volumes.Volumes {
 			if !v.Metadata.Hidden && (in.Host == "" || v.NodeId == in.Host) {
-				out = append(out, e.volumeDTO(v))
+				out.Items = append(out.Items, e.volumeDTO(v))
 			}
 		}
-		return &apiResult[[]apiVolume]{Body: out}, nil
+		return &apiResult[apiVolumeList]{Body: out}, nil
 	})
 	registerAPI(api, "GET", "/clouds", "list-clouds", "List configured cloud catalogs", func(ctx context.Context, in *apiEmpty) (*apiResult[[]apiCloud], error) {
 		out := []apiCloud{}
@@ -162,14 +194,11 @@ func (e *Environ) registerClouds(api huma.API) {
 		if e.clouds == nil {
 			return nil, apiError(compute.ErrNotFound)
 		}
-		for n := range in.Body.ExistingDisks {
-			path, err := volumePath(in.Body.ExistingDisks[n].Path)
-			if err != nil {
-				return nil, apiError(err)
-			}
-			in.Body.ExistingDisks[n].Path = path
+		spec, err := in.Body.domain(in.Cloud, e.clouds)
+		if err != nil {
+			return nil, apiError(err)
 		}
-		return e.submitTask(ctx, in.IdempotencyKey, "machine.create", compute.InfrastructureCommand{CloudID: in.Cloud, CreateSpec: &in.Body})
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.create", compute.InfrastructureCommand{CloudID: in.Cloud, CreateSpec: &spec})
 	})
 	registerAPI(api, "POST", "/clouds/{cloud}/volumes", "create-cloud-volume", "Queue a host-bound volume using a storage class", func(ctx context.Context, in *apiCloudVolumeInput) (*apiAccepted, error) {
 		if e.clouds == nil {
@@ -184,16 +213,6 @@ func (e *Environ) registerClouds(api huma.API) {
 		return e.submitTask(ctx, in.IdempotencyKey, "machine.change-type", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, InstanceType: in.Body.InstanceType})
 	})
 
-	registerAPI(api, "GET", "/hosts/{node}/cloud", "get-host-cloud", "Resolve a configured host's cloud without contacting the backend", func(ctx context.Context, in *apiHostChoicesInput) (*apiResult[apiHostCloud], error) {
-		if e.clouds == nil {
-			return nil, apiError(compute.ErrNotFound)
-		}
-		c, _, err := e.clouds.ForNode(in.Node)
-		if err != nil {
-			return nil, apiError(compute.ErrNotFound)
-		}
-		return &apiResult[apiHostCloud]{Body: apiHostCloud{Cloud: c.ID}}, nil
-	})
 	type createDiskInput struct {
 		SubmissionInput
 		Cloud string `path:"cloud"`
@@ -202,36 +221,5 @@ func (e *Environ) registerClouds(api huma.API) {
 	}
 	registerAPI(api, "POST", "/clouds/{cloud}/machines/{vm}/disks", "create-machine-disk", "Create and attach a local disk through a storage class", func(ctx context.Context, in *createDiskInput) (*apiAccepted, error) {
 		return e.submitTask(ctx, in.IdempotencyKey, "machine.create-disk", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, NewDisk: &in.Body})
-	})
-	registerAPI(api, "GET", "/hosts/{node}/catalog", "get-host-catalog", "Discover logical storage classes and networks supported on a host", func(ctx context.Context, in *apiHostChoicesInput) (*apiResult[apiHostChoices], error) {
-		if e.clouds == nil {
-			return nil, apiError(compute.ErrNotFound)
-		}
-		c, h, err := e.clouds.ForNode(in.Node)
-		if err != nil {
-			return nil, apiError(err)
-		}
-		out := apiHostChoices{Cloud: c.ID, Zone: h.Zone, Networks: []compute.CatalogEntry{}, StorageClasses: []compute.CatalogEntry{}}
-		for _, n := range c.Networks {
-			if b, ok := h.Networks[n.ID]; ok {
-				if e.vms.ValidateNetwork(in.Node, &compute.VirtualMachineAttachedInterface{NetworkName: b.Network, Bridge: b.Bridge, Model: b.Model, AccessVlan: b.VLAN}) == nil {
-					out.Networks = append(out.Networks, n)
-				}
-			}
-		}
-		pools, err := e.volpools.List(compute.VolumePoolListOptions{NodeIds: []string{in.Node}})
-		if err != nil {
-			return nil, apiError(err)
-		}
-		availablePools := map[string]bool{}
-		for _, p := range pools {
-			availablePools[p.Name] = true
-		}
-		for _, s := range c.StorageClasses {
-			if b, ok := h.Storage[s.ID]; ok && availablePools[b.Pool] {
-				out.StorageClasses = append(out.StorageClasses, s)
-			}
-		}
-		return &apiResult[apiHostChoices]{Body: out}, nil
 	})
 }

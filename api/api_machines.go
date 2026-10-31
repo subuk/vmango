@@ -45,17 +45,21 @@ type apiDetachInterfaceInput struct {
 	MAC string `path:"mac"`
 }
 
-func (e *Environ) apiGetVM(ctx context.Context, cloud, id string) (*apiResult[apiVM], error) {
+func (e *Environ) apiGetVM(ctx context.Context, cloud, id string) (*apiResult[apiVMDetail], error) {
 	v, err := e.clouds.GetMachine(ctx, cloud, id)
 	if err != nil {
 		return nil, apiError(err)
 	}
-	return &apiResult[apiVM]{Body: e.machineDTO(v)}, nil
+	out := apiVMDetail{APIVMFields: e.machineDTO(v)}
+	if choices, err := e.clouds.MachineCatalog(cloud, v); err == nil {
+		out.Catalog = &apiMachineCatalog{Networks: choices.Networks, StorageClasses: choices.StorageClasses}
+	}
+	return &apiResult[apiVMDetail]{Body: out}, nil
 }
 
 func (e *Environ) registerVMOperations(api huma.API) {
 	const path = "/clouds/{cloud}/machines/{vm}"
-	registerAPI(api, "GET", path, "get-vm", "Get virtual machine", func(ctx context.Context, in *apiVMInput) (*apiResult[apiVM], error) {
+	registerAPI(api, "GET", path, "get-vm", "Get virtual machine", func(ctx context.Context, in *apiVMInput) (*apiResult[apiVMDetail], error) {
 		return e.apiGetVM(ctx, in.Cloud, in.VM)
 	})
 	registerAPI(api, "DELETE", path, "delete-vm", "Queue VM deletion; attached disk deletion requires delete_volumes=true", func(ctx context.Context, in *apiDeleteVMInput) (*apiAccepted, error) {
@@ -65,18 +69,18 @@ func (e *Environ) registerVMOperations(api huma.API) {
 		return e.submitTask(ctx, in.IdempotencyKey, "machine."+in.Body.Action, compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM})
 	})
 	registerAPI(api, "POST", path+"/disks/attach", "attach-disk", "Queue disk attachment", func(ctx context.Context, in *apiAttachDiskInput) (*apiAccepted, error) {
-		disk, err := in.Body.domain()
+		volume, err := e.clouds.VolumeAddress(in.Cloud, in.Body.VolumeID)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		return e.submitTask(ctx, in.IdempotencyKey, "machine.attach-disk", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, Disk: disk})
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.attach-disk", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, Node: volume.Host, Disk: in.Body.domain(volume.Path)})
 	})
 	registerAPI(api, "DELETE", path+"/disks/{volume}", "detach-disk", "Queue disk detachment without deletion", func(ctx context.Context, in *apiDetachDiskInput) (*apiAccepted, error) {
-		path, err := volumePath(in.Volume)
+		volume, err := e.clouds.VolumeAddress(in.Cloud, in.Volume)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		return e.submitTask(ctx, in.IdempotencyKey, "machine.detach-disk", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, Path: path})
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.detach-disk", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, Node: volume.Host, Path: volume.Path})
 	})
 	registerAPI(api, "POST", path+"/interfaces", "attach-interface", "Queue network interface attachment", func(ctx context.Context, in *apiAttachInterfaceInput) (*apiAccepted, error) {
 		return e.submitTask(ctx, in.IdempotencyKey, "machine.attach-interface", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, Interface: in.Body.domain()})

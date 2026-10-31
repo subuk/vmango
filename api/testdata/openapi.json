@@ -1,6 +1,665 @@
 {
   "components": {
     "schemas": {
+      "AdministrationCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "host_inventory": {
+            "type": "boolean"
+          },
+          "image_availability": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "host_inventory",
+          "image_availability"
+        ],
+        "type": "object"
+      },
+      "AdministrationCloud": {
+        "additionalProperties": false,
+        "properties": {
+          "backend_kind": {
+            "type": "string"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/AdministrationCapabilities"
+          },
+          "id": {
+            "type": "string"
+          },
+          "images": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "instance_types": {
+            "items": {
+              "$ref": "#/components/schemas/InstanceType"
+            },
+            "type": "array"
+          },
+          "libvirt": {
+            "$ref": "#/components/schemas/AdministrationLibvirtCloud"
+          },
+          "name": {
+            "type": "string"
+          },
+          "networks": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogEntry"
+            },
+            "type": "array"
+          },
+          "storage_classes": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogEntry"
+            },
+            "type": "array"
+          },
+          "zones": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "backend_kind",
+          "capabilities",
+          "zones",
+          "instance_types",
+          "networks",
+          "storage_classes",
+          "images"
+        ],
+        "type": "object"
+      },
+      "AdministrationFieldState": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "configured",
+              "defaulted",
+              "inherited",
+              "unresolved"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "state",
+          "source"
+        ],
+        "type": "object"
+      },
+      "AdministrationHost": {
+        "additionalProperties": false,
+        "properties": {
+          "cache": {
+            "type": "boolean"
+          },
+          "cloud_id": {
+            "type": "string"
+          },
+          "config_drive_format": {
+            "type": "string"
+          },
+          "config_drive_pool": {
+            "type": "string"
+          },
+          "config_drive_suffix": {
+            "type": "string"
+          },
+          "cpu_overcommit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "cpu_reserve": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "emulator": {
+            "$ref": "#/components/schemas/AdministrationSetting"
+          },
+          "graphics_listen": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "image_pool": {
+            "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "memory_reserve_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "networks": {
+            "items": {
+              "$ref": "#/components/schemas/AdministrationNetworkBinding"
+            },
+            "type": "array"
+          },
+          "qcow_prealloc_metadata": {
+            "type": "boolean"
+          },
+          "storage": {
+            "items": {
+              "$ref": "#/components/schemas/AdministrationStorageBinding"
+            },
+            "type": "array"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "cloud_id",
+          "zone",
+          "labels",
+          "cpu_overcommit",
+          "cpu_reserve",
+          "memory_reserve_bytes",
+          "emulator",
+          "image_pool",
+          "config_drive_pool",
+          "config_drive_suffix",
+          "config_drive_format",
+          "graphics_listen",
+          "cache",
+          "qcow_prealloc_metadata",
+          "networks",
+          "storage"
+        ],
+        "type": "object"
+      },
+      "AdministrationHostReference": {
+        "additionalProperties": false,
+        "properties": {
+          "cloud_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "cloud_id",
+          "zone"
+        ],
+        "type": "object"
+      },
+      "AdministrationImage": {
+        "additionalProperties": false,
+        "properties": {
+          "arch": {
+            "type": "string"
+          },
+          "cloud_id": {
+            "type": "string"
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/AdministrationImageDefaults"
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "minimum_disk_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "minimum_memory_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "os_name": {
+            "type": "string"
+          },
+          "os_version": {
+            "type": "string"
+          },
+          "protected": {
+            "type": "boolean"
+          },
+          "settings": {
+            "items": {
+              "$ref": "#/components/schemas/AdministrationFieldState"
+            },
+            "type": "array"
+          },
+          "source": {
+            "$ref": "#/components/schemas/AdministrationImageSource"
+          }
+        },
+        "required": [
+          "id",
+          "cloud_id",
+          "name",
+          "os_name",
+          "os_version",
+          "arch",
+          "minimum_memory_bytes",
+          "minimum_disk_bytes",
+          "protected",
+          "hidden",
+          "defaults",
+          "settings",
+          "source"
+        ],
+        "type": "object"
+      },
+      "AdministrationImageAvailability": {
+        "additionalProperties": false,
+        "properties": {
+          "cloud_id": {
+            "type": "string"
+          },
+          "image_id": {
+            "type": "string"
+          },
+          "libvirt": {
+            "$ref": "#/components/schemas/AdministrationLibvirtImage"
+          }
+        },
+        "required": [
+          "cloud_id",
+          "image_id"
+        ],
+        "type": "object"
+      },
+      "AdministrationImageDefaults": {
+        "additionalProperties": false,
+        "properties": {
+          "disk_bus": {
+            "type": "string"
+          },
+          "disk_controller": {
+            "type": "string"
+          },
+          "firmware": {
+            "type": "string"
+          },
+          "graphics": {
+            "type": "string"
+          },
+          "guest_agent": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "initialization": {
+            "type": "string"
+          },
+          "nic_model": {
+            "type": "string"
+          },
+          "video_model": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "firmware",
+          "disk_bus",
+          "disk_controller",
+          "nic_model",
+          "graphics",
+          "video_model",
+          "guest_agent",
+          "initialization"
+        ],
+        "type": "object"
+      },
+      "AdministrationImageHost": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "compatibility": {
+            "enum": [
+              "supported",
+              "unsupported",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "host_id": {
+            "type": "string"
+          },
+          "observation": {
+            "enum": [
+              "observed",
+              "unavailable",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "pool": {
+            "type": "string"
+          },
+          "source_state": {
+            "enum": [
+              "ready",
+              "downloadable",
+              "preparing",
+              "failed",
+              "missing",
+              "hidden",
+              "attached",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "volume_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host_id",
+          "observation",
+          "compatibility",
+          "source_state"
+        ],
+        "type": "object"
+      },
+      "AdministrationImageSource": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "local",
+              "download"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "remote": {
+            "$ref": "#/components/schemas/AdministrationRemoteSource"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "sha256",
+          "format",
+          "size_bytes"
+        ],
+        "type": "object"
+      },
+      "AdministrationInstallation": {
+        "additionalProperties": false,
+        "properties": {
+          "activation": {
+            "type": "string"
+          },
+          "image_transfers": {
+            "$ref": "#/components/schemas/AdministrationTransfers"
+          },
+          "loaded_at": {
+            "type": "string"
+          },
+          "log_level": {
+            "type": "string"
+          },
+          "snapshot_id": {
+            "type": "string"
+          },
+          "tasks": {
+            "$ref": "#/components/schemas/AdministrationTasks"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "loaded_at",
+          "version",
+          "activation",
+          "log_level",
+          "tasks",
+          "image_transfers"
+        ],
+        "type": "object"
+      },
+      "AdministrationLibvirtCloud": {
+        "additionalProperties": false,
+        "properties": {
+          "hosts": {
+            "items": {
+              "$ref": "#/components/schemas/AdministrationHostReference"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "hosts"
+        ],
+        "type": "object"
+      },
+      "AdministrationLibvirtImage": {
+        "additionalProperties": false,
+        "properties": {
+          "hosts": {
+            "items": {
+              "$ref": "#/components/schemas/AdministrationImageHost"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "hosts"
+        ],
+        "type": "object"
+      },
+      "AdministrationNetworkBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "backend": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "network",
+              "bridge"
+            ],
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "vlan": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "backend",
+          "model",
+          "vlan"
+        ],
+        "type": "object"
+      },
+      "AdministrationRemoteSource": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "string"
+          },
+          "redacted": {
+            "type": "boolean"
+          },
+          "scheme": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scheme",
+          "host",
+          "port",
+          "redacted"
+        ],
+        "type": "object"
+      },
+      "AdministrationSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "configured",
+              "defaulted",
+              "inherited",
+              "unresolved"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "state",
+          "source"
+        ],
+        "type": "object"
+      },
+      "AdministrationStorageBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pool": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "pool",
+          "format"
+        ],
+        "type": "object"
+      },
+      "AdministrationTasks": {
+        "additionalProperties": false,
+        "properties": {
+          "retention_days": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "workers": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "workers",
+          "retention_days"
+        ],
+        "type": "object"
+      },
+      "AdministrationTransfers": {
+        "additionalProperties": false,
+        "properties": {
+          "idle_timeout_seconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "max_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timeout_seconds": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_bytes",
+          "timeout_seconds",
+          "idle_timeout_seconds"
+        ],
+        "type": "object"
+      },
+      "AdministrationUnavailableHost": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code"
+        ],
+        "type": "object"
+      },
       "ApiActionInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -17,6 +676,28 @@
         },
         "required": [
           "action"
+        ],
+        "type": "object"
+      },
+      "ApiAdministrationHostList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiNode"
+            },
+            "type": "array"
+          },
+          "unavailable_hosts": {
+            "items": {
+              "$ref": "#/components/schemas/AdministrationUnavailableHost"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "unavailable_hosts"
         ],
         "type": "object"
       },
@@ -289,6 +970,9 @@
           "arch": {
             "type": "string"
           },
+          "defaults": {
+            "$ref": "#/components/schemas/ApiImageDefaults"
+          },
           "id": {
             "type": "string"
           },
@@ -304,11 +988,20 @@
           },
           "name": {
             "type": "string"
+          },
+          "os_name": {
+            "type": "string"
+          },
+          "os_version": {
+            "type": "string"
           }
         },
         "required": [
           "id",
           "name",
+          "os_name",
+          "os_version",
+          "defaults",
           "arch",
           "minimum_memory_bytes",
           "minimum_disk_bytes"
@@ -445,7 +1138,7 @@
             "type": "string"
           },
           "volume_id": {
-            "description": "Opaque host-local volume identifier returned by cloud discovery.",
+            "description": "Compound host/path volume identifier returned by cloud discovery.",
             "minLength": 1,
             "type": "string"
           }
@@ -455,114 +1148,16 @@
         ],
         "type": "object"
       },
-      "ApiHostChoices": {
+      "ApiExistingDisk": {
         "additionalProperties": false,
         "properties": {
-          "cloud": {
-            "type": "string"
-          },
-          "networks": {
-            "items": {
-              "$ref": "#/components/schemas/CatalogEntry"
-            },
-            "type": "array"
-          },
-          "storage_classes": {
-            "items": {
-              "$ref": "#/components/schemas/CatalogEntry"
-            },
-            "type": "array"
-          },
-          "zone": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "cloud",
-          "zone",
-          "networks",
-          "storage_classes"
-        ],
-        "type": "object"
-      },
-      "ApiHostCloud": {
-        "additionalProperties": false,
-        "properties": {
-          "cloud": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "cloud"
-        ],
-        "type": "object"
-      },
-      "ApiImage": {
-        "additionalProperties": false,
-        "properties": {
-          "arch": {
-            "type": "string"
-          },
-          "defaults": {
-            "$ref": "#/components/schemas/ApiImageDefaults"
-          },
-          "id": {
-            "type": "string"
-          },
-          "minimum_disk_bytes": {
-            "format": "int64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "minimum_memory_bytes": {
-            "format": "int64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "os_name": {
-            "type": "string"
-          },
-          "os_version": {
-            "type": "string"
-          },
-          "preparation_error": {
-            "type": "string"
-          },
-          "source_mode": {
-            "enum": [
-              "local",
-              "download"
-            ],
-            "type": "string"
-          },
-          "state": {
-            "enum": [
-              "ready",
-              "downloadable",
-              "preparing",
-              "failed"
-            ],
-            "type": "string"
-          },
           "volume_id": {
+            "minLength": 1,
             "type": "string"
           }
         },
         "required": [
-          "id",
-          "name",
-          "os_name",
-          "os_version",
-          "arch",
-          "volume_id",
-          "minimum_memory_bytes",
-          "minimum_disk_bytes",
-          "defaults",
-          "source_mode",
-          "state"
+          "volume_id"
         ],
         "type": "object"
       },
@@ -704,6 +1299,100 @@
         "required": [
           "username",
           "password"
+        ],
+        "type": "object"
+      },
+      "ApiMachineCatalog": {
+        "additionalProperties": false,
+        "properties": {
+          "networks": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogEntry"
+            },
+            "type": "array"
+          },
+          "storage_classes": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "networks",
+          "storage_classes"
+        ],
+        "type": [
+          "object",
+          "null"
+        ]
+      },
+      "ApiMachineCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "existing_disks": {
+            "items": {
+              "$ref": "#/components/schemas/ApiExistingDisk"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "image": {
+            "type": "string"
+          },
+          "instance_type": {
+            "type": "string"
+          },
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "new_disks": {
+            "items": {
+              "$ref": "#/components/schemas/DataDiskSpec"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "placement": {
+            "$ref": "#/components/schemas/Placement"
+          },
+          "start": {
+            "type": "boolean"
+          },
+          "storage_class": {
+            "type": "string"
+          },
+          "user_data": {
+            "type": "string"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "image",
+          "instance_type",
+          "zone",
+          "network",
+          "storage_class",
+          "start"
         ],
         "type": "object"
       },
@@ -1286,6 +1975,153 @@
         ],
         "type": "object"
       },
+      "ApiVMDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "arch": {
+            "type": "string"
+          },
+          "autostart": {
+            "type": "boolean"
+          },
+          "catalog": {
+            "$ref": "#/components/schemas/ApiMachineCatalog"
+          },
+          "cloud": {
+            "type": "string"
+          },
+          "configured_keys": {
+            "description": "Null means unavailable; an empty array means a known empty key configuration.",
+            "items": {
+              "$ref": "#/components/schemas/ApiConfiguredKey"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "cpu_pinning": {
+            "$ref": "#/components/schemas/ApiCPUPinning"
+          },
+          "cpu_request": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "disk_controller": {
+            "type": "string"
+          },
+          "disks": {
+            "items": {
+              "$ref": "#/components/schemas/ApiDisk"
+            },
+            "type": "array"
+          },
+          "firmware": {
+            "type": "string"
+          },
+          "graphics": {
+            "type": "string"
+          },
+          "graphics_listen": {
+            "type": "string"
+          },
+          "guest_agent": {
+            "type": "boolean"
+          },
+          "hugepages": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          },
+          "instance_type": {
+            "type": "string"
+          },
+          "interfaces": {
+            "items": {
+              "$ref": "#/components/schemas/ApiReadInterface"
+            },
+            "type": "array"
+          },
+          "ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "managed": {
+            "type": "boolean"
+          },
+          "memory_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "memory_request_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "unknown",
+              "stopped",
+              "running"
+            ],
+            "type": "string"
+          },
+          "vcpus": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "video_model": {
+            "type": "string"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "catalog",
+          "cloud",
+          "zone",
+          "instance_type",
+          "image",
+          "managed",
+          "cpu_request",
+          "memory_request_bytes",
+          "node",
+          "id",
+          "name",
+          "arch",
+          "state",
+          "vcpus",
+          "memory_bytes",
+          "firmware",
+          "disk_controller",
+          "guest_agent",
+          "autostart",
+          "hugepages",
+          "graphics",
+          "video_model",
+          "disks",
+          "interfaces",
+          "graphics_listen",
+          "cpu_pinning",
+          "configured_keys",
+          "ip_addresses"
+        ],
+        "type": "object"
+      },
       "ApiVolume": {
         "additionalProperties": false,
         "properties": {
@@ -1343,6 +2179,24 @@
         ],
         "type": "object"
       },
+      "ApiVolumeCatalog": {
+        "additionalProperties": false,
+        "properties": {
+          "storage_classes": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "storage_classes"
+        ],
+        "type": [
+          "object",
+          "null"
+        ]
+      },
       "ApiVolumeCreate": {
         "additionalProperties": false,
         "properties": {
@@ -1364,6 +2218,89 @@
           "name",
           "storage_class",
           "size_bytes"
+        ],
+        "type": "object"
+      },
+      "ApiVolumeDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "attached_to": {
+            "type": "string"
+          },
+          "catalog": {
+            "$ref": "#/components/schemas/ApiVolumeCatalog"
+          },
+          "cloud": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          },
+          "owned": {
+            "type": "boolean"
+          },
+          "pool": {
+            "type": "string"
+          },
+          "protected": {
+            "type": "boolean"
+          },
+          "size_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "storage_class": {
+            "type": "string"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "catalog",
+          "cloud",
+          "zone",
+          "storage_class",
+          "owned",
+          "id",
+          "node",
+          "name",
+          "pool",
+          "size_bytes",
+          "format",
+          "protected"
+        ],
+        "type": "object"
+      },
+      "ApiVolumeList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiVolume"
+            },
+            "type": "array"
+          },
+          "unavailable_hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "unavailable_hosts"
         ],
         "type": "object"
       },
@@ -1617,6 +2554,28 @@
         },
         "type": "object"
       },
+      "HostCatalog": {
+        "additionalProperties": false,
+        "properties": {
+          "networks": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogEntry"
+            },
+            "type": "array"
+          },
+          "storage_classes": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "networks",
+          "storage_classes"
+        ],
+        "type": "object"
+      },
       "Identity": {
         "additionalProperties": false,
         "properties": {
@@ -1681,91 +2640,6 @@
           "boot_disk_bytes",
           "hugepages",
           "autostart"
-        ],
-        "type": "object"
-      },
-      "LocalDiskRef": {
-        "additionalProperties": false,
-        "properties": {
-          "host": {
-            "type": "string"
-          },
-          "volume_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "host",
-          "volume_id"
-        ],
-        "type": "object"
-      },
-      "MachineCreateSpec": {
-        "additionalProperties": false,
-        "properties": {
-          "existing_disks": {
-            "items": {
-              "$ref": "#/components/schemas/LocalDiskRef"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "image": {
-            "type": "string"
-          },
-          "instance_type": {
-            "type": "string"
-          },
-          "keys": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "network": {
-            "type": "string"
-          },
-          "new_disks": {
-            "items": {
-              "$ref": "#/components/schemas/DataDiskSpec"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "placement": {
-            "$ref": "#/components/schemas/Placement"
-          },
-          "start": {
-            "type": "boolean"
-          },
-          "storage_class": {
-            "type": "string"
-          },
-          "user_data": {
-            "type": "string"
-          },
-          "zone": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "image",
-          "instance_type",
-          "zone",
-          "network",
-          "storage_class",
-          "start"
         ],
         "type": "object"
       },
@@ -2124,6 +2998,1754 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/administration/clouds": {
+      "get": {
+        "operationId": "list-administration-clouds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdministrationCloud"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List configured clouds without backend discovery",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}": {
+      "get": {
+        "operationId": "get-administration-cloud",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationCloud"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read a configured cloud overview",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/configuration": {
+      "get": {
+        "operationId": "get-administration-cloud-configuration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationCloud"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read the full accepted cloud configuration",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/configuration/hosts": {
+      "get": {
+        "operationId": "list-administration-host-configuration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdministrationHostReference"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List configured hosts without contacting them",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/configuration/hosts/{node}": {
+      "get": {
+        "operationId": "get-administration-host-configuration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "node",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationHost"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read accepted host settings and bindings",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/hosts": {
+      "get": {
+        "operationId": "list-administration-hosts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiAdministrationHostList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Observe hosts with explicit partial results",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/hosts/{node}": {
+      "get": {
+        "operationId": "get-administration-host",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "node",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiNode"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read live host diagnostics and topology",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/hosts/{node}/capabilities": {
+      "get": {
+        "operationId": "get-administration-host-capabilities",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "node",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "arch",
+            "schema": {
+              "enum": [
+                "x86_64",
+                "aarch64"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCapabilities"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Observe backend launch capabilities",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/hosts/{node}/catalog": {
+      "get": {
+        "operationId": "get-administration-host-catalog",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "node",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostCatalog"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Observe applicable logical choices for a host",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/hosts/{node}/networks": {
+      "get": {
+        "operationId": "list-administration-host-networks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "node",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApiNetwork"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Observe backend networks",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/hosts/{node}/pools": {
+      "get": {
+        "operationId": "list-administration-host-pools",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "node",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApiPool"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Observe backend storage pools",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/images": {
+      "get": {
+        "operationId": "list-administration-images",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "arch",
+            "schema": {
+              "enum": [
+                "x86_64",
+                "aarch64"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdministrationImage"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List cloud-owned image definitions independently of source availability",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/images/{image}": {
+      "get": {
+        "operationId": "get-administration-image",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "image",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationImage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read a safe technical image definition",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/images/{image}/availability": {
+      "get": {
+        "operationId": "get-administration-image-availability",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "image",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationImageAvailability"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Observe image sources without preparing them",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/configuration": {
+      "get": {
+        "operationId": "get-administration-configuration",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationInstallation"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read the accepted installation configuration",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
     "/api/v1/auth/config": {
       "get": {
         "operationId": "auth-config",
@@ -2662,7 +5284,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MachineCreateSpec"
+                "$ref": "#/components/schemas/ApiMachineCreate"
               }
             }
           },
@@ -2947,7 +5569,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiVM"
+                  "$ref": "#/components/schemas/ApiVMDetail"
                 }
               }
             },
@@ -4495,10 +7117,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ApiVolume"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/ApiVolumeList"
                 }
               }
             },
@@ -4729,7 +7348,7 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/volumes/{node}/{volume}": {
+    "/api/v1/clouds/{cloud}/volumes/{volume}": {
       "delete": {
         "operationId": "delete-volume",
         "parameters": [
@@ -4750,14 +7369,6 @@
               "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
               "maxLength": 200,
               "minLength": 8,
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
               "type": "string"
             }
           },
@@ -4887,14 +7498,6 @@
           },
           {
             "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
             "name": "volume",
             "required": true,
             "schema": {
@@ -4907,7 +7510,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiVolume"
+                  "$ref": "#/components/schemas/ApiVolumeDetail"
                 }
               }
             },
@@ -4994,13 +7597,13 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Get volume",
+        "summary": "Get volume and applicable clone choices",
         "tags": [
           "clouds"
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/volumes/{node}/{volume}/clone": {
+    "/api/v1/clouds/{cloud}/volumes/{volume}/clone": {
       "post": {
         "operationId": "clone-volume",
         "parameters": [
@@ -5021,14 +7624,6 @@
               "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
               "maxLength": 200,
               "minLength": 8,
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
               "type": "string"
             }
           },
@@ -5156,7 +7751,7 @@
         ]
       }
     },
-    "/api/v1/clouds/{cloud}/volumes/{node}/{volume}/resize": {
+    "/api/v1/clouds/{cloud}/volumes/{volume}/resize": {
       "post": {
         "operationId": "resize-volume",
         "parameters": [
@@ -5177,14 +7772,6 @@
               "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
               "maxLength": 200,
               "minLength": 8,
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
               "type": "string"
             }
           },
@@ -5309,927 +7896,6 @@
         "summary": "Queue volume growth",
         "tags": [
           "clouds"
-        ]
-      }
-    },
-    "/api/v1/hosts": {
-      "get": {
-        "operationId": "list-hosts",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ApiNode"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "List hosts for read-only administrative diagnostics",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{node}": {
-      "get": {
-        "operationId": "get-host",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
-              "minLength": 1,
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiNode"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Get read-only host diagnostics and CPU topology",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{node}/capabilities": {
-      "get": {
-        "operationId": "get-capabilities",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Omit to use the node architecture.",
-            "explode": false,
-            "in": "query",
-            "name": "arch",
-            "schema": {
-              "description": "Omit to use the node architecture.",
-              "enum": [
-                "x86_64",
-                "aarch64"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiCapabilities"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Discover supported launch options",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{node}/catalog": {
-      "get": {
-        "operationId": "get-host-catalog",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiHostChoices"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Discover logical storage classes and networks supported on a host",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{node}/cloud": {
-      "get": {
-        "operationId": "get-host-cloud",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiHostCloud"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Resolve a configured host's cloud without contacting the backend",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{node}/images": {
-      "get": {
-        "operationId": "list-images",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Omit to use the node architecture.",
-            "explode": false,
-            "in": "query",
-            "name": "arch",
-            "schema": {
-              "description": "Omit to use the node architecture.",
-              "enum": [
-                "x86_64",
-                "aarch64"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ApiImage"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "List available images for this node",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{node}/networks": {
-      "get": {
-        "operationId": "list-networks",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
-              "minLength": 1,
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ApiNetwork"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "List networks",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{node}/pools": {
-      "get": {
-        "operationId": "list-pools",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "node",
-            "required": true,
-            "schema": {
-              "minLength": 1,
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ApiPool"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiProblem"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "List storage pools",
-        "tags": [
-          "hosts"
         ]
       }
     },

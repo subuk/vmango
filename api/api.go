@@ -192,7 +192,7 @@ func (e *Environ) registerAPI() {
 	e.registerAuth(api)
 	e.registerTasks(api)
 	e.registerClouds(api)
-	e.registerDiscovery(api)
+	e.registerAdministration(api)
 	e.registerVMOperations(api)
 	e.registerVolumeOperations(api)
 	e.registerKeyOperations(api)
@@ -220,12 +220,4 @@ func (e *Environ) registerAPI() {
 		public := r.URL.Path == "/api/docs" || r.URL.Path == "/api/v1/auth/config" || r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/auth/refresh" || r.URL.Path == "/api/v1/auth/logout"
 		e.apiGuard(router, !public).ServeHTTP(w, r)
 	}))
-}
-
-func volumeIDs(paths []string) []string {
-	out := []string{}
-	for _, p := range paths {
-		out = append(out, volumeID(p))
-	}
-	return out
 }

@@ -77,7 +77,8 @@ export function useTaskPage(params: URLSearchParams, enabled = true) {
     const path = `/api/v1/tasks?${params}`;
     return useQuery({
         queryKey: [path],
-        queryFn: () => request<TaskPage>(path),
+        queryFn: ({ signal }) =>
+            request<TaskPage>(path, "GET", undefined, signal),
         enabled,
         refetchInterval: 2000,
     });
@@ -86,7 +87,7 @@ export function useTask(id: string) {
     const path = `/api/v1/tasks/${encodeURIComponent(id)}`;
     return useQuery({
         queryKey: [path],
-        queryFn: () => request<Task>(path),
+        queryFn: ({ signal }) => request<Task>(path, "GET", undefined, signal),
         refetchInterval: 2000,
     });
 }
@@ -141,9 +142,20 @@ export function useResourceBusy(resource?: ResourceRef) {
 export function volumeResource(node: string, id: string): ResourceRef {
     let path = id;
     try {
+        const parts = id.split(".");
+        if (parts.length !== 2 || !parts.every(Boolean))
+            throw new Error("Invalid volume address");
+        const decode = (value: string) =>
+            new TextDecoder("utf-8", { fatal: true }).decode(
+                Uint8Array.from(
+                    atob(value.replace(/-/g, "+").replace(/_/g, "/")),
+                    (c) => c.charCodeAt(0),
+                ),
+            );
+        node = decode(parts[0]);
         path = new TextDecoder().decode(
             Uint8Array.from(
-                atob(id.replace(/-/g, "+").replace(/_/g, "/")),
+                atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
                 (c) => c.charCodeAt(0),
             ),
         );

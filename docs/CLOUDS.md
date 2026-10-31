@@ -11,8 +11,47 @@ its libvirt connection (`uri`) and backend settings, alongside its zone, reserve
 network and storage bindings. Host names and URIs must be globally unique across
 clouds. Do not configure aliases for the same connection. Multiple hosts can
 share a zone.
-Catalog IDs are separate from display names. Images remain a shared catalog with
-host-specific image storage; cloud membership is an explicit list of image IDs.
+Catalog IDs are separate from display names. Each cloud owns its nested image
+definitions; the same image ID in another cloud is independent. Image storage
+is bound separately on each configured host.
+
+## Cloud-owned image migration
+
+Top-level `image` blocks and `cloud.images = [...]` references are removed.
+Move every image definition inside each owning `cloud` and delete the reference
+list. Formerly shared definitions must be copied explicitly into every cloud
+that uses them. Image IDs match `^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$` and are
+unique within a cloud; the same ID in another cloud can have different sources
+and launch defaults. Lookup never falls back to another cloud.
+
+```hcl
+cloud "local" {
+    image "ubuntu-local" {
+        path = "/var/lib/libvirt/images/ubuntu-cloud.img"
+        os_name = "Ubuntu"
+        os_arch = "x86_64"
+        firmware = "efi"
+        protected = true
+    }
+    # Keep zones, types, networks, storage classes and host bindings here.
+}
+```
+
+For path-labeled images, choose a stable ID and copy the old label into `path`.
+For downloadable images, keep the accepted URL, checksum, format and byte size
+inside the new nested block. A legacy image block used only for `hidden` or
+`protected` volume policy becomes a top-level `volume "path" { ... }` block,
+not a catalog image. Explicit volume policy retains its existing path semantics;
+image-derived policy applies only to hosts in the image's owning cloud. Equal
+paths in unrelated clouds do not share image policy or attachment exclusions.
+`hidden`/`protected` describe source-volume policy, not catalog visibility.
+
+Restart to activate the new file. Preserve the task directory and its sibling
+`-images` and `-volumes` metadata stores. Accepted pre-migration tasks retain
+pinned image sources/defaults, backend bindings, artifact identity, history,
+ownership and locks; editing today's catalog does not retarget queued work.
+A legacy task without safely established accepted cloud context fails before
+mutation with a resubmission message while retaining its history and safety state.
 
 ## Host configuration migration
 
@@ -181,15 +220,16 @@ part of the catalog. Create a machine with an idempotency key:
 
 Submit this body to `POST /api/v1/clouds/local/machines`. It returns 202 with a
 durable task reference. Follow the task's stages, effects and confirmed outcome;
-acceptance is not completion. Existing-disk references contain the observed
-`host` and opaque `volume_id` returned by discovery. Raw paths are not create inputs.
+acceptance is not completion. Existing disks use `existing_disks: [{volume_id}]`,
+with the compound ID returned by discovery and no separate public `host` field.
+The ID reversibly encodes its host and path; raw paths are not create inputs.
 
 Queued commands accepted before the cloud migration fail before backend mutation
 if they lack cloud context; inspect their history and submit a new cloud command.
 
 All former `/api/v1/nodes/...` resource routes and global `/vms`, `/volumes` and
 `/networks` collections are removed without compatibility aliases. Read-only
-administrative diagnostics use `/api/v1/hosts/...`. CPU/RAM
+administrative diagnostics use `/api/v1/administration/clouds/{cloud}/hosts/...`. CPU/RAM
 patches are replaced by `POST /api/v1/clouds/{cloud}/machines/{vm}/instance-type`
 with `{"instance_type":"medium"}`. Machine URLs use the stable machine ID (the libvirt domain UUID), independently
 of its name or observed host. Names must be unique only within a host. Adoption uses the same
@@ -206,17 +246,34 @@ to one owning host after the first selection.
 Standalone creation uses `POST /api/v1/clouds/{cloud}/volumes` with `name`, `zone`,
 `storage_class` and `size_bytes`. Existing-volume clone commands select
 `storage_class`, not `pool` or `format`. Read-only host and pool discovery remain
-available under `/hosts` for administrative diagnostics. See authenticated OpenAPI for the complete schema.
+available under `/administration/clouds/{cloud}/hosts` for administrative
+diagnostics. Workload forms use the logical catalogs included in resource detail,
+without requiring host-administration requests. See authenticated OpenAPI for the
+complete schema.
 
 ## Machine discovery and routing
 
 Machine reads return separate `id` and `name` fields. API routes use
 `/api/v1/clouds/{cloud}/machines/{id}` and browser routes use
 `/machines/{cloud}/{id}/`. Existing libvirt UUIDs are preserved. Old host/name
-machine routes are removed; update API clients and bookmarks. Volume routes
-continue to include their owning host. Signed console links now bind the cloud
+machine routes are removed; update API clients and bookmarks. Volume routes use
+`/api/v1/clouds/{cloud}/volumes/{volume}` without a separate host segment. For
+libvirt, `volume` is unpadded `base64url(node) + "." + base64url(path)`; old
+path-only IDs and host-segment routes are removed without aliases. VM disk
+references, attachment/detachment and existing-disk creation use the same ID.
+Backend identities, ownership and durable task references/locks remain unchanged.
+Signed console links bind the cloud
 and machine UUID; issue new links after upgrading.
 Event hooks receive the UUID in `vm_id` and the display name in `vm_name`.
+
+`GET /api/v1/clouds/{cloud}/volumes` returns `{items, unavailable_hosts}` as well.
+Volumes is a flat list of the selected cloud across hosts and pools; the UI uses
+`?cloud=` like Machines and never implicitly combines unrelated clouds. Partial
+and all-unavailable reads return 200 with failed host IDs. Empty items without
+failures confirm an empty list. VM and volume detail contain applicable logical
+`catalog` choices; `catalog: null` means discovery failed while the resource
+remains readable, and empty arrays mean known-empty choices. Lists do not fetch
+a catalog for every row.
 
 `GET /api/v1/clouds/{cloud}/machines` returns `items` and `unavailable_hosts`.
 Each request reads hosts afresh, with at most 20 concurrent machine-list backend

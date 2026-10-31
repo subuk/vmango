@@ -216,7 +216,7 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 		if err := stage("clone-volume", vmRef, true, func() error {
 			verifiedManaged := false
 			if p.ImageID != "" && manager.images != nil {
-				i, imageErr := manager.images.Get(p.ImageID)
+				i, imageErr := manager.images.ForCloud(p.Cloud).Get(p.ImageID)
 				if imageErr != nil {
 					return imageErr
 				}

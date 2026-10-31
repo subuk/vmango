@@ -22,6 +22,7 @@ import {
     vmPath,
     volumePath,
     type VM,
+    type VolumeList,
     type Volume,
 } from "../api/hooks";
 import { useResourceBusy } from "../api/tasks";
@@ -39,7 +40,6 @@ import { OperationDialog, fieldError } from "../components/OperationDialog";
 import { ResourceTable } from "../components/ResourceTable";
 import { DetailSection, Summary } from "../components/Information";
 import { MachineActions } from "./Lists";
-import type { HostCatalog } from "./MachineForm";
 
 export function MachineDetail() {
     const { cloud = "", id = "" } = useParams();
@@ -188,14 +188,7 @@ function Overview({ vm }: { vm: VM }) {
                             <Copy label="Copy machine ID" text={vm.id} />
                         </dd>
                         <dt>Host</dt>
-                        <dd>
-                            <Link
-                                component={RouterLink}
-                                to={`/nodes/${esc(vm.node)}/`}
-                            >
-                                {vm.node}
-                            </Link>
-                        </dd>
+                        <dd>{vm.node}</dd>
                         <dt>Cloud</dt>
                         <dd>{vm.cloud}</dd>
                         <dt>Availability zone</dt>
@@ -252,37 +245,6 @@ function Overview({ vm }: { vm: VM }) {
                         <dd>{vm.hugepages ? "Enabled" : "Disabled"}</dd>
                     </Box>
                 </DetailSection>
-                <DetailSection
-                    title="Console and CPU placement"
-                    description="Display configuration and host CPU affinity."
-                >
-                    <Box component="dl" className="details">
-                        <dt>Graphics</dt>
-                        <dd>{vm.graphics || "None"}</dd>
-                        <dt>Graphics listen</dt>
-                        <dd className="mono">
-                            {vm.graphics_listen || "Default"}
-                        </dd>
-                        <dt>Video model</dt>
-                        <dd>{vm.video_model || "Default"}</dd>
-                        <dt>Emulator CPUs</dt>
-                        <dd>
-                            {vm.cpu_pinning?.emulator.join(", ") ||
-                                "Not pinned"}
-                        </dd>
-                        <dt>vCPU pinning</dt>
-                        <dd>
-                            {vm.cpu_pinning?.vcpus.length
-                                ? vm.cpu_pinning.vcpus.map((p) => (
-                                      <div key={p.vcpu}>
-                                          vCPU {p.vcpu}: host CPUs{" "}
-                                          {p.host_cpus.join(", ")}
-                                      </div>
-                                  ))
-                                : "Not pinned"}
-                        </dd>
-                    </Box>
-                </DetailSection>
             </Box>
             <DetailSection
                 title="Configured SSH keys"
@@ -332,7 +294,7 @@ function Disks({ vm }: { vm: VM }) {
     });
     const conflict =
         !!blocked.task || blocked.unavailable || vm.managed === false;
-    const volumes = useResource<Volume[]>(
+    const volumes = useResource<VolumeList>(
         `/api/v1/clouds/${esc(vm.cloud)}/volumes?host=${esc(vm.node)}`,
     );
     const [add, setAdd] = useState(false);
@@ -342,7 +304,7 @@ function Disks({ vm }: { vm: VM }) {
     // A visible list omits hidden disks; authorized detail reads retain their labels.
     const disks = vm.disks.map((d) => ({
         ...d,
-        volume: volumes.data?.find((v) => v.id === d.volume_id),
+        volume: volumes.data?.items.find((v) => v.id === d.volume_id),
     }));
     return (
         <>
@@ -380,7 +342,6 @@ function Disks({ vm }: { vm: VM }) {
                         render: (d) => (
                             <DiskLabel
                                 cloud={vm.cloud}
-                                node={vm.node}
                                 id={d.volume_id}
                                 known={d.volume}
                             />
@@ -431,7 +392,10 @@ function Disks({ vm }: { vm: VM }) {
                             `${vmPath(vm.cloud, vm.id)}/disks/${esc(remove)}`,
                             "DELETE",
                         );
-                        await queries.invalidateQueries();
+                        await queries.invalidateQueries({
+                            predicate: (q) =>
+                                q.queryKey[0] !== "administration",
+                        });
                     }}
                 >
                     Detach this disk from {vm.node}/{vm.name}. The volume and
@@ -443,16 +407,14 @@ function Disks({ vm }: { vm: VM }) {
 }
 function DiskLabel({
     cloud,
-    node,
     id,
     known,
 }: {
-    node: string;
     id: string;
     known?: Volume;
     cloud: string;
 }) {
-    const q = useResource<Volume>(volumePath(node, id, cloud), !known, false);
+    const q = useResource<Volume>(volumePath(cloud, id), !known, false);
     return (
         <>
             {known?.name ||
@@ -462,19 +424,18 @@ function DiskLabel({
     );
 }
 function CreateDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
-    const catalog = useResource<HostCatalog>(
-        `/api/v1/hosts/${esc(vm.node)}/catalog`,
-    );
+    const detail = useMachine(vm.cloud, vm.id, true, false);
+    const catalog = detail.data?.catalog;
     const [name, setName] = useState("");
     const [storage, setStorage] = useState("");
     const [size, setSize] = useState("10");
     useEffect(() => {
         setStorage((old) =>
-            catalog.data?.storage_classes.some((s) => s.id === old)
+            catalog?.storage_classes.some((s) => s.id === old)
                 ? old
-                : catalog.data?.storage_classes[0]?.id || "",
+                : catalog?.storage_classes[0]?.id || "",
         );
-    }, [catalog.data]);
+    }, [catalog]);
     return (
         <OperationDialog
             title={`Create disk for ${vm.name}`}
@@ -512,22 +473,33 @@ function CreateDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
                         onChange={(e) => setSize(e.target.value)}
                         {...fieldError(error, "size_bytes")}
                     />
-                    <QueryState query={catalog}>
-                        {(c) => (
-                            <TextField
-                                select
-                                required
-                                label="Storage class"
-                                value={storage}
-                                onChange={(e) => setStorage(e.target.value)}
-                            >
-                                {c.storage_classes.map((s) => (
-                                    <MenuItem key={s.id} value={s.id}>
-                                        {s.name}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                        )}
+                    <QueryState query={detail}>
+                        {() =>
+                            catalog ? (
+                                <TextField
+                                    select
+                                    required
+                                    label="Storage class"
+                                    value={storage}
+                                    onChange={(e) => setStorage(e.target.value)}
+                                >
+                                    {catalog.storage_classes.map((s) => (
+                                        <MenuItem key={s.id} value={s.id}>
+                                            {s.name}
+                                        </MenuItem>
+                                    ))}
+                                </TextField>
+                            ) : (
+                                <Alert severity="warning">
+                                    Storage choices are unavailable.{" "}
+                                    <Button
+                                        onClick={() => void detail.refetch()}
+                                    >
+                                        Retry
+                                    </Button>
+                                </Alert>
+                            )
+                        }
                     </QueryState>
                     <Typography>
                         The disk will be created on the machine's current host.
@@ -543,7 +515,7 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
         scope: vm.node,
         id: vm.id,
     });
-    const q = useResource<Volume[]>(
+    const q = useResource<VolumeList>(
         `/api/v1/clouds/${esc(vm.cloud)}/volumes?host=${esc(vm.node)}&usage=attachable`,
         true,
         false,
@@ -581,7 +553,7 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
                                 {...fieldError(error, "volume_id")}
                             >
                                 <MenuItem value="">Choose a volume</MenuItem>
-                                {volumes.map((v) => (
+                                {volumes.items.map((v) => (
                                     <MenuItem key={v.id} value={v.id}>
                                         {v.name} · {bytes(v.size_bytes)}
                                     </MenuItem>
@@ -699,7 +671,10 @@ function Interfaces({ vm }: { vm: VM }) {
                             `${vmPath(vm.cloud, vm.id)}/interfaces/${esc(remove)}`,
                             "DELETE",
                         );
-                        await queries.invalidateQueries();
+                        await queries.invalidateQueries({
+                            predicate: (q) =>
+                                q.queryKey[0] !== "administration",
+                        });
                     }}
                 >
                     Detach {remove} from {vm.node}/{vm.name}. The guest will
@@ -715,16 +690,15 @@ function AttachInterface({ vm, onClose }: { vm: VM; onClose: () => void }) {
         scope: vm.node,
         id: vm.id,
     });
-    const choices = useResource<HostCatalog>(
-        `/api/v1/hosts/${esc(vm.node)}/catalog`,
-    );
+    const detail = useMachine(vm.cloud, vm.id, true, false);
+    const choices = detail.data?.catalog;
     const [network, setNetwork] = useState("");
     useEffect(() => {
-        const entries = choices.data?.networks || [];
+        const entries = choices?.networks || [];
         setNetwork((old) =>
             entries.some((n) => n.id === old) ? old : entries[0]?.id || "",
         );
-    }, [choices.data]);
+    }, [choices]);
     return (
         <OperationDialog
             title={`Attach interface to ${vm.name}`}
@@ -734,7 +708,7 @@ function AttachInterface({ vm, onClose }: { vm: VM; onClose: () => void }) {
                 !!blocked.task ||
                 blocked.unavailable ||
                 !network ||
-                choices.isError
+                !choices
             }
             onClose={onClose}
             run={() =>
@@ -745,23 +719,34 @@ function AttachInterface({ vm, onClose }: { vm: VM; onClose: () => void }) {
         >
             {(error) => (
                 <>
-                    <QueryState query={choices}>
-                        {(catalog) => (
-                            <TextField
-                                select
-                                label="Network"
-                                required
-                                value={network}
-                                onChange={(e) => setNetwork(e.target.value)}
-                                {...fieldError(error, "network")}
-                            >
-                                {catalog.networks.map((n) => (
-                                    <MenuItem key={n.id} value={n.id}>
-                                        {n.name}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                        )}
+                    <QueryState query={detail}>
+                        {() =>
+                            choices ? (
+                                <TextField
+                                    select
+                                    label="Network"
+                                    required
+                                    value={network}
+                                    onChange={(e) => setNetwork(e.target.value)}
+                                    {...fieldError(error, "network")}
+                                >
+                                    {choices.networks.map((n) => (
+                                        <MenuItem key={n.id} value={n.id}>
+                                            {n.name}
+                                        </MenuItem>
+                                    ))}
+                                </TextField>
+                            ) : (
+                                <Alert severity="warning">
+                                    Network choices are unavailable.{" "}
+                                    <Button
+                                        onClick={() => void detail.refetch()}
+                                    >
+                                        Retry
+                                    </Button>
+                                </Alert>
+                            )
+                        }
                     </QueryState>
                     <Typography>
                         The logical network is resolved on this machine's host.

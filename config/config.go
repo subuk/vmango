@@ -97,8 +97,8 @@ type VolumeConfig struct {
 	Hidden    bool   `hcl:"hidden"`
 }
 
-// ImageDefinitions converts legacy path labels and new catalog IDs without
-// consulting a node. Policies remain properties of storage paths.
+// ImageDefinitions normalizes cloud-owned definitions without backend calls.
+// Image-derived source policies are scoped to the owning cloud's hosts.
 func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeMetadata, error) {
 	images := []compute.Image{}
 	policies := map[string]compute.VolumeMetadata{}
@@ -106,76 +106,79 @@ func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeM
 		old := policies[path]
 		policies[path] = compute.VolumeMetadata{Protected: old.Protected || protected, Hidden: old.Hidden || hidden}
 	}
-	seen := map[string]bool{}
-	artifacts := map[string]compute.ImageDownload{}
-	for _, entry := range c.Images {
-		path := entry.Path
-		if path == "" {
-			path = entry.ID
-		}
-		managed := entry.URL != "" || entry.SHA256 != ""
-		if !managed && (entry.SourceFormat != "" || entry.SourceSizeBytes != 0) {
-			return nil, nil, fmt.Errorf("image %q: source_format/source_size_bytes require url and sha256", entry.ID)
-		}
-		if !managed {
-			mergePolicy(path, entry.Protected, entry.Hidden)
-		}
-		// Legacy image blocks without OS metadata were ordinary volume policies.
-		if !managed && entry.Path == "" && entry.OsName == "" {
-			continue
-		}
-		firmware := entry.Firmware
-		if entry.Efi != nil {
-			legacy := "auto"
-			if *entry.Efi {
-				legacy = "efi"
+	if len(c.Images) != 0 {
+		return nil, nil, fmt.Errorf("top-level image blocks were removed: move each definition into its owning cloud and replace path labels with stable IDs plus path; policy-only blocks become volume blocks (see docs/CLOUDS.md)")
+	}
+	for _, cloud := range c.Clouds {
+		seen := map[string]bool{}
+		artifacts := map[string]compute.ImageDownload{}
+		for _, entry := range cloud.Images {
+			if !compute.ValidCatalogID(entry.ID) {
+				return nil, nil, fmt.Errorf("cloud %s image %q: use a stable catalog ID and a separate path (see docs/CLOUDS.md)", cloud.ID, entry.ID)
 			}
-			if firmware != "" && firmware != legacy {
-				return nil, nil, fmt.Errorf("image %q: conflicting efi and firmware", entry.ID)
+			path := entry.Path
+			managed := entry.URL != "" || entry.SHA256 != ""
+			if !managed && (entry.SourceFormat != "" || entry.SourceSizeBytes != 0) {
+				return nil, nil, fmt.Errorf("image %q: source_format/source_size_bytes require url and sha256", entry.ID)
 			}
-			firmware = legacy
-		}
-		bus := compute.NewDeviceBus(entry.DiskBus)
-		if entry.DiskBus != "" && bus == compute.DeviceBusUnknown {
-			return nil, nil, fmt.Errorf("image %q: invalid disk_bus", entry.ID)
-		}
-		if entry.MinimumMemoryMiB < 0 || entry.MinimumDiskGiB < 0 || entry.MinimumMemoryMiB > math.MaxUint64/(1<<20) || entry.MinimumDiskGiB > math.MaxUint64/(1<<30) {
-			return nil, nil, fmt.Errorf("image %q: resource minimum overflows", entry.ID)
-		}
-		name := entry.Name
-		if name == "" {
-			name = entry.ID
-		}
-		i := compute.Image{ID: entry.ID, Name: name, OSName: entry.OsName, OSVersion: entry.OsVersion, Arch: compute.NewArch(entry.OsArch), SourcePath: path,
-			Defaults:           compute.ImageDefaults{Firmware: firmware, DiskBus: bus, DiskController: entry.DiskController, NICModel: entry.NICModel, GuestAgent: entry.GuestAgent, Graphics: entry.Graphics, VideoModel: entry.VideoModel, Initialization: entry.Initialization},
-			MinimumMemoryBytes: uint64(entry.MinimumMemoryMiB) << 20, MinimumDiskBytes: uint64(entry.MinimumDiskGiB) << 30}
-		if entry.SourceSizeBytes < 0 {
-			return nil, nil, fmt.Errorf("image %q: source_size_bytes must be positive", entry.ID)
-		}
-		if managed {
-			i.SourcePath = entry.Path
-			i.Download = &compute.ImageDownload{URL: entry.URL, SHA256: strings.ToLower(entry.SHA256), Format: compute.NewVolumeFormat(entry.SourceFormat), SizeBytes: uint64(entry.SourceSizeBytes)}
-		} else if entry.SourceFormat != "" || entry.SourceSizeBytes != 0 {
-			return nil, nil, fmt.Errorf("image %q: source_format/source_size_bytes require url and sha256", entry.ID)
-		}
-		if i.Managed() {
-			if previous, ok := artifacts[i.Download.SHA256]; ok && (previous.Format != i.Download.Format || (previous.SizeBytes != 0 && i.Download.SizeBytes != 0 && previous.SizeBytes != i.Download.SizeBytes)) {
-				return nil, nil, fmt.Errorf("image %q: conflicting format or byte size for shared artifact", i.ID)
+			if !managed {
+				for _, host := range cloud.Hosts {
+					mergePolicy(compute.VolumePolicyKey(host.Node, path), entry.Protected, entry.Hidden)
+				}
 			}
-			identity := *i.Download
-			if previous, ok := artifacts[i.Download.SHA256]; ok && identity.SizeBytes == 0 {
-				identity.SizeBytes = previous.SizeBytes
+			firmware := entry.Firmware
+			if entry.Efi != nil {
+				legacy := "auto"
+				if *entry.Efi {
+					legacy = "efi"
+				}
+				if firmware != "" && firmware != legacy {
+					return nil, nil, fmt.Errorf("image %q: conflicting efi and firmware", entry.ID)
+				}
+				firmware = legacy
 			}
-			artifacts[i.Download.SHA256] = identity
+			bus := compute.NewDeviceBus(entry.DiskBus)
+			if entry.DiskBus != "" && bus == compute.DeviceBusUnknown {
+				return nil, nil, fmt.Errorf("image %q: invalid disk_bus", entry.ID)
+			}
+			if entry.MinimumMemoryMiB < 0 || entry.MinimumDiskGiB < 0 || entry.MinimumMemoryMiB > math.MaxUint64/(1<<20) || entry.MinimumDiskGiB > math.MaxUint64/(1<<30) {
+				return nil, nil, fmt.Errorf("image %q: resource minimum overflows", entry.ID)
+			}
+			name := entry.Name
+			if name == "" {
+				name = entry.ID
+			}
+			i := compute.Image{CloudID: cloud.ID, ConfiguredPolicy: compute.VolumeMetadata{Protected: entry.Protected, Hidden: entry.Hidden}, ID: entry.ID, Name: name, OSName: entry.OsName, OSVersion: entry.OsVersion, Arch: compute.NewArch(entry.OsArch), SourcePath: path,
+				Defaults:           compute.ImageDefaults{Firmware: firmware, DiskBus: bus, DiskController: entry.DiskController, NICModel: entry.NICModel, GuestAgent: entry.GuestAgent, Graphics: entry.Graphics, VideoModel: entry.VideoModel, Initialization: entry.Initialization},
+				MinimumMemoryBytes: uint64(entry.MinimumMemoryMiB) << 20, MinimumDiskBytes: uint64(entry.MinimumDiskGiB) << 30}
+			if entry.SourceSizeBytes < 0 {
+				return nil, nil, fmt.Errorf("image %q: source_size_bytes must be positive", entry.ID)
+			}
+			if managed {
+				i.SourcePath = entry.Path
+				i.Download = &compute.ImageDownload{URL: entry.URL, SHA256: strings.ToLower(entry.SHA256), Format: compute.NewVolumeFormat(entry.SourceFormat), SizeBytes: uint64(entry.SourceSizeBytes)}
+			} else if entry.SourceFormat != "" || entry.SourceSizeBytes != 0 {
+				return nil, nil, fmt.Errorf("image %q: source_format/source_size_bytes require url and sha256", entry.ID)
+			}
+			if i.Managed() {
+				if previous, ok := artifacts[i.Download.SHA256]; ok && (previous.Format != i.Download.Format || (previous.SizeBytes != 0 && i.Download.SizeBytes != 0 && previous.SizeBytes != i.Download.SizeBytes)) {
+					return nil, nil, fmt.Errorf("image %q: conflicting format or byte size for shared artifact", i.ID)
+				}
+				identity := *i.Download
+				if previous, ok := artifacts[i.Download.SHA256]; ok && identity.SizeBytes == 0 {
+					identity.SizeBytes = previous.SizeBytes
+				}
+				artifacts[i.Download.SHA256] = identity
+			}
+			if err := i.Validate(); err != nil {
+				return nil, nil, err
+			}
+			if seen[i.ID] {
+				return nil, nil, fmt.Errorf("duplicate image identifier %q", i.ID)
+			}
+			seen[i.ID] = true
+			images = append(images, i)
 		}
-		if err := i.Validate(); err != nil {
-			return nil, nil, err
-		}
-		if seen[i.ID] {
-			return nil, nil, fmt.Errorf("duplicate image identifier %q", i.ID)
-		}
-		seen[i.ID] = true
-		images = append(images, i)
 	}
 	for _, v := range c.Volumes {
 		mergePolicy(v.Path, v.Protected, v.Hidden)
@@ -386,6 +389,12 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 		key, _ := item.Keys[0].Token.Value().(string)
 		if key == "libvirt" {
 			return fmt.Errorf("libvirt blocks are unsupported: put backend settings directly in cloud.host")
+		}
+		if key == "image" && owner != "cloud" {
+			return fmt.Errorf("top-level image blocks were removed: move definitions into each owning cloud; use a stable ID plus path, and volume blocks for policy-only entries (see docs/CLOUDS.md)")
+		}
+		if key == "images" && owner == "cloud" {
+			return fmt.Errorf("cloud.images references were removed: put nested image definitions inside the cloud (see docs/CLOUDS.md)")
 		}
 		if key == "host" && owner != "cloud" {
 			return fmt.Errorf("host blocks belong only inside cloud configuration")

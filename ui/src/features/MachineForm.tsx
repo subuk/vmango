@@ -23,7 +23,7 @@ import {
     useMachine,
     type Key,
     type VM,
-    type Volume,
+    type VolumeList,
 } from "../api/hooks";
 import type { components } from "../api/schema";
 import {
@@ -38,7 +38,6 @@ import { Summary } from "../components/Information";
 import { useResourceBusy } from "../api/tasks";
 
 export type Cloud = components["schemas"]["ApiCloud"];
-export type HostCatalog = components["schemas"]["ApiHostChoices"];
 const GiB = 2 ** 30;
 type Entry = { id: string; name: string };
 function Choice({
@@ -86,7 +85,7 @@ export function CreateMachine() {
     const cloud =
         clouds.data?.find((c) => c.id === cloudID) || clouds.data?.[0];
     const keys = useResource<Key[]>("/api/v1/keys");
-    const volumes = useResource<Volume[]>(
+    const volumes = useResource<VolumeList>(
         `/api/v1/clouds/${esc(cloud?.id || "")}/volumes?usage=attachable`,
         !!cloud,
     );
@@ -149,11 +148,11 @@ export function CreateMachine() {
         setExisting([]);
     }, [zone]);
     const selectedType = typeChoices.find((t) => t.id === instanceType);
-    const owningHost = volumes.data?.find((v) =>
+    const owningHost = volumes.data?.items.find((v) =>
         existing.includes(`${v.node}/${v.id}`),
     )?.node;
     const attachable =
-        volumes.data?.filter(
+        volumes.data?.items.filter(
             (v) =>
                 v.cloud === cloud?.id &&
                 v.zone === zone &&
@@ -255,7 +254,6 @@ export function CreateMachine() {
                                                                       key,
                                                               )!;
                                                           return {
-                                                              host: v.node,
                                                               volume_id: v.id,
                                                           };
                                                       },

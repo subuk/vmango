@@ -294,3 +294,6 @@ func choose(candidates []PlacementCandidate) (CloudHost, error) {
 	})
 	return candidates[0].Inventory.Host, nil
 }
+
+// ValidCatalogID reports whether an identifier can name a configured catalog entry.
+func ValidCatalogID(id string) bool { return resourceName.MatchString(id) }

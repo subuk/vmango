@@ -171,11 +171,11 @@ One Vmango instance can manage virtual machines across multiple local or remote
 libvirt hosts from the same web interface. Add a `host` block inside the cloud
 for each hypervisor. Host names and connection URIs must be globally unique.
 The following replaces the `cloud "local"` block in the quick-start configuration;
-keep the shared image definition:
+keep its nested image definitions:
 
 ```hcl
 cloud "local" {
-    images = ["ubuntu-24.04-x86_64-bios"]
+    # Keep the nested image definitions from vmango.quickstart.conf here.
     zone "local" {}
     instance_type "small" { cpu = 2 memory_mib = 2048 boot_disk_gib = 20 }
     network "lan" {}

@@ -161,7 +161,7 @@ func (h *CommandHandler) Prepare(command tasks.Command) (tasks.Command, error) {
 				c.Machine.Config.Keys = append(c.Machine.Config.Keys, key)
 			}
 		}
-		images := h.Manager.images
+		images := h.Manager.images.ForCloud(c.CloudID)
 		c.ImageBindings = map[string]ImageBinding{}
 		if images != nil {
 			seen := map[string]bool{}
@@ -372,10 +372,37 @@ func (h *CommandHandler) Prepare(command tasks.Command) (tasks.Command, error) {
 	return command, err
 }
 
+// validateAcceptedImageContext checks stored image identity before any preparation
+// mutation. Older accepted images inherit only their command's pinned cloud.
+func validateAcceptedImageContext(c InfrastructureCommand) error {
+	if len(c.Images) == 0 {
+		return nil
+	}
+	cloud := c.CloudID
+	if c.Catalog != nil {
+		if cloud != "" && c.Catalog.ID != cloud {
+			return invalid("image", "Accepted cloud context is inconsistent; inspect the task and submit again.")
+		}
+		cloud = c.Catalog.ID
+	}
+	if c.Machine != nil && c.Machine.Metadata != nil && cloud != "" && c.Machine.Metadata.Cloud != cloud {
+		return invalid("image", "Accepted machine cloud context changed; inspect the task and submit again.")
+	}
+	for _, image := range c.Images {
+		if image.CloudID != "" && image.CloudID != cloud {
+			return invalid("image", "Accepted image belongs to another cloud; inspect the task and submit again.")
+		}
+	}
+	return nil
+}
+
 func (h *CommandHandler) Execute(ctx context.Context, command tasks.Command, progress *tasks.Execution) error {
 	var c InfrastructureCommand
 	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 2 {
 		return ErrInvalid
+	}
+	if err := validateAcceptedImageContext(c); err != nil {
+		return err
 	}
 	if h.Clouds != nil {
 		if c.CreateSpec != nil || c.VolumeSpec != nil || c.NewDisk != nil || command.Kind == "machine.adopt" || command.Kind == "machine.change-type" {
@@ -387,7 +414,7 @@ func (h *CommandHandler) Execute(ctx context.Context, command tasks.Command, pro
 	}
 	if command.Kind == "machine.create" {
 		if len(c.Images) > 0 {
-			manager := h.Manager.withImages(h.Manager.images.Snapshot(c.Images, c.ImageBindings, false))
+			manager := h.Manager.withImages(h.Manager.images.ForCloud(c.CloudID).Snapshot(c.Images, c.ImageBindings, false))
 			manager.settings = map[string]VirtualMachineManagerNodeSettings{c.Node: c.Settings}
 			for _, i := range c.Images {
 				if i.Managed() {

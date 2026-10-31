@@ -4,6 +4,9 @@ import type { components } from "./schema";
 
 export type VM = components["schemas"]["ApiVM"];
 export type Node = components["schemas"]["ApiNode"];
+export type VolumeList = components["schemas"]["ApiVolumeList"];
+export type VMDetail = components["schemas"]["ApiVMDetail"];
+export type VolumeDetail = components["schemas"]["ApiVolumeDetail"];
 export type Volume = components["schemas"]["ApiVolume"];
 export type Network = components["schemas"]["ApiNetwork"];
 export type Key = components["schemas"]["ApiKey"];
@@ -14,20 +17,17 @@ export type Interface = components["schemas"]["ApiInterface"];
 export const esc = encodeURIComponent;
 export const vmPath = (cloud: string, id: string) =>
     `/api/v1/clouds/${esc(cloud)}/machines/${esc(id)}`;
-export const volumePath = (node: string, id: string, cloud: string) =>
-    `/api/v1/clouds/${esc(cloud)}/volumes/${esc(node)}/${esc(id)}`;
+export const volumePath = (cloud: string, id: string) =>
+    `/api/v1/clouds/${esc(cloud)}/volumes/${esc(id)}`;
 export const machineURL = (cloud: string, id: string) =>
     `/machines/${esc(cloud)}/${esc(id)}/`;
 export function useResource<T>(path: string, enabled = true, poll = true) {
     return useQuery({
         queryKey: [path],
-        queryFn: () => request<T>(path),
+        queryFn: ({ signal }) => request<T>(path, "GET", undefined, signal),
         enabled,
         refetchInterval: poll ? 15000 : false,
     });
-}
-export function useNodes(enabled = true) {
-    return useResource<Node[]>("/api/v1/hosts", enabled);
 }
 export function useMachine(
     cloud: string,
@@ -35,19 +35,13 @@ export function useMachine(
     enabled = true,
     poll = true,
 ) {
-    return useQuery<VM>({
+    return useQuery<VMDetail>({
         queryKey: ["machine", cloud, id],
         enabled,
-        queryFn: () => request<VM>(vmPath(cloud, id)),
+        queryFn: ({ signal }) =>
+            request<VMDetail>(vmPath(cloud, id), "GET", undefined, signal),
         refetchInterval: poll ? 15000 : false,
     });
-}
-export function useHostCloud(node: string, enabled = true) {
-    return useResource<{ cloud: string }>(
-        `/api/v1/hosts/${esc(node)}/cloud`,
-        enabled,
-        false,
-    );
 }
 export function useMachines(cloud?: string) {
     return useResource<components["schemas"]["ApiMachineList"]>(
@@ -55,22 +49,11 @@ export function useMachines(cloud?: string) {
         !!cloud,
     );
 }
-export function useVolumes() {
-    return useQuery({
-        queryKey: ["cloud-volumes"],
-        queryFn: async () => {
-            const clouds = await request<{ id: string }[]>("/api/v1/clouds");
-            return (
-                await Promise.all(
-                    clouds.map((c) =>
-                        request<Volume[]>(
-                            `/api/v1/clouds/${esc(c.id)}/volumes`,
-                        ),
-                    ),
-                )
-            ).flat();
-        },
-    });
+export function useVolumes(cloud: string, filters = "") {
+    return useResource<VolumeList>(
+        `/api/v1/clouds/${esc(cloud)}/volumes${filters ? `?${filters}` : ""}`,
+        !!cloud,
+    );
 }
 export function useOperation<T>(execute: (input: T) => Promise<unknown>) {
     const queries = useQueryClient();

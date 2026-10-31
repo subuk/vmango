@@ -194,7 +194,10 @@ export function Tokens() {
                             `/api/v1/tokens/${esc(remove.id)}`,
                             "DELETE",
                         );
-                        await queries.invalidateQueries();
+                        await queries.invalidateQueries({
+                            predicate: (q) =>
+                                q.queryKey[0] !== "administration",
+                        });
                     }}
                 >
                     This token will fail subsequent requests and its active

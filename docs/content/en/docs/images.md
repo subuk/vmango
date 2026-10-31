@@ -11,7 +11,7 @@ initial configuration on first boot.
 Image entries are exposed to users through a configured cloud. Define the
 [cloud catalog and host bindings](/docs/clouds/) before creating machines.
 
-## Shared downloadable catalog
+## Cloud-owned downloadable catalog
 
 `vmango.dist.conf` ships twelve pinned QCOW2 definitions: Ubuntu 24.04 LTS,
 Debian 13 Generic, Fedora Cloud Base 44, AlmaLinux GenericCloud 9.8,
@@ -21,7 +21,8 @@ mode is explicit in each catalog ID and label. These settings describe the
 selected variants, not universal BIOS/UEFI or cross-architecture compatibility.
 The selector filters architecture and launch requirements using node capabilities.
 
-Each top-level `image` entry is defined once and is available on compatible nodes.
+Each `image` entry belongs inside its owning `cloud` and is available on compatible
+nodes of that cloud. Equal image IDs in different clouds are independent.
 Set `image_pool` directly in each existing cloud host. This excerpt shows the
 image storage settings; keep the cloud's catalog and each host's zone,
 network and storage-class bindings:
@@ -50,7 +51,7 @@ managed image storage. VM destination disks use a logical storage class mapped
 to a pool on the selected host.
 The same catalog entry can use different pool paths on different nodes. Adding
 a node needs only a cloud host block with its connection and pool binding,
-without copied image definitions.
+without copying definitions within that cloud.
 
 A downloadable entry has `url`, mandatory `sha256` and `source_format` (`raw` or
 `qcow2`), with no `path`. Use the complete definitions in `vmango.dist.conf` as
@@ -260,28 +261,33 @@ sizes. Adoption also preserves the existing VM configuration. Accepted tasks
 retain their policy and private binding snapshots. Restart Vmango after changing
 the configuration to reload the read-only catalog.
 
-### Legacy configuration and volume policies
+### Configuration migration and volume policies
 
-Existing blocks remain supported:
+Top-level image blocks and `cloud.images` reference lists are removed. Move each
+image into its owning `cloud` block. Copy formerly shared definitions explicitly
+into every cloud that uses them. For a path-labeled image, choose a stable catalog
+ID and put the former label in `path`:
 
 ```hcl
-image "/var/lib/libvirt/images/ubuntu-cloud.img" {
-    os_name = "Ubuntu"
-    os_arch = "x86_64"
-    efi = true
-    protected = true
+cloud "local" {
+    image "ubuntu-local" {
+        path = "/var/lib/libvirt/images/ubuntu-cloud.img"
+        os_name = "Ubuntu"
+        os_arch = "x86_64"
+        firmware = "efi"
+        protected = true
+    }
+    # Keep this cloud's zones, types, network/storage catalogs and host bindings.
 }
 ```
 
-Without `path`, the label is both the legacy identifier and source path.
-`efi = true` maps to `firmware = "efi"`; `efi = false` preserves the old automatic
-behavior (`firmware = "auto"`). Conflicting `efi` and `firmware` settings are
-rejected. Unspecified options keep the existing defaults, including the node's
-config drive format. To migrate, choose a stable label and put the old label in
-`path`; IDs must be unique, but source paths need not be.
+IDs match `^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$` and are unique within their cloud;
+source paths need not be unique. `efi = true` still maps to `firmware = "efi"` and
+`efi = false` maps to `firmware = "auto"`; conflicting settings are rejected.
+Omitted settings retain launch inheritance, including the target host's config
+drive format. Restart to activate file edits.
 
-Protection and visibility belong to volumes, including ordinary non-image
-volumes. They can be configured independently:
+Legacy image blocks used only for volume policy become top-level volume blocks:
 
 ```hcl
 volume "/dev/data/private" {
@@ -290,12 +296,19 @@ volume "/dev/data/private" {
 }
 ```
 
-`protected` prevents deletion through Vmango; `hidden` excludes the volume from
-lookup and listing. Existing `image "path"` blocks without `os_name` continue to
-act as volume-policy entries and do not become catalog images. The legacy
-`protected` and `hidden` fields on image entries remain supported. Policies apply
-to the source path on every node; when several entries reference one path,
-protection and hiding are combined (any `true` applies to that volume).
+`protected` prevents deletion and `hidden` excludes an ordinary volume from
+listing. Neither flag hides an image definition from Administration. Explicit
+volume policies retain their path semantics. Policies derived from a cloud image
+apply only to that cloud's configured hosts; equal source paths in unrelated
+clouds do not share protection, hiding or attachment exclusions. Multiple images
+using one source on the same backend combine source policy (any `true` applies).
+Managed sources retain their existing physical protection independently of these
+configured flags.
+
+Preserve task, artifact and volume-ownership metadata during migration. Queued
+tasks keep their accepted source/default snapshots and backend identities, even
+if the running catalog now differs. Unsafe legacy commands fail before mutation
+and require explicit resubmission; history and locks remain available for review.
 
 ## Launch a machine
 

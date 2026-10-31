@@ -19,22 +19,23 @@ import (
 var AppVersion string
 
 type Environ struct {
-	clouds   *compute.CloudService
-	logger   zerolog.Logger
-	router   *mux.Router
-	networks *compute.NetworkService
-	keys     *compute.KeyService
-	volpools *compute.VolumePoolService
-	nodes    *compute.NodeService
-	volumes  *compute.VolumeService
-	vms      *compute.VirtualMachineService
-	images   *compute.ImageService
-	vmanager *compute.VirtualMachineManager
-	cfg      *config.APIConfig
-	auth     *auth.Service
-	tasks    *tasks.Service
-	oauth2   *oauth2.Config
-	oidcp    *oidc.Provider
+	administration *compute.AdministrationService
+	clouds         *compute.CloudService
+	logger         zerolog.Logger
+	router         *mux.Router
+	networks       *compute.NetworkService
+	keys           *compute.KeyService
+	volpools       *compute.VolumePoolService
+	nodes          *compute.NodeService
+	volumes        *compute.VolumeService
+	vms            *compute.VirtualMachineService
+	images         *compute.ImageService
+	vmanager       *compute.VirtualMachineManager
+	cfg            *config.APIConfig
+	auth           *auth.Service
+	tasks          *tasks.Service
+	oauth2         *oauth2.Config
+	oidcp          *oidc.Provider
 }
 
 func New(cfg *config.Config, logger zerolog.Logger,
@@ -44,6 +45,7 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	vmanager *compute.VirtualMachineManager, images *compute.ImageService,
 	authentication *auth.Service,
 	taskService *tasks.Service,
+	administration ...*compute.AdministrationService,
 ) (http.Handler, error) {
 	if cfg.API.APIDisabled {
 		return nil, fmt.Errorf("the frontend requires the API; remove api_disabled after reviewing the migration guide")
@@ -63,6 +65,15 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	env := &Environ{cfg: &cfg.API, logger: logger, router: mux.NewRouter(), networks: networks, keys: keys, volpools: volpools, nodes: nodes, volumes: volumes, vms: vms, vmanager: vmanager, images: images, auth: authentication, tasks: taskService}
 	if vmanager != nil {
 		env.clouds = vmanager.Clouds
+	}
+	if len(administration) > 0 {
+		env.administration = administration[0]
+	} else {
+		snapshot, err := cfg.AdministrationSnapshot(AppVersion)
+		if err != nil {
+			return nil, fmt.Errorf("build accepted administration snapshot: %w", err)
+		}
+		env.administration = compute.NewAdministrationService(snapshot, nil)
 	}
 	if cfg.API.Oidc.ClientId != "" {
 		provider, err := oidc.NewProvider(context.Background(), cfg.API.Oidc.IssuerUrl)

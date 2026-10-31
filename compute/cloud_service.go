@@ -88,7 +88,7 @@ func (s *CloudService) Offers(c Cloud) ([]CloudOffer, error) {
 			availablePools[pool.Name] = true
 		}
 		for _, id := range c.Images {
-			image, err := s.Manager.images.Get(id)
+			image, err := s.Manager.images.ForCloud(c.ID).Get(id)
 			if err != nil {
 				return nil, err
 			}
@@ -161,20 +161,51 @@ func (s *CloudService) Get(id string) (Cloud, error) {
 	return Cloud{}, ErrNotFound
 }
 
-func (s *CloudService) ListVolumes(cloudID string, attachable bool) ([]*Volume, error) {
+func (s *CloudService) ListVolumes(cloudID string, attachable bool, hostFilter ...string) (VolumeInventory, error) {
 	c, err := s.Get(cloudID)
 	if err != nil {
-		return nil, err
+		return VolumeInventory{}, err
 	}
 	nodes := []string{}
+	filter := ""
+	if len(hostFilter) > 0 {
+		filter = hostFilter[0]
+		if filter != "" {
+			if _, _, err := s.ForHost(c.ID, filter); err != nil {
+				return VolumeInventory{}, err
+			}
+		}
+	}
 	for _, h := range c.Hosts {
-		nodes = append(nodes, h.Node)
+		if filter == "" || filter == h.Node {
+			nodes = append(nodes, h.Node)
+		}
 	}
-	options := VolumeListOptions{NodeIds: nodes}
-	if attachable {
-		return s.Volumes.Attachable(options, s.Manager.images)
+	if len(nodes) == 0 {
+		return VolumeInventory{Volumes: []*Volume{}, UnavailableHosts: []string{}}, nil
 	}
-	return s.Volumes.List(options)
+	result, err := s.Volumes.ListInventory(VolumeListOptions{NodeIds: nodes})
+	if err != nil {
+		return VolumeInventory{}, err
+	}
+	sources := map[string]bool{}
+	if attachable && s.Manager != nil && s.Manager.images != nil {
+		sources, err = s.Manager.images.ForCloud(c.ID).SourcePaths()
+		if err != nil {
+			return VolumeInventory{}, err
+		}
+	}
+	visible := []*Volume{}
+	for _, v := range result.Volumes {
+		if !v.Metadata.Hidden && (!attachable || (v.AttachedTo == "" && !sources[v.Path])) {
+			visible = append(visible, v)
+		}
+	}
+	result.Volumes = visible
+	if result.UnavailableHosts == nil {
+		result.UnavailableHosts = []string{}
+	}
+	return result, nil
 }
 func (s *CloudService) ForNode(node string) (Cloud, CloudHost, error) {
 	for _, c := range s.Definitions {
@@ -238,7 +269,7 @@ func (s *CloudService) ValidateCreate(c Cloud, spec MachineCreateSpec) error {
 	if err != nil {
 		return err
 	}
-	image, err := s.Manager.images.Get(spec.Image)
+	image, err := s.Manager.images.ForCloud(c.ID).Get(spec.Image)
 	if err != nil {
 		return err
 	}
@@ -297,7 +328,7 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 	if err != nil {
 		return InfrastructureCommand{}, err
 	}
-	image, err := images.Get(spec.Image)
+	image, err := images.ForCloud(c.ID).Get(spec.Image)
 	if err != nil {
 		return InfrastructureCommand{}, err
 	}
@@ -361,7 +392,7 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 				newDisks = append(newDisks, VirtualMachineManagerCreatedVolumeParams{Cloud: c.ID, StorageClass: d.StorageClass, Name: vm.Name + "_" + d.Name, Pool: b.Pool, Format: b.Format, Size: NewSize(d.SizeBytes, SizeUnitB), DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio, Alias: d.Name})
 			}
 			for _, d := range spec.ExistingDisks {
-				if err = s.Volumes.ValidateAttachable(d.Path, h.Node, images); err != nil {
+				if err = s.Volumes.ValidateAttachable(d.Path, h.Node, images.ForCloud(c.ID)); err != nil {
 					return InfrastructureCommand{}, err
 				}
 				vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{Path: d.Path, DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio})

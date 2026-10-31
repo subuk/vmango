@@ -126,6 +126,10 @@ it("keeps backend network names in explicitly labeled host diagnostics", async (
         if (path.endsWith("/networks"))
             return [{ node: "host-a", name: "backend-private" }];
         if (path.endsWith("/pools")) return [];
+        if (path.endsWith("/catalog"))
+            return { networks: [], storage_classes: [] };
+        if (path.endsWith("/capabilities"))
+            return { arch: "x86_64", max_vcpus: 8 };
         return {
             id: "host-a",
             hostname: "host-a",
@@ -136,8 +140,13 @@ it("keeps backend network names in explicitly labeled host diagnostics", async (
         };
     });
     const router = createMemoryRouter(
-        [{ path: "/nodes/:node/", element: <NodeDetail /> }],
-        { initialEntries: ["/nodes/host-a/"] },
+        [
+            {
+                path: "/administration/clouds/:cloud/hosts/:node/",
+                element: <NodeDetail />,
+            },
+        ],
+        { initialEntries: ["/administration/clouds/west/hosts/host-a/"] },
     );
     render(
         <QueryClientProvider
@@ -156,5 +165,10 @@ it("keeps backend network names in explicitly labeled host diagnostics", async (
             name: "Backend networks (read-only diagnostics)",
         }),
     ).toBeTruthy();
-    expect(request).toHaveBeenCalledWith("/api/v1/hosts/host-a/networks");
+    expect(request).toHaveBeenCalledWith(
+        "/api/v1/administration/clouds/west/hosts/host-a/networks",
+        "GET",
+        undefined,
+        expect.any(AbortSignal),
+    );
 });

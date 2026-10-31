@@ -1,7 +1,10 @@
 # VM automation API v1
 
-The JSON API powers the embedded React UI. Existing users retain application-wide
-resource permissions; RBAC is outside v1; infrastructure mutations use durable asynchronous tasks. The UI requires
+The JSON API powers the embedded React UI. Authenticated operators retain their
+existing application-wide resource authority, including Administration, until
+namespace/RBAC support is introduced separately. Existing credential-kind,
+transport and origin checks still apply. Infrastructure mutations use durable
+asynchronous tasks. The UI requires
 the API; the legacy `web` block and `api_disabled=true` fail with a migration
 instruction. See [upgrade and authentication migration](UI-MIGRATION.md).
 
@@ -66,28 +69,40 @@ contract changes run `make api-types`, review the snapshot/type diff and run
 All machine and volume operations live under `/api/v1/clouds/{cloud}`.
 Create commands select catalog entries and an availability zone; the scheduler
 selects the host. Machine URLs contain the stable `id` returned by discovery
-(the libvirt domain UUID); `name` is a separate display field. Volume URLs retain
-`{node}` because disks are host-local. Copy identities from discovery; they are
-not placement inputs. Cloud membership is checked before reads, mutations and
-console connections.
+(the libvirt domain UUID); `name` is a separate display field. Volume URLs use
+one compound identifier without a separate host segment. Copy IDs from returned
+resources; they identify existing addresses rather than select placement. Cloud
+membership is checked before reads, mutations and console connections.
 
-Machine lists return `{ "items": [...], "unavailable_hosts": [...] }`. Every list
-request reads fresh backend state; failed hosts are omitted and explicitly named.
-The routing index stores only IDs and locations, not machine state. Point reads
-use the known host, or discover it after a miss. An unknown ID returns 503 if the
-search is incomplete and 404 after all hosts confirm absence.
+Machine and volume lists return `{ "items": [...], "unavailable_hosts": [...] }`
+for the requested cloud, with arrays even when empty. Successful inventory is
+fresh; failed hosts are omitted and explicitly named. A partial or completely
+unavailable scan returns 200 with the successful items and failed host IDs. Only
+empty items with no unavailable hosts confirm an empty collection. The machine
+routing index stores only IDs and locations, not machine state. Machine point
+reads use the known host, or discover it after a miss. An unknown machine ID
+returns 503 if the search is incomplete and 404 after all hosts confirm absence.
 
-Volume IDs are opaque URL-safe identifiers returned by discovery; clients should
-not construct or interpret them. SSH keys are application-wide and identified by
-their fingerprint. Sizes are integer **bytes**. Enums are strings. Unknown fields
-and invalid types are rejected. Paths below are relative to `/api/v1`.
+For libvirt, a volume's public ID is `base64url(node) + "." + base64url(path)`,
+with both components unpadded. This reversible address encoding distinguishes
+identical paths on different hosts; it does not replace backend identity or
+promise immutability after replacement at the same address. Exactly two nonempty
+canonical components are required, with at most 4096 decoded path bytes.
+Malformed IDs, including the former path-only IDs, return 422. A decoded host
+outside the requested cloud returns 404 before storage access; a missing volume
+returns 404 and an unavailable backend returns 503.
+
+SSH keys remain application-wide and identified by their fingerprint. Sizes are
+integer **bytes**. Enums are strings. Unknown fields and invalid types are
+rejected. No namespace selection or workspace headers are introduced here.
+Paths below are relative to `/api/v1`.
 
 | Resource | Operations |
 | --- | --- |
 | `/clouds`, `/clouds/{cloud}` | GET catalogs, compatible offers and placement capabilities |
 | `/clouds/{cloud}/machines` | GET managed/unmanaged inventory, POST scheduled creation |
 | `/clouds/{cloud}/machines/{vm}` | GET, DELETE |
-| `/clouds/{cloud}/machines/{vm}/actions` | POST `start`, `reboot`, `poweroff` |
+| `/clouds/{cloud}/machines/{vm}/actions` | POST `start`, `reboot`, `shutdown`, `poweroff` |
 | `/clouds/{cloud}/machines/{vm}/instance-type` | POST explicit stopped, same-host type change |
 | `/clouds/{cloud}/machines/{vm}/adopt` | POST explicit adoption |
 | `/clouds/{cloud}/machines/{vm}/disks` | POST create and attach a disk using storage class and size |
@@ -96,21 +111,11 @@ and invalid types are rejected. Paths below are relative to `/api/v1`.
 | `/clouds/{cloud}/machines/{vm}/interfaces` | POST attach a configured logical network |
 | `/clouds/{cloud}/machines/{vm}/interfaces/{mac}` | DELETE attachment |
 | `/clouds/{cloud}/volumes` | GET visible volumes, POST scheduled creation |
-| `/clouds/{cloud}/volumes/{node}/{volume}` | GET, DELETE |
-| `/clouds/{cloud}/volumes/{node}/{volume}/clone` | POST host-local clone to a storage class |
-| `/clouds/{cloud}/volumes/{node}/{volume}/resize` | POST explicit growth |
-| `/hosts`, `/hosts/{node}` | GET administrative diagnostics, topology, NUMA memory and pins |
-| `/hosts/{node}/networks`, `/hosts/{node}/pools` | GET backend diagnostics |
-| `/hosts/{node}/images`, `/hosts/{node}/capabilities` | GET backend diagnostics, optional `arch` |
-| `/hosts/{node}/catalog` | GET logical networks/storage classes supported on an observed host, plus its cloud and AZ |
-| `/hosts/{node}/cloud` | GET configured cloud membership without a backend read |
+| `/clouds/{cloud}/volumes/{volume}` | GET, DELETE |
+| `/clouds/{cloud}/volumes/{volume}/clone` | POST host-local clone to a storage class |
+| `/clouds/{cloud}/volumes/{volume}/resize` | POST explicit growth |
 | `/keys` | GET list, POST add a public key |
 | `/keys/{fingerprint}` | GET, DELETE |
-
-`GET /hosts/{node}/images` and `GET /hosts/{node}/capabilities` are intentional
-API-only diagnostics. The bundled UI does not call them; the acceptance suite
-exercises both routes. `GET /clouds/{cloud}` also remains available to API
-clients and acceptance tests, while the UI fetches the full cloud catalog.
 
 `GET /clouds/{cloud}/volumes` accepts `host` to filter by observed locality and
 `usage=attachable` to exclude attached disks and image sources. Neither changes
@@ -122,10 +127,12 @@ NIC model and VLAN are selected by the administrator's host network binding;
 `model`, `vlan` and other unsupported request fields are rejected. Observed
 interface responses retain `model` and `vlan` for diagnostics.
 
-The separate `/hosts` API is **read-only**. It cannot create, update, adopt or
-delete infrastructure. Legacy `/nodes/...`, `/vms`, `/volumes` and `/networks`
-endpoints are removed; there are no compatibility aliases. Clients aggregating
-multiple clouds enumerate `/clouds` and query each cloud's collections.
+All former `/hosts...` API routes, host-segment volume routes and legacy
+`/nodes/...`, `/vms`, `/volumes` and `/networks` endpoints are removed. Authenticated
+calls receive 404, with no redirect or compatibility alias. Dedicated host
+configuration and diagnostics now belong to cloud-centered Administration.
+Clients that intentionally aggregate multiple clouds can query each cloud's
+collection; the bundled Volumes page requests only its selected cloud.
 
 Infrastructure mutations return **202 Accepted** with a task and `status_url`,
 and require an `Idempotency-Key` header. Reads return 200. Key creation and
@@ -162,6 +169,107 @@ backend error, including libvirt message/code/domain. Browser disconnection does
 not cancel execution. Do not automatically resubmit failed/interrupted work;
 inspect its outcome first. No rollback is performed on hook or start failure.
 
+## Resource detail catalogs and disk references
+
+Machine detail includes `catalog: {networks: [{id, name}], storage_classes:
+[{id, name}]}` for the machine's current placement. Volume detail includes
+`catalog: {storage_classes: [{id, name}]}` for local clone destinations, including
+source constraints. Cloud and zone remain fields of the resource. Lists do not
+discover a catalog for each row. If a resource is readable but supplemental
+choice discovery fails, its detail still returns 200 with `catalog: null`.
+Empty arrays mean discovery succeeded with no choices. Refresh the same detail
+to retry; there is no separate workload catalog endpoint. Command acceptance and
+execution still validate current conditions independently.
+
+The same compound ID appears in volume `id`, VM `disks[].volume_id`, attachment
+bodies and detachment URLs. Existing-disk creation accepts only the public ID:
+
+```json
+{
+  "existing_disks": [
+    { "volume_id": "aG9zdC1h.L3Bvb2wvZGF0YS5xY293Mg" }
+  ]
+}
+```
+
+This fragment refers to `host-a` and `/pool/data.qcow2`; include the other machine
+creation fields in a complete request. The former per-disk `host` input is
+removed. Existing disks must share a host in the selected cloud/zone. VM
+attach/detach resolves the VM independently and rejects a disk on another host
+with 422, even if the same path exists there. Public ID changes do not rewrite
+accepted task payloads, historical resource references, ownership or lock keys.
+
+## Read-only Administration
+
+Administration is available to users authenticated through the existing
+local/OIDC/token flows, subject to the same credential-kind, transport and origin
+restrictions. It adds no temporary administrator flag or role system. Configuration
+and diagnostics do not send or use workspace namespace/context headers for
+filtering or authority. Namespace scope and RBAC are separate later changes.
+
+| GET path | Result |
+| --- | --- |
+| `/administration/configuration` | Accepted snapshot metadata and safe installation settings |
+| `/administration/clouds` | Configured cloud summaries |
+| `/administration/clouds/{cloud}` | Common cloud overview and typed backend references |
+| `/administration/clouds/{cloud}/configuration` | Effective zones, instance types, logical networks, storage classes and image references |
+| `/administration/clouds/{cloud}/configuration/hosts` | Configured host summaries, when supported |
+| `/administration/clouds/{cloud}/configuration/hosts/{node}` | Effective host settings and physical network/storage bindings |
+| `/administration/clouds/{cloud}/images` | This cloud's configured images, independent of live availability |
+| `/administration/clouds/{cloud}/images/{image}` | Safe full technical definition |
+| `/administration/clouds/{cloud}/images/{image}/availability` | Separately observed backend availability, when supported |
+| `/administration/clouds/{cloud}/hosts` | Live host inventory and explicit failures |
+| `/administration/clouds/{cloud}/hosts/{node}` | Live diagnostics, CPU topology, NUMA memory and pins |
+| `/administration/clouds/{cloud}/hosts/{node}/networks` | Observed backend networks |
+| `/administration/clouds/{cloud}/hosts/{node}/pools` | Observed backend storage pools |
+| `/administration/clouds/{cloud}/hosts/{node}/capabilities` | Live launch capabilities, optionally filtered by architecture |
+| `/administration/clouds/{cloud}/hosts/{node}/catalog` | Backend-validated logical networks and storage classes |
+
+Each common cloud descriptor has `id`, effective `name`, `backend_kind` and
+`capabilities: {host_inventory, image_availability}`. Backend capabilities describe
+supported views independently of permissions and runtime health. Libvirt-specific
+host references/counts and bindings appear in typed `libvirt` detail. Unsupported
+host or image-availability views return 404. An offline libvirt host remains a
+supported host; its individual live endpoints return 503. Unknown cloud/host or
+wrong-parent pairs return 404 before backend access.
+
+Configuration comes from an immutable deep copy accepted after startup
+validation/defaulting, with no backend reads. Its process-local `snapshot_id`, UTC
+`loaded_at`, application `version` and `activation: "restart"` identify what is
+running. Editing the file does not update this snapshot; restart to activate
+changes. Explicit false/zero values and unresolved target-dependent inheritance
+remain distinguishable. Configuration/diagnostic endpoints are GET-only and never
+prepare/download images, submit tasks, apply/reload settings or expose raw HCL.
+
+Projections exclude credentials, complete connection URIs, secrets, authentication
+policy and private storage locations. Administrative local image paths and
+configured emulator/pool references remain readable technical information.
+Remote image sources expose only `{scheme, host, port, redacted: true}`; path,
+userinfo, query and fragment are omitted, including signed tokens in paths.
+Errors preserve the same secret boundary. Ordinary resource IDs and non-secret
+diagnostics remain usable.
+
+The live host list returns `{items: [...], unavailable_hosts: [{id, code}]}`.
+Partial and all-unavailable inventories return 200; successful hosts remain visible.
+Image availability returns `{cloud_id, image_id, libvirt: {hosts: [...]}}` for
+libvirt, with an entry per configured host. `observation`, `compatibility` and
+`source_state` are separate states; unavailable observations use unknown values
+rather than asserting readiness. These reads have no preparation side effects.
+
+Image list `arch` accepts `x86_64` or `aarch64`; omission lists all configured
+architectures. Invalid values return 422. Host capabilities use the same allowed
+values and default to the host's architecture. Images are owned by cloud; a
+missing image in one cloud returns 404 even if its ID exists in another. See
+[configuration and image migration](CLOUDS.md) for nested definitions and removal
+of global image references. Public cloud catalogs expose user-facing OS,
+requirements and guest compatibility, with administrative sources/download/cache
+settings omitted by the server.
+
+Tasks remain at `/tasks...`, with their existing API methods, scope, references,
+polling and cancel/release safety checks. Their placement in Administration
+navigation does not change the task contract. The removed `/hosts/{node}/cloud`
+reverse lookup has no replacement endpoint.
+
 ## Create a VM
 
 Administrators first prepare the hypervisors and configure the cloud catalog,
@@ -169,8 +277,8 @@ image requirements and private host bindings; see [configured clouds](CLOUDS.md)
 and the [image guide](content/en/docs/images.md). Users discover a cloud's catalog
 with `GET /api/v1/clouds` or `GET /api/v1/clouds/{cloud}` and select compatible
 image, instance type, zone, logical network and storage class IDs. The scheduler
-chooses the host; `/hosts/...` discovery is administrative diagnostics, not the
-source of creation inputs.
+chooses the host. Creation uses the public cloud catalog and offers; it does not
+require administrative host or image requests.
 
 Creation uses the same domain manager as the UI for image requirements, resource
 admission, image preparation, config drives and event hooks. There is no `defaults`

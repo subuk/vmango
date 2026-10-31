@@ -24,7 +24,7 @@ func (repo *NodeRepository) List(options compute.NodeListOptions) ([]*compute.No
 	for _, nodeId := range repo.pool.Nodes(nil) {
 		node, err := repo.Get(nodeId, compute.NodeGetOptions{NoPins: options.NoPins})
 		if err != nil {
-			repo.logger.Warn().Err(err).Str("node", nodeId).Msg("cannot get node")
+			repo.logger.Warn().Err(administrationFailure(err)).Str("node", nodeId).Msg("cannot get node")
 			continue
 		}
 		nodes = append(nodes, node)

@@ -13,7 +13,6 @@ import (
 	"subuk/vmango/tasks"
 	"subuk/vmango/util"
 	"sync"
-	"time"
 
 	"github.com/rs/zerolog"
 
@@ -92,6 +91,10 @@ func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.Sto
 	volume.Name = virVolumeConfig.Name
 	volume.Pool = poolConfig.Name
 	volume.Metadata = repo.metadata[virVolumeConfig.Target.Path]
+	if scoped, ok := repo.metadata[compute.VolumePolicyKey(nodeId, virVolumeConfig.Target.Path)]; ok {
+		volume.Metadata.Protected = volume.Metadata.Protected || scoped.Protected
+		volume.Metadata.Hidden = volume.Metadata.Hidden || scoped.Hidden
+	}
 	if strings.HasPrefix(volume.Name, compute.ManagedImagePrefix) {
 		volume.Metadata = compute.VolumeMetadata{Protected: true, Hidden: true}
 	}
@@ -215,29 +218,36 @@ func (repo *VolumeRepository) listNode(nodeId string, onlyPools []string) ([]*co
 }
 
 func (repo *VolumeRepository) List(options compute.VolumeListOptions) ([]*compute.Volume, error) {
-	result := []*compute.Volume{}
+	inventory, err := repo.ListInventory(options)
+	return inventory.Volumes, err
+}
+
+// ListInventory records each failed host instead of treating it as empty.
+func (repo *VolumeRepository) ListInventory(options compute.VolumeListOptions) (compute.VolumeInventory, error) {
+	result := compute.VolumeInventory{Volumes: []*compute.Volume{}, UnavailableHosts: []string{}}
 	nodes := repo.pool.Nodes(options.NodeIds)
-	wg := &sync.WaitGroup{}
-	mu := &sync.Mutex{}
-	wg.Add(len(nodes))
-	start := time.Now()
-	for _, nodeId := range nodes {
-		go func(nodeId string) {
+	reads := make([][]*compute.Volume, len(nodes))
+	failures := make([]error, len(nodes))
+	var wg sync.WaitGroup
+	workers := make(chan struct{}, 20)
+	for n, node := range nodes {
+		wg.Add(1)
+		go func() {
 			defer wg.Done()
-			nodeStart := time.Now()
-			vols, err := repo.listNode(nodeId, options.PoolNames)
-			if err != nil {
-				repo.logger.Warn().Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("cannot list volumes")
-				return
-			}
-			repo.logger.Debug().Str("node", nodeId).TimeDiff("took", time.Now(), nodeStart).Msg("node volume list done")
-			mu.Lock()
-			result = append(result, vols...)
-			mu.Unlock()
-		}(nodeId)
+			workers <- struct{}{}
+			defer func() { <-workers }()
+			reads[n], failures[n] = repo.listNode(node, options.PoolNames)
+		}()
 	}
 	wg.Wait()
-	repo.logger.Debug().TimeDiff("took", time.Now(), start).Msg("full volume list done")
+	for n, node := range nodes {
+		if failures[n] != nil {
+			repo.logger.Warn().Str("node", node).Msg("cannot list volumes")
+			result.UnavailableHosts = append(result.UnavailableHosts, node)
+			continue
+		}
+		result.Volumes = append(result.Volumes, reads[n]...)
+	}
 	return result, nil
 }
 
@@ -407,7 +417,7 @@ func (repo *VolumeRepository) Delete(path, node string) error {
 	if err != nil {
 		return repositoryError(err, "cannot lookup storage volume")
 	}
-	if md, ok := repo.metadata[path]; ok && md.Protected {
+	if repo.metadata[path].Protected || repo.metadata[compute.VolumePolicyKey(node, path)].Protected {
 		return fmt.Errorf("%w: volume is protected", compute.ErrConflict)
 	}
 	if err := virVolume.Delete(libvirt.STORAGE_VOL_DELETE_NORMAL); err != nil {

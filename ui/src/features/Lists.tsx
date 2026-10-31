@@ -14,7 +14,6 @@ import { Link as RouterLink, useSearchParams } from "react-router";
 import {
     machineURL,
     useMachines,
-    useNodes,
     useOperation,
     useResource,
     vmPath,
@@ -148,7 +147,6 @@ export function Machines() {
                         search={(v) =>
                             `${v.name} ${v.id} ${v.node} ${v.ip_addresses.join(" ")}`
                         }
-                        node={(v) => v.node}
                         state={(v) => v.state}
                         columns={[
                             {
@@ -173,27 +171,6 @@ export function Machines() {
                                             {v.managed === false
                                                 ? " · Read-only"
                                                 : ""}
-                                        </Typography>
-                                    </Box>
-                                ),
-                            },
-                            {
-                                id: "node",
-                                label: "Host",
-                                value: (v) => v.node,
-                                render: (v) => (
-                                    <Box>
-                                        <Link
-                                            component={RouterLink}
-                                            to={`/nodes/${encodeURIComponent(v.node)}/`}
-                                        >
-                                            {v.node}
-                                        </Link>
-                                        <Typography
-                                            variant="body2"
-                                            color="text.secondary"
-                                        >
-                                            {v.zone || "No zone"}
                                         </Typography>
                                     </Box>
                                 ),
@@ -365,7 +342,9 @@ export function MachineActions({
                         >
                             {action === "poweroff"
                                 ? "Hard power-off…"
-                                : action === "shutdown" ? "Shutdown…" : "Reboot…"}
+                                : action === "shutdown"
+                                  ? "Shutdown…"
+                                  : "Reboot…"}
                         </MenuItem>
                     ))}
                 <MenuItem
@@ -398,7 +377,9 @@ export function MachineActions({
                               ? "Delete machine"
                               : confirm === "poweroff"
                                 ? "Hard power-off"
-                                : confirm === "shutdown" ? "Shutdown" : "Reboot"
+                                : confirm === "shutdown"
+                                  ? "Shutdown"
+                                  : "Reboot"
                     }
                     extra={
                         confirm === "delete"
@@ -424,7 +405,10 @@ export function MachineActions({
                                 "POST",
                                 { action: confirm },
                             );
-                        await queries.invalidateQueries();
+                        await queries.invalidateQueries({
+                            predicate: (q) =>
+                                q.queryKey[0] !== "administration",
+                        });
                     }}
                 >
                     {confirm === "adopt"
@@ -433,107 +417,11 @@ export function MachineActions({
                           ? `Permanently remove ${vm.node}/${vm.name}. Attached disks are kept unless you explicitly choose to delete them.`
                           : confirm === "poweroff"
                             ? `Immediately cut power to ${vm.node}/${vm.name}. Unsaved guest data may be lost.`
-                            : confirm === "shutdown" ? `Request graceful shutdown of ${vm.node}/${vm.name}. The guest operating system must respond to the request.` : `Reboot ${vm.node}/${vm.name}.`}
+                            : confirm === "shutdown"
+                              ? `Request graceful shutdown of ${vm.node}/${vm.name}. The guest operating system must respond to the request.`
+                              : `Reboot ${vm.node}/${vm.name}.`}
                 </Confirm>
             )}
-        </>
-    );
-}
-export function Nodes() {
-    const q = useNodes();
-    return (
-        <>
-            <PageTitle
-                title="Hosts"
-                count={q.data?.length}
-                description="Inspect host hardware, CPU topology and storage capacity."
-            />
-            {q.data && (
-                <Summary
-                    label="Host inventory summary"
-                    items={[
-                        {
-                            label: "Hosts",
-                            value: q.data.length,
-                            detail: "Returned by the backend",
-                        },
-                        {
-                            label: "Host CPUs",
-                            value: q.data.reduce(
-                                (sum, n) => sum + n.cpus.length,
-                                0,
-                            ),
-                            detail: "Logical processors",
-                        },
-                        {
-                            label: "Total memory",
-                            value: bytes(
-                                q.data.reduce(
-                                    (sum, n) => sum + n.memory_bytes,
-                                    0,
-                                ),
-                            ),
-                            detail: "Installed host memory",
-                        },
-                        {
-                            label: "Architectures",
-                            value: new Set(q.data.map((n) => n.arch)).size,
-                            detail:
-                                [...new Set(q.data.map((n) => n.arch))].join(
-                                    " · ",
-                                ) || "No hosts",
-                        },
-                    ]}
-                />
-            )}
-            <QueryState query={q}>
-                {(rows) => (
-                    <ResourceTable
-                        rows={rows}
-                        rowKey={(n) => n.id}
-                        search={(n) => `${n.id} ${n.hostname} ${n.arch}`}
-                        columns={[
-                            {
-                                id: "name",
-                                label: "Name",
-                                value: (n) => n.id,
-                                render: (n) => (
-                                    <Link
-                                        component={RouterLink}
-                                        to={`/nodes/${encodeURIComponent(n.id)}/`}
-                                    >
-                                        {n.id}
-                                    </Link>
-                                ),
-                            },
-                            {
-                                id: "host",
-                                label: "Hostname",
-                                value: (n) => n.hostname,
-                            },
-                            {
-                                id: "arch",
-                                label: "Architecture",
-                                value: (n) => n.arch,
-                            },
-                            {
-                                id: "cpus",
-                                label: "Host CPUs",
-                                value: (n) => n.cpus.length,
-                                numeric: true,
-                            },
-                            {
-                                id: "memory",
-                                label: "Memory",
-                                value: (n) => n.memory_bytes,
-                                render: (n) => bytes(n.memory_bytes),
-                                numeric: true,
-                            },
-                        ]}
-                        empty="No nodes are configured."
-                    />
-                )}
-            </QueryState>
         </>
     );
 }

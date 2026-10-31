@@ -10,6 +10,8 @@ import (
 // Image describes a reusable launch configuration. SourcePath is resolved on
 // the selected node; storage properties are never cached in the catalog.
 type Image struct {
+	CloudID            string         `json:",omitempty"`
+	ConfiguredPolicy   VolumeMetadata `json:",omitempty"`
 	ID                 string
 	Name               string
 	OSName             string
@@ -42,6 +44,18 @@ type ImageDefaults struct {
 	VideoModel     string
 	GuestAgent     *bool
 	Initialization string // Empty inherits the node's config drive format.
+}
+
+// BootDiskBus and GuestAgentEnabled expose the same omission defaults used
+// during launch, so read-only configuration can describe them without a host.
+func (d ImageDefaults) BootDiskBus() DeviceBus {
+	if d.DiskBus == DeviceBusUnknown {
+		return DeviceBusVirtio
+	}
+	return d.DiskBus
+}
+func (d ImageDefaults) GuestAgentEnabled() bool {
+	return d.GuestAgent == nil || *d.GuestAgent
 }
 
 func (i Image) Validate() error {
@@ -85,12 +99,14 @@ func (i Image) Validate() error {
 }
 
 type ImageRepository interface {
-	List() ([]Image, error)
-	Get(id string) (Image, error)
+	List(cloud string) ([]Image, error)
+	Get(cloud, id string) (Image, error)
 }
 
 type ImageService struct {
 	ImageRepository
+	CloudID        string
+	NodeClouds     map[string]string
 	ManagedSources *ManagedImageService
 	PinnedBindings map[string]ImageBinding
 	Preflight      bool
@@ -100,17 +116,42 @@ type ImageService struct {
 // subsequently edited catalog. Launch defaults and artifact identity stay pinned.
 type pinnedImages []Image
 
-func (p pinnedImages) List() ([]Image, error) { return p, nil }
-func (p pinnedImages) Get(id string) (Image, error) {
+func (p pinnedImages) List(cloud string) ([]Image, error) {
+	out := []Image{}
 	for _, i := range p {
-		if i.ID == id {
+		if i.CloudID == cloud {
+			out = append(out, i)
+		}
+	}
+	return out, nil
+}
+func (p pinnedImages) Get(cloud, id string) (Image, error) {
+	for _, i := range p {
+		if i.CloudID == cloud && i.ID == id {
 			return i, nil
 		}
 	}
 	return Image{}, fmt.Errorf("image %q is not pinned", id)
 }
 func (s *ImageService) Snapshot(images []Image, bindings map[string]ImageBinding, preflight bool) *ImageService {
-	return &ImageService{ImageRepository: pinnedImages(images), ManagedSources: s.ManagedSources, PinnedBindings: bindings, Preflight: preflight}
+	// Pre-migration accepted commands did not store CloudID in each pinned image.
+	// Their accepted cloud is authoritative; never consult today's catalog.
+	pinned := make([]Image, len(images))
+	copy(pinned, images)
+	for n := range pinned {
+		if pinned[n].Download != nil {
+			download := *pinned[n].Download
+			pinned[n].Download = &download
+		}
+		if pinned[n].Defaults.GuestAgent != nil {
+			enabled := *pinned[n].Defaults.GuestAgent
+			pinned[n].Defaults.GuestAgent = &enabled
+		}
+		if pinned[n].CloudID == "" {
+			pinned[n].CloudID = s.CloudID
+		}
+	}
+	return &ImageService{ImageRepository: pinnedImages(pinned), CloudID: s.CloudID, NodeClouds: s.NodeClouds, ManagedSources: s.ManagedSources, PinnedBindings: bindings, Preflight: preflight}
 }
 func (s *ImageService) Source(i Image, node string, volumes *VolumeService) (*Volume, error) {
 	if !i.Managed() {
@@ -134,6 +175,32 @@ func (s *ImageService) Source(i Image, node string, volumes *VolumeService) (*Vo
 }
 
 func NewImageService(repo ImageRepository) *ImageService { return &ImageService{ImageRepository: repo} }
+
+// ForCloud binds all definition lookups to one owning cloud. An empty cloud
+// preserves an already scoped view and never selects another catalog.
+func (s *ImageService) ForCloud(cloud string) *ImageService {
+	if s == nil {
+		return nil
+	}
+	view := *s
+	if cloud != "" {
+		view.CloudID = cloud
+	}
+	return &view
+}
+
+// ForNode selects the configured owning cloud for node-local safety checks.
+func (s *ImageService) ForNode(node string) *ImageService {
+	if s == nil {
+		return nil
+	}
+	if s.CloudID != "" {
+		return s
+	}
+	return s.ForCloud(s.NodeClouds[node])
+}
+func (s *ImageService) Get(id string) (Image, error) { return s.ImageRepository.Get(s.CloudID, id) }
+func (s *ImageService) List() ([]Image, error)       { return s.ImageRepository.List(s.CloudID) }
 
 // Available filters definitions by actual, visible, unattached source volumes.
 func (s *ImageService) Available(node string, arch Arch, volumes []*Volume) ([]Image, error) {

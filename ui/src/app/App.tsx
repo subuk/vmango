@@ -19,18 +19,22 @@ import {
     Navigate,
     Route,
     Routes,
+    useLocation,
 } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppearance } from "./theme";
 import { useMe } from "./Auth";
 import { TaskMonitor, Tasks, TaskDetail } from "../features/Tasks";
+import { AdministrationLayout } from "../features/AdministrationLayout";
 import { logout } from "../api/client";
 
 const Machines = lazy(() =>
     import("../features/Lists").then((m) => ({ default: m.Machines })),
 );
-const Nodes = lazy(() =>
-    import("../features/Lists").then((m) => ({ default: m.Nodes })),
+const Administration = lazy(() =>
+    import("../features/Administration").then((m) => ({
+        default: m.Administration,
+    })),
 );
 const Networks = lazy(() =>
     import("../features/Lists").then((m) => ({ default: m.Networks })),
@@ -47,9 +51,7 @@ const KeyDetail = lazy(() =>
 const Tokens = lazy(() =>
     import("../features/Tokens").then((m) => ({ default: m.Tokens })),
 );
-const NodeDetail = lazy(() =>
-    import("../features/NodeDetail").then((m) => ({ default: m.NodeDetail })),
-);
+
 const MachineDetail = lazy(() =>
     import("../features/MachineDetail").then((m) => ({
         default: m.MachineDetail,
@@ -71,11 +73,10 @@ const ApiDocs = lazy(() =>
 );
 const sections = [
     ["Machines", "/machines/"],
-    ["Hosts", "/nodes/"],
     ["Volumes", "/volumes/"],
     ["Networks", "/networks/"],
     ["Keys", "/keys/"],
-    ["Tasks", "/tasks/"],
+    ["Administration", "/administration/"],
 ];
 
 function ThemeChoice() {
@@ -132,6 +133,7 @@ export function App({ standalone = false }: { standalone?: boolean }) {
     return <Shell />;
 }
 function Shell() {
+    const { pathname } = useLocation();
     const me = useMe();
     const [account, setAccount] = useState<HTMLElement | null>(null);
     const [drawer, setDrawer] = useState(false);
@@ -180,7 +182,17 @@ function Shell() {
                     sx={{ display: { xs: "none", md: "flex" }, gap: 2.5 }}
                 >
                     {sections.map(([title, url]) => (
-                        <NavLink key={url} to={url}>
+                        <NavLink
+                            key={url}
+                            to={url}
+                            className={({ isActive }) =>
+                                isActive ||
+                                (url === "/administration/" &&
+                                    pathname.startsWith("/tasks/"))
+                                    ? "active"
+                                    : ""
+                            }
+                        >
                             {title}
                         </NavLink>
                     ))}
@@ -299,8 +311,17 @@ function Shell() {
                             path="/login/"
                             element={<Navigate to="/machines/" replace />}
                         />
-                        <Route path="/nodes/" element={<Nodes />} />
-                        <Route path="/nodes/:node/" element={<NodeDetail />} />
+                        <Route element={<AdministrationLayout />}>
+                            <Route
+                                path="/administration/*"
+                                element={<Administration />}
+                            />
+                            <Route path="/tasks/" element={<Tasks />} />
+                            <Route
+                                path="/tasks/:id/"
+                                element={<TaskDetail />}
+                            />
+                        </Route>
                         <Route path="/machines/" element={<Machines />} />
                         <Route
                             path="/machines/add/"
@@ -326,8 +347,6 @@ function Shell() {
                             path="/machines/:cloud/:id/vnc/"
                             element={<Console />}
                         />
-                        <Route path="/tasks/" element={<Tasks />} />
-                        <Route path="/tasks/:id/" element={<TaskDetail />} />
                         <Route path="/volumes/" element={<Volumes />} />
                         <Route path="/networks/" element={<Networks />} />
                         <Route path="/keys/" element={<Keys />} />
@@ -348,7 +367,7 @@ function Shell() {
                                         component={RouterLink}
                                         to="/machines/"
                                     >
-                                        Open nodes
+                                        Open machines
                                     </Button>
                                 </>
                             }

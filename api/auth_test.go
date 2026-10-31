@@ -134,7 +134,7 @@ func TestFrontendRoutingAndRuntimeAssets(t *testing.T) {
 	if w := apiRequest(h, "POST", "/machines/v/delete/", "", false); w.Code != 405 {
 		t.Fatal("legacy HTML mutation route survived", w.Code)
 	}
-	if w := apiRequest(h, "POST", "/api/v1/hosts", "", true); w.Code != 405 || !strings.Contains(w.Header().Get("Content-Type"), "problem+json") {
+	if w := apiRequest(h, "POST", "/api/v1/administration/clouds", "", true); w.Code != 405 || !strings.Contains(w.Header().Get("Content-Type"), "problem+json") {
 		t.Fatal("API method error is not JSON", w.Code)
 	}
 	for _, path := range []string{"/machines/", "/api/docs"} {

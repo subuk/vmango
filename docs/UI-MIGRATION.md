@@ -12,7 +12,8 @@ Replace `web { ... }` with `api { ... }`. The legacy block fails with a migratio
 instruction; it is not an alias. The subsequent [cloud migration](CLOUDS.md)
 replaces low-level machine creation and CPU/RAM updates with catalog commands.
 All machine/volume/console operations now use cloud-scoped API URLs. Legacy
-`/nodes` routes are removed; `/hosts` provides read-only administrative diagnostics. Remove
+`/nodes` routes are removed; cloud-nested `/administration` routes provide
+read-only configuration and diagnostics. Remove
 `static_version`, `session_secret`, `session_domain`, `session_max_age` and
 `media_upload_tmp`. Listener/base URL, users/OIDC, navigation links and console
 settings move into `api`. The CLI command remains `vmango web`.
@@ -48,6 +49,96 @@ unusable storage or a second process owning either store fail startup. RPM/DEB
 upgrades preserve runtime data and configuration; records are never packaged.
 The store is local to one process; shared/network storage and replicas are out
 of scope.
+
+## Cloud-centered Administration and resource migration
+
+The application shell has one Administration entry. Its Overview at
+`/administration/` summarizes configured clouds, catalogs and installation status.
+A shared sidebar links Overview, Clouds, installation Configuration and Tasks;
+on smaller screens it becomes a separate navigation panel above the content.
+Installation settings live at `/administration/configuration/`. Selecting a cloud
+adds its Overview, Configuration, Images and supported Hosts views to the sidebar.
+Task list/detail pages use the same layout while keeping `/tasks/` and
+`/tasks/:task/`.
+Workload operation progress and resource task history remain available, including
+existing busy checks, cancel/release behavior and real backend references.
+
+| Previous address | New address |
+| --- | --- |
+| UI `/nodes/`, `/nodes/:node/` | `/administration/clouds/:cloud/hosts/` and `.../hosts/:node/` |
+| API `/api/v1/hosts`, `/api/v1/hosts/{node}` | `/api/v1/administration/clouds/{cloud}/hosts` and `.../hosts/{node}` |
+| API `/api/v1/hosts/{node}/networks`, `.../pools`, `.../capabilities`, `.../catalog` | The corresponding suffix under `/api/v1/administration/clouds/{cloud}/hosts/{node}` |
+| API `/api/v1/hosts/{node}/images` | Cloud image definitions under `/api/v1/administration/clouds/{cloud}/images`; observations under `.../images/{image}/availability` |
+| API `/api/v1/hosts/{node}/cloud` | Removed; use known resource/cloud context for navigation |
+| API `/api/v1/clouds/{cloud}/volumes/{node}/{volume}` | `/api/v1/clouds/{cloud}/volumes/{volume}`; clone/resize keep their action suffixes |
+
+Removed routes return 404 without redirects or compatibility aliases. Update API
+clients and saved links together. Administration deep links support configured
+IDs containing dots. There is no global administrative Hosts/Images page or
+host-owned image catalog. Workload tables no longer have dedicated Host columns,
+filters, infrastructure links or hardware-topology panels. Real resource IDs,
+paths and useful non-secret diagnostics remain readable.
+
+Configuration is file-managed. Administration shows the immutable accepted
+startup snapshot, its load time/version and the restart activation rule.
+Configured pages work with every host offline and are separate from Live host
+or image observations. Editing a file takes effect after restart, with no browser
+edit/apply/reload/download-raw-config operation. Explicit false/zero values and
+unresolved inheritance retain their meaning. Live failures do not block configured
+settings; manual refresh retries observations. Configuration/diagnostic pages do
+not poll or refresh on task completion. Workload/task refresh behavior remains.
+
+Backend capabilities control whether Hosts or image availability are supported.
+A provider without hosts has no Hosts links or requests. An offline libvirt host
+retains its supported view and shows unavailable/partial observations. A 403/404
+replaces old detail; transient live errors can retain labeled last-known data.
+Queries are separated by API area, principal, resource and configuration snapshot;
+logout/identity change clears private data and isolates late responses.
+
+Administration currently follows the authenticated-operator model for existing
+local, OIDC and token credentials; transport, credential-kind and origin rules
+still apply. No temporary administrator flag, roles, namespace selector or
+namespace/context headers are introduced. Namespace/RBAC support will arrive
+separately. Configuration and diagnostics do not use incoming workspace headers
+to filter data or grant access.
+
+Cloud owns each image definition. Move top-level `image` blocks and `cloud.images`
+references to nested `cloud "id" { image "id" { ... } }` blocks. Copy a formerly
+shared definition into each owning cloud. Equal IDs in different clouds are
+independent; duplicate IDs within one cloud fail startup. Path-labeled images
+need a stable catalog ID plus a separate `path`. Policy-only legacy blocks move
+to explicit `volume` configuration. Removed syntax fails with a migration hint.
+See [the detailed configuration migration](CLOUDS.md). Preserve task/artifact/
+ownership storage when upgrading: already accepted commands retain pinned
+sources/defaults, history and safety records. Commands without safely recoverable
+context fail before mutation and require explicit resubmission after inspection.
+
+Volumes now matches Machines: select one cloud using `?cloud=`, defaulting to the
+first configured cloud. The page requests that cloud alone and shows one flat
+table across its hosts/pools, with search, sorting and volume-specific filters.
+Creation starts with the selected cloud. Counts describe the returned items;
+partial/all-unavailable inventories show an explicit incomplete state. The volume
+list API now returns `{items: Volume[], unavailable_hosts: string[]}` instead of
+a bare array. Empty items with failures do not establish an empty cloud.
+
+For libvirt, the public volume ID is `base64url(node) + "." + base64url(path)`
+with unpadded canonical components. Use it consistently in volume URLs and `id`,
+VM `disks[].volume_id`, attachment/detachment and machine creation:
+`existing_disks: [{volume_id}]`. Remove the former public per-disk `host` field.
+Path-only IDs are rejected with 422; wrong-cloud hosts return 404 and cross-host
+VM disk actions return 422 before touching an equal path on another host. IDs
+remain reversible addresses; backend identities, durable task references and
+locks keep their previous representations. Busy/history filters still use the
+real host/raw-path resource reference internally.
+
+VM detail now contains `catalog: {networks, storage_classes}` and volume detail
+contains `catalog: {storage_classes}`. Disk/interface/clone forms load or reuse
+that detail rather than administrative host requests or a separate catalog API.
+A readable resource with unavailable supplemental choices returns `catalog: null`;
+controls requiring choices are disabled until refreshing detail succeeds. Empty
+arrays mean known-empty choices. Lists remain lightweight. Machine/volume
+creation still uses public cloud catalogs/offers. See [the API contract](API.md)
+for full routes, errors and examples.
 
 ## Credential lifecycle
 
