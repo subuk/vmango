@@ -56,16 +56,23 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: docker-image
-          path: ${{ runner.temp }}
+          pattern: docker-image-*
+          path: ${{ runner.temp }}/images
+      - uses: docker/setup-buildx-action@v4
+        with:
+          cache-binary: false
       - name: Load and verify tested image
         env:
           VERSION: ${{ inputs.version }}
           SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
         run: |
-          docker load --input "$RUNNER_TEMP/vmango-image.tar"
-          test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' vmango:tested)" = "$VERSION"
-          test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' vmango:tested)" = "$SOURCE_SHA"
+          for arch in amd64 arm64; do
+            docker load --input "$RUNNER_TEMP/images/docker-image-$arch/vmango-image.tar"
+            image="vmango:tested-$arch"
+            test "$(docker inspect --format '{{.Os}}/{{.Architecture}}' "$image")" = "linux/$arch"
+            test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$image")" = "$VERSION"
+            test "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image")" = "$SOURCE_SHA"
+          done
       - uses: docker/login-action@v4
         with:
           username: subuk
@@ -76,13 +83,21 @@ jobs:
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ inputs.version }}
         run: |
-          docker tag vmango:tested "subuk/vmango:$VERSION"
-          docker push "subuk/vmango:$VERSION"
+          refs=()
+          for arch in amd64 arm64; do
+            tag="subuk/vmango:$VERSION-$arch"
+            docker tag "vmango:tested-$arch" "$tag"
+            docker push "$tag"
+            refs+=("$(docker inspect --format '{{index .RepoDigests 0}}' "$tag")")
+          done
+          # Assemble only the exact platform digests that were just pushed.
+          docker buildx imagetools create --tag "subuk/vmango:$VERSION" "${refs[@]}"
+          docker buildx imagetools inspect --raw "subuk/vmango:$VERSION" \
+            | jq -e '[.manifests[].platform | .os + "/" + .architecture] | sort == ["linux/amd64", "linux/arm64"]'
           # Re-publishing an older release must not roll latest back.
           if [[ "$VERSION" != *-* ]]; then
             latest=$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)
             if [ "$latest" = "v$VERSION" ]; then
-              docker tag vmango:tested subuk/vmango:latest
-              docker push subuk/vmango:latest
+              docker buildx imagetools create --tag subuk/vmango:latest "subuk/vmango:$VERSION"
             fi
           fi

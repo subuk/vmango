@@ -76,13 +76,15 @@ Use the Ubuntu 22.04 Jammy package from the release PPA, following the
 The repository suite must remain `jammy`, not the Debian codename. Package
 validation checks installation and startup on both Debian versions.
 
-### Docker (Linux amd64)
+### Docker (Linux amd64 and arm64)
 
 Release images are published to [Docker Hub](https://hub.docker.com/r/subuk/vmango)
 as `subuk/vmango:VERSION`; `latest` tracks the latest stable GitHub release.
-Prereleases have only their version tag. The image includes libvirt clients,
+Prereleases use version-specific tags. The image includes libvirt clients,
 SSH, CA certificates, ISO tools and the embedded frontend. It connects to
 existing hypervisors and does not run a libvirt daemon.
+Docker selects the matching architecture automatically; explicit
+`VERSION-amd64` and `VERSION-arm64` tags are also available.
 
 Copy `vmango.dist.conf` to `vmango.conf`, configure your cloud's host connections,
 and add an administrator password hash generated with:

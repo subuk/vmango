@@ -15,7 +15,7 @@ def docker(*args):
     return subprocess.check_output(["docker", *args], text=True, timeout=60).strip()
 
 
-def smoke(image, version):
+def smoke(image, version, architecture=None):
     name = "vmango-smoke-" + uuid.uuid4().hex
     root = pathlib.Path(__file__).resolve().parents[2]
     config = (root / "vmango.quickstart.conf").read_text()
@@ -29,6 +29,8 @@ def smoke(image, version):
     # This test-only hash uses the password "admin"; it never enters the image.
     config = config.replace("REPLACE_WITH_GENPW_OUTPUT", "$2a$10$igHQGROHntvl05AztpfMeONSBDUsEbZHxayc5DOPTKIFX50WrHURS")
     metadata, = json.loads(docker("image", "inspect", image))
+    if architecture and (metadata["Os"], metadata["Architecture"]) != ("linux", architecture):
+        raise RuntimeError("Image platform differs from the expected Linux architecture")
     if metadata["Config"]["User"] != "10001:10001":
         raise RuntimeError("Container must run as the unprivileged Vmango user")
     for command in ("ssh", "genisoimage", "virsh"):
