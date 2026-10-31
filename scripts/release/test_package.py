@@ -22,6 +22,7 @@ class OfflineDocumentationTest(unittest.TestCase):
                 "LICENSE", "vmango.quickstart.conf", "vmango.dist.conf", "docs/API.md",
                 "docs/CLOUDS.md", "docs/TASKS.md", "docs/UI-MIGRATION.md",
                 "docs/content/en/docs/start.md", "docs/content/en/docs/images.md",
+                "docs/content/en/docs/docker.md",
                 "docs/data/image-sources.json",
             ):
                 target = root / filename
@@ -38,9 +39,9 @@ class OfflineDocumentationTest(unittest.TestCase):
             with tarfile.open(archive) as packaged:
                 prefix = "vmango-test-linux-x64/"
                 files = {item.name.removeprefix(prefix) for item in packaged if item.isfile()}
-                for guide in ("API.md", "CLOUDS.md", "IMAGES.md", "MIGRATION.md", "TASKS.md", "QUICKSTART.md"):
+                for guide in ("API.md", "CLOUDS.md", "DOCKER.md", "IMAGES.md", "MIGRATION.md", "TASKS.md", "QUICKSTART.md"):
                     self.assertIn(guide, files)
-                for guide in ("API.md", "CLOUDS.md", "IMAGES.md", "MIGRATION.md", "TASKS.md", "QUICKSTART.md"):
+                for guide in ("API.md", "CLOUDS.md", "DOCKER.md", "IMAGES.md", "MIGRATION.md", "TASKS.md", "QUICKSTART.md"):
                     text = packaged.extractfile(prefix + guide).read().decode()
                     for target in re.findall(r"\]\(([^)]+)\)", text):
                         if "://" not in target and not target.startswith("#"):
