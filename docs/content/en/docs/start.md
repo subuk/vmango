@@ -9,6 +9,8 @@ Download an archive and `SHA256SUMS` from
 Choose the **Vmango server's** architecture, which may differ from the guest VM's
 architecture. No Docker or Go compiler is needed.
 
+To run a container instead, follow [Docker installation](/docs/docker/).
+
 ## Choose an archive
 
 Replace `VERSION` below with the version shown on the release, without its `v` prefix.

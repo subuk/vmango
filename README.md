@@ -78,6 +78,9 @@ validation checks installation and startup on both Debian versions.
 
 ### Docker (Linux amd64 and arm64)
 
+Follow the [Docker installation guide](docs/content/en/docs/docker.md)
+([website](https://vmango.org/docs/docker/)) for setup and troubleshooting.
+
 Release images are published to [Docker Hub](https://hub.docker.com/r/subuk/vmango)
 as `subuk/vmango:VERSION`; `latest` tracks the latest stable GitHub release.
 Prereleases use version-specific tags. The image includes libvirt clients,
