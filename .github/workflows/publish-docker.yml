@@ -88,7 +88,10 @@ jobs:
             tag="subuk/vmango:$VERSION-$arch"
             docker tag "vmango:tested-$arch" "$tag"
             docker push "$tag"
-            refs+=("$(docker inspect --format '{{index .RepoDigests 0}}' "$tag")")
+            ref=$(docker inspect --format '{{json .RepoDigests}}' "$tag" \
+              | jq -er '.[] | select(startswith("subuk/vmango@sha256:"))')
+            [[ "$ref" =~ ^subuk/vmango@sha256:[0-9a-f]{64}$ ]]
+            refs+=("$ref")
           done
           # Assemble only the exact platform digests that were just pushed.
           docker buildx imagetools create --tag "subuk/vmango:$VERSION" "${refs[@]}"

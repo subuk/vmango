@@ -37,7 +37,8 @@ class DockerPublicationTest(unittest.TestCase):
             elif args[0] == 'inspect':
                 if 'RepoDigests' in args[2]:
                     digest = 'a' if args[-1].endswith('-amd64') else 'b'
-                    print('subuk/vmango@sha256:' + digest * 64)
+                    print(json.dumps(['other.example/vmango@sha256:' + 'c' * 64,
+                                      'subuk/vmango@sha256:' + digest * 64]))
                 elif 'Architecture' in args[2]:
                     print('linux/' + os.environ.get('IMAGE_ARCH', args[-1].rsplit('-', 1)[1]))
                 else:
@@ -46,6 +47,8 @@ class DockerPublicationTest(unittest.TestCase):
             elif args[0] == 'push':
                 if os.environ.get('FAIL_PUSH') and args[-1].endswith(os.environ['FAIL_PUSH']):
                     sys.exit(1)
+                digest = 'a' if args[-1].endswith('-amd64') else 'b'
+                print('sha256:' + digest * 64)
             elif args[:2] == ['buildx', 'imagetools']:
                 if args[2] == 'create':
                     if os.environ.get('FAIL_MANIFEST'):
@@ -77,7 +80,7 @@ class DockerPublicationTest(unittest.TestCase):
         return result, calls
 
     def pushes(self, calls):
-        return [call[2] for call in calls if call[:2] == ['docker', 'push']]
+        return [call[-1] for call in calls if call[:2] == ['docker', 'push']]
 
     def manifests(self, calls):
         return [call for call in calls if call[:4] == ['docker', 'buildx', 'imagetools', 'create']]
