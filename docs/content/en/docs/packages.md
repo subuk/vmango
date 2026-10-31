@@ -6,6 +6,8 @@ weight: 2
 
 Use the release repositories below. Configure `/etc/vmango.conf` for your
 libvirt host and web login before starting the service.
+For a container deployment with bundled dependencies, see
+[Docker installation](/docs/docker/).
 
 ## Ubuntu 22.04, 24.04 and 26.04 LTS (amd64)
 

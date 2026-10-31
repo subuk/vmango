@@ -30,6 +30,7 @@
     <p class="actions">
       <a class="primary-link" href="/docs/">Read the documentation</a>
       <a href="/docs/start/">Quick start →</a>
+      <a href="/docs/docker/">Run with Docker →</a>
     </p>
 
     <section aria-labelledby="features-title">
@@ -44,6 +45,20 @@
       </ul>
       <p>Linux with QEMU/KVM is the main target. Local development on macOS
         is also possible with QEMU/HVF.</p>
+    </section>
+
+    <section aria-labelledby="docker-title">
+      <h2 id="docker-title">Run Vmango with Docker</h2>
+      <p>The published image includes the web interface, libvirt clients, SSH and
+        cloud-init ISO tools. It supports Linux amd64 and arm64; Docker selects
+        the matching architecture automatically.</p>
+      <div class="config-example">
+        <div class="example-heading"><span>Vmango · Docker image</span><a href="https://hub.docker.com/r/subuk/vmango">Docker Hub</a></div>
+        <div class="example-code" tabindex="0" role="region" aria-label="Pull the Vmango Docker image">{{ transform.Highlight "docker pull subuk/vmango:0.15.1" "sh" "" }}</div>
+      </div>
+      <p>Connect your existing libvirt hosts and keep application state in a
+        persistent volume. Follow the <a href="/docs/docker/">Docker installation guide</a>
+        for configuration, host access and the required HTTPS proxy.</p>
     </section>
 
     <section class="interface-preview" aria-labelledby="interface-title">

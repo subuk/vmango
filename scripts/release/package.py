@@ -27,6 +27,7 @@ def package(version, target, binary, runtime=None):
             shutil.copy2(root / filename, stage)
         guides = {
             "docs/content/en/docs/start.md": "QUICKSTART.md",
+            "docs/content/en/docs/docker.md": "DOCKER.md",
             "docs/UI-MIGRATION.md": "MIGRATION.md",
             "docs/API.md": "API.md",
             "docs/TASKS.md": "TASKS.md",
@@ -37,6 +38,7 @@ def package(version, target, binary, runtime=None):
             "UI-MIGRATION.md": "MIGRATION.md",
             "content/en/docs/images.md": "IMAGES.md",
             "/docs/start/": "QUICKSTART.md",
+            "/docs/docker/": "DOCKER.md",
             "/docs/clouds/": "CLOUDS.md",
             "/docs/images/": "IMAGES.md",
         }

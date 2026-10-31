@@ -16,6 +16,8 @@ and manage machines from your browser.
 
 - [Binary quick start](/docs/start/): download a release, connect a host and
   configure your web login.
+- [Docker installation](/docs/docker/): run the published amd64 or arm64 image
+  with persistent state and an HTTPS proxy.
 - [Multiple hosts](/docs/start/#manage-multiple-hosts): connect several
   hypervisors to one Vmango instance.
 - [Package installation](/docs/packages/): install release packages on Ubuntu,
