@@ -135,6 +135,31 @@ existing policy and devices, and accepted tasks snapshot policy and private host
 bindings. None of these five settings accepts per-machine overrides; the machine
 PATCH endpoint is removed and effective values remain read-only.
 
+## System disks and boot order
+
+Vmango assigns an explicit boot priority to the system disk when creating a VM
+or attaching disks. The `root` attachment alias identifies the system disk. If
+there is only one ordinary disk, it can be selected without an alias. The
+`configdrive` disk contains cloud-init data and is never selected automatically
+as the system disk, even though it is attached through virtio.
+
+When reattaching a system disk to a machine with other data disks, set its alias
+to `root`. Vmango does not guess which of several unlabelled disks contains an
+OS. Device names and PCI addresses are preserved; the system disk need not be
+`vda`.
+
+Legacy `hd`/`cdrom` boot settings are converted on disk attachment when a system
+disk can be identified. An already attached installation CD keeps its configured
+precedence. Existing explicit bootable hard disks, direct kernel boot and legacy
+PXE-only or mixed PXE boot policies are preserved. With per-device priorities, a
+reattached system disk is added after existing optical/network boot entries when
+no hard disk has a priority. Newly attached installation media can be selected
+through the firmware boot menu or an explicit libvirt boot configuration.
+
+Existing machines are not rewritten or restarted merely by upgrading Vmango.
+Disk attachment requires a stopped VM, and the updated boot order takes effect
+on its next start.
+
 ## API and migration
 
 Machine, disk, interface and native console operations use `/api/v1/clouds/{cloud}`.

@@ -538,6 +538,7 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 				return repositoryError(err, "cannot attach interface")
 			}
 		}
+		ensureDomainBootDisk(virDomainConfig)
 	}
 	if err := writeSchedulerMetadata(virDomainConfig, vm.Metadata); err != nil {
 		return err
@@ -805,6 +806,7 @@ func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVo
 	if err := repo.attachVolume(conn, virDomainConfig, attachedVolume, namer); err != nil {
 		return repositoryError(err, "cannot add volume xml config")
 	}
+	ensureDomainBootDisk(virDomainConfig)
 
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {

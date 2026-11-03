@@ -15,6 +15,25 @@ Catalog IDs are separate from display names. Each cloud owns its nested image
 definitions; the same image ID in another cloud is independent. Image storage
 is bound separately on each configured host.
 
+## System disk boot selection
+
+Creation and disk attachment assign an explicit libvirt boot priority to the
+disk with the `root` attachment alias, or to the only ordinary disk when that
+alias is absent. The `configdrive` attachment is excluded. Reattach a system
+disk with alias `root` when other data disks are present; Vmango does not infer
+the OS disk from several unlabelled disks or from filenames. Guest device names
+and PCI addresses are not changed.
+
+Legacy `hd`/`cdrom` boot settings are converted on attachment, preserving the
+relative priority of an already attached installation CD. Existing explicit
+bootable hard disks, direct kernel boot and legacy PXE policies are preserved.
+If only non-hard-disk devices have explicit priorities, the system disk is added
+after them. Newly attached installation media can be selected in the firmware
+boot menu or configured explicitly through libvirt.
+
+Upgrades do not rewrite or restart existing VMs. The boot change applies when
+creating a VM or attaching a disk to a stopped VM, on its next start.
+
 ## Cloud-owned image migration
 
 Top-level `image` blocks and `cloud.images = [...]` references are removed.
