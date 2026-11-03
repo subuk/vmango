@@ -64,10 +64,15 @@ completion are outside the command contract. A successful libvirt Start return
 is sufficient for the start stage, including `start=true` creation. The UI
 reads observed VM state separately rather than inferring running from success.
 
-Reboot waits up to two minutes for a libvirt reboot event registered before the
+Reboot waits up to 10 seconds for a libvirt reboot event registered before the
 request. If no event arrives, the task fails with an uncertain outcome and
 retains its locks. This does not prove that the guest failed to reboot. See the
 [libvirt domain event API](https://libvirt.org/html/libvirt-libvirt-domain.html#virConnectDomainEventRegisterAny).
+Shutdown also waits up to 10 seconds, for a `STOPPED` lifecycle event with the
+`SHUTDOWN` reason. Observation is registered before sending the shutdown request.
+The earlier `SHUTDOWN` lifecycle event alone does not confirm that the VM has
+stopped. A timeout fails the task with an uncertain outcome and retains its
+locks; the guest may still finish shutting down afterward.
 Hard power-off means libvirt Destroy; it is not a graceful shutdown.
 
 A mandatory `vm_created` hook failure fails the creation task and prevents its

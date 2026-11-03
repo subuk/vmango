@@ -717,13 +717,22 @@ func (repo *VirtualMachineRepository) Reboot(id, nodeId string) error {
 	if err != nil {
 		return repositoryError(err, "virDomainReboot")
 	}
-	timer := time.NewTimer(2 * time.Minute)
+	return waitForReboot(observed)
+}
+
+func waitForReboot(observed <-chan struct{}) error {
+	return waitForMachineEvent(observed, "reboot", "reboot")
+}
+
+func waitForMachineEvent(observed <-chan struct{}, action, event string) error {
+	const timeout = 10 * time.Second
+	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
 	case <-observed:
 		return nil
 	case <-timer.C:
-		return fmt.Errorf("reboot was requested but no libvirt reboot event was observed within two minutes; the backend outcome is uncertain")
+		return fmt.Errorf("%s was requested but no libvirt %s event was observed within %s; the backend outcome is uncertain", action, event, timeout)
 	}
 }
 
@@ -1038,15 +1047,43 @@ func (repo *VirtualMachineRepository) DetachInterface(id, nodeId, needleMac stri
 }
 
 func (repo *VirtualMachineRepository) Shutdown(id, nodeId string) error {
+	if err := ensureEventLoop(); err != nil {
+		return repositoryError(err, "initialize shutdown observation")
+	}
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return repositoryError(err, "cannot acquire connection")
 	}
-	defer repo.pool.Release(nodeId)
-
 	domain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
+		repo.pool.Release(nodeId)
 		return repositoryError(err, "domain lookup failed")
 	}
-	return repositoryError(domain.Shutdown(), "virDomainShutdown")
+	defer domain.Free()
+	observed := make(chan struct{}, 1)
+	callback, err := conn.DomainEventLifecycleRegister(domain, shutdownObserver(observed))
+	if err != nil {
+		repo.pool.Release(nodeId)
+		return repositoryError(err, "register shutdown confirmation")
+	}
+	defer conn.DomainEventDeregister(callback)
+	err = domain.Shutdown()
+	repo.pool.Release(nodeId)
+	if err != nil {
+		return repositoryError(err, "virDomainShutdown")
+	}
+	return waitForMachineEvent(observed, "shutdown", "stopped (shutdown)")
+}
+
+func shutdownObserver(observed chan<- struct{}) libvirt.DomainEventLifecycleCallback {
+	return func(_ *libvirt.Connect, _ *libvirt.Domain, event *libvirt.DomainEventLifecycle) {
+		// SHUTDOWN only means the guest has begun shutting down; STOPPED confirms completion.
+		if event.Event != libvirt.DOMAIN_EVENT_STOPPED || event.Detail != int(libvirt.DOMAIN_EVENT_STOPPED_SHUTDOWN) {
+			return
+		}
+		select {
+		case observed <- struct{}{}:
+		default:
+		}
+	}
 }
