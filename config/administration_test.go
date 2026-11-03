@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"subuk/vmango/compute"
 	"testing"
@@ -9,7 +10,7 @@ import (
 )
 
 func TestAcceptedAdministrationProjectionSafeAndComplete(t *testing.T) {
-	text := strings.Replace(cloudConfig, `path="/source" os_arch="x86_64"`, `url="https://images.example:8443/private-signed-path?token=secret-query" sha256="`+strings.Repeat("a", 64)+`" source_format="qcow2" source_size_bytes=0 os_arch="x86_64" guest_agent=false protected=true hidden=false minimum_memory_mib=128 minimum_disk_gib=2`, 1)
+	text := strings.Replace(cloudConfig, `path="/source" os_arch="x86_64"`, `url="https://images.example:8443/private-signed-path?token=secret-query" sha256="`+strings.Repeat("a", 64)+`" source_format="qcow2" source_size_bytes=0 os_arch="x86_64" guest_agent=false protected=true hidden=false minimum_memory_mib=128 minimum_disk_gib=2 data_disk "userdata" { size_gib=16 } data_disk "cache" { size_gib=2 }`, 1)
 	cfg, err := parseCloudTest(t, text)
 	if err != nil {
 		t.Fatal(err)
@@ -31,6 +32,10 @@ func TestAcceptedAdministrationProjectionSafeAndComplete(t *testing.T) {
 		t.Fatal(err)
 	}
 	image := snapshot.Images[0]
+	wantDisks := []compute.ImageDataDisk{{Name: "userdata", SizeBytes: 16 << 30}, {Name: "cache", SizeBytes: 2 << 30}}
+	if !reflect.DeepEqual(image.DataDisks, wantDisks) {
+		t.Fatalf("image disk requirements lost: %+v", image.DataDisks)
+	}
 	if image.Defaults.GuestAgent == nil || *image.Defaults.GuestAgent || image.Source.SizeBytes != 0 || !image.Protected || image.Hidden || image.MinimumMemoryBytes != 128<<20 || image.MinimumDiskBytes != 2<<30 {
 		t.Fatal(image)
 	}
@@ -53,10 +58,26 @@ func TestAcceptedAdministrationProjectionSafeAndComplete(t *testing.T) {
 	cfg.Clouds[0].Name = "edited file"
 	cfg.Clouds[0].Hosts[0].Labels["rack"] = "edited"
 	*cfg.Clouds[0].Images[0].GuestAgent = true
+	cfg.Clouds[0].Images[0].DataDisks[0].SizeGiB = 1
+	snapshot.Images[0].DataDisks[0].SizeBytes = 1
 	c, _ := service.Cloud("test")
 	saved, _ := service.Image("test", "linux")
 	savedHost, _ := service.HostConfiguration("test", "a")
-	if c.Name != "Test cloud" || *saved.Defaults.GuestAgent || savedHost.Labels["rack"] != "one" {
+	if c.Name != "Test cloud" || *saved.Defaults.GuestAgent || savedHost.Labels["rack"] != "one" || !reflect.DeepEqual(saved.DataDisks, wantDisks) {
 		t.Fatal("snapshot changed after config edit")
+	}
+	saved.DataDisks[0].SizeBytes = 1
+	saved, _ = service.Image("test", "linux")
+	if !reflect.DeepEqual(saved.DataDisks, wantDisks) {
+		t.Fatal("caller changed accepted image disks", saved.DataDisks)
+	}
+}
+
+func TestAdministrationImageCopiesDiskDefinitions(t *testing.T) {
+	input := compute.Image{DataDisks: []compute.ImageDataDisk{{Name: "userdata", SizeBytes: 16 << 30}}}
+	projected := administrationImage(input)
+	input.DataDisks[0].SizeBytes = 1
+	if len(projected.DataDisks) != 1 || projected.DataDisks[0].SizeBytes != 16<<30 {
+		t.Fatal("projection aliases source image disks", projected.DataDisks)
 	}
 }

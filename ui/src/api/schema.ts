@@ -869,6 +869,7 @@ export interface components {
         AdministrationImage: {
             arch: string;
             cloud_id: string;
+            data_disks?: components["schemas"]["ImageDataDisk"][] | null;
             defaults: components["schemas"]["AdministrationImageDefaults"];
             hidden: boolean;
             id: string;
@@ -1050,6 +1051,7 @@ export interface components {
         };
         ApiCloudImage: {
             arch: string;
+            data_disks?: components["schemas"]["ImageDataDisk"][] | null;
             defaults: components["schemas"]["ApiImageDefaults"];
             id: string;
             /** Format: int64 */
@@ -1125,7 +1127,7 @@ export interface components {
             /** @enum {string} */
             nic_model?: "virtio" | "e1000" | "rtl8139";
             /** @enum {string} */
-            video_model: "none" | "cirrus" | "qxl";
+            video_model: "none" | "cirrus" | "qxl" | "virtio";
         };
         ApiInterface: {
             mac?: string;
@@ -1489,6 +1491,11 @@ export interface components {
         Identity: {
             id: string;
             name?: string;
+        };
+        ImageDataDisk: {
+            name: string;
+            /** Format: int64 */
+            size_bytes: number;
         };
         InstanceType: {
             autostart: boolean;

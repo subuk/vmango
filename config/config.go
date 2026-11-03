@@ -105,6 +105,13 @@ type ImageConfig struct {
 	Initialization   string `hcl:"initialization"`
 	MinimumMemoryMiB int64  `hcl:"minimum_memory_mib"`
 	MinimumDiskGiB   int64  `hcl:"minimum_disk_gib"`
+
+	DataDisks []ImageDataDiskConfig `hcl:"data_disk"`
+}
+
+type ImageDataDiskConfig struct {
+	Name    string `hcl:",key"`
+	SizeGiB int64  `hcl:"size_gib"`
 }
 
 type VolumeConfig struct {
@@ -167,6 +174,12 @@ func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeM
 			i := compute.Image{CloudID: cloud.ID, ConfiguredPolicy: compute.VolumeMetadata{Protected: entry.Protected, Hidden: entry.Hidden}, ID: entry.ID, Name: name, OSName: entry.OsName, OSVersion: entry.OsVersion, Arch: compute.NewArch(entry.OsArch), SourcePath: path,
 				Defaults:           compute.ImageDefaults{Firmware: firmware, DiskBus: bus, DiskController: entry.DiskController, NICModel: entry.NICModel, GuestAgent: entry.GuestAgent, Graphics: entry.Graphics, VideoModel: entry.VideoModel, Initialization: entry.Initialization},
 				MinimumMemoryBytes: uint64(entry.MinimumMemoryMiB) << 20, MinimumDiskBytes: uint64(entry.MinimumDiskGiB) << 30}
+			for _, disk := range entry.DataDisks {
+				if disk.SizeGiB <= 0 || disk.SizeGiB > math.MaxUint64/(1<<30) {
+					return nil, nil, fmt.Errorf("image %q data disk %q: size_gib must be positive and fit in bytes", entry.ID, disk.Name)
+				}
+				i.DataDisks = append(i.DataDisks, compute.ImageDataDisk{Name: disk.Name, SizeBytes: uint64(disk.SizeGiB) << 30})
+			}
 			if entry.SourceSizeBytes < 0 {
 				return nil, nil, fmt.Errorf("image %q: source_size_bytes must be positive", entry.ID)
 			}

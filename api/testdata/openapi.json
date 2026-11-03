@@ -223,6 +223,15 @@
           "cloud_id": {
             "type": "string"
           },
+          "data_disks": {
+            "items": {
+              "$ref": "#/components/schemas/ImageDataDisk"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "defaults": {
             "$ref": "#/components/schemas/AdministrationImageDefaults"
           },
@@ -970,6 +979,15 @@
           "arch": {
             "type": "string"
           },
+          "data_disks": {
+            "items": {
+              "$ref": "#/components/schemas/ImageDataDisk"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "defaults": {
             "$ref": "#/components/schemas/ApiImageDefaults"
           },
@@ -1217,7 +1235,8 @@
             "enum": [
               "none",
               "cirrus",
-              "qxl"
+              "qxl",
+              "virtio"
             ],
             "type": "string"
           }
@@ -2588,6 +2607,24 @@
         },
         "required": [
           "id"
+        ],
+        "type": "object"
+      },
+      "ImageDataDisk": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "size_bytes"
         ],
         "type": "object"
       },

@@ -112,6 +112,7 @@ type cloudVolumeBackend struct {
 	compute.VolumeRepository
 	mu           sync.Mutex
 	created      int
+	creates      []compute.VolumeCreateParams
 	deleted      int
 	cloneStarted chan struct{}
 	cloneRelease chan struct{}
@@ -122,6 +123,13 @@ func (r *cloudVolumeBackend) Get(path, node string) (*compute.Volume, error) {
 	return &compute.Volume{NodeId: node, Path: path, Name: "source", Pool: "pool", Format: compute.VolumeFormatRaw, Size: compute.NewSize(1, compute.SizeUnitG), Identity: node + path}, nil
 }
 func (r *cloudVolumeBackend) ValidateCreate(compute.VolumeCreateParams) error { return nil }
+func (r *cloudVolumeBackend) Create(p compute.VolumeCreateParams) (*compute.Volume, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.created++
+	r.creates = append(r.creates, p)
+	return &compute.Volume{NodeId: p.NodeId, Path: "/pool/" + p.Name, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size, Identity: p.NodeId + "/pool/" + p.Name}, nil
+}
 func (r *cloudVolumeBackend) ResolvePath(node, pool, name string) (string, error) {
 	return "/pool/" + name, nil
 }
@@ -153,8 +161,20 @@ func (cloudEvents) Publish(compute.Event) error { return nil }
 
 func cloudFixture(t *testing.T, cpus int) (*tasks.Service, *cloudVMBackend, *cloudVolumeBackend, compute.Cloud) {
 	t.Helper()
+	handler, vmBackend, volumeBackend, c := cloudFixtureHandler(t, cpus, nil)
+	repo, err := filesystem.NewTaskRepository(filepath.Join(t.TempDir(), "tasks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := tasks.New(repo, handler, zerolog.Nop())
+	t.Cleanup(func() { repo.Close() })
+	return service, vmBackend, volumeBackend, c
+}
+
+func cloudFixtureHandler(t *testing.T, cpus int, disks []compute.ImageDataDisk) (*compute.CommandHandler, *cloudVMBackend, *cloudVolumeBackend, compute.Cloud) {
+	t.Helper()
 	off := false
-	imageRepo, err := catalog.NewImageRepository([]compute.Image{{CloudID: "c", ID: "image", Name: "Image", OSName: "Linux", Arch: compute.ArchAmd64, SourcePath: "/source", Defaults: compute.ImageDefaults{Initialization: "none", Graphics: "spice", VideoModel: "qxl", GuestAgent: &off}}})
+	imageRepo, err := catalog.NewImageRepository([]compute.Image{{CloudID: "c", ID: "image", Name: "Image", OSName: "Linux", Arch: compute.ArchAmd64, SourcePath: "/source", DataDisks: disks, Defaults: compute.ImageDefaults{Initialization: "none", Graphics: "spice", VideoModel: "qxl", GuestAgent: &off}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,13 +191,7 @@ func cloudFixture(t *testing.T, cpus int) (*tasks.Service, *cloudVMBackend, *clo
 	clouds := &compute.CloudService{Definitions: []compute.Cloud{c}, Nodes: nodes, VMs: vms, Pools: pools, Volumes: volumes, Manager: manager}
 	manager.Clouds = clouds
 	handler := &compute.CommandHandler{Clouds: clouds, Manager: manager, VMs: vms, Volumes: volumes, Nodes: nodes}
-	repo, err := filesystem.NewTaskRepository(filepath.Join(t.TempDir(), "tasks"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	service := tasks.New(repo, handler, zerolog.Nop())
-	t.Cleanup(func() { repo.Close() })
-	return service, vmBackend, volumeBackend, c
+	return handler, vmBackend, volumeBackend, c
 }
 func awaitCloudTask(t *testing.T, s *tasks.Service, id string) tasks.Task {
 	t.Helper()
@@ -429,6 +443,83 @@ func TestCloudCreatePinsPolicyAndSelectedHostBinding(t *testing.T) {
 	}
 	if !vm.Autostart || vm.GuestAgent || vm.Graphic.Type != compute.GraphicTypeSpice || vm.VideoModel != compute.VideoModelQxl || vm.Graphic.Listen != "127.0.0.2" {
 		t.Fatalf("accepted policy changed: %+v", vm)
+	}
+}
+
+func TestCloudCreatePinsImageDisksAcrossRestart(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		imageDisks []compute.ImageDataDisk
+		extraDisks bool
+		paths      []string
+	}{
+		{name: "automatic-only", imageDisks: []compute.ImageDataDisk{{Name: "userdata", SizeBytes: 16 << 30}}, paths: []string{"/pool/pinned_root", "/pool/pinned_userdata"}},
+		{name: "required-before-user-disks", imageDisks: []compute.ImageDataDisk{{Name: "userdata", SizeBytes: 16 << 30}}, extraDisks: true, paths: []string{"/pool/pinned_root", "/pool/pinned_userdata", "/pool/pinned_extra", "/existing"}},
+		{name: "older-command-without-image-disks", extraDisks: true, paths: []string{"/existing", "/pool/pinned_root", "/pool/pinned_extra"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler, _, beforeVolumes, _ := cloudFixtureHandler(t, 4, test.imageDisks)
+			directory := filepath.Join(t.TempDir(), "tasks")
+			repo, err := filesystem.NewTaskRepository(directory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := tasks.New(repo, handler, zerolog.Nop())
+			spec := createSpec("pinned")
+			if test.extraDisks {
+				spec.Disks = []compute.DataDiskSpec{{Name: "extra", StorageClass: "fast", SizeBytes: 3 << 30}}
+				spec.ExistingDisks = []compute.LocalDiskRef{{Host: "a", Path: "/existing"}}
+			}
+			accepted := submitCloud(t, s, "accepted-image-disks", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: spec})
+			if beforeVolumes.created != 0 {
+				t.Fatal("submission provisioned storage before execution")
+			}
+			if err := repo.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			// Reopen the durable queue with a changed image definition, as after a
+			// configuration edit and service restart before queued work executes.
+			handler, backend, volumes, _ := cloudFixtureHandler(t, 4, []compute.ImageDataDisk{{Name: "replacement", SizeBytes: 32 << 30}})
+			reopened, err := filesystem.NewTaskRepository(directory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { reopened.Close() })
+			restarted := tasks.New(reopened, handler, zerolog.Nop())
+			runCloudService(t, restarted)
+			result := awaitCloudTask(t, restarted, accepted.ID)
+			if result.State != tasks.Succeeded {
+				t.Fatalf("accepted creation failed after restart: %+v", result)
+			}
+			vm, err := backend.Get(taskMachineID(t, result), "a")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(vm.Volumes) != len(test.paths) {
+				t.Fatalf("unexpected attached disks: %+v", vm.Volumes)
+			}
+			for n, path := range test.paths {
+				if disk := vm.Volumes[n]; disk.Path != path || disk.DeviceBus != compute.DeviceBusVirtio || disk.DeviceType != compute.DeviceTypeDisk {
+					t.Fatalf("disk %d: got %+v, want virtio disk %s", n, disk, path)
+				}
+			}
+			volumes.mu.Lock()
+			defer volumes.mu.Unlock()
+			wantCreates := len(test.imageDisks)
+			if test.extraDisks {
+				wantCreates++
+			}
+			if len(volumes.creates) != wantCreates || volumes.created != wantCreates+1 {
+				t.Fatalf("unexpected provisioning count: clones and creates=%d, creates=%+v", volumes.created, volumes.creates)
+			}
+			if len(test.imageDisks) > 0 {
+				disk := volumes.creates[0]
+				if disk.Name != "pinned_userdata" || disk.Size.Bytes() != 16<<30 || disk.Pool != "pool" || disk.Format != compute.VolumeFormatRaw || disk.StorageClass != "fast" || disk.Cloud != "c" || disk.NodeId != "a" {
+					t.Fatalf("accepted image disk configuration changed: %+v", disk)
+				}
+			}
+		})
 	}
 }
 

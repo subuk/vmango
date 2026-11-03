@@ -225,7 +225,7 @@ drive. It does not change the `ubuntu-server` entry or the shared source disk.
 | `nic_model` | `virtio`, `e1000`, `rtl8139`, subject to backend support | `virtio` |
 | `guest_agent` | `true`, `false` | `true` |
 | `graphics` | `none`, `vnc`, `spice`, subject to backend support | `vnc` |
-| `video_model` | `none`, `cirrus`, `qxl`, subject to backend support | `none` |
+| `video_model` | `none`, `cirrus`, `qxl`, `virtio` (2D), subject to backend support | `none` |
 | `initialization` | `none`, `nocloud`, `openstack` | Selected node's `config_drive_write_format` |
 | `minimum_memory_mib` | Nonnegative integer, MiB | No additional minimum |
 | `minimum_disk_gib` | Nonnegative integer, GiB | Source volume capacity |
@@ -260,6 +260,33 @@ autostart while preserving existing guest devices, graphics listener and disk
 sizes. Adoption also preserves the existing VM configuration. Accepted tasks
 retain their policy and private binding snapshots. Restart Vmango after changing
 the configuration to reload the read-only catalog.
+
+### Required image data disks
+
+An image can declare blank disks that every new VM needs. Add one or more
+`data_disk` blocks inside the `image` block:
+
+```hcl
+data_disk "userdata" {
+    size_gib = 16
+}
+```
+
+Each label is a unique disk name within the image; `root` is reserved for the
+boot disk. `size_gib` is a positive integer. Vmango creates these disks
+automatically using the VM's selected storage class and disk format, attached
+through VirtIO. The boot disk comes first, followed by image data disks in their
+declaration order, then any additional disks chosen by the user.
+
+The creation form displays required image disks without edit or remove controls.
+API callers also receive them automatically and should not repeat them in
+`new_disks`; a user disk with the same name is rejected. Storage capacity checks
+include the required disks. They start blank, so the guest must partition and
+format them as needed.
+
+Image disk configuration applies to new machines. It does not modify existing
+VMs, and accepted creation tasks retain the disk definitions from acceptance.
+Images without `data_disk` blocks keep their existing behavior.
 
 ### Configuration migration and volume policies
 
@@ -309,6 +336,70 @@ Preserve task, artifact and volume-ownership metadata during migration. Queued
 tasks keep their accepted source/default snapshots and backend identities, even
 if the running catalog now differs. Unsafe legacy commands fail before mutation
 and require explicit resubmission; history and locks remain available for review.
+
+## Android ARM64 with LineageOS
+
+The community [LineageOS QEMU builds](https://github.com/jqssun/android-lineage-qemu)
+provide a complete ARM64 UEFI system disk. The `v2026.10.20` prerelease targets
+upstream QEMU and works with macOS HVF; it does not require Android Emulator or
+Cuttlefish host services. The archive contains a UTM bundle, but Vmango uses its
+`vda.qcow2` directly.
+
+Download
+[`UTM-VM-lineage-24.0-20261020-jqssun-virtio_arm64only.zip`](https://github.com/jqssun/android-lineage-qemu/releases/download/v2026.10.20/UTM-VM-lineage-24.0-20261020-jqssun-virtio_arm64only.zip)
+and verify its SHA-256 before extracting:
+
+```text
+f2754f6be04b5e47e35851586d350411cfbf516f67dd53ec4a80121ceaa4428e
+```
+
+Place `LineageOS_on_arm64.utm/Data/vda.qcow2` in an active libvirt directory
+pool on the target host, refresh that pool, and add the following definition
+inside its cloud. Adjust `path` to the actual source volume:
+
+```hcl
+image "android-lineage-24-arm64" {
+    name = "Android / LineageOS 24 (ARM64)"
+    os_name = "Android (LineageOS)"
+    os_version = "24.0 / 20261020"
+    os_arch = "aarch64"
+    path = "/var/lib/libvirt/images/android-lineage-24.0-arm64.qcow2"
+    firmware = "efi"
+    disk_bus = "virtio"
+    nic_model = "virtio"
+    graphics = "vnc"
+    video_model = "virtio"
+    guest_agent = false
+    initialization = "none"
+    protected = true
+    minimum_memory_mib = 2048
+    minimum_disk_gib = 5
+    data_disk "userdata" {
+        size_gib = 16
+    }
+}
+```
+
+Restart Vmango to load the catalog. Select an ARM64 host and a type with at least
+2 vCPUs, 2 GiB RAM and a 5 GiB boot disk. Selecting this Android image automatically
+adds the required blank 16 GiB `userdata` disk. Android uses the cloned system
+disk as `vda` and formats the second disk, `vdb`, for `/data` on first boot.
+The supplied `vdb.qcow2` and `efi_vars.fd` are not needed: Vmango creates the
+blank disk and libvirt creates fresh UEFI variables.
+
+Open the machine's console, select **VNC**, and connect to complete the LineageOS
+setup wizard. New ARM64 graphical VMs include USB keyboard and tablet input;
+`video_model = "virtio"` uses 2D graphics without host OpenGL acceleration.
+SSH keys and cloud-init user data do not configure this image.
+
+Verified on 2026-11-03 through Vmango's creation API on an Apple M1 Pro with
+QEMU 9.2.3, libvirt 11.2.0 and HVF: a 4-vCPU/4-GiB VM with a 20-GiB system disk
+and 16-GiB data disk reached the LineageOS setup wizard. Its display and pointer
+input were checked through Vmango's browser VNC console. A separate 2-vCPU/2-GiB
+VM with an 8-GiB system disk also reached the setup wizard with `userdata` created
+automatically from `data_disk`, without `new_disks` in the API request. These
+checks do not establish Linux/KVM compatibility, accelerated graphics, audio or
+application compatibility.
 
 ## Launch a machine
 

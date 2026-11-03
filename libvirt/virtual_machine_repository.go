@@ -444,6 +444,15 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 	virDomainConfig.Clock = &libvirtxml.DomainClock{Offset: "utc"}
 	applyDomainPowerPolicy(virDomainConfig)
 	virDomainConfig.Devices = &libvirtxml.DomainDeviceList{Emulator: domCapsConfig.Path}
+	// ARM virt has no implicit PS/2 input. USB input works in both UEFI and
+	// graphical guests, including before guest-specific drivers are loaded.
+	if domCapsConfig.Arch == "aarch64" && (vm.Graphic.Type == compute.GraphicTypeVnc || vm.Graphic.Type == compute.GraphicTypeSpice) {
+		virDomainConfig.Devices.Controllers = append(virDomainConfig.Devices.Controllers, libvirtxml.DomainController{Type: "usb", Model: "qemu-xhci"})
+		virDomainConfig.Devices.Inputs = []libvirtxml.DomainInput{
+			{Type: "keyboard", Bus: "usb"},
+			{Type: "tablet", Bus: "usb"},
+		}
+	}
 	if vm.DiskController != "" {
 		virDomainConfig.Devices.Controllers = append(virDomainConfig.Devices.Controllers, libvirtxml.DomainController{Type: "scsi", Model: vm.DiskController})
 	}

@@ -55,3 +55,46 @@ func TestNewDomainConfigPlatformFeatures(t *testing.T) {
 		})
 	}
 }
+
+func TestNewARMGraphicalDomainHasFirmwareCompatibleInput(t *testing.T) {
+	for _, arch := range []string{"aarch64", "x86_64"} {
+		for _, graphics := range []compute.GraphicType{compute.GraphicTypeNone, compute.GraphicTypeVnc, compute.GraphicTypeSpice} {
+			t.Run(arch+"/"+graphics.String(), func(t *testing.T) {
+				vm := &compute.VirtualMachine{Graphic: compute.VirtualMachineGraphic{Type: graphics}}
+				config := newDomainConfig(vm, &libvirtxml.DomainCaps{Arch: arch})
+				wantInput := arch == "aarch64" && graphics != compute.GraphicTypeNone
+				if !wantInput {
+					if len(config.Devices.Inputs) != 0 || len(config.Devices.Controllers) != 0 {
+						t.Fatal("unexpected input devices")
+					}
+					return
+				}
+				data, err := config.Marshal()
+				if err != nil {
+					t.Fatal(err)
+				}
+				var domain struct {
+					Devices struct {
+						Inputs []struct {
+							Type string `xml:"type,attr"`
+							Bus  string `xml:"bus,attr"`
+						} `xml:"input"`
+						Controllers []struct {
+							Type  string `xml:"type,attr"`
+							Model string `xml:"model,attr"`
+						} `xml:"controller"`
+					} `xml:"devices"`
+				}
+				if err := xml.Unmarshal([]byte(data), &domain); err != nil {
+					t.Fatal(err)
+				}
+				if len(domain.Devices.Controllers) != 1 || domain.Devices.Controllers[0].Type != "usb" || domain.Devices.Controllers[0].Model != "qemu-xhci" {
+					t.Fatalf("missing USB controller: %s", data)
+				}
+				if len(domain.Devices.Inputs) != 2 || domain.Devices.Inputs[0].Type != "keyboard" || domain.Devices.Inputs[1].Type != "tablet" || domain.Devices.Inputs[0].Bus != "usb" || domain.Devices.Inputs[1].Bus != "usb" {
+					t.Fatalf("missing USB input: %s", data)
+				}
+			})
+		}
+	}
+}

@@ -7,6 +7,7 @@ const (
 	VideoModelNone               = 1
 	VideoModelCirrus             = 2
 	VideoModelQxl                = 3
+	VideoModelVirtio             = 4
 )
 
 func (VideoModel VideoModel) String() string {
@@ -19,6 +20,8 @@ func (VideoModel VideoModel) String() string {
 		return "cirrus"
 	case VideoModelQxl:
 		return "qxl"
+	case VideoModelVirtio:
+		return "virtio"
 	}
 }
 
@@ -32,6 +35,8 @@ func NewVideoModel(input string) VideoModel {
 		return VideoModelCirrus
 	case "qxl":
 		return VideoModelQxl
+	case "virtio":
+		return VideoModelVirtio
 	}
 }
 

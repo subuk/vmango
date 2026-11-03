@@ -124,6 +124,7 @@ type AdministrationImage struct {
 	Arch               string                      `json:"arch"`
 	MinimumMemoryBytes uint64                      `json:"minimum_memory_bytes"`
 	MinimumDiskBytes   uint64                      `json:"minimum_disk_bytes"`
+	DataDisks          []ImageDataDisk             `json:"data_disks,omitempty"`
 	Protected          bool                        `json:"protected"`
 	Hidden             bool                        `json:"hidden"`
 	Defaults           AdministrationImageDefaults `json:"defaults"`

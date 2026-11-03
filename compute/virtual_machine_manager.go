@@ -33,6 +33,8 @@ type VirtualMachineManagerClonedVolumeParams struct {
 }
 
 type VirtualMachineManagerCreatedVolumeParams struct {
+	// ImageDisk marks required image disks in the accepted creation snapshot.
+	ImageDisk           bool `json:",omitempty"`
 	Cloud, StorageClass string
 	Name                string
 	Pool                string
@@ -158,6 +160,7 @@ func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine
 // createPrepared executes the accepted snapshot without reapplying a changed
 // catalog after restart. Progress writes precede every provisioning side effect.
 func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool, settings VirtualMachineManagerNodeSettings, progress *tasks.Execution) (err error) {
+	existingDiskCount := len(vm.Volumes)
 	failure := &ProvisioningError{Node: vm.NodeId, VM: vm.Id, Volumes: []string{}}
 	mutated := false
 	defer func() {
@@ -254,6 +257,15 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 			return effect(VolumeRef(vm.NodeId, volume.Path), "created")
 		}); err != nil {
 			return err
+		}
+	}
+	// Image disks must follow the boot disk, before caller-supplied existing disks.
+	// Old accepted tasks without image disks retain their original device order.
+	for _, disk := range newVols {
+		if disk.ImageDisk {
+			existing := append([]*VirtualMachineAttachedVolume(nil), vm.Volumes[:existingDiskCount]...)
+			vm.Volumes = append(vm.Volumes[existingDiskCount:], existing...)
+			break
 		}
 	}
 	if err := stage("define-vm", vmRef, true, func() error {

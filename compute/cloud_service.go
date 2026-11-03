@@ -140,7 +140,20 @@ func (s *CloudService) Offers(c Cloud) ([]CloudOffer, error) {
 				}
 				for _, sc := range c.StorageClasses {
 					if b, ok := h.Storage[sc.ID]; ok && availablePools[b.Pool] {
-						offer.StorageClasses = append(offer.StorageClasses, sc.ID)
+						required := map[string]uint64{b.Pool: t.BootDiskBytes}
+						fits := true
+						for _, disk := range image.DataDisks {
+							if addStorage(required, b.Pool, disk.SizeBytes) != nil {
+								fits = false
+							}
+						}
+						// Image disks are mandatory; suppress offers that cannot hold them.
+						if len(image.DataDisks) > 0 && storageFits(HostInventory{Pools: pools}, required) != nil {
+							fits = false
+						}
+						if fits {
+							offer.StorageClasses = append(offer.StorageClasses, sc.ID)
+						}
 					}
 				}
 				if len(offer.Networks) > 0 && len(offer.StorageClasses) > 0 {
@@ -279,10 +292,13 @@ func (s *CloudService) ValidateCreate(c Cloud, spec MachineCreateSpec) error {
 	if err = c.ValidatePlacement(spec.Placement); err != nil {
 		return err
 	}
-	seen := map[string]bool{}
+	seen := map[string]bool{"root": true}
+	for _, d := range image.DataDisks {
+		seen[d.Name] = true
+	}
 	for _, d := range spec.Disks {
 		if !resourceName.MatchString(d.Name) || seen[d.Name] || !hasEntry(c.StorageClasses, d.StorageClass) || d.SizeBytes == 0 {
-			return invalid("new_disks", "Invalid or duplicate additional disk.")
+			return invalid("new_disks", "Invalid additional disk, duplicate name or name reserved by the image.")
 		}
 		seen[d.Name] = true
 	}
@@ -381,7 +397,18 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 			clones := []VirtualMachineManagerClonedVolumeParams{{Cloud: c.ID, StorageClass: spec.StorageClass, ImageID: image.ID, NewName: vm.Name + "_root", NewPool: storage.Pool, NewSize: NewSize(t.BootDiskBytes, SizeUnitB), NewFormat: storage.Format, Alias: "root", DeviceType: DeviceTypeDisk}}
 			newDisks := []VirtualMachineManagerCreatedVolumeParams{}
 			required := map[string]uint64{storage.Pool: t.BootDiskBytes}
+			for _, d := range image.DataDisks {
+				if err = addStorage(required, storage.Pool, d.SizeBytes); err != nil {
+					return InfrastructureCommand{}, err
+				}
+				newDisks = append(newDisks, VirtualMachineManagerCreatedVolumeParams{Cloud: c.ID, StorageClass: spec.StorageClass, Name: vm.Name + "_" + d.Name, Pool: storage.Pool, Format: storage.Format, Size: NewSize(d.SizeBytes, SizeUnitB), DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio, Alias: d.Name, ImageDisk: true})
+			}
 			for _, d := range spec.Disks {
+				for _, requiredDisk := range image.DataDisks {
+					if d.Name == requiredDisk.Name {
+						return InfrastructureCommand{}, invalid("new_disks", "Additional disk name is reserved by the image.")
+					}
+				}
 				b, ok := h.Storage[d.StorageClass]
 				if !ok {
 					return InfrastructureCommand{}, fmt.Errorf("additional disk storage class %s is unavailable", d.StorageClass)

@@ -22,6 +22,13 @@ type Image struct {
 	Defaults           ImageDefaults
 	MinimumMemoryBytes uint64
 	MinimumDiskBytes   uint64
+	DataDisks          []ImageDataDisk `json:",omitempty"`
+}
+
+// ImageDataDisk is a required blank disk created in the machine storage class.
+type ImageDataDisk struct {
+	Name      string `json:"name"`
+	SizeBytes uint64 `json:"size_bytes"`
 }
 
 // ImageDownload describes exact artifact bytes, independently of launch defaults.
@@ -69,6 +76,18 @@ func (i Image) Validate() error {
 		if i.SourcePath != "" || err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.Fragment != "" || hashErr != nil || len(h) != 32 || (d.Format != VolumeFormatRaw && d.Format != VolumeFormatQcow2) {
 			return fmt.Errorf("image %q: downloadable sources require an HTTP(S) URL, SHA-256 and raw/qcow2 source_format, without path or URL credentials", i.ID)
 		}
+	}
+	seen := map[string]bool{"root": true}
+	var total uint64
+	for _, disk := range i.DataDisks {
+		if !resourceName.MatchString(disk.Name) || seen[disk.Name] || disk.SizeBytes == 0 {
+			return fmt.Errorf("image %q: invalid, reserved or duplicate data disk %q", i.ID, disk.Name)
+		}
+		if ^uint64(0)-total < disk.SizeBytes {
+			return fmt.Errorf("image %q: data disk size overflow", i.ID)
+		}
+		total += disk.SizeBytes
+		seen[disk.Name] = true
 	}
 	d := i.Defaults
 	if (d.Graphics != "" && NewGraphicType(d.Graphics) == GraphicTypeUnknown) || (d.VideoModel != "" && NewVideoModel(d.VideoModel) == VideoModelUnknown) {
@@ -120,7 +139,7 @@ func (p pinnedImages) List(cloud string) ([]Image, error) {
 	out := []Image{}
 	for _, i := range p {
 		if i.CloudID == cloud {
-			out = append(out, i)
+			out = append(out, copyPinnedImage(i))
 		}
 	}
 	return out, nil
@@ -128,10 +147,22 @@ func (p pinnedImages) List(cloud string) ([]Image, error) {
 func (p pinnedImages) Get(cloud, id string) (Image, error) {
 	for _, i := range p {
 		if i.CloudID == cloud && i.ID == id {
-			return i, nil
+			return copyPinnedImage(i), nil
 		}
 	}
 	return Image{}, fmt.Errorf("image %q is not pinned", id)
+}
+func copyPinnedImage(i Image) Image {
+	i.DataDisks = slices.Clone(i.DataDisks)
+	if i.Download != nil {
+		d := *i.Download
+		i.Download = &d
+	}
+	if i.Defaults.GuestAgent != nil {
+		enabled := *i.Defaults.GuestAgent
+		i.Defaults.GuestAgent = &enabled
+	}
+	return i
 }
 func (s *ImageService) Snapshot(images []Image, bindings map[string]ImageBinding, preflight bool) *ImageService {
 	// Pre-migration accepted commands did not store CloudID in each pinned image.
@@ -139,14 +170,7 @@ func (s *ImageService) Snapshot(images []Image, bindings map[string]ImageBinding
 	pinned := make([]Image, len(images))
 	copy(pinned, images)
 	for n := range pinned {
-		if pinned[n].Download != nil {
-			download := *pinned[n].Download
-			pinned[n].Download = &download
-		}
-		if pinned[n].Defaults.GuestAgent != nil {
-			enabled := *pinned[n].Defaults.GuestAgent
-			pinned[n].Defaults.GuestAgent = &enabled
-		}
+		pinned[n] = copyPinnedImage(pinned[n])
 		if pinned[n].CloudID == "" {
 			pinned[n].CloudID = s.CloudID
 		}
@@ -241,7 +265,7 @@ func (s *ImageService) SourcePaths() (map[string]bool, error) {
 func (i Image) Compatible(c VirtualMachineCapabilities) bool {
 	d := i.Defaults
 	g, v := d.Display()
-	return slices.Contains(c.Graphics, g) && slices.Contains(c.VideoModels, v) && c.Arch == i.Arch && (d.Firmware == "" || d.Firmware == "auto" || slices.Contains(c.Firmwares, d.Firmware)) && (d.DiskBus == DeviceBusUnknown || slices.Contains(c.DiskBuses, d.DiskBus)) && (d.NICModel == "" || slices.Contains(c.NICModels, d.NICModel)) && (d.DiskController == "" || slices.Contains(c.DiskControllers, d.DiskController))
+	return (len(i.DataDisks) == 0 || slices.Contains(c.DiskBuses, DeviceBusVirtio)) && slices.Contains(c.Graphics, g) && slices.Contains(c.VideoModels, v) && c.Arch == i.Arch && (d.Firmware == "" || d.Firmware == "auto" || slices.Contains(c.Firmwares, d.Firmware)) && (d.DiskBus == DeviceBusUnknown || slices.Contains(c.DiskBuses, d.DiskBus)) && (d.NICModel == "" || slices.Contains(c.NICModels, d.NICModel)) && (d.DiskController == "" || slices.Contains(c.DiskControllers, d.DiskController))
 }
 
 // Display centrally defines omission defaults for image-owned guest devices.

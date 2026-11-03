@@ -17,7 +17,7 @@ func ValidateVM(vm *VirtualMachine) error {
 	if err != nil || b == 0 {
 		return &ValidationError{Field: "memory_bytes", Message: "Memory must be a positive byte size."}
 	}
-	if !slices.Contains([]GraphicType{GraphicTypeNone, GraphicTypeVnc, GraphicTypeSpice}, vm.Graphic.Type) || !slices.Contains([]VideoModel{VideoModelNone, VideoModelCirrus, VideoModelQxl}, vm.VideoModel) {
+	if !slices.Contains([]GraphicType{GraphicTypeNone, GraphicTypeVnc, GraphicTypeSpice}, vm.Graphic.Type) || !slices.Contains([]VideoModel{VideoModelNone, VideoModelCirrus, VideoModelQxl, VideoModelVirtio}, vm.VideoModel) {
 		return fmt.Errorf("%w: unsupported graphics or video model", ErrInvalid)
 	}
 	return nil

@@ -7,14 +7,15 @@ import (
 )
 
 type apiCloudImage struct {
-	ID                 string           `json:"id"`
-	Name               string           `json:"name"`
-	OSName             string           `json:"os_name"`
-	OSVersion          string           `json:"os_version"`
-	Defaults           apiImageDefaults `json:"defaults"`
-	Arch               string           `json:"arch"`
-	MinimumMemoryBytes uint64           `json:"minimum_memory_bytes"`
-	MinimumDiskBytes   uint64           `json:"minimum_disk_bytes"`
+	ID                 string                  `json:"id"`
+	Name               string                  `json:"name"`
+	OSName             string                  `json:"os_name"`
+	OSVersion          string                  `json:"os_version"`
+	Defaults           apiImageDefaults        `json:"defaults"`
+	Arch               string                  `json:"arch"`
+	MinimumMemoryBytes uint64                  `json:"minimum_memory_bytes"`
+	MinimumDiskBytes   uint64                  `json:"minimum_disk_bytes"`
+	DataDisks          []compute.ImageDataDisk `json:"data_disks,omitempty"`
 }
 type apiPlacementCapabilities struct {
 	Attributes []string `json:"attributes" nullable:"false"`
@@ -121,7 +122,7 @@ func (e *Environ) cloudDTO(c compute.Cloud) (apiCloud, error) {
 			bus = i.Defaults.DiskBus.String()
 		}
 		graphics, video := i.Defaults.Display()
-		d.Images = append(d.Images, apiCloudImage{ID: i.ID, Name: i.Name, OSName: i.OSName, OSVersion: i.OSVersion, Arch: i.Arch.String(), MinimumMemoryBytes: i.MinimumMemoryBytes, MinimumDiskBytes: i.MinimumDiskBytes, Defaults: apiImageDefaults{i.Defaults.Firmware, bus, i.Defaults.DiskController, i.Defaults.NICModel, graphics.String(), video.String(), i.Defaults.GuestAgent, i.Defaults.Initialization}})
+		d.Images = append(d.Images, apiCloudImage{ID: i.ID, Name: i.Name, OSName: i.OSName, OSVersion: i.OSVersion, Arch: i.Arch.String(), MinimumMemoryBytes: i.MinimumMemoryBytes, MinimumDiskBytes: i.MinimumDiskBytes, DataDisks: i.DataDisks, Defaults: apiImageDefaults{i.Defaults.Firmware, bus, i.Defaults.DiskController, i.Defaults.NICModel, graphics.String(), video.String(), i.Defaults.GuestAgent, i.Defaults.Initialization}})
 	}
 	d.Offers, d.StorageAvailability, d.UnavailableHosts = e.clouds.Discover(c)
 	return d, nil

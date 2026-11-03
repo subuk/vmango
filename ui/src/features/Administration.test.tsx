@@ -101,6 +101,39 @@ function base() {
               : cloud,
     );
 }
+it("shows required image disks in configuration details", async () => {
+    mocks.request.mockImplementation(async (path: string) =>
+        path.endsWith("/images/android")
+            ? {
+                  id: "android",
+                  cloud_id: cloud.id,
+                  name: "Android",
+                  os_name: "Android",
+                  os_version: "16",
+                  arch: "aarch64",
+                  minimum_memory_bytes: 2 ** 31,
+                  minimum_disk_bytes: 2 ** 30,
+                  protected: true,
+                  hidden: false,
+                  defaults: { initialization: "none" },
+                  data_disks: [{ name: "userdata", size_bytes: 16 * 2 ** 30 }],
+                  settings: [],
+                  source: { mode: "local", path: "/android.qcow2" },
+              }
+            : path === "/api/v1/administration/configuration"
+              ? install
+              : cloud,
+    );
+    show("/administration/clouds/remote.cloud/images/android/");
+    const disks = await screen.findByRole("region", {
+        name: "Required image disks",
+    });
+    expect(within(disks).getByText("userdata")).toBeTruthy();
+    expect(within(disks).getByText("16 GiB")).toBeTruthy();
+    expect(
+        within(disks).getByText(/Created automatically for new machines/),
+    ).toBeTruthy();
+});
 it("renders hostless clouds without host navigation or diagnostic requests", async () => {
     base();
     const { queries } = show("/administration/clouds/remote.cloud/");

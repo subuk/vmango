@@ -148,6 +148,25 @@ export function CreateMachine() {
         setExisting([]);
     }, [zone]);
     const selectedType = typeChoices.find((t) => t.id === instanceType);
+    const imageDisks =
+        imageChoices.find((i) => i.id === image)?.data_disks || [];
+    const imageDiskNames = new Set(imageDisks.map((d) => d.name));
+    const conflictingDisk = disks.some((d) =>
+        imageDiskNames.has(d.name.trim()),
+    );
+    const selectedStorageName = storageClasses.find(
+        (s) => s.id === storageClass,
+    )?.name;
+    const totalNewStorage =
+        (selectedType?.boot_disk_bytes || 0) +
+        imageDisks.reduce((total, disk) => total + disk.size_bytes, 0) +
+        disks.reduce((total, disk) => {
+            const size = Number(disk.size);
+            return (
+                total +
+                (Number.isFinite(size) && size > 0 ? Math.round(size * GiB) : 0)
+            );
+        }, 0);
     const owningHost = volumes.data?.items.find((v) =>
         existing.includes(`${v.node}/${v.id}`),
     )?.node;
@@ -200,7 +219,7 @@ export function CreateMachine() {
                             component="form"
                             onSubmit={async (e) => {
                                 e.preventDefault();
-                                if (busy || accepted) return;
+                                if (busy || accepted || conflictingDisk) return;
                                 if (
                                     uncertainty &&
                                     !(
@@ -397,6 +416,32 @@ export function CreateMachine() {
                                         entries={storageClasses}
                                         set={setStorage}
                                     />
+                                    {imageDisks.length > 0 && (
+                                        <Box
+                                            component="section"
+                                            aria-label="Required image disks"
+                                            aria-live="polite"
+                                        >
+                                            <Typography variant="h6">
+                                                Required image disks
+                                            </Typography>
+                                            <Typography
+                                                color="text.secondary"
+                                                sx={{ mb: 1 }}
+                                            >
+                                                Created automatically with this
+                                                image in the selected storage
+                                                class.
+                                            </Typography>
+                                            {imageDisks.map((disk) => (
+                                                <Typography key={disk.name}>
+                                                    {disk.name} ·{" "}
+                                                    {bytes(disk.size_bytes)} ·{" "}
+                                                    {selectedStorageName}
+                                                </Typography>
+                                            ))}
+                                        </Box>
+                                    )}
                                     <TextField
                                         select
                                         label="SSH keys"
@@ -447,6 +492,16 @@ export function CreateMachine() {
                                                             required
                                                             label={`Disk ${index + 1} name`}
                                                             value={disk.name}
+                                                            error={imageDiskNames.has(
+                                                                disk.name.trim(),
+                                                            )}
+                                                            helperText={
+                                                                imageDiskNames.has(
+                                                                    disk.name.trim(),
+                                                                )
+                                                                    ? "This name is reserved for a required image disk. Choose another name."
+                                                                    : undefined
+                                                            }
                                                             onChange={(e) =>
                                                                 setDisks(
                                                                     (old) =>
@@ -606,6 +661,26 @@ export function CreateMachine() {
                                             </Stack>
                                         </AccordionDetails>
                                     </Accordion>
+                                    {selectedType && (
+                                        <Box
+                                            component="section"
+                                            aria-label="New storage summary"
+                                            aria-live="polite"
+                                        >
+                                            <Typography>
+                                                Total new storage:{" "}
+                                                {bytes(totalNewStorage)}
+                                            </Typography>
+                                            <Typography
+                                                variant="body2"
+                                                color="text.secondary"
+                                            >
+                                                Boot disk, required image disks
+                                                and additional new disks.
+                                                Existing disks are excluded.
+                                            </Typography>
+                                        </Box>
+                                    )}
                                     {cloud.placement.attributes.length > 0 && (
                                         <Accordion>
                                             <AccordionSummary>
@@ -708,6 +783,7 @@ export function CreateMachine() {
                                         variant="contained"
                                         disabled={
                                             busy ||
+                                            conflictingDisk ||
                                             !selectedType ||
                                             !storageClass ||
                                             !network ||

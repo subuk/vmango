@@ -3,12 +3,14 @@ package catalog
 
 import (
 	"fmt"
+	"slices"
 	"subuk/vmango/compute"
 )
 
 type ImageRepository struct{ images []compute.Image }
 
 func copyImage(i compute.Image) compute.Image {
+	i.DataDisks = slices.Clone(i.DataDisks)
 	if i.Download != nil {
 		d := *i.Download
 		i.Download = &d

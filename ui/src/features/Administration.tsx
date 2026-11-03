@@ -1033,6 +1033,20 @@ function ImageDetail({
                                 ]}
                             />
                         </DetailSection>
+                        {!!i.data_disks?.length && (
+                            <DetailSection title="Required image disks">
+                                <Typography sx={{ mb: 2 }}>
+                                    Created automatically for new machines using
+                                    the selected storage class.
+                                </Typography>
+                                <Fields
+                                    entries={i.data_disks.map((disk) => [
+                                        disk.name,
+                                        bytes(disk.size_bytes),
+                                    ])}
+                                />
+                            </DetailSection>
+                        )}
                         <DetailSection title="Configured source">
                             <Fields
                                 entries={[

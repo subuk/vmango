@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"subuk/vmango/compute"
 	"testing"
@@ -57,6 +58,47 @@ func TestInvalidImageConfiguration(t *testing.T) {
 			os.WriteFile(path, []byte(withImages(`image "test" { path = "/base" os_arch = "x86_64" `+options+` }`)), 0600)
 			if _, err := Parse(path); err == nil {
 				t.Fatal("invalid config accepted")
+			}
+		})
+	}
+}
+
+func TestImageDataDisksPreserveDeclarationOrder(t *testing.T) {
+	cfg, err := parseCloudTest(t, withImages(`image "android" {
+		path = "/images/android.qcow2"
+		os_arch = "aarch64"
+		data_disk "userdata" { size_gib = 16 }
+		data_disk "cache" { size_gib = 2 }
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	images, _, err := cfg.ImageDefinitions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []compute.ImageDataDisk{{Name: "userdata", SizeBytes: 16 << 30}, {Name: "cache", SizeBytes: 2 << 30}}
+	if len(images) != 1 || !reflect.DeepEqual(images[0].DataDisks, want) {
+		t.Fatalf("image data disks = %+v, want %+v", images, want)
+	}
+}
+
+func TestInvalidImageDataDiskConfiguration(t *testing.T) {
+	for name, disks := range map[string]string{
+		"missing size":     `data_disk "userdata" {}`,
+		"zero size":        `data_disk "userdata" { size_gib = 0 }`,
+		"negative size":    `data_disk "userdata" { size_gib = -1 }`,
+		"fractional size":  `data_disk "userdata" { size_gib = 1.5 }`,
+		"byte overflow":    `data_disk "userdata" { size_gib = 17179869184 }`,
+		"integer overflow": `data_disk "userdata" { size_gib = 18446744073709551615 }`,
+		"duplicate name":   `data_disk "userdata" { size_gib = 16 } data_disk "userdata" { size_gib = 2 }`,
+		"reserved name":    `data_disk "root" { size_gib = 16 }`,
+		"invalid name":     `data_disk "../userdata" { size_gib = 16 }`,
+		"total overflow":   `data_disk "one" { size_gib = 17179869183 } data_disk "two" { size_gib = 1 }`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parseCloudTest(t, withImages(`image "android" { path = "/images/android.qcow2" os_arch = "aarch64" `+disks+` }`)); err == nil {
+				t.Fatal("invalid image data disks accepted")
 			}
 		})
 	}

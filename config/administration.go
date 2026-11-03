@@ -78,6 +78,7 @@ func administrationImage(i compute.Image) compute.AdministrationImage {
 	bus := d.BootDiskBus().String()
 	guestAgent := d.GuestAgentEnabled()
 	out := compute.AdministrationImage{ID: i.ID, CloudID: i.CloudID, Name: i.Name, OSName: i.OSName, OSVersion: i.OSVersion, Arch: i.Arch.String(), MinimumMemoryBytes: i.MinimumMemoryBytes, MinimumDiskBytes: i.MinimumDiskBytes, Protected: i.ConfiguredPolicy.Protected, Hidden: i.ConfiguredPolicy.Hidden, Defaults: compute.AdministrationImageDefaults{Firmware: d.Firmware, DiskBus: bus, DiskController: d.DiskController, NICModel: d.NICModel, Graphics: graphics.String(), VideoModel: video.String(), GuestAgent: &guestAgent, Initialization: d.Initialization}, Settings: []compute.AdministrationFieldState{}, Source: compute.AdministrationImageSource{Mode: "local", Path: i.SourcePath}}
+	out.DataDisks = append([]compute.ImageDataDisk(nil), i.DataDisks...)
 	for _, field := range []struct{ name, value, source string }{{"firmware", d.Firmware, "target backend"}, {"disk_controller", d.DiskController, "target backend SCSI controller"}, {"nic_model", d.NICModel, "target network binding, then domain virtio default"}, {"initialization", d.Initialization, "target host config_drive_format"}} {
 		state, source := "configured", "image."+field.name
 		if field.value == "" {

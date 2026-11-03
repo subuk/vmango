@@ -20,7 +20,11 @@ const catalog = vi.hoisted(() => ({
     id: "local",
     name: "Local cloud",
     zones: [{ id: "z", name: "Zone" }],
-    images: [{ id: "ubuntu", name: "Ubuntu" }],
+    images: [{ id: "ubuntu", name: "Ubuntu" }] as {
+        id: string;
+        name: string;
+        data_disks?: { name: string; size_bytes: number }[];
+    }[],
     instance_types: [
         {
             id: "small",
@@ -95,6 +99,9 @@ afterEach(() => {
     cleanup();
     request.mockReset();
     catalog.offers.splice(1);
+    catalog.images.splice(1);
+    catalog.storage_classes.splice(1);
+    catalog.offers[0].storage_classes = ["fast"];
 });
 function show() {
     render(
@@ -218,4 +225,114 @@ it("updates the included resources when the instance type changes", async () => 
     expect(within(summary).getByText("4 GiB")).toBeTruthy();
     expect(within(summary).getByText("40 GiB")).toBeTruthy();
     expect(within(summary).queryByText("20 GiB")).toBeNull();
+});
+
+function addAndroid() {
+    catalog.images.push({
+        id: "android",
+        name: "Android",
+        data_disks: [{ name: "userdata", size_bytes: 16 * 2 ** 30 }],
+    });
+    catalog.offers.push({ ...catalog.offers[0], image: "android" });
+}
+
+async function chooseImage(name: string) {
+    await userEvent.click(screen.getByRole("combobox", { name: "Image" }));
+    await userEvent.click(screen.getByRole("option", { name }));
+}
+
+it("shows automatic image disks without including them in the create request", async () => {
+    addAndroid();
+    show();
+    await screen.findByText("2 vCPU");
+    await chooseImage("Android");
+    const required = screen.getByRole("region", {
+        name: "Required image disks",
+    });
+    expect(within(required).getByText("userdata · 16 GiB · Fast")).toBeTruthy();
+    expect(within(required).queryByRole("textbox")).toBeNull();
+    expect(screen.getByText("Total new storage: 36 GiB")).toBeTruthy();
+    request.mockResolvedValueOnce({ task: { id: "android-task" } });
+    await userEvent.type(
+        screen.getByRole("textbox", { name: "Machine name" }),
+        "android",
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Create machine" }),
+    );
+    await waitFor(() =>
+        expect(request).toHaveBeenCalledWith(
+            "/api/v1/clouds/local/machines",
+            "POST",
+            expect.objectContaining({ image: "android", new_disks: [] }),
+        ),
+    );
+});
+
+it("keeps user disks separate while image disks follow image and storage choices", async () => {
+    catalog.storage_classes.push({ id: "bulk", name: "Bulk" });
+    catalog.offers[0].storage_classes.push("bulk");
+    addAndroid();
+    show();
+    await screen.findByText("2 vCPU");
+    await chooseImage("Android");
+    await userEvent.click(
+        screen.getByRole("combobox", { name: "Storage class" }),
+    );
+    await userEvent.click(screen.getByRole("option", { name: "Bulk" }));
+    expect(screen.getByText("userdata · 16 GiB · Bulk")).toBeTruthy();
+    await userEvent.click(
+        screen.getByRole("button", { name: "Additional disks" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Add disk" }));
+    expect(screen.getByText("Total new storage: 46 GiB")).toBeTruthy();
+    const diskName = screen.getByRole("textbox", { name: "Disk 1 name" });
+    await userEvent.clear(diskName);
+    await userEvent.type(diskName, "userdata");
+    expect(
+        screen.getByText(/This name is reserved for a required image disk/),
+    ).toBeTruthy();
+    expect(
+        (
+            screen.getByRole("button", {
+                name: "Create machine",
+            }) as HTMLButtonElement
+        ).disabled,
+    ).toBe(true);
+    await chooseImage("Ubuntu");
+    expect(
+        screen.queryByRole("region", { name: "Required image disks" }),
+    ).toBeNull();
+    expect(screen.getByText("Total new storage: 30 GiB")).toBeTruthy();
+    expect((diskName as HTMLInputElement).value).toBe("userdata");
+    await chooseImage("Android");
+    expect(screen.getAllByText("userdata · 16 GiB · Bulk")).toHaveLength(1);
+    expect(screen.getByText("Total new storage: 46 GiB")).toBeTruthy();
+    await userEvent.clear(diskName);
+    await userEvent.type(diskName, "extra");
+    request.mockResolvedValueOnce({ task: { id: "android-task" } });
+    await userEvent.type(
+        screen.getByRole("textbox", { name: "Machine name" }),
+        "android",
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Create machine" }),
+    );
+    await waitFor(() =>
+        expect(request).toHaveBeenCalledWith(
+            "/api/v1/clouds/local/machines",
+            "POST",
+            expect.objectContaining({
+                image: "android",
+                storage_class: "bulk",
+                new_disks: [
+                    {
+                        name: "extra",
+                        size_bytes: 10 * 2 ** 30,
+                        storage_class: "bulk",
+                    },
+                ],
+            }),
+        ),
+    );
 });

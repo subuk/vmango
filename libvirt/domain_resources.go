@@ -101,6 +101,10 @@ func applyDomainPolicy(virDomainConfig *libvirtxml.Domain, vm *compute.VirtualMa
 		virDomainConfig.Devices.Videos = []libvirtxml.DomainVideo{
 			libvirtxml.DomainVideo{Model: libvirtxml.DomainVideoModel{Type: "cirrus"}},
 		}
+	case compute.VideoModelVirtio:
+		virDomainConfig.Devices.Videos = []libvirtxml.DomainVideo{
+			{Model: libvirtxml.DomainVideoModel{Type: "virtio"}},
+		}
 	case compute.VideoModelNone:
 		virDomainConfig.Devices.Videos = nil
 	}

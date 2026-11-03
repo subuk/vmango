@@ -205,6 +205,8 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 			vm.VideoModel = compute.VideoModelQxl
 		case "cirrus":
 			vm.VideoModel = compute.VideoModelCirrus
+		case "virtio":
+			vm.VideoModel = compute.VideoModelVirtio
 		}
 	}
 	if vm.VideoModel == compute.VideoModelUnknown {
