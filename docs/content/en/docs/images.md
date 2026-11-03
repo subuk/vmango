@@ -56,8 +56,74 @@ without copying definitions within that cloud.
 A downloadable entry has `url`, mandatory `sha256` and `source_format` (`raw` or
 `qcow2`), with no `path`. Use the complete definitions in `vmango.dist.conf` as
 ready-to-use examples. SHA-256 covers the exact downloaded file bytes, not a
-guest-visible filesystem or an unpacked/converted disk. Archives, external QCOW2
-backing/data files, encryption and incompatible QCOW2 features are rejected.
+guest-visible filesystem or an unpacked disk. Add the archive settings below
+when the download contains a disk inside ZIP or TAR. External QCOW2 backing/data
+files, encryption and incompatible QCOW2 features are rejected.
+
+### Select a disk inside an archive
+
+Keep `url`, `sha256` and `source_format`, and add `archive_format` and
+`archive_member` to select exactly one regular file:
+
+```hcl
+image "archived-linux" {
+    os_arch = "aarch64"
+    url = "https://images.example.org/linux.tar.gz"
+    sha256 = "REPLACE_WITH_ARCHIVE_SHA256"
+    source_format = "qcow2"
+    archive_format = "tar.gz"
+    archive_member = "images/system.qcow2"
+    extracted_size_bytes = 2147483648
+}
+```
+
+Replace the URL, checksum, member name and size with the published artifact's
+values. `archive_format` accepts `zip`, `tar` and `tar.gz`. `source_format` remains
+`raw` or `qcow2` and describes the selected disk, not its container. Both archive
+settings must be present together; omitting both retains direct-file downloads.
+Local `path` entries do not use archive settings.
+
+`archive_member` is the exact, case-sensitive path stored in the archive, using
+forward slashes. Use a relative path without a drive prefix, leading slash,
+backslashes, empty components, `.` or `..`. Vmango does not extract a directory
+or follow symbolic/hard links: the selected member must be a single regular
+file. Missing or duplicate matching members fail preparation. ZIP supports
+stored and Deflate members, including ZIP64 and data descriptors; encrypted
+members and unsupported compression methods are rejected. TAR supports plain
+or gzip-compressed archives.
+
+The sizes describe different things:
+
+| Setting | Meaning |
+| --- | --- |
+| `sha256` | SHA-256 of the complete downloaded archive |
+| `source_size_bytes` | Optional exact archive file byte count; required if HTTP omits `Content-Length` |
+| `extracted_size_bytes` | Optional exact selected file byte count after decompression |
+| `minimum_disk_gib` | Minimum guest-visible boot disk capacity |
+
+Set `extracted_size_bytes` when known so placement can budget the actual image
+storage. Without it, placement conservatively reserves `image_transfers.max_bytes`
+for an unprepared archived image. A configured extracted size must agree with
+the archive member; it is not the QCOW2 virtual capacity.
+
+ZIP preparation makes two complete HTTP requests. The first verifies the archive
+SHA-256 and reads its bounded central-directory metadata; the second streams the
+selected disk to libvirt and verifies the full archive again before completing
+the upload. ZIP metadata must fit in a 4 MiB tail window with at most 10,000 entries.
+Split archives and nonstandard footer gaps are rejected.
+This handles members whose local headers omit their sizes without keeping the
+archive on disk. TAR and TAR.GZ use one HTTP pass; after the selected member,
+Vmango scans the remainder before completing the upload to detect duplicates,
+validate trailers and verify the complete download checksum. Nonzero data after
+the TAR end marker is rejected; concatenated TAR archives are not supported.
+
+`image_transfers.max_bytes` bounds the downloaded archive and the extracted disk
+file separately. For TAR and TAR.GZ it also bounds the complete TAR stream after
+decompression, including headers and skipped files. An archive may therefore exceed the limit
+even when the selected disk fits. Checksum, ZIP CRC, gzip trailer, size or format
+failures leave the image unverified and use the staging cleanup described below.
+Archive payloads and extracted disks are never written to temporary files on the
+Vmango application host. Only the selected disk is uploaded to the target pool.
 
 ### Lazy preparation and progress
 
@@ -67,14 +133,16 @@ prepares it on the selected node and then automatically continues creating the V
 Closing the form or browser does not cancel accepted work.
 
 The data path is **upstream HTTP(S) → Vmango → libvirt volume upload**. Download
-and upload overlap with bounded buffers and backpressure. Vmango creates no image
+and upload overlap with bounded buffers and backpressure for direct files and
+TAR; ZIP first makes the verification pass described above. Vmango creates no image
 payload file, temporary download, spool or application-side cache. The staging
 volume and reusable verified image belong to the destination libvirt node, even
 when Vmango and libvirt run on the same computer. Concurrent creates share one
 preparation for the same connection, pool and artifact. Followers remain queued
 while that artifact is in use by an active create, leaving workers available for
 unrelated images and nodes. Different nodes prepare independently. Different image IDs can share bytes while supplying different
-launch defaults.
+launch defaults. Archive format and selected member are part of the prepared
+image identity, so different disks in one archive cannot reuse each other.
 
 Task progress shows source inspection, destination preparation, concurrent
 **Download and upload image**, final verification and normal VM provisioning.
@@ -95,7 +163,7 @@ Optional application-wide limits:
 
 ```hcl
 image_transfers {
-    max_bytes = 17179869184 # 16 GiB of downloaded bytes per artifact
+    max_bytes = 17179869184 # 16 GiB per download, extracted disk or decompressed TAR scan
     timeout_seconds = 3600
     idle_timeout_seconds = 120
 }
@@ -103,7 +171,8 @@ image_transfers {
 
 ### Verification, failures and pinned updates
 
-Managed names include the SHA-256 and format. Incomplete volumes are hidden from
+Managed names identify the SHA-256 and format; archived sources also include
+the archive format and member selection in their identity. Incomplete volumes are hidden from
 ordinary volume selection and cannot be cloned through public volume commands.
 Readiness is published only after consuming the complete response, checking
 SHA-256, successfully finalizing the libvirt stream and confirming backend format,
@@ -345,17 +414,11 @@ upstream QEMU and works with macOS HVF; it does not require Android Emulator or
 Cuttlefish host services. The archive contains a UTM bundle, but Vmango uses its
 `vda.qcow2` directly.
 
-Download
-[`UTM-VM-lineage-24.0-20261020-jqssun-virtio_arm64only.zip`](https://github.com/jqssun/android-lineage-qemu/releases/download/v2026.10.20/UTM-VM-lineage-24.0-20261020-jqssun-virtio_arm64only.zip)
-and verify its SHA-256 before extracting:
-
-```text
-f2754f6be04b5e47e35851586d350411cfbf516f67dd53ec4a80121ceaa4428e
-```
-
-Place `LineageOS_on_arm64.utm/Data/vda.qcow2` in an active libvirt directory
-pool on the target host, refresh that pool, and add the following definition
-inside its cloud. Adjust `path` to the actual source volume:
+Add this definition inside the cloud that owns the ARM64 host. Vmango downloads
+the [pinned release archive](https://github.com/jqssun/android-lineage-qemu/releases/download/v2026.10.20/UTM-VM-lineage-24.0-20261020-jqssun-virtio_arm64only.zip)
+and selects `LineageOS_on_arm64.utm/Data/vda.qcow2` automatically; no manual
+extraction, source-volume registration or local `path` is needed. Configure the
+host's `image_pool` as described above.
 
 ```hcl
 image "android-lineage-24-arm64" {
@@ -363,7 +426,13 @@ image "android-lineage-24-arm64" {
     os_name = "Android (LineageOS)"
     os_version = "24.0 / 20261020"
     os_arch = "aarch64"
-    path = "/var/lib/libvirt/images/android-lineage-24.0-arm64.qcow2"
+    url = "https://github.com/jqssun/android-lineage-qemu/releases/download/v2026.10.20/UTM-VM-lineage-24.0-20261020-jqssun-virtio_arm64only.zip"
+    sha256 = "f2754f6be04b5e47e35851586d350411cfbf516f67dd53ec4a80121ceaa4428e"
+    source_format = "qcow2"
+    source_size_bytes = 1119381498
+    archive_format = "zip"
+    archive_member = "LineageOS_on_arm64.utm/Data/vda.qcow2"
+    extracted_size_bytes = 2222784512
     firmware = "efi"
     disk_bus = "virtio"
     nic_model = "virtio"
@@ -384,7 +453,7 @@ Restart Vmango to load the catalog. Select an ARM64 host and a type with at leas
 2 vCPUs, 2 GiB RAM and a 5 GiB boot disk. Selecting this Android image automatically
 adds the required blank 16 GiB `userdata` disk. Android uses the cloned system
 disk as `vda` and formats the second disk, `vdb`, for `/data` on first boot.
-The supplied `vdb.qcow2` and `efi_vars.fd` are not needed: Vmango creates the
+The archive's `vdb.qcow2` and `efi_vars.fd` are not extracted: Vmango creates the
 blank disk and libvirt creates fresh UEFI variables.
 
 Open the machine's console, select **VNC**, and connect to complete the LineageOS
@@ -393,13 +462,12 @@ setup wizard. New ARM64 graphical VMs include USB keyboard and tablet input;
 SSH keys and cloud-init user data do not configure this image.
 
 Verified on 2026-11-03 through Vmango's creation API on an Apple M1 Pro with
-QEMU 9.2.3, libvirt 11.2.0 and HVF: a 4-vCPU/4-GiB VM with a 20-GiB system disk
-and 16-GiB data disk reached the LineageOS setup wizard. Its display and pointer
-input were checked through Vmango's browser VNC console. A separate 2-vCPU/2-GiB
-VM with an 8-GiB system disk also reached the setup wizard with `userdata` created
-automatically from `data_disk`, without `new_disks` in the API request. These
-checks do not establish Linux/KVM compatibility, accelerated graphics, audio or
-application compatibility.
+QEMU 9.2.3, libvirt 11.2.0 and HVF: Vmango downloaded the release ZIP, verified
+both passes, selected the system disk and started a 2-vCPU/2-GiB VM with an 8-GiB
+boot disk and automatic 16-GiB `userdata`. The guest reached the LineageOS setup
+wizard. Display and pointer input were also checked through Vmango's browser
+VNC console in the earlier local-source test. These checks do not establish
+Linux/KVM compatibility, accelerated graphics, audio or application compatibility.
 
 ## Launch a machine
 

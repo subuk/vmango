@@ -82,29 +82,32 @@ func (c *APIConfig) ValidateTLS() error {
 }
 
 type ImageConfig struct {
-	ID               string `hcl:",key"`
-	Path             string `hcl:"path"`
-	URL              string `hcl:"url"`
-	SHA256           string `hcl:"sha256"`
-	SourceFormat     string `hcl:"source_format"`
-	SourceSizeBytes  int64  `hcl:"source_size_bytes"`
-	Name             string `hcl:"name"`
-	OsName           string `hcl:"os_name"`
-	OsVersion        string `hcl:"os_version"`
-	OsArch           string `hcl:"os_arch"`
-	Protected        bool   `hcl:"protected"`
-	Hidden           bool   `hcl:"hidden"`
-	Efi              *bool  `hcl:"efi"`
-	Firmware         string `hcl:"firmware"`
-	DiskBus          string `hcl:"disk_bus"`
-	DiskController   string `hcl:"disk_controller"`
-	NICModel         string `hcl:"nic_model"`
-	Graphics         string `hcl:"graphics"`
-	VideoModel       string `hcl:"video_model"`
-	GuestAgent       *bool  `hcl:"guest_agent"`
-	Initialization   string `hcl:"initialization"`
-	MinimumMemoryMiB int64  `hcl:"minimum_memory_mib"`
-	MinimumDiskGiB   int64  `hcl:"minimum_disk_gib"`
+	ID                 string `hcl:",key"`
+	Path               string `hcl:"path"`
+	URL                string `hcl:"url"`
+	SHA256             string `hcl:"sha256"`
+	SourceFormat       string `hcl:"source_format"`
+	SourceSizeBytes    int64  `hcl:"source_size_bytes"`
+	ArchiveFormat      string `hcl:"archive_format"`
+	ArchiveMember      string `hcl:"archive_member"`
+	ExtractedSizeBytes int64  `hcl:"extracted_size_bytes"`
+	Name               string `hcl:"name"`
+	OsName             string `hcl:"os_name"`
+	OsVersion          string `hcl:"os_version"`
+	OsArch             string `hcl:"os_arch"`
+	Protected          bool   `hcl:"protected"`
+	Hidden             bool   `hcl:"hidden"`
+	Efi                *bool  `hcl:"efi"`
+	Firmware           string `hcl:"firmware"`
+	DiskBus            string `hcl:"disk_bus"`
+	DiskController     string `hcl:"disk_controller"`
+	NICModel           string `hcl:"nic_model"`
+	Graphics           string `hcl:"graphics"`
+	VideoModel         string `hcl:"video_model"`
+	GuestAgent         *bool  `hcl:"guest_agent"`
+	Initialization     string `hcl:"initialization"`
+	MinimumMemoryMiB   int64  `hcl:"minimum_memory_mib"`
+	MinimumDiskGiB     int64  `hcl:"minimum_disk_gib"`
 
 	DataDisks []ImageDataDiskConfig `hcl:"data_disk"`
 }
@@ -135,14 +138,15 @@ func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeM
 	for _, cloud := range c.Clouds {
 		seen := map[string]bool{}
 		artifacts := map[string]compute.ImageDownload{}
+		downloads := map[string]compute.ImageDownload{}
 		for _, entry := range cloud.Images {
 			if !compute.ValidCatalogID(entry.ID) {
 				return nil, nil, fmt.Errorf("cloud %s image %q: use a stable catalog ID and a separate path (see docs/CLOUDS.md)", cloud.ID, entry.ID)
 			}
 			path := entry.Path
 			managed := entry.URL != "" || entry.SHA256 != ""
-			if !managed && (entry.SourceFormat != "" || entry.SourceSizeBytes != 0) {
-				return nil, nil, fmt.Errorf("image %q: source_format/source_size_bytes require url and sha256", entry.ID)
+			if !managed && (entry.SourceFormat != "" || entry.SourceSizeBytes != 0 || entry.ArchiveFormat != "" || entry.ArchiveMember != "" || entry.ExtractedSizeBytes != 0) {
+				return nil, nil, fmt.Errorf("image %q: download and archive settings require url and sha256", entry.ID)
 			}
 			if !managed {
 				for _, host := range cloud.Hosts {
@@ -180,24 +184,36 @@ func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeM
 				}
 				i.DataDisks = append(i.DataDisks, compute.ImageDataDisk{Name: disk.Name, SizeBytes: uint64(disk.SizeGiB) << 30})
 			}
-			if entry.SourceSizeBytes < 0 {
-				return nil, nil, fmt.Errorf("image %q: source_size_bytes must be positive", entry.ID)
+			if entry.SourceSizeBytes < 0 || entry.ExtractedSizeBytes < 0 {
+				return nil, nil, fmt.Errorf("image %q: source_size_bytes and extracted_size_bytes must be nonnegative", entry.ID)
 			}
 			if managed {
 				i.SourcePath = entry.Path
-				i.Download = &compute.ImageDownload{URL: entry.URL, SHA256: strings.ToLower(entry.SHA256), Format: compute.NewVolumeFormat(entry.SourceFormat), SizeBytes: uint64(entry.SourceSizeBytes)}
-			} else if entry.SourceFormat != "" || entry.SourceSizeBytes != 0 {
-				return nil, nil, fmt.Errorf("image %q: source_format/source_size_bytes require url and sha256", entry.ID)
+				i.Download = &compute.ImageDownload{URL: entry.URL, SHA256: strings.ToLower(entry.SHA256), Format: compute.NewVolumeFormat(entry.SourceFormat), SizeBytes: uint64(entry.SourceSizeBytes), ArchiveFormat: entry.ArchiveFormat, ArchiveMember: entry.ArchiveMember, ExtractedSizeBytes: uint64(entry.ExtractedSizeBytes)}
+			} else if entry.SourceFormat != "" || entry.SourceSizeBytes != 0 || entry.ArchiveFormat != "" || entry.ArchiveMember != "" || entry.ExtractedSizeBytes != 0 {
+				return nil, nil, fmt.Errorf("image %q: download and archive settings require url and sha256", entry.ID)
 			}
 			if i.Managed() {
-				if previous, ok := artifacts[i.Download.SHA256]; ok && (previous.Format != i.Download.Format || (previous.SizeBytes != 0 && i.Download.SizeBytes != 0 && previous.SizeBytes != i.Download.SizeBytes)) {
-					return nil, nil, fmt.Errorf("image %q: conflicting format or byte size for shared artifact", i.ID)
+				d := *i.Download
+				if previous, ok := downloads[d.SHA256]; ok {
+					if previous.ArchiveFormat != d.ArchiveFormat || (previous.SizeBytes != 0 && d.SizeBytes != 0 && previous.SizeBytes != d.SizeBytes) {
+						return nil, nil, fmt.Errorf("image %q: conflicting archive format or source byte size for shared download", i.ID)
+					}
+					if d.SizeBytes == 0 {
+						d.SizeBytes = previous.SizeBytes
+					}
 				}
-				identity := *i.Download
-				if previous, ok := artifacts[i.Download.SHA256]; ok && identity.SizeBytes == 0 {
-					identity.SizeBytes = previous.SizeBytes
+				downloads[d.SHA256] = d
+				key := d.SHA256 + "\x00" + d.ArchiveFormat + "\x00" + d.ArchiveMember
+				if previous, ok := artifacts[key]; ok {
+					if previous.Format != d.Format || (previous.ExtractedSizeBytes != 0 && d.ExtractedSizeBytes != 0 && previous.ExtractedSizeBytes != d.ExtractedSizeBytes) {
+						return nil, nil, fmt.Errorf("image %q: conflicting format or extracted byte size for shared artifact", i.ID)
+					}
+					if d.ExtractedSizeBytes == 0 {
+						d.ExtractedSizeBytes = previous.ExtractedSizeBytes
+					}
 				}
-				artifacts[i.Download.SHA256] = identity
+				artifacts[key] = d
 			}
 			if err := i.Validate(); err != nil {
 				return nil, nil, err

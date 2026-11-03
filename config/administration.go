@@ -111,7 +111,7 @@ func administrationImage(i compute.Image) compute.AdministrationImage {
 			remote.Host = u.Hostname()
 			remote.Port = u.Port()
 		}
-		out.Source = compute.AdministrationImageSource{Mode: "download", Remote: remote, SHA256: i.Download.SHA256, Format: i.Download.Format.String(), SizeBytes: i.Download.SizeBytes}
+		out.Source = compute.AdministrationImageSource{Mode: "download", Remote: remote, SHA256: i.Download.SHA256, Format: i.Download.Format.String(), SizeBytes: i.Download.SizeBytes, ArchiveFormat: i.Download.ArchiveFormat, ArchiveMember: i.Download.ArchiveMember, ExtractedSizeBytes: i.Download.ExtractedSizeBytes}
 	}
 	return out
 }

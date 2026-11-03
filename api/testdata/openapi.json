@@ -456,6 +456,17 @@
       "AdministrationImageSource": {
         "additionalProperties": false,
         "properties": {
+          "archive_format": {
+            "type": "string"
+          },
+          "archive_member": {
+            "type": "string"
+          },
+          "extracted_size_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "format": {
             "type": "string"
           },

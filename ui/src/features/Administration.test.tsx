@@ -118,7 +118,12 @@ it("shows required image disks in configuration details", async () => {
                   defaults: { initialization: "none" },
                   data_disks: [{ name: "userdata", size_bytes: 16 * 2 ** 30 }],
                   settings: [],
-                  source: { mode: "local", path: "/android.qcow2" },
+                  source: {
+                      mode: "download", format: "qcow2",
+                      archive_format: "zip",
+                      archive_member: "bundle/vda.qcow2",
+                      extracted_size_bytes: 2 * 2 ** 30,
+                  },
               }
             : path === "/api/v1/administration/configuration"
               ? install
@@ -128,6 +133,9 @@ it("shows required image disks in configuration details", async () => {
     const disks = await screen.findByRole("region", {
         name: "Required image disks",
     });
+    expect(screen.getByText("bundle/vda.qcow2")).toBeTruthy();
+    expect(screen.getByText("zip")).toBeTruthy();
+    expect(screen.getByText("Declared extracted size")).toBeTruthy();
     expect(within(disks).getByText("userdata")).toBeTruthy();
     expect(within(disks).getByText("16 GiB")).toBeTruthy();
     expect(

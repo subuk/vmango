@@ -1060,6 +1060,9 @@ function ImageDetail({
                                     ],
                                     ["SHA-256", i.source.sha256],
                                     ["Artifact format", i.source.format],
+                                    ["Archive format", i.source.archive_format],
+                                    ["Archive member", i.source.archive_member],
+                                    ["Declared extracted size", i.source.extracted_size_bytes ? bytes(i.source.extracted_size_bytes) : undefined],
                                     [
                                         "Declared source size",
                                         i.source.size_bytes

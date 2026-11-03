@@ -34,10 +34,13 @@ type ImageDataDisk struct {
 // ImageDownload describes exact artifact bytes, independently of launch defaults.
 // SizeBytes is optional HTTP size information, never guest disk capacity.
 type ImageDownload struct {
-	URL       string
-	SHA256    string
-	Format    VolumeFormat
-	SizeBytes uint64
+	URL                string
+	SHA256             string
+	Format             VolumeFormat
+	SizeBytes          uint64
+	ArchiveFormat      string `json:",omitempty"`
+	ArchiveMember      string `json:",omitempty"`
+	ExtractedSizeBytes uint64 `json:",omitempty"`
 }
 
 func (i Image) Managed() bool { return i.Download != nil }
@@ -71,6 +74,13 @@ func (i Image) Validate() error {
 	}
 	if i.Managed() {
 		d := i.Download
+		if d.ArchiveFormat == "" {
+			if d.ArchiveMember != "" || d.ExtractedSizeBytes != 0 {
+				return fmt.Errorf("image %q: archive_member and extracted_size_bytes require archive_format", i.ID)
+			}
+		} else if !slices.Contains([]string{"zip", "tar", "tar.gz"}, d.ArchiveFormat) || !validArchiveMemberName(d.ArchiveMember) {
+			return fmt.Errorf("image %q: archive_format must be zip, tar or tar.gz with a safe relative archive_member path", i.ID)
+		}
 		u, err := url.Parse(d.URL)
 		h, hashErr := hex.DecodeString(d.SHA256)
 		if i.SourcePath != "" || err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.Fragment != "" || hashErr != nil || len(h) != 32 || (d.Format != VolumeFormatRaw && d.Format != VolumeFormatQcow2) {

@@ -26,16 +26,19 @@ var ErrArtifactNotFound = errors.New("artifact metadata not found")
 // Scope identifies the connection rather than its configurable display name.
 type ImageBinding struct{ Node, Scope, Pool, PoolID, Name, Path string }
 type ImageArtifact struct {
-	Binding     ImageBinding
-	SHA256      string
-	Format      VolumeFormat
-	Owner       string
-	State       string
-	Fingerprint string
-	Capacity    uint64
-	SizeBytes   uint64
-	Error       string
-	FailedAt    time.Time
+	Binding            ImageBinding
+	SHA256             string
+	Format             VolumeFormat
+	Owner              string
+	State              string
+	Fingerprint        string
+	Capacity           uint64
+	SizeBytes          uint64
+	ArchiveFormat      string `json:",omitempty"`
+	ArchiveMember      string `json:",omitempty"`
+	ExtractedSizeBytes uint64 `json:",omitempty"`
+	Error              string
+	FailedAt           time.Time
 }
 type ImageArtifactRepository interface {
 	Get(key string) (ImageArtifact, error)
@@ -89,7 +92,12 @@ func (s *ManagedImageService) Bind(node string, i Image) (ImageBinding, error) {
 	if !ok {
 		return b, fmt.Errorf("image storage is not configured on node %q", node)
 	}
-	name := ManagedImagePrefix + strings.ToLower(i.Download.SHA256) + "." + i.Download.Format.String()
+	identity := strings.ToLower(i.Download.SHA256)
+	if i.Download.ArchiveFormat != "" {
+		digest := sha256.Sum256([]byte(identity + "\x00" + i.Download.ArchiveFormat + "\x00" + i.Download.ArchiveMember))
+		identity = hex.EncodeToString(digest[:])
+	}
+	name := ManagedImagePrefix + identity + "." + i.Download.Format.String()
 	return s.backend.BindImage(node, b.Scope, b.Pool, name, 0)
 }
 func (s *ManagedImageService) ready(b ImageBinding, i Image) (*Volume, error) {
@@ -100,11 +108,14 @@ func (s *ManagedImageService) ready(b ImageBinding, i Image) (*Volume, error) {
 	if a.State == "absent" {
 		return nil, ErrArtifactNotFound
 	}
-	if a.State != "ready" || a.SHA256 != i.Download.SHA256 || a.Format != i.Download.Format || !sameImageBinding(a.Binding, b) {
+	if a.State != "ready" || a.SHA256 != i.Download.SHA256 || a.Format != i.Download.Format || a.ArchiveFormat != i.Download.ArchiveFormat || a.ArchiveMember != i.Download.ArchiveMember || !sameImageBinding(a.Binding, b) {
 		return nil, fmt.Errorf("image preparation is incomplete; inspect its task and owned destination before a new attempt")
 	}
 	if i.Download.SizeBytes != 0 && i.Download.SizeBytes != a.SizeBytes {
 		return nil, errors.New("source_size_bytes differs from the verified shared artifact")
+	}
+	if i.Download.ExtractedSizeBytes != 0 && i.Download.ExtractedSizeBytes != a.ExtractedSizeBytes {
+		return nil, errors.New("extracted_size_bytes differs from the verified shared artifact")
 	}
 	v, fingerprint, err := s.backend.InspectImage(b)
 	if err != nil {
@@ -211,7 +222,7 @@ func (s *ManagedImageService) prepare(ctx context.Context, b ImageBinding, i Ima
 		}
 		return cause
 	}
-	a := ImageArtifact{Binding: b, SHA256: i.Download.SHA256, Format: i.Download.Format, Owner: e.ID(), State: "incomplete"}
+	a := ImageArtifact{Binding: b, SHA256: i.Download.SHA256, Format: i.Download.Format, ArchiveFormat: i.Download.ArchiveFormat, ArchiveMember: i.Download.ArchiveMember, Owner: e.ID(), State: "incomplete"}
 	created := false
 	defer func() {
 		if err == nil {
@@ -244,39 +255,49 @@ func (s *ManagedImageService) prepare(ctx context.Context, b ImageBinding, i Ima
 	}()
 	// An ordinary failed attempt whose owned staging was confirmed deleted may be retried.
 	var body io.ReadCloser
+	var archive *archiveImageSource
 	var header []byte
 	var size, capacity uint64
 	if err = e.Stage("inspect-image-source", &ref, false, func() error {
-		req, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, i.Download.URL, nil)
-		if requestErr != nil {
-			return errors.New("invalid source URL")
-		}
-		req.Header.Set("Accept-Encoding", "identity")
-		response, requestErr := s.client.Do(req)
-		if requestErr != nil {
-			return transferError(errors.New("image HTTP request failed; check source connectivity and timeout"))
-		}
-		body = response.Body
-		if response.StatusCode != http.StatusOK {
-			return fmt.Errorf("image source returned HTTP %d", response.StatusCode)
-		}
-		if ce := response.Header.Get("Content-Encoding"); ce != "" && ce != "identity" {
-			return fmt.Errorf("image source HTTP encoding %q is unsupported; use direct raw/qcow2 bytes", ce)
-		}
-		if response.ContentLength > 0 {
-			size = uint64(response.ContentLength)
-		}
-		if i.Download.SizeBytes > 0 {
-			if size > 0 && size != i.Download.SizeBytes {
-				return fmt.Errorf("source_size_bytes disagrees with HTTP Content-Length")
+		if i.Download.ArchiveFormat != "" {
+			var sourceErr error
+			archive, sourceErr = s.openArchiveImage(ctx, cancel, i, e)
+			if sourceErr != nil {
+				return sourceErr
 			}
-			size = i.Download.SizeBytes
-		}
-		if size == 0 {
-			return fmt.Errorf("cannot determine artifact byte size; set source_size_bytes on image %q", i.ID)
-		}
-		if size > s.limits.MaxBytes {
-			return fmt.Errorf("image exceeds image_transfers.max_bytes (%d)", s.limits.MaxBytes)
+			body, size = archive, archive.size
+		} else {
+			req, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, i.Download.URL, nil)
+			if requestErr != nil {
+				return errors.New("invalid source URL")
+			}
+			req.Header.Set("Accept-Encoding", "identity")
+			response, requestErr := s.client.Do(req)
+			if requestErr != nil {
+				return transferError(errors.New("image HTTP request failed; check source connectivity and timeout"))
+			}
+			body = response.Body
+			if response.StatusCode != http.StatusOK {
+				return fmt.Errorf("image source returned HTTP %d", response.StatusCode)
+			}
+			if ce := response.Header.Get("Content-Encoding"); ce != "" && ce != "identity" {
+				return fmt.Errorf("image source HTTP encoding %q is unsupported; use direct raw/qcow2 bytes", ce)
+			}
+			if response.ContentLength > 0 {
+				size = uint64(response.ContentLength)
+			}
+			if i.Download.SizeBytes > 0 {
+				if size > 0 && size != i.Download.SizeBytes {
+					return fmt.Errorf("source_size_bytes disagrees with HTTP Content-Length")
+				}
+				size = i.Download.SizeBytes
+			}
+			if size == 0 {
+				return fmt.Errorf("cannot determine artifact byte size; set source_size_bytes on image %q", i.ID)
+			}
+			if size > s.limits.MaxBytes {
+				return fmt.Errorf("image exceeds image_transfers.max_bytes (%d)", s.limits.MaxBytes)
+			}
 		}
 		timer := time.AfterFunc(s.limits.IdleTimeout, cancel)
 		defer timer.Stop()
@@ -304,6 +325,10 @@ func (s *ManagedImageService) prepare(ctx context.Context, b ImageBinding, i Ima
 		return err
 	}
 	a.SizeBytes = size
+	if archive != nil {
+		a.SizeBytes = archive.downloadSize
+		a.ExtractedSizeBytes = size
+	}
 	if err = e.Stage("create-image-staging", &ref, true, func() error {
 		if saveErr := s.store.Put(artifactKey(b), a); saveErr != nil {
 			return saveErr
@@ -317,6 +342,17 @@ func (s *ManagedImageService) prepare(ctx context.Context, b ImageBinding, i Ima
 		return err
 	}
 	if err = e.Stage("stream-image", &ref, true, func() error {
+		if archive != nil {
+			archive.startTransfer()
+			upload := &imageUploadReader{reader: io.MultiReader(bytes.NewReader(header), body)}
+			if uploadErr := s.backend.UploadImage(ctx, b, upload, size); uploadErr != nil {
+				return transferError(uploadErr)
+			}
+			if !archive.complete || upload.count != size {
+				return errors.New("image upload did not consume and verify the complete archive")
+			}
+			return e.Effect(ref, "uploaded-image")
+		}
 		reader := &verifiedImageReader{reader: io.MultiReader(bytes.NewReader(header), body), hash: sha256.New(), expected: i.Download.SHA256, size: size, progress: e, start: time.Now(), idle: s.limits.IdleTimeout}
 		reader.timer = time.AfterFunc(reader.idle, cancel)
 		defer reader.timer.Stop()
@@ -411,6 +447,9 @@ func (r *verifiedImageReader) Read(p []byte) (int, error) {
 	return n, err
 }
 func (r *verifiedImageReader) report(final bool) error {
+	if r.progress == nil {
+		return nil
+	}
 	now := time.Now()
 	if !final && !r.last.IsZero() && now.Sub(r.last) < time.Second {
 		return nil
@@ -433,7 +472,7 @@ func inspectImagePrefix(p []byte, format VolumeFormat, size uint64) (uint64, err
 		return size, nil
 	}
 	if !qcow || len(p) < 72 {
-		return 0, errors.New("expected a directly usable QCOW2 image; archives and conversion are unsupported")
+		return 0, errors.New("expected a directly usable QCOW2 image; configure archive_format and archive_member for an archive")
 	}
 	version := binary.BigEndian.Uint32(p[4:8])
 	capacity := binary.BigEndian.Uint64(p[24:32])
@@ -444,4 +483,16 @@ func inspectImagePrefix(p []byte, format VolumeFormat, size uint64) (uint64, err
 		return 0, errors.New("QCOW2 incompatible features are unsupported")
 	}
 	return capacity, nil
+}
+
+// Count the inspected prefix too, including members shorter than the header.
+type imageUploadReader struct {
+	reader io.Reader
+	count  uint64
+}
+
+func (r *imageUploadReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	r.count += uint64(n)
+	return n, err
 }

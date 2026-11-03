@@ -444,6 +444,9 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 				}
 				if state != "ready" {
 					needed := image.Download.SizeBytes
+					if image.Download.ArchiveFormat != "" {
+						needed = image.Download.ExtractedSizeBytes
+					}
 					if needed == 0 {
 						needed = images.ManagedSources.limits.MaxBytes
 					}

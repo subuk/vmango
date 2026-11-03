@@ -960,6 +960,10 @@ export interface components {
             volume_path?: string;
         };
         AdministrationImageSource: {
+            archive_format?: string;
+            archive_member?: string;
+            /** Format: int64 */
+            extracted_size_bytes?: number;
             format: string;
             /** @enum {string} */
             mode: "local" | "download";

@@ -198,6 +198,30 @@ func TestMissingRetrievableImageCanBePlacedAndSharesStorageBudget(t *testing.T) 
 	if _, err := s.ResolveCreate(cloud, spec, images, []HostInventory{i}); err == nil {
 		t.Fatal("image preparation space was not included alongside the boot disk")
 	}
+
+	// Compressed download bytes must not replace the extracted storage budget.
+	image.Download.ArchiveFormat = "tar.gz"
+	image.Download.ArchiveMember = "disk.raw"
+	image.Download.ExtractedSizeBytes = 64 << 20
+	for _, hint := range []uint64{64 << 20, 0} {
+		image.Download.ExtractedSizeBytes = hint
+		archived := images.Snapshot([]Image{image}, nil, true)
+		needed := hint
+		if needed == 0 {
+			needed = images.ManagedSources.limits.MaxBytes
+		}
+		for _, enough := range []bool{false, true} {
+			free := testType().BootDiskBytes + needed
+			if !enough {
+				free--
+			}
+			i.Pools[0].Free = NewSize(free, SizeUnitB)
+			_, err := s.ResolveCreate(cloud, spec, archived, []HostInventory{i})
+			if (err == nil) != enough {
+				t.Fatalf("archive storage hint=%d free=%d: %v", hint, free, err)
+			}
+		}
+	}
 }
 
 type hiddenCloudVolume struct{ VolumeRepository }

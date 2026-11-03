@@ -98,12 +98,15 @@ type AdministrationRemoteSource struct {
 	Redacted bool   `json:"redacted"`
 }
 type AdministrationImageSource struct {
-	Mode      string                      `json:"mode" enum:"local,download"`
-	Path      string                      `json:"path,omitempty"`
-	Remote    *AdministrationRemoteSource `json:"remote,omitempty"`
-	SHA256    string                      `json:"sha256"`
-	Format    string                      `json:"format"`
-	SizeBytes uint64                      `json:"size_bytes"`
+	Mode               string                      `json:"mode" enum:"local,download"`
+	Path               string                      `json:"path,omitempty"`
+	Remote             *AdministrationRemoteSource `json:"remote,omitempty"`
+	SHA256             string                      `json:"sha256"`
+	Format             string                      `json:"format"`
+	SizeBytes          uint64                      `json:"size_bytes"`
+	ArchiveFormat      string                      `json:"archive_format,omitempty"`
+	ArchiveMember      string                      `json:"archive_member,omitempty"`
+	ExtractedSizeBytes uint64                      `json:"extracted_size_bytes,omitempty"`
 }
 type AdministrationImageDefaults struct {
 	Firmware       string `json:"firmware"`

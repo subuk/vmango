@@ -140,6 +140,75 @@ func TestManagedSourceConfiguration(t *testing.T) {
 	}
 }
 
+func TestArchiveImageConfiguration(t *testing.T) {
+	hash := strings.Repeat("a", 64)
+	for _, format := range []string{"zip", "tar", "tar.gz"} {
+		cfg, err := parseCloudTest(t, withImages(`image "archive" {
+            os_arch="aarch64" url="https://example.org/image" sha256="`+hash+`"
+            source_format="qcow2" source_size_bytes=4096
+            archive_format="`+format+`" archive_member="bundle/disk.qcow2" extracted_size_bytes=8192
+        }`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		images, _, err := cfg.ImageDefinitions()
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := images[0].Download
+		if d.ArchiveFormat != format || d.ArchiveMember != "bundle/disk.qcow2" || d.SizeBytes != 4096 || d.ExtractedSizeBytes != 8192 || d.Format != compute.VolumeFormatQcow2 {
+			t.Fatalf("archive settings lost: %+v", d)
+		}
+		projected := administrationImage(images[0])
+		if projected.Source.ArchiveFormat != format || projected.Source.ArchiveMember != d.ArchiveMember || projected.Source.ExtractedSizeBytes != 8192 {
+			t.Fatalf("archive administration settings lost: %+v", projected.Source)
+		}
+	}
+	base := `os_arch="aarch64" url="https://example.org/image" sha256="` + hash + `" source_format="qcow2" `
+	for _, options := range []string{
+		`archive_format="zip"`, `archive_member="disk.qcow2"`,
+		`archive_format="rar" archive_member="disk.qcow2"`,
+		`archive_format="zip" archive_member="/disk.qcow2"`,
+		`archive_format="zip" archive_member="../disk.qcow2"`,
+		`archive_format="zip" archive_member="bundle/../disk.qcow2"`,
+		`archive_format="zip" archive_member="bundle//disk.qcow2"`,
+		`archive_format="zip" archive_member="./disk.qcow2"`,
+		`archive_format="zip" archive_member="C:/disk.qcow2"`,
+		`archive_format="zip" archive_member="bundle\\disk.qcow2"`,
+		`archive_format="zip" archive_member="disk.qcow2" extracted_size_bytes=-1`,
+		`archive_format="zip" archive_member="disk.qcow2" extracted_size_bytes=18446744073709551615`,
+		`extracted_size_bytes=8192`,
+	} {
+		if _, err := parseCloudTest(t, withImages(`image "invalid" { `+base+options+` }`)); err == nil {
+			t.Fatalf("invalid archive settings accepted: %s", options)
+		}
+	}
+	for _, options := range []string{`archive_format="zip"`, `archive_member="disk.qcow2"`, `extracted_size_bytes=8192`} {
+		if _, err := parseCloudTest(t, withImages(`image "invalid" { path="/source" os_arch="aarch64" `+options+` }`)); err == nil {
+			t.Fatalf("archive settings accepted for local image: %s", options)
+		}
+	}
+}
+
+func TestSharedArchiveMembersRemainIndependent(t *testing.T) {
+	hash := strings.Repeat("b", 64)
+	first := `image "first" { os_arch="aarch64" url="https://example.org/archive" sha256="` + hash + `" source_format="qcow2" source_size_bytes=4096 archive_format="zip" archive_member="first.qcow2" extracted_size_bytes=8192 }`
+	second := `image "second" { os_arch="aarch64" url="https://example.org/archive" sha256="` + hash + `" source_format="raw" source_size_bytes=4096 archive_format="zip" archive_member="second.raw" extracted_size_bytes=16384 }`
+	if _, err := parseCloudTest(t, withImages(first+second)); err != nil {
+		t.Fatalf("different members of one archive conflict: %v", err)
+	}
+	for _, changed := range []string{
+		strings.Replace(second, `source_size_bytes=4096`, `source_size_bytes=4097`, 1),
+		strings.Replace(second, `archive_format="zip"`, `archive_format="tar"`, 1),
+		strings.Replace(second, `archive_member="second.raw"`, `archive_member="first.qcow2"`, 1),
+		strings.Replace(strings.Replace(second, `archive_member="second.raw"`, `archive_member="first.qcow2"`, 1), `source_format="raw"`, `source_format="qcow2"`, 1),
+	} {
+		if _, err := parseCloudTest(t, withImages(first+changed)); err == nil {
+			t.Fatal("conflicting shared archive settings accepted")
+		}
+	}
+}
+
 func TestShippedManagedCatalogMatchesVerifiedProvenance(t *testing.T) {
 	// Go package tests run in config/, while packaged Windows test binaries
 	// run beside vmango.dist.conf in the extracted runtime directory.
