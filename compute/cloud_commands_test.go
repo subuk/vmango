@@ -173,8 +173,13 @@ func cloudFixture(t *testing.T, cpus int) (*tasks.Service, *cloudVMBackend, *clo
 
 func cloudFixtureHandler(t *testing.T, cpus int, disks []compute.ImageDataDisk) (*compute.CommandHandler, *cloudVMBackend, *cloudVolumeBackend, compute.Cloud) {
 	t.Helper()
+	return cloudFixtureInitialization(t, cpus, disks, "none")
+}
+
+func cloudFixtureInitialization(t *testing.T, cpus int, disks []compute.ImageDataDisk, initialization string) (*compute.CommandHandler, *cloudVMBackend, *cloudVolumeBackend, compute.Cloud) {
+	t.Helper()
 	off := false
-	imageRepo, err := catalog.NewImageRepository([]compute.Image{{CloudID: "c", ID: "image", Name: "Image", OSName: "Linux", Arch: compute.ArchAmd64, SourcePath: "/source", DataDisks: disks, Defaults: compute.ImageDefaults{Initialization: "none", Graphics: "spice", VideoModel: "qxl", GuestAgent: &off}}})
+	imageRepo, err := catalog.NewImageRepository([]compute.Image{{CloudID: "c", ID: "image", Name: "Image", OSName: "Linux", Arch: compute.ArchAmd64, SourcePath: "/source", DataDisks: disks, Defaults: compute.ImageDefaults{Initialization: initialization, Graphics: "spice", VideoModel: "qxl", GuestAgent: &off}}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -36,6 +36,7 @@ import { fieldError, OperationDialog } from "../components/OperationDialog";
 import { ResourceTasks } from "./Tasks";
 import { Summary } from "../components/Information";
 import { useResourceBusy } from "../api/tasks";
+import { CloudInitInput, type CloudInitSelection } from "./CloudInitTemplates";
 
 export type Cloud = components["schemas"]["ApiCloud"];
 const GiB = 2 ** 30;
@@ -96,7 +97,7 @@ export function CreateMachine() {
     const [network, setNetwork] = useState("");
     const [storageClass, setStorage] = useState("");
     const [keyIDs, setKeys] = useState<string[]>([]);
-    const [userData, setUserData] = useState("");
+    const [cloudInit, setCloudInit] = useState<CloudInitSelection>({});
     const [start, setStart] = useState(true);
     const [required, setRequired] = useState<Record<string, string>>({});
     const [preferred, setPreferred] = useState<Record<string, string>>({});
@@ -148,6 +149,9 @@ export function CreateMachine() {
         setExisting([]);
     }, [zone]);
     const selectedType = typeChoices.find((t) => t.id === instanceType);
+    const initializationDisabled =
+        imageChoices.find((i) => i.id === image)?.defaults?.initialization ===
+        "none";
     const imageDisks =
         imageChoices.find((i) => i.id === image)?.data_disks || [];
     const imageDiskNames = new Set(imageDisks.map((d) => d.name));
@@ -219,7 +223,14 @@ export function CreateMachine() {
                             component="form"
                             onSubmit={async (e) => {
                                 e.preventDefault();
-                                if (busy || accepted || conflictingDisk) return;
+                                if (
+                                    busy ||
+                                    accepted ||
+                                    conflictingDisk ||
+                                    (!initializationDisabled &&
+                                        cloudInit.pending)
+                                )
+                                    return;
                                 if (
                                     uncertainty &&
                                     !(
@@ -249,7 +260,21 @@ export function CreateMachine() {
                                                   storage_class: storageClass,
                                                   start,
                                                   keys: keyIDs,
-                                                  user_data: userData,
+                                                  ...(!initializationDisabled &&
+                                                  cloudInit.user_data !==
+                                                      undefined
+                                                      ? {
+                                                            user_data:
+                                                                cloudInit.user_data,
+                                                        }
+                                                      : {}),
+                                                  ...(!initializationDisabled &&
+                                                  cloudInit.user_data_template
+                                                      ? {
+                                                            user_data_template:
+                                                                cloudInit.user_data_template,
+                                                        }
+                                                      : {}),
                                                   placement: {
                                                       required:
                                                           selectors(required),
@@ -468,13 +493,12 @@ export function CreateMachine() {
                                         ))}
                                     </TextField>
                                     <ErrorMessage error={keys.error} />
-                                    <TextField
-                                        label="Cloud-init user-data"
-                                        multiline
-                                        minRows={4}
-                                        value={userData}
-                                        onChange={(e) =>
-                                            setUserData(e.target.value)
+                                    <CloudInitInput
+                                        disabled={initializationDisabled}
+                                        onChange={setCloudInit}
+                                        conflict={
+                                            error instanceof APIError &&
+                                            error.status === 409
                                         }
                                     />
                                     <Accordion>
@@ -784,6 +808,8 @@ export function CreateMachine() {
                                         disabled={
                                             busy ||
                                             conflictingDisk ||
+                                            (!initializationDisabled &&
+                                                !!cloudInit.pending) ||
                                             !selectedType ||
                                             !storageClass ||
                                             !network ||

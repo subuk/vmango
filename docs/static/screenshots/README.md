@@ -13,3 +13,8 @@ Use a 980-pixel viewport height for the inventory and a full-page capture for th
 creation form. Export PNG, then encode lossless WebP to keep text sharp. Preserve
 these filenames when refreshing the screenshots and review their captions and alt
 text in `docs/layouts/home.html` and `docs/content/en/docs/_index.md`.
+
+`cloud-init-template.jpg` shows the saved-template selector and preview in an
+isolated local application, with a demonstration Nginx configuration. It was
+captured as a full-page JPEG in the in-app browser at its default viewport and
+system dark theme; it contains no credentials or private infrastructure details.

@@ -196,6 +196,7 @@ func (e *Environ) registerAPI() {
 	e.registerVMOperations(api)
 	e.registerVolumeOperations(api)
 	e.registerKeyOperations(api)
+	e.registerCloudInitTemplates(api)
 	e.registerConsoles(api, router)
 	problemSchema := api.OpenAPI().Components.Schemas.Schema(reflect.TypeOf(apiProblem{}), true, "ProblemDetails")
 	for _, p := range api.OpenAPI().Paths {

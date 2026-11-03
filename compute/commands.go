@@ -91,13 +91,14 @@ func NewCommand(kind string, c InfrastructureCommand) tasks.Command {
 }
 
 type CommandHandler struct {
-	Clouds  *CloudService
-	Manager *VirtualMachineManager
-	VMs     *VirtualMachineService
-	Volumes *VolumeService
-	Nodes   *NodeService
-	Keys    *KeyService
-	Scopes  map[string]string
+	Clouds             *CloudService
+	Manager            *VirtualMachineManager
+	VMs                *VirtualMachineService
+	Volumes            *VolumeService
+	Nodes              *NodeService
+	Keys               *KeyService
+	CloudInitTemplates *CloudInitTemplateService
+	Scopes             map[string]string
 }
 
 func (h *CommandHandler) LockRefs(refs []tasks.ResourceRef) []tasks.ResourceRef {

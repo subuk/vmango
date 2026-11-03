@@ -16,6 +16,14 @@ vi.mock("../api/client", async (original) => ({
     ...(await original<typeof import("../api/client")>()),
     request,
 }));
+const templates = vi.hoisted(() => [
+    {
+        id: "setup",
+        name: "Server setup",
+        description: "Install tools",
+        revision: "r1",
+    },
+]);
 const catalog = vi.hoisted(() => ({
     id: "local",
     name: "Local cloud",
@@ -24,6 +32,7 @@ const catalog = vi.hoisted(() => ({
         id: string;
         name: string;
         data_disks?: { name: string; size_bytes: number }[];
+        defaults?: { initialization: string };
     }[],
     instance_types: [
         {
@@ -64,29 +73,31 @@ vi.mock("../api/hooks", async (original) => ({
         data:
             path === "/api/v1/clouds"
                 ? [catalog]
-                : path.includes("/volumes")
-                  ? {
-                        items: [
-                            {
-                                id: "one",
-                                node: "a",
-                                name: "Disk A",
-                                cloud: "local",
-                                zone: "z",
-                                size_bytes: 2 ** 30,
-                            },
-                            {
-                                id: "two",
-                                node: "b",
-                                name: "Disk B",
-                                cloud: "local",
-                                zone: "z",
-                                size_bytes: 2 ** 30,
-                            },
-                        ],
-                        unavailable_hosts: [],
-                    }
-                  : [],
+                : path === "/api/v1/cloud-init-templates"
+                  ? templates
+                  : path.includes("/volumes")
+                    ? {
+                          items: [
+                              {
+                                  id: "one",
+                                  node: "a",
+                                  name: "Disk A",
+                                  cloud: "local",
+                                  zone: "z",
+                                  size_bytes: 2 ** 30,
+                              },
+                              {
+                                  id: "two",
+                                  node: "b",
+                                  name: "Disk B",
+                                  cloud: "local",
+                                  zone: "z",
+                                  size_bytes: 2 ** 30,
+                              },
+                          ],
+                          unavailable_hosts: [],
+                      }
+                    : [],
         isError: false,
         isPending: false,
         error: null,
@@ -334,5 +345,153 @@ it("keeps user disks separate while image disks follow image and storage choices
                 ],
             }),
         ),
+    );
+});
+
+async function chooseSource(name: string) {
+    await userEvent.click(
+        screen.getByRole("combobox", { name: "Cloud-init user-data source" }),
+    );
+    await userEvent.click(screen.getByRole("option", { name }));
+}
+async function nameAndSubmit() {
+    await userEvent.type(
+        screen.getByRole("textbox", { name: "Machine name" }),
+        "configured",
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Create machine" }),
+    );
+}
+it("submits exactly one viewed template revision without copying user-data into the request", async () => {
+    request.mockImplementation(async (path: string) =>
+        path.endsWith("/setup")
+            ? {
+                  ...templates[0],
+                  user_data: "#cloud-config\npackages: [curl]\n",
+              }
+            : { task: { id: "created" } },
+    );
+    show();
+    await screen.findByText("2 vCPU");
+    await chooseSource("Server setup");
+    expect(
+        (
+            (await screen.findByRole("textbox", {
+                name: "Template preview",
+            })) as HTMLTextAreaElement
+        ).value,
+    ).toBe("#cloud-config\npackages: [curl]\n");
+    await nameAndSubmit();
+    const body = request.mock.calls.find(
+        ([, method]) => method === "POST",
+    )?.[2];
+    expect(body.user_data_template).toEqual({ id: "setup", revision: "r1" });
+    expect(body).not.toHaveProperty("user_data");
+});
+it("customizes a template for one machine and confirms replacement of custom text", async () => {
+    request.mockResolvedValue({
+        ...templates[0],
+        user_data: "#cloud-config\n",
+    });
+    show();
+    await screen.findByText("2 vCPU");
+    await chooseSource("Server setup");
+    await userEvent.click(
+        await screen.findByRole("button", {
+            name: "Customize for this machine",
+        }),
+    );
+    const editor = screen.getByRole("textbox", {
+        name: "Cloud-init user-data",
+    });
+    expect((editor as HTMLTextAreaElement).value).toBe("#cloud-config\n");
+    await userEvent.type(editor, "hostname: demo");
+    await chooseSource("None");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect((editor as HTMLTextAreaElement).value).toContain("hostname: demo");
+    request.mockResolvedValue({ task: { id: "custom" } });
+    await nameAndSubmit();
+    const body = request.mock.calls.find(
+        ([, method]) => method === "POST",
+    )?.[2];
+    expect(body.user_data).toBe("#cloud-config\nhostname: demo");
+    expect(body).not.toHaveProperty("user_data_template");
+    expect(request.mock.calls.every(([, method]) => method !== "PUT")).toBe(
+        true,
+    );
+});
+it("discards custom text only after confirmation", async () => {
+    show();
+    await screen.findByText("2 vCPU");
+    await chooseSource("Custom");
+    await userEvent.type(
+        screen.getByRole("textbox", { name: "Cloud-init user-data" }),
+        "secret draft",
+    );
+    await chooseSource("None");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Discard changes" }),
+    );
+    await waitFor(() =>
+        expect(
+            screen.queryByRole("textbox", { name: "Cloud-init user-data" }),
+        ).toBeNull(),
+    );
+    await chooseSource("Custom");
+    expect(
+        (
+            screen.getByRole("textbox", {
+                name: "Cloud-init user-data",
+            }) as HTMLTextAreaElement
+        ).value,
+    ).toBe("");
+});
+it("omits user-data when switching to an image with initialization disabled", async () => {
+    addAndroid();
+    catalog.images[1].defaults = { initialization: "none" };
+    show();
+    await screen.findByText("2 vCPU");
+    await chooseSource("Custom");
+    await userEvent.type(
+        screen.getByRole("textbox", { name: "Cloud-init user-data" }),
+        "#cloud-config",
+    );
+    await chooseImage("Android");
+    expect(
+        await screen.findByText(/This image has initialization disabled/),
+    ).toBeTruthy();
+    request.mockResolvedValue({ task: { id: "no-init" } });
+    await nameAndSubmit();
+    const body = request.mock.calls.find(
+        ([, method]) => method === "POST",
+    )?.[2];
+    expect(body).not.toHaveProperty("user_data");
+    expect(body).not.toHaveProperty("user_data_template");
+});
+it("blocks creation when a selected template cannot be loaded", async () => {
+    request.mockRejectedValue(
+        new APIError(404, { detail: "Template not found." }),
+    );
+    show();
+    await screen.findByText("2 vCPU");
+    await chooseSource("Server setup");
+    await screen.findByText("Template not found.");
+    expect(
+        (
+            screen.getByRole("button", {
+                name: "Create machine",
+            }) as HTMLButtonElement
+        ).disabled,
+    ).toBe(true);
+    await chooseSource("None");
+    await waitFor(() =>
+        expect(
+            (
+                screen.getByRole("button", {
+                    name: "Create machine",
+                }) as HTMLButtonElement
+            ).disabled,
+        ).toBe(false),
     );
 });

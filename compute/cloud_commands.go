@@ -76,6 +76,19 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 		if err != nil {
 			return command, c, err
 		}
+		if c.CreateSpec.UserDataTemplate != nil {
+			if h.CloudInitTemplates == nil {
+				return command, c, ErrUnavailable
+			}
+			userData, err := h.CloudInitTemplates.Resolve(*c.CreateSpec.UserDataTemplate)
+			if err != nil {
+				return command, c, err
+			}
+			// Store accepted content rather than a mutable catalog reference. The
+			// task service has already fingerprinted the original submission.
+			c.CreateSpec.UserData = userData
+			c.CreateSpec.UserDataTemplate = nil
+		}
 		c.Images = []Image{image}
 		c.CreationBindings = map[string]json.RawMessage{}
 		for _, host := range cloud.Hosts {

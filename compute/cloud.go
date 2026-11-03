@@ -81,18 +81,19 @@ type DataDiskSpec struct {
 	SizeBytes    uint64 `json:"size_bytes"`
 }
 type MachineCreateSpec struct {
-	Name          string         `json:"name"`
-	Image         string         `json:"image"`
-	InstanceType  string         `json:"instance_type"`
-	Zone          string         `json:"zone"`
-	Network       string         `json:"network"`
-	StorageClass  string         `json:"storage_class"`
-	Placement     Placement      `json:"placement,omitempty"`
-	Start         bool           `json:"start"`
-	KeyIDs        []string       `json:"keys,omitempty"`
-	UserData      string         `json:"user_data,omitempty"`
-	Disks         []DataDiskSpec `json:"new_disks,omitempty"`
-	ExistingDisks []LocalDiskRef `json:"existing_disks,omitempty"`
+	Name             string                `json:"name"`
+	Image            string                `json:"image"`
+	InstanceType     string                `json:"instance_type"`
+	Zone             string                `json:"zone"`
+	Network          string                `json:"network"`
+	StorageClass     string                `json:"storage_class"`
+	Placement        Placement             `json:"placement,omitempty"`
+	Start            bool                  `json:"start"`
+	KeyIDs           []string              `json:"keys,omitempty"`
+	UserData         string                `json:"user_data,omitempty"`
+	UserDataTemplate *CloudInitTemplateRef `json:"user_data_template,omitempty"`
+	Disks            []DataDiskSpec        `json:"new_disks,omitempty"`
+	ExistingDisks    []LocalDiskRef        `json:"existing_disks,omitempty"`
 }
 
 func invalid(field, message string) error { return &ValidationError{Field: field, Message: message} }
