@@ -145,7 +145,18 @@ func TestCloudInitTemplateRepositoryRejectsCorruptionWithoutSecrets(t *testing.T
 	}
 	id := uuid.NewString()
 	path := filepath.Join(dir, id+".json")
-	if err := os.WriteFile(path, []byte(`{"private-bootstrap-secret":"not a record"}`), 0600); err != nil {
+	file, err := openAuthFile(path, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString(`{"private-bootstrap-secret":"not a record"}`); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkAuthPath(path, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repo.Get(id); err == nil || strings.Contains(err.Error(), "private-bootstrap-secret") {
@@ -160,11 +171,19 @@ func TestCloudInitTemplateRepositoryRejectsCorruptionWithoutSecrets(t *testing.T
 
 func TestCloudInitTemplateRepositoryDiscardsInterruptedWrite(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "templates")
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := makeAuthDirectory(dir); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, ".pending-interrupted")
-	if err := os.WriteFile(path, []byte("private unfinished content"), 0600); err != nil {
+	pending, err := createAuthTemp(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := pending.Name()
+	if _, err := pending.WriteString("private unfinished content"); err != nil {
+		pending.Close()
+		t.Fatal(err)
+	}
+	if err := pending.Close(); err != nil {
 		t.Fatal(err)
 	}
 	repo, err := NewCloudInitTemplateRepository(dir)
