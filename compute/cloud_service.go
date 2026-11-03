@@ -269,6 +269,12 @@ func (s *CloudService) Inventory(c Cloud) ([]HostInventory, error) {
 	return result, nil
 }
 func (s *CloudService) ValidateCreate(c Cloud, spec MachineCreateSpec) error {
+	if err := ValidateCloudInitUserData(spec.UserData); err != nil {
+		return err
+	}
+	if spec.UserDataTemplate != nil && spec.UserData != "" {
+		return invalid("user_data_template", "Select a template or provide custom user-data, not both.")
+	}
 	if !resourceName.MatchString(spec.Name) {
 		return invalid("name", "Invalid machine name.")
 	}
@@ -285,6 +291,9 @@ func (s *CloudService) ValidateCreate(c Cloud, spec MachineCreateSpec) error {
 	image, err := s.Manager.images.ForCloud(c.ID).Get(spec.Image)
 	if err != nil {
 		return err
+	}
+	if image.Defaults.Initialization == "none" && (spec.UserData != "" || spec.UserDataTemplate != nil) {
+		return invalid("user_data", "This image disables cloud-init initialization.")
 	}
 	if t.MemoryBytes < image.MinimumMemoryBytes || t.BootDiskBytes < image.MinimumDiskBytes {
 		return invalid("instance_type", "Instance resources do not meet the image minimum.")

@@ -45,6 +45,11 @@ const Volumes = lazy(() =>
 const Keys = lazy(() =>
     import("../features/Keys").then((m) => ({ default: m.Keys })),
 );
+const CloudInitTemplates = lazy(() =>
+    import("../features/CloudInitTemplates").then((m) => ({
+        default: m.CloudInitTemplates,
+    })),
+);
 const KeyDetail = lazy(() =>
     import("../features/Keys").then((m) => ({ default: m.KeyDetail })),
 );
@@ -76,6 +81,7 @@ const sections = [
     ["Volumes", "/volumes/"],
     ["Networks", "/networks/"],
     ["Keys", "/keys/"],
+    ["Cloud-init templates", "/cloud-init-templates/"],
     ["Administration", "/administration/"],
 ];
 
@@ -350,6 +356,10 @@ function Shell() {
                         <Route path="/volumes/" element={<Volumes />} />
                         <Route path="/networks/" element={<Networks />} />
                         <Route path="/keys/" element={<Keys />} />
+                        <Route
+                            path="/cloud-init-templates/"
+                            element={<CloudInitTemplates />}
+                        />
                         <Route
                             path="/keys/:fingerprint/show/"
                             element={<KeyDetail />}

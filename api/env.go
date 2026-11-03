@@ -19,23 +19,30 @@ import (
 var AppVersion string
 
 type Environ struct {
-	administration *compute.AdministrationService
-	clouds         *compute.CloudService
-	logger         zerolog.Logger
-	router         *mux.Router
-	networks       *compute.NetworkService
-	keys           *compute.KeyService
-	volpools       *compute.VolumePoolService
-	nodes          *compute.NodeService
-	volumes        *compute.VolumeService
-	vms            *compute.VirtualMachineService
-	images         *compute.ImageService
-	vmanager       *compute.VirtualMachineManager
-	cfg            *config.APIConfig
-	auth           *auth.Service
-	tasks          *tasks.Service
-	oauth2         *oauth2.Config
-	oidcp          *oidc.Provider
+	administration     *compute.AdministrationService
+	clouds             *compute.CloudService
+	cloudInitTemplates *compute.CloudInitTemplateService
+	logger             zerolog.Logger
+	router             *mux.Router
+	networks           *compute.NetworkService
+	keys               *compute.KeyService
+	volpools           *compute.VolumePoolService
+	nodes              *compute.NodeService
+	volumes            *compute.VolumeService
+	vms                *compute.VirtualMachineService
+	images             *compute.ImageService
+	vmanager           *compute.VirtualMachineManager
+	cfg                *config.APIConfig
+	auth               *auth.Service
+	tasks              *tasks.Service
+	oauth2             *oauth2.Config
+	oidcp              *oidc.Provider
+}
+
+// Services contains optional application services supplied by bootstrap.
+type Services struct {
+	Administration     *compute.AdministrationService
+	CloudInitTemplates *compute.CloudInitTemplateService
 }
 
 func New(cfg *config.Config, logger zerolog.Logger,
@@ -45,7 +52,7 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	vmanager *compute.VirtualMachineManager, images *compute.ImageService,
 	authentication *auth.Service,
 	taskService *tasks.Service,
-	administration ...*compute.AdministrationService,
+	services ...Services,
 ) (http.Handler, error) {
 	if cfg.API.APIDisabled {
 		return nil, fmt.Errorf("the frontend requires the API; remove api_disabled after reviewing the migration guide")
@@ -66,9 +73,11 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	if vmanager != nil {
 		env.clouds = vmanager.Clouds
 	}
-	if len(administration) > 0 {
-		env.administration = administration[0]
-	} else {
+	if len(services) > 0 {
+		env.administration = services[0].Administration
+		env.cloudInitTemplates = services[0].CloudInitTemplates
+	}
+	if env.administration == nil {
 		snapshot, err := cfg.AdministrationSnapshot(AppVersion)
 		if err != nil {
 			return nil, fmt.Errorf("build accepted administration snapshot: %w", err)

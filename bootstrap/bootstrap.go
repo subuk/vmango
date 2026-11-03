@@ -77,6 +77,13 @@ func Web(configFilename string) error {
 		os.Exit(1)
 	}
 
+	templateRepo, err := filesystem.NewCloudInitTemplateRepository(util.ExpandHomeDir(cfg.CloudInitTemplatesDir))
+	if err != nil {
+		return fmt.Errorf("cannot initialize cloud-init template storage: %w", err)
+	}
+	defer templateRepo.Close()
+	cloudInitTemplates := compute.NewCloudInitTemplateService(templateRepo)
+
 	epub := filesystem.NewScriptedComputeEventBroker(logger.With().Str("component", "compute-event-broker").Logger())
 	for _, sub := range cfg.Subscribes {
 		epub.Subscribe(sub.Event, sub.Script, sub.Mandatory)
@@ -204,7 +211,7 @@ func Web(configFilename string) error {
 		logger.Fatal().Err(err).Msg("cannot initialize durable task storage")
 	}
 	defer taskRepo.Close()
-	taskService := tasks.New(taskRepo, &compute.CommandHandler{Clouds: clouds, Manager: vmanager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys, Scopes: nodeScopes}, logger.With().Str("component", "tasks").Logger())
+	taskService := tasks.New(taskRepo, &compute.CommandHandler{Clouds: clouds, Manager: vmanager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys, CloudInitTemplates: cloudInitTemplates, Scopes: nodeScopes}, logger.With().Str("component", "tasks").Logger())
 	executionContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := taskService.Start(executionContext, cfg.Tasks.Workers); err != nil {
@@ -234,7 +241,7 @@ func Web(configFilename string) error {
 		administrationBackends[cloud.ID] = observations
 	}
 	administration := compute.NewAdministrationService(snapshot, administrationBackends)
-	apiEnv, err := api.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager, images, authentication, taskService, administration)
+	apiEnv, err := api.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager, images, authentication, taskService, api.Services{Administration: administration, CloudInitTemplates: cloudInitTemplates})
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot initialize API")
 	}

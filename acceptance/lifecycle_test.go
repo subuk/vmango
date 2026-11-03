@@ -288,6 +288,7 @@ func TestLifecycle(t *testing.T) {
 	config := filepath.Join(root, "vmango.conf")
 	write(filepath.Join(root, "keys"), "")
 	configuration := fmt.Sprintf(`key_file = %q
+cloud_init_templates_dir = %q
 tasks { directory = %q workers = 2 }
 api {
  listen = %q
@@ -297,7 +298,7 @@ api {
  token_dir = %q
  user "acceptance" { hashed_password = %q }
 }
-`, filepath.Join(root, "keys"), filepath.Join(root, "tasks"), address, filepath.Join(root, "jwt-key"), filepath.Join(root, "console-key"), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
+`, filepath.Join(root, "keys"), filepath.Join(root, "cloud-init-templates"), filepath.Join(root, "tasks"), address, filepath.Join(root, "jwt-key"), filepath.Join(root, "console-key"), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
 
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {
@@ -622,7 +623,15 @@ cloud "offline" {
 	apiCommand("DELETE", "/api/v1/clouds/acceptance/machines/"+domainUUID+"?delete_volumes=true", nil)
 	domainUUID = ""
 	apiVMPath := ""
-	createBody := map[string]any{"name": name, "image": "boot", "instance_type": "small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false, "user_data": userdata}
+	var userDataTemplate compute.CloudInitTemplate
+	if err := json.Unmarshal(apiRequest("POST", "/api/v1/cloud-init-templates", map[string]string{"name": "Acceptance provisioning", "user_data": userdata}, 201), &userDataTemplate); err != nil {
+		t.Fatal(err)
+	}
+	if userDataTemplate.ID == "" || userDataTemplate.Revision == "" || userDataTemplate.UserData != userdata {
+		t.Fatal("template content or identity changed")
+	}
+	templatePath := "/api/v1/cloud-init-templates/" + userDataTemplate.ID
+	createBody := map[string]any{"name": name, "image": "boot", "instance_type": "small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false, "user_data_template": compute.CloudInitTemplateRef{ID: userDataTemplate.ID, Revision: userDataTemplate.Revision}}
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines", createBody)
 	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
 	apiVMPath = "/api/v1/clouds/acceptance/machines/" + domainUUID
@@ -646,6 +655,9 @@ cloud "offline" {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+	// Removing a reusable template must not change the already provisioned guest.
+	apiRequest("DELETE", templatePath, map[string]string{"revision": userDataTemplate.Revision}, 204)
+	apiRequest("GET", templatePath, nil, 404)
 	apiRequest("PATCH", apiVMPath, map[string]any{"autostart": true}, 405)
 	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
 	write(filepath.Join(root, "resources.txt"), "pool="+name+"\npool_uuid="+poolUUID+"\npool_path="+poolDir+"\nvm_uuid="+domainUUID+"\n")

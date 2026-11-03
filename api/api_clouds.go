@@ -76,25 +76,26 @@ type apiChangeTypeInput struct {
 // apiMachineCreate is an input projection, deliberately separate from durable
 // MachineCreateSpec so accepted tasks retain their existing host/path payloads.
 type apiMachineCreate struct {
-	Name          string                 `json:"name"`
-	Image         string                 `json:"image"`
-	InstanceType  string                 `json:"instance_type"`
-	Zone          string                 `json:"zone"`
-	Network       string                 `json:"network"`
-	StorageClass  string                 `json:"storage_class"`
-	Placement     compute.Placement      `json:"placement,omitempty"`
-	Start         bool                   `json:"start"`
-	KeyIDs        []string               `json:"keys,omitempty"`
-	UserData      string                 `json:"user_data,omitempty"`
-	Disks         []compute.DataDiskSpec `json:"new_disks,omitempty"`
-	ExistingDisks []apiExistingDisk      `json:"existing_disks,omitempty"`
+	Name             string                        `json:"name"`
+	Image            string                        `json:"image"`
+	InstanceType     string                        `json:"instance_type"`
+	Zone             string                        `json:"zone"`
+	Network          string                        `json:"network"`
+	StorageClass     string                        `json:"storage_class"`
+	Placement        compute.Placement             `json:"placement,omitempty"`
+	Start            bool                          `json:"start"`
+	KeyIDs           []string                      `json:"keys,omitempty"`
+	UserData         string                        `json:"user_data,omitempty"`
+	UserDataTemplate *compute.CloudInitTemplateRef `json:"user_data_template,omitempty"`
+	Disks            []compute.DataDiskSpec        `json:"new_disks,omitempty"`
+	ExistingDisks    []apiExistingDisk             `json:"existing_disks,omitempty"`
 }
 type apiExistingDisk struct {
 	VolumeID string `json:"volume_id" minLength:"1"`
 }
 
 func (in apiMachineCreate) domain(cloudID string, clouds *compute.CloudService) (compute.MachineCreateSpec, error) {
-	out := compute.MachineCreateSpec{Name: in.Name, Image: in.Image, InstanceType: in.InstanceType, Zone: in.Zone, Network: in.Network, StorageClass: in.StorageClass, Placement: in.Placement, Start: in.Start, KeyIDs: in.KeyIDs, UserData: in.UserData, Disks: in.Disks}
+	out := compute.MachineCreateSpec{Name: in.Name, Image: in.Image, InstanceType: in.InstanceType, Zone: in.Zone, Network: in.Network, StorageClass: in.StorageClass, Placement: in.Placement, Start: in.Start, KeyIDs: in.KeyIDs, UserData: in.UserData, UserDataTemplate: in.UserDataTemplate, Disks: in.Disks}
 	for _, disk := range in.ExistingDisks {
 		v, err := clouds.VolumeAddress(cloudID, disk.VolumeID)
 		if err != nil {

@@ -28,7 +28,7 @@ func (b *administrationAPIBackend) Host(_ context.Context, _ string, node string
 func administrationAPI(t *testing.T, snapshot compute.AdministrationSnapshot, backends map[string]compute.AdministrationObservations) http.Handler {
 	t.Helper()
 	cfg := apiTestConfig(t)
-	h, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, testAuthService(t, cfg), newTestTaskService(t, &compute.CommandHandler{}), compute.NewAdministrationService(snapshot, backends))
+	h, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, testAuthService(t, cfg), newTestTaskService(t, &compute.CommandHandler{}), Services{Administration: compute.NewAdministrationService(snapshot, backends)})
 	if err != nil {
 		t.Fatal(err)
 	}

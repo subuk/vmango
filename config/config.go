@@ -222,16 +222,17 @@ type SubscribeConfig struct {
 }
 
 type Config struct {
-	Clouds         []CloudConfig       `hcl:"cloud"`
-	ImageTransfers ImageTransferConfig `hcl:"image_transfers"`
-	Tasks          TaskConfig          `hcl:"tasks"`
-	LogLevel       string              `hcl:"log_level"`
-	Images         []ImageConfig       `hcl:"image"`
-	Volumes        []VolumeConfig      `hcl:"volume"`
-	Bridges        []string            `hcl:"bridges"`
-	KeyFile        string              `hcl:"key_file"`
-	API            APIConfig           `hcl:"api"`
-	Subscribes     []SubscribeConfig   `hcl:"subscribe"`
+	Clouds                []CloudConfig       `hcl:"cloud"`
+	ImageTransfers        ImageTransferConfig `hcl:"image_transfers"`
+	Tasks                 TaskConfig          `hcl:"tasks"`
+	LogLevel              string              `hcl:"log_level"`
+	Images                []ImageConfig       `hcl:"image"`
+	Volumes               []VolumeConfig      `hcl:"volume"`
+	Bridges               []string            `hcl:"bridges"`
+	KeyFile               string              `hcl:"key_file"`
+	CloudInitTemplatesDir string              `hcl:"cloud_init_templates_dir"`
+	API                   APIConfig           `hcl:"api"`
+	Subscribes            []SubscribeConfig   `hcl:"subscribe"`
 
 	LegacyBridges []string `hcl:"bridges"`
 }
@@ -250,10 +251,11 @@ type TaskConfig struct {
 
 func Default() *Config {
 	return &Config{
-		ImageTransfers: ImageTransferConfig{MaxBytes: 16 << 30, TimeoutSeconds: 3600, IdleTimeoutSeconds: 120},
-		Tasks:          TaskConfig{Directory: "~/.vmango/tasks", Workers: 2},
-		LogLevel:       "info",
-		KeyFile:        "~/.vmango/authorized_keys",
+		ImageTransfers:        ImageTransferConfig{MaxBytes: 16 << 30, TimeoutSeconds: 3600, IdleTimeoutSeconds: 120},
+		Tasks:                 TaskConfig{Directory: "~/.vmango/tasks", Workers: 2},
+		LogLevel:              "info",
+		KeyFile:               "~/.vmango/authorized_keys",
+		CloudInitTemplatesDir: "~/.vmango/cloud-init-templates",
 		API: APIConfig{
 			JWTSigningKeyFile:          "~/.vmango/jwt_signing_key",
 			ConsoleSigningKeyFile:      "~/.vmango/console_signing_key",

@@ -21,6 +21,8 @@ func TestAdministrationDeepLinksAndRetiredHostPages(t *testing.T) {
 		"/administration/clouds/cloud.one/hosts/host.one/",
 		"/administration/clouds/cloud.one/images/",
 		"/administration/clouds/cloud.one/images/image.one/",
+		"/cloud-init-templates",
+		"/cloud-init-templates/",
 		"/tasks/",
 		"/tasks/task.one/",
 	} {
