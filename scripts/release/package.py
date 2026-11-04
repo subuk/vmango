@@ -32,6 +32,7 @@ def package(version, target, binary, runtime=None):
             "docs/API.md": "API.md",
             "docs/TASKS.md": "TASKS.md",
             "docs/CLOUDS.md": "CLOUDS.md",
+            "docs/NAMESPACES.md": "NAMESPACES.md",
             "docs/content/en/docs/images.md": "IMAGES.md",
         }
         guide_links = {

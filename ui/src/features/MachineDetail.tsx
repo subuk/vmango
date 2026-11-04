@@ -1,3 +1,5 @@
+import { WorkspaceLink as RouterLink } from "../app/Workspace";
+import { useRequest } from "../app/Workspace";
 import { useEffect, useState } from "react";
 import {
     Alert,
@@ -12,7 +14,7 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
-import { Link as RouterLink, useParams, useSearchParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
     esc,
@@ -27,7 +29,6 @@ import {
 } from "../api/hooks";
 import { useResourceBusy } from "../api/tasks";
 import { ResourceTasks } from "./Tasks";
-import { request } from "../api/client";
 import {
     bytes,
     Confirm,
@@ -187,6 +188,14 @@ function Overview({ vm }: { vm: VM }) {
                             <span className="mono">{vm.id}</span>
                             <Copy label="Copy machine ID" text={vm.id} />
                         </dd>
+                        <dt>Namespace</dt>
+                        <dd>{vm.namespace_id || "Unassigned"}</dd>
+                        {vm.backend_name && (
+                            <>
+                                <dt>Backend name</dt>
+                                <dd>{vm.backend_name}</dd>
+                            </>
+                        )}
                         <dt>Host</dt>
                         <dd>{vm.node}</dd>
                         <dt>Cloud</dt>
@@ -287,6 +296,7 @@ function Overview({ vm }: { vm: VM }) {
 }
 
 function Disks({ vm }: { vm: VM }) {
+    const request = useRequest();
     const blocked = useResourceBusy({
         kind: "machine",
         scope: vm.node,
@@ -424,6 +434,7 @@ function DiskLabel({
     );
 }
 function CreateDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
+    const request = useRequest();
     const detail = useMachine(vm.cloud, vm.id, true, false);
     const catalog = detail.data?.catalog;
     const [name, setName] = useState("");
@@ -510,6 +521,7 @@ function CreateDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
     );
 }
 function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
+    const request = useRequest();
     const blocked = useResourceBusy({
         kind: "machine",
         scope: vm.node,
@@ -596,6 +608,7 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
     );
 }
 function Interfaces({ vm }: { vm: VM }) {
+    const request = useRequest();
     const blocked = useResourceBusy({
         kind: "machine",
         scope: vm.node,
@@ -685,6 +698,7 @@ function Interfaces({ vm }: { vm: VM }) {
     );
 }
 function AttachInterface({ vm, onClose }: { vm: VM; onClose: () => void }) {
+    const request = useRequest();
     const blocked = useResourceBusy({
         kind: "machine",
         scope: vm.node,

@@ -39,7 +39,7 @@ type apiVolumeResizeInput struct {
 func (e *Environ) registerVolumeOperations(api huma.API) {
 	const path = "/clouds/{cloud}/volumes/{volume}"
 	registerAPI(api, "GET", path, "get-volume", "Get volume and applicable clone choices", func(ctx context.Context, in *apiVolumeInput) (*apiResult[apiVolumeDetail], error) {
-		v, err := e.clouds.GetVolume(in.Cloud, in.Volume)
+		v, err := e.getWorkloadVolume(ctx, in.Cloud, in.Volume)
 		if err != nil {
 			return nil, apiError(err)
 		}
@@ -75,13 +75,16 @@ func (e *Environ) registerVolumeOperations(api huma.API) {
 }
 
 type apiKey struct {
-	Fingerprint string `json:"fingerprint"`
-	PublicKey   string `json:"public_key"`
-	Type        string `json:"type"`
-	Comment     string `json:"comment"`
+	NamespaceID compute.NamespaceID `json:"namespace_id,omitempty"`
+	Fingerprint string              `json:"fingerprint"`
+	PublicKey   string              `json:"public_key"`
+	Type        string              `json:"type"`
+	Comment     string              `json:"comment"`
 }
 
-func keyDTO(k *compute.Key) apiKey { return apiKey{k.Fingerprint, k.ValueString(), k.Type, k.Comment} }
+func keyDTO(k *compute.Key) apiKey {
+	return apiKey{k.NamespaceID, k.Fingerprint, k.ValueString(), k.Type, k.Comment}
+}
 
 type apiKeyInput struct {
 	Fingerprint string `path:"fingerprint"`
@@ -94,7 +97,11 @@ type apiKeyCreateInput struct {
 
 func (e *Environ) registerKeyOperations(api huma.API) {
 	registerAPI(api, "GET", "/keys", "list-keys", "List SSH public keys", func(ctx context.Context, in *apiEmpty) (*apiResult[[]apiKey], error) {
-		ks, err := e.keys.List()
+		keys, scopeErr := e.keys.ForNamespace(requestNamespace(ctx))
+		if scopeErr != nil {
+			return nil, apiError(scopeErr)
+		}
+		ks, err := keys.List()
 		if err != nil {
 			return nil, apiError(err)
 		}
@@ -105,30 +112,42 @@ func (e *Environ) registerKeyOperations(api huma.API) {
 		return &apiResult[[]apiKey]{Body: out}, nil
 	})
 	registerAPI(api, "GET", "/keys/{fingerprint}", "get-key", "Get SSH public key", func(ctx context.Context, in *apiKeyInput) (*apiResult[apiKey], error) {
-		k, err := e.keys.Get(in.Fingerprint)
+		keys, scopeErr := e.keys.ForNamespace(requestNamespace(ctx))
+		if scopeErr != nil {
+			return nil, apiError(scopeErr)
+		}
+		k, err := keys.Get(in.Fingerprint)
 		if err != nil {
 			return nil, apiError(err)
 		}
 		return &apiResult[apiKey]{Body: keyDTO(k)}, nil
 	})
 	registerAPI(api, "POST", "/keys", "add-key", "Add one SSH public key", func(ctx context.Context, in *apiKeyCreateInput) (*apiResult[apiKey], error) {
+		keys, scopeErr := e.keys.ForNamespace(requestNamespace(ctx))
+		if scopeErr != nil {
+			return nil, apiError(scopeErr)
+		}
 		pub, _, _, rest, err := ssh.ParseAuthorizedKey([]byte(in.Body.PublicKey))
 		if err != nil || len(rest) != 0 {
 			return nil, apiError(compute.ErrInvalid)
 		}
-		if err := e.keys.Add(in.Body.PublicKey); err != nil {
+		if err := keys.Add(in.Body.PublicKey); err != nil {
 			return nil, apiError(err)
 		}
-		k, err := e.keys.Get(ssh.FingerprintLegacyMD5(pub))
+		k, err := keys.Get(ssh.FingerprintLegacyMD5(pub))
 		if err != nil {
 			return nil, apiError(err)
 		}
 		return &apiResult[apiKey]{Body: keyDTO(k)}, nil
 	})
 	registerAPI(api, "DELETE", "/keys/{fingerprint}", "delete-key", "Delete SSH public key", func(ctx context.Context, in *apiKeyInput) (*apiEmpty, error) {
-		if _, err := e.keys.Get(in.Fingerprint); err != nil {
+		keys, scopeErr := e.keys.ForNamespace(requestNamespace(ctx))
+		if scopeErr != nil {
+			return nil, apiError(scopeErr)
+		}
+		if _, err := keys.Get(in.Fingerprint); err != nil {
 			return nil, apiError(err)
 		}
-		return nil, apiError(e.keys.Delete(in.Fingerprint))
+		return nil, apiError(keys.Delete(in.Fingerprint))
 	})
 }

@@ -1,3 +1,5 @@
+import { WorkspaceLink as RouterLink } from "../app/Workspace";
+import { useRequest } from "../app/Workspace";
 import { useEffect, useState } from "react";
 import {
     Accordion,
@@ -15,8 +17,8 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
-import { Link as RouterLink, useParams, useSearchParams } from "react-router";
-import { APIError, request, type TaskReference } from "../api/client";
+import { useParams, useSearchParams } from "react-router";
+import { APIError, type TaskReference } from "../api/client";
 import {
     esc,
     useResource,
@@ -80,9 +82,20 @@ function validOrFirst(value: string, entries: Entry[]) {
 }
 
 export function CreateMachine() {
-    const clouds = useResource<Cloud[]>("/api/v1/clouds");
     const [params] = useSearchParams();
-    const [cloudID, setCloud] = useState(params.get("cloud") || "");
+    return <CreateMachineForm key={params.get("cloud") || ""} />;
+}
+function CreateMachineForm() {
+    const request = useRequest();
+    const clouds = useResource<Cloud[]>("/api/v1/clouds");
+    const [params, setParams] = useSearchParams();
+    const cloudID = params.get("cloud") || "";
+    const setCloud = (id: string) =>
+        setParams((previous) => {
+            const next = new URLSearchParams(previous);
+            next.set("cloud", id);
+            return next;
+        });
     const cloud =
         clouds.data?.find((c) => c.id === cloudID) || clouds.data?.[0];
     const keys = useResource<Key[]>("/api/v1/keys");
@@ -91,6 +104,7 @@ export function CreateMachine() {
         !!cloud,
     );
     const [name, setName] = useState("");
+    const [hostname, setHostname] = useState("");
     const [zone, setZone] = useState("");
     const [image, setImage] = useState("");
     const [instanceType, setType] = useState("");
@@ -253,6 +267,9 @@ export function CreateMachine() {
                                               "POST",
                                               {
                                                   name,
+                                                  ...(hostname
+                                                      ? { hostname }
+                                                      : {}),
                                                   zone,
                                                   image,
                                                   instance_type: instanceType,
@@ -333,7 +350,7 @@ export function CreateMachine() {
                                     />
                                     <TextField
                                         label="Machine name"
-                                        name="id"
+                                        name="name"
                                         required
                                         value={name}
                                         onChange={(e) =>
@@ -341,11 +358,27 @@ export function CreateMachine() {
                                         }
                                         slotProps={{
                                             htmlInput: {
-                                                pattern:
-                                                    "[A-Za-z0-9][A-Za-z0-9_.-]{0,127}",
+                                                maxLength: 128,
                                             },
                                         }}
-                                        {...fieldError(error, "id")}
+                                        {...fieldError(error, "name")}
+                                    />
+                                    <TextField
+                                        label="Guest hostname (optional)"
+                                        name="hostname"
+                                        value={hostname}
+                                        onChange={(e) =>
+                                            setHostname(e.target.value)
+                                        }
+                                        slotProps={{
+                                            htmlInput: { maxLength: 253 },
+                                        }}
+                                        {...fieldError(error, "hostname")}
+                                        helperText={
+                                            fieldError(error, "hostname")
+                                                .helperText ||
+                                            "Used by guest initialization. Leave empty to derive a hostname from the machine name."
+                                        }
                                     />
                                     <Choice
                                         label="Availability zone"
@@ -856,6 +889,7 @@ export function EditMachine() {
     );
 }
 function EditForm({ vm }: { vm: VM }) {
+    const request = useRequest();
     const clouds = useResource<Cloud[]>("/api/v1/clouds");
     const blocked = useResourceBusy({
         kind: "machine",

@@ -1,5 +1,5 @@
+import { useRequest, useResourceKey } from "../app/Workspace";
 import { useQuery } from "@tanstack/react-query";
-import { request } from "./client";
 import type { components } from "./schema";
 
 export type Task = components["schemas"]["Task"];
@@ -74,27 +74,32 @@ export const stageLabel = (name: string) =>
         )
         .join(" ");
 export function useTaskPage(params: URLSearchParams, enabled = true) {
-    const path = `/api/v1/tasks?${params}`;
+    const request = useRequest();
+    const filters = new URLSearchParams(params);
+    filters.delete("namespace");
+    const path = `/api/v1/tasks?${filters}`;
     return useQuery({
-        queryKey: [path],
+        queryKey: useResourceKey(path),
         queryFn: ({ signal }) =>
             request<TaskPage>(path, "GET", undefined, signal),
         enabled,
         refetchInterval: 2000,
     });
 }
-export function useTask(id: string) {
-    const path = `/api/v1/tasks/${encodeURIComponent(id)}`;
+export function useTask(id: string, administration = false) {
+    const request = useRequest();
+    const path = `/api/v1/${administration ? "administration/" : ""}tasks/${encodeURIComponent(id)}`;
     return useQuery({
-        queryKey: [path],
+        queryKey: useResourceKey(path),
         queryFn: ({ signal }) => request<Task>(path, "GET", undefined, signal),
         refetchInterval: 2000,
     });
 }
 // Observe every active task, independently of the current history page.
 export function useActiveTasks() {
+    const request = useRequest();
     return useQuery({
-        queryKey: ["/api/v1/tasks/active-observer"],
+        queryKey: useResourceKey("/api/v1/tasks/active-observer"),
         queryFn: async () => {
             const items: Task[] = [];
             let before: string | undefined;

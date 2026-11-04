@@ -165,6 +165,8 @@ it("uses compatible catalog defaults without low-level host or disk controls", a
                 storage_class: "fast",
                 placement: { required: {}, preferred: { rack: "two" } },
             }),
+            undefined,
+            expect.objectContaining({ namespace: undefined }),
         ),
     );
     expect(
@@ -276,6 +278,8 @@ it("shows automatic image disks without including them in the create request", a
             "/api/v1/clouds/local/machines",
             "POST",
             expect.objectContaining({ image: "android", new_disks: [] }),
+            undefined,
+            expect.objectContaining({ namespace: undefined }),
         ),
     );
 });
@@ -344,6 +348,8 @@ it("keeps user disks separate while image disks follow image and storage choices
                     },
                 ],
             }),
+            undefined,
+            expect.objectContaining({ namespace: undefined }),
         ),
     );
 });
@@ -493,5 +499,33 @@ it("blocks creation when a selected template cannot be loaded", async () => {
                 }) as HTMLButtonElement
             ).disabled,
         ).toBe(false),
+    );
+});
+it("keeps a display label separate from an explicit guest hostname", async () => {
+    show();
+    await screen.findByText(/2 vCPU/);
+    request.mockResolvedValueOnce({ task: { id: "task-hostname" } });
+    await userEvent.type(
+        screen.getByRole("textbox", { name: "Machine name" }),
+        "Development web server",
+    );
+    await userEvent.type(
+        screen.getByRole("textbox", { name: "Guest hostname (optional)" }),
+        "web-01.example",
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Create machine" }),
+    );
+    await waitFor(() =>
+        expect(request).toHaveBeenCalledWith(
+            "/api/v1/clouds/local/machines",
+            "POST",
+            expect.objectContaining({
+                name: "Development web server",
+                hostname: "web-01.example",
+            }),
+            undefined,
+            expect.objectContaining({ namespace: undefined }),
+        ),
     );
 });

@@ -42,10 +42,12 @@ func apiTestConfig(t *testing.T) *config.Config {
 }
 func apiRequest(h http.Handler, method, path, body string, auth bool) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, "https://vmango.test"+path, strings.NewReader(body))
+	r.Header.Set("X-Vmango-Namespace", "test")
 	if body != "" {
 		r.Header.Set("Content-Type", "application/json")
 	}
 	if method != "GET" && strings.Contains(path, "/clouds/") {
+		r.Header.Set("X-Vmango-Namespace", "test")
 		r.Header.Set("Idempotency-Key", uuid.NewString())
 	}
 	if auth {
@@ -107,7 +109,7 @@ func TestAPIAuthenticationAndOrigins(t *testing.T) {
 		}
 	}
 	cfg.API.APIDisabled = true
-	if _, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, testAuthService(t, cfg), nil); err == nil {
+	if _, err := newScopedTestAPI(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, testAuthService(t, cfg), nil); err == nil {
 		t.Fatal("silently enabled disabled API")
 	}
 }
@@ -276,7 +278,7 @@ func TestConsoleTokenBinding(t *testing.T) {
 	cfg := apiTestConfig(t)
 	e := &Environ{cfg: &cfg.API}
 	now := time.Now()
-	base := consoleClaim{2, "console", "admin", "node", "vm", "serial", false, now.Add(time.Hour).Unix()}
+	base := consoleClaim{"test", 3, "console", "admin", "node", "vm", "serial", false, now.Add(time.Hour).Unix()}
 	token, err := e.signConsole(base)
 	if err != nil {
 		t.Fatal(err)
@@ -286,7 +288,7 @@ func TestConsoleTokenBinding(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, change := range []func(*consoleClaim){func(c *consoleClaim) { c.Version = 1 }, func(c *consoleClaim) { c.Purpose = "login" }, func(c *consoleClaim) { c.Cloud = "other" }, func(c *consoleClaim) { c.VM = "other" }, func(c *consoleClaim) { c.Kind = "vnc" }, func(c *consoleClaim) { c.User = "" }, func(c *consoleClaim) { c.Expires = now.Unix() }} {
+	for _, change := range []func(*consoleClaim){func(c *consoleClaim) { c.Namespace = "" }, func(c *consoleClaim) { c.Namespace = "bad namespace" }, func(c *consoleClaim) { c.Version = 2 }, func(c *consoleClaim) { c.Version = 1 }, func(c *consoleClaim) { c.Purpose = "login" }, func(c *consoleClaim) { c.Cloud = "other" }, func(c *consoleClaim) { c.VM = "other" }, func(c *consoleClaim) { c.Kind = "vnc" }, func(c *consoleClaim) { c.User = "" }, func(c *consoleClaim) { c.Expires = now.Unix() }} {
 		c := base
 		change(&c)
 		token, _ := e.signConsole(c)
@@ -330,7 +332,7 @@ func TestConsoleStreamsAndExpiry(t *testing.T) {
 	}()
 	e := &Environ{cfg: &cfg.API}
 	expires := time.Now().Add(3 * time.Second).Truncate(time.Second)
-	token, _ := e.signConsole(consoleClaim{2, "console", "admin", "local", "v", "serial", true, expires.Unix()})
+	token, _ := e.signConsole(consoleClaim{"test", 3, "console", "admin", "local", "v", "serial", true, expires.Unix()})
 	endpoint := "ws" + strings.TrimPrefix(srv.URL, "http") + "/console/local/v/serial/ws"
 	dial := websocket.Dialer{Subprotocols: []string{"binary", "vmango.token." + token}}
 	for i := 0; i < 2; i++ {
@@ -499,7 +501,7 @@ func newTestAPI(t *testing.T, cfg *config.Config, logger zerolog.Logger, network
 		manager.Clouds = &compute.CloudService{Definitions: []compute.Cloud{{ID: "local", Hosts: []compute.CloudHost{{Node: "n"}, {Node: "local"}, {Node: "a"}, {Node: "b"}}}}}
 	}
 	manager.Clouds.VMs = vms
-	h, err := New(cfg, logger, networks, keys, pools, nodes, volumes, vms, manager, images, testAuthService(t, cfg), newTestTaskService(t, &compute.CommandHandler{Clouds: manager.Clouds, Manager: manager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys}))
+	h, err := newScopedTestAPI(cfg, logger, networks, keys, pools, nodes, volumes, vms, manager, images, testAuthService(t, cfg), newTestTaskService(t, &compute.CommandHandler{Clouds: manager.Clouds, Manager: manager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -587,6 +589,7 @@ func TestMachineSubmissionRecoveryDoesNotRequireRouting(t *testing.T) {
 		r := httptest.NewRequest("POST", "https://vmango.test/api/v1/clouds/local/machines/v/actions", strings.NewReader(`{"action":"start"}`))
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Authorization", "Bearer "+testWebToken())
+		r.Header.Set("X-Vmango-Namespace", "test")
 		r.Header.Set("Idempotency-Key", key)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)

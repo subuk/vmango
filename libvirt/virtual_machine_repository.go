@@ -543,6 +543,9 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 	if err := writeSchedulerMetadata(virDomainConfig, vm.Metadata); err != nil {
 		return err
 	}
+	if err := writeWorkloadMetadata(virDomainConfig, vm.NamespaceID, vm.Label); err != nil {
+		return err
+	}
 	virDomainXml, err := virDomainConfig.Marshal()
 	if err != nil {
 		return repositoryError(err, "cannot marshal domain xml")
@@ -554,6 +557,15 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 	virDomain, err := conn.LookupDomainByUUIDString(vm.Id)
 	if err != nil {
 		return repositoryError(err, "cannot lookup domain after define")
+	}
+	if vm.NamespaceID != "" {
+		namespace, label, err := domainWorkload(virDomain)
+		if err != nil {
+			return err
+		}
+		if namespace != vm.NamespaceID || label != vm.Label {
+			return fmt.Errorf("VM namespace persistence verification failed")
+		}
 	}
 	virDomainAutostart, err := virDomain.GetAutostart()
 	if err != nil {

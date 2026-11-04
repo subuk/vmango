@@ -1,3 +1,5 @@
+import { WorkspaceLink as RouterLink } from "../app/Workspace";
+import { useRequest, useWorkspace } from "../app/Workspace";
 import { useEffect, useRef, useState } from "react";
 import {
     Alert,
@@ -16,9 +18,9 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
-import { Link as RouterLink, useParams, useSearchParams } from "react-router";
+import { useParams, useSearchParams, useLocation } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { onTaskAccepted, request, type TaskReference } from "../api/client";
+import { onTaskAccepted, type TaskReference } from "../api/client";
 import {
     taskLabel,
     stageLabel,
@@ -53,6 +55,8 @@ function TaskLink({ task }: { task: Task }) {
 
 // This observer lives above routes so closing a form never loses observation.
 export function TaskMonitor() {
+    const { namespace, principal } = useWorkspace();
+    const request = useRequest();
     const query = useTaskPage(new URLSearchParams({ limit: "10" }));
     const active = useActiveTasks();
     const known = useRef(new Map<string, Task>());
@@ -63,7 +67,9 @@ export function TaskMonitor() {
     const [dismissed, setDismissed] = useState<string[]>(() => {
         try {
             const saved: unknown = JSON.parse(
-                localStorage.getItem("vmango.dismissedTasks") || "[]",
+                localStorage.getItem(
+                    `vmango.dismissedTasks.${principal}.${namespace}`,
+                ) || "[]",
             );
             return Array.isArray(saved)
                 ? saved.filter((id): id is string => typeof id === "string")
@@ -75,15 +81,23 @@ export function TaskMonitor() {
     useEffect(
         () =>
             onTaskAccepted((task) => {
+                if (
+                    (task.task as Task & { namespace_id?: string })
+                        .namespace_id !== namespace
+                )
+                    return;
                 setAccepted(task);
                 known.current.set(task.task.id, task.task);
-                queries.setQueryData([task.status_url], task.task);
+                queries.setQueryData(
+                    ["workload", principal, namespace, task.status_url],
+                    task.task,
+                );
                 void queries.invalidateQueries({
                     predicate: (q) =>
-                        String(q.queryKey[0]).startsWith("/api/v1/tasks"),
+                        String(q.queryKey[3]).startsWith("/api/v1/tasks"),
                 });
             }),
-        [queries],
+        [queries, principal, namespace],
     );
     useEffect(() => {
         for (const task of query.data?.items || []) {
@@ -94,7 +108,7 @@ export function TaskMonitor() {
                 void queries.invalidateQueries({
                     predicate: (q) =>
                         q.queryKey[0] !== "administration" &&
-                        !String(q.queryKey[0]).startsWith("/api/v1/tasks"),
+                        !String(q.queryKey[3]).startsWith("/api/v1/tasks"),
                 });
             }
             previous.current.set(task.id, task.state);
@@ -120,7 +134,7 @@ export function TaskMonitor() {
                         void queries.invalidateQueries({
                             predicate: (q) =>
                                 q.queryKey[0] !== "administration" &&
-                                !String(q.queryKey[0]).startsWith(
+                                !String(q.queryKey[3]).startsWith(
                                     "/api/v1/tasks",
                                 ),
                         });
@@ -207,7 +221,7 @@ export function TaskMonitor() {
                             const next = [...old, task.id];
                             try {
                                 localStorage.setItem(
-                                    "vmango.dismissedTasks",
+                                    `vmango.dismissedTasks.${principal}.${namespace}`,
                                     JSON.stringify(next),
                                 );
                             } catch {
@@ -316,6 +330,7 @@ export function Tasks() {
             </Typography>
             <Stack
                 component="form"
+                data-workload-filter="true"
                 onSubmit={(e) => {
                     e.preventDefault();
                     applyResources();
@@ -485,7 +500,28 @@ function ResourceLink({
     available?: boolean;
     cloudID?: string;
 }) {
+    const administrative =
+        useLocation().pathname.startsWith("/administration/");
     const label = `${resource.scope}/${resource.id}`;
+    if (administrative) {
+        if (!cloudID || deleted || !available)
+            return (
+                <span>
+                    {label}
+                    {deleted ? " (deleted)" : ""}
+                </span>
+            );
+        if (resource.kind === "machine")
+            return (
+                <Link
+                    component={RouterLink}
+                    to={`/administration/clouds/${encodeURIComponent(cloudID)}/machines/${encodeURIComponent(resource.id)}/`}
+                >
+                    {label}
+                </Link>
+            );
+        return <span>{label}</span>;
+    }
     if (resource.kind === "machine-request")
         return <span>Requested machine: {resource.id}</span>;
     if (resource.kind === "cloud")
@@ -553,9 +589,14 @@ export function TransferStatus({
     );
 }
 
-export function TaskDetail() {
+export function TaskDetail({
+    administration = false,
+}: {
+    administration?: boolean;
+}) {
+    const request = useRequest();
     const { id = "" } = useParams();
-    const query = useTask(id);
+    const query = useTask(id, administration);
     const queries = useQueryClient();
     const [confirm, setConfirm] = useState<"cancel" | "release">();
     const [reason, setReason] = useState("");
@@ -563,11 +604,16 @@ export function TaskDetail() {
     const previous = useRef<string>("");
     useEffect(() => {
         const task = query.data;
-        if (task && terminal(task) && previous.current !== task.state) {
+        if (
+            !administration &&
+            task &&
+            terminal(task) &&
+            previous.current !== task.state
+        ) {
             void queries.invalidateQueries({
                 predicate: (q) =>
                     q.queryKey[0] !== "administration" &&
-                    !String(q.queryKey[0]).startsWith("/api/v1/tasks"),
+                    !String(q.queryKey[3]).startsWith("/api/v1/tasks"),
             });
         }
         previous.current = task?.state || "";
@@ -577,7 +623,14 @@ export function TaskDetail() {
             <PageTitle
                 title="Task details"
                 action={
-                    <Button component={RouterLink} to="/tasks/">
+                    <Button
+                        component={RouterLink}
+                        to={
+                            administration
+                                ? "/administration/tasks/"
+                                : "/tasks/"
+                        }
+                    >
                         All tasks
                     </Button>
                 }
@@ -632,20 +685,22 @@ export function TaskDetail() {
                             </Typography>
                         </Box>
                         <Stack direction="row" spacing={2}>
-                            {task.state === "queued" && (
+                            {!administration && task.state === "queued" && (
                                 <Button onClick={() => setConfirm("cancel")}>
                                     Cancel queued task
                                 </Button>
                             )}
-                            {task.blocks_resources && terminal(task) && (
-                                <Button
-                                    variant="contained"
-                                    color="warning"
-                                    onClick={() => setConfirm("release")}
-                                >
-                                    Release resource locks…
-                                </Button>
-                            )}
+                            {!administration &&
+                                task.blocks_resources &&
+                                terminal(task) && (
+                                    <Button
+                                        variant="contained"
+                                        color="warning"
+                                        onClick={() => setConfirm("release")}
+                                    >
+                                        Release resource locks…
+                                    </Button>
+                                )}
                         </Stack>
                         {task.outcome_uncertain && !task.lock_release && (
                             <Alert severity="warning">
@@ -654,14 +709,17 @@ export function TaskDetail() {
                                 this page does not stop backend activity.
                             </Alert>
                         )}
-                        {task.blocks_resources && terminal(task) && (
-                            <Alert severity="warning">
-                                Action required: inspect the affected resources
-                                on the backend, then click Release resource
-                                locks above and enter your inspection reason.
-                                Resources remain blocked until you confirm.
-                            </Alert>
-                        )}
+                        {!administration &&
+                            task.blocks_resources &&
+                            terminal(task) && (
+                                <Alert severity="warning">
+                                    Action required: inspect the affected
+                                    resources on the backend, then click Release
+                                    resource locks above and enter your
+                                    inspection reason. Resources remain blocked
+                                    until you confirm.
+                                </Alert>
+                            )}
                         {task.error && (
                             <Alert severity="error">
                                 <Typography>
@@ -711,6 +769,10 @@ export function TaskDetail() {
                                     {task.id}
                                     <Copy label="Copy task ID" text={task.id} />
                                 </dd>
+                                <dt>Namespace</dt>
+                                <dd>{task.namespace_id || "Unassigned"}</dd>
+                                <dt>Cloud</dt>
+                                <dd>{task.cloud_id || "—"}</dd>
                                 <dt>Initiated by</dt>
                                 <dd>
                                     {task.initiator.name || task.initiator.id}
@@ -868,6 +930,7 @@ export function TaskDetail() {
                                     {stageLabel(effect.action)} ·{" "}
                                     <ResourceLink
                                         cloudID={
+                                            task.cloud_id ||
                                             task.resources?.find(
                                                 (r) => r.kind === "cloud",
                                             )?.scope ||
@@ -903,6 +966,7 @@ export function TaskDetail() {
                                 >
                                     <ResourceLink
                                         cloudID={
+                                            task.cloud_id ||
                                             task.resources?.find(
                                                 (r) => r.kind === "cloud",
                                             )?.scope ||

@@ -1,3 +1,4 @@
+import { WorkspaceLink as RouterLink } from "../app/Workspace";
 import { useEffect, useState, type ReactNode } from "react";
 import {
     Alert,
@@ -16,7 +17,7 @@ import {
 } from "@mui/material";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { APIError } from "../api/client";
-import { Link as RouterLink, useBlocker } from "react-router";
+import { useBlocker } from "react-router";
 
 export const bytes = (n: number) => {
     const units = ["B", "KiB", "MiB", "GiB", "TiB"];

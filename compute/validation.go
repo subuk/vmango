@@ -129,7 +129,7 @@ func (s *VolumeService) clone(p VolumeCloneParams, verifiedManaged bool) (*Volum
 	if p.Format == VolumeFormatUnknown {
 		p.Format = source.Format
 	}
-	create := VolumeCreateParams{NodeId: p.NodeId, Name: p.NewName, Pool: p.NewPool, Size: p.NewSize, Format: p.Format}
+	create := VolumeCreateParams{NamespaceID: p.NamespaceID, Label: p.Label, Cloud: p.Cloud, NodeId: p.NodeId, Name: p.NewName, Pool: p.NewPool, Size: p.NewSize, Format: p.Format}
 	if err := validateVolumeCreate(create); err != nil {
 		return nil, err
 	}

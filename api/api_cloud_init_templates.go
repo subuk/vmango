@@ -9,10 +9,11 @@ import (
 )
 
 type APICloudInitTemplateSummary struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Revision    string `json:"revision"`
+	NamespaceID compute.NamespaceID `json:"namespace_id,omitempty"`
+	ID          string              `json:"id"`
+	Name        string              `json:"name"`
+	Description string              `json:"description"`
+	Revision    string              `json:"revision"`
 }
 
 type apiCloudInitTemplate struct {
@@ -31,7 +32,7 @@ func (in APICloudInitTemplateInput) domain() compute.CloudInitTemplateInput {
 }
 
 func cloudInitTemplateSummary(t compute.CloudInitTemplate) APICloudInitTemplateSummary {
-	return APICloudInitTemplateSummary{ID: t.ID, Name: t.Name, Description: t.Description, Revision: t.Revision}
+	return APICloudInitTemplateSummary{NamespaceID: t.NamespaceID, ID: t.ID, Name: t.Name, Description: t.Description, Revision: t.Revision}
 }
 
 func cloudInitTemplateDTO(t compute.CloudInitTemplate) apiCloudInitTemplate {
@@ -67,10 +68,14 @@ func (e *Environ) registerCloudInitTemplates(api huma.API) {
 		}
 	}
 	registerAPI(api, "GET", path, "list-cloud-init-templates", "List saved cloud-init templates without user-data", func(ctx context.Context, in *apiEmpty) (*apiResult[[]APICloudInitTemplateSummary], error) {
+		templates, scopeErr := e.cloudInitTemplates.ForNamespace(requestNamespace(ctx))
+		if scopeErr != nil {
+			return nil, apiError(scopeErr)
+		}
 		if e.cloudInitTemplates == nil {
 			return nil, apiError(compute.ErrUnavailable)
 		}
-		items, err := e.cloudInitTemplates.List()
+		items, err := templates.List()
 		if err != nil {
 			return nil, templateAPIError(err)
 		}
@@ -81,39 +86,55 @@ func (e *Environ) registerCloudInitTemplates(api huma.API) {
 		return &apiResult[[]APICloudInitTemplateSummary]{Body: out}, nil
 	})
 	registerAPI(api, "POST", path, "create-cloud-init-template", "Save a cloud-init template", func(ctx context.Context, in *createInput) (*apiResult[apiCloudInitTemplate], error) {
+		templates, scopeErr := e.cloudInitTemplates.ForNamespace(requestNamespace(ctx))
+		if scopeErr != nil {
+			return nil, apiError(scopeErr)
+		}
 		if e.cloudInitTemplates == nil {
 			return nil, apiError(compute.ErrUnavailable)
 		}
-		item, err := e.cloudInitTemplates.Create(in.Body.domain())
+		item, err := templates.Create(in.Body.domain())
 		if err != nil {
 			return nil, templateAPIError(err)
 		}
 		return &apiResult[apiCloudInitTemplate]{Body: cloudInitTemplateDTO(item)}, nil
 	})
 	registerAPI(api, "GET", path+"/{id}", "get-cloud-init-template", "Read a cloud-init template and its revision", func(ctx context.Context, in *itemInput) (*apiResult[apiCloudInitTemplate], error) {
+		templates, scopeErr := e.cloudInitTemplates.ForNamespace(requestNamespace(ctx))
+		if scopeErr != nil {
+			return nil, apiError(scopeErr)
+		}
 		if e.cloudInitTemplates == nil {
 			return nil, apiError(compute.ErrUnavailable)
 		}
-		item, err := e.cloudInitTemplates.Get(in.ID)
+		item, err := templates.Get(in.ID)
 		if err != nil {
 			return nil, templateAPIError(err)
 		}
 		return &apiResult[apiCloudInitTemplate]{Body: cloudInitTemplateDTO(item)}, nil
 	})
 	registerAPI(api, "PUT", path+"/{id}", "update-cloud-init-template", "Replace a cloud-init template at the reviewed revision", func(ctx context.Context, in *updateInput) (*apiResult[apiCloudInitTemplate], error) {
+		templates, scopeErr := e.cloudInitTemplates.ForNamespace(requestNamespace(ctx))
+		if scopeErr != nil {
+			return nil, apiError(scopeErr)
+		}
 		if e.cloudInitTemplates == nil {
 			return nil, apiError(compute.ErrUnavailable)
 		}
-		item, err := e.cloudInitTemplates.Update(in.ID, in.Body.Revision, in.Body.APICloudInitTemplateInput.domain())
+		item, err := templates.Update(in.ID, in.Body.Revision, in.Body.APICloudInitTemplateInput.domain())
 		if err != nil {
 			return nil, templateAPIError(err)
 		}
 		return &apiResult[apiCloudInitTemplate]{Body: cloudInitTemplateDTO(item)}, nil
 	})
 	registerAPI(api, "DELETE", path+"/{id}", "delete-cloud-init-template", "Delete a cloud-init template at the reviewed revision", func(ctx context.Context, in *deleteInput) (*apiEmpty, error) {
+		templates, scopeErr := e.cloudInitTemplates.ForNamespace(requestNamespace(ctx))
+		if scopeErr != nil {
+			return nil, apiError(scopeErr)
+		}
 		if e.cloudInitTemplates == nil {
 			return nil, apiError(compute.ErrUnavailable)
 		}
-		return nil, templateAPIError(e.cloudInitTemplates.Delete(in.ID, in.Body.Revision))
+		return nil, templateAPIError(templates.Delete(in.ID, in.Body.Revision))
 	})
 }

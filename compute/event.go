@@ -29,11 +29,17 @@ func (e *EventVirtualMachineCreated) Plain() map[string]string {
 	data := map[string]string{
 		"event":              e.Name(),
 		"vm_id":              e.vm.Id,
+		"namespace_id":       string(e.vm.NamespaceID),
+		"cloud_id":           "",
+		"vm_label":           e.vm.Label,
 		"vm_name":            e.vm.Name,
 		"vm_cpus":            fmt.Sprintf("%d", e.vm.VCpus),
 		"vm_memory_mib":      fmt.Sprintf("%d", e.vm.Memory.M()),
 		"vm_volume_count":    fmt.Sprintf("%d", len(e.vm.Volumes)),
 		"vm_interface_count": fmt.Sprintf("%d", len(e.vm.Interfaces)),
+	}
+	if e.vm.Metadata != nil {
+		data["cloud_id"] = e.vm.Metadata.Cloud
 	}
 	for idx, volume := range e.vm.Volumes {
 		data[fmt.Sprintf("vm_volume_%d_path", idx)] = volume.Path

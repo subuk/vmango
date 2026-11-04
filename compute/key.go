@@ -1,6 +1,7 @@
 package compute
 
 type Key struct {
+	NamespaceID NamespaceID
 	Type        string
 	Value       []byte
 	Comment     string

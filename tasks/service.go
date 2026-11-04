@@ -82,22 +82,31 @@ func (s *Service) Submit(who Identity, key string, command Command) (Task, error
 	if who.ID == "" || len(key) < 8 || len(key) > 200 || strings.TrimSpace(key) != key {
 		return Task{}, ErrInvalid
 	}
+	if validator, ok := s.handler.(ContextValidator); ok {
+		if err := validator.ValidateContext(command); err != nil {
+			return Task{}, err
+		}
+	}
 	keyHash := hash(who.ID + "\x00" + key)
-	fingerprint := hash(command.Kind + "\x00" + string(command.Payload))
+	identity := command.Kind + "\x00" + string(command.Payload)
+	if command.NamespaceID != "" || command.CloudID != "" {
+		identity += "\x00" + command.NamespaceID + "\x00" + command.CloudID
+	}
+	fingerprint := hash(identity)
 	store, err := s.repo.Read()
 	if err != nil {
 		return Task{}, fmt.Errorf("%w: %w", ErrStorageUnavailable, err)
 	}
 	for _, rec := range store.Records {
 		if rec.KeyHash == keyHash {
-			if rec.Fingerprint != fingerprint {
+			if rec.Fingerprint != fingerprint || rec.Task.NamespaceID != command.NamespaceID || rec.Task.CloudID != command.CloudID {
 				return Task{}, ErrKeyReuse
 			}
 			return rec.Task, nil
 		}
 	}
 	if c := conflict(store, s.lockRefs(command.Resources)); c != nil {
-		return Task{}, c
+		return Task{}, scopedConflict(store, c, command.NamespaceID)
 	}
 	command, err = s.handler.Prepare(command)
 	if err != nil {
@@ -105,10 +114,10 @@ func (s *Service) Submit(who Identity, key string, command Command) (Task, error
 	}
 	command.Resources = unique(command.Resources)
 	if c := conflict(store, s.lockRefs(command.Resources)); c != nil {
-		return Task{}, c
+		return Task{}, scopedConflict(store, c, command.NamespaceID)
 	}
 	now := time.Now().UTC()
-	task := Task{ID: uuid.NewString(), Kind: command.Kind, State: Queued, Initiator: who, CreatedAt: now, Resources: command.Resources, Stages: []Stage{}, Transitions: []Transition{{State: Queued, At: now}}, Effects: []Effect{}, BlocksResources: true}
+	task := Task{NamespaceID: command.NamespaceID, CloudID: command.CloudID, ID: uuid.NewString(), Kind: command.Kind, State: Queued, Initiator: who, CreatedAt: now, Resources: command.Resources, Stages: []Stage{}, Transitions: []Transition{{State: Queued, At: now}}, Effects: []Effect{}, BlocksResources: true}
 	err = s.repo.Update(func(state *Store) error {
 		state.Records[task.ID] = Record{Task: task, Payload: command.Payload, Locks: s.lockRefs(command.Resources), KeyHash: keyHash, Fingerprint: fingerprint, ExecutionGroups: command.ExecutionGroups}
 		return nil
@@ -117,7 +126,7 @@ func (s *Service) Submit(who Identity, key string, command Command) (Task, error
 		s.poison = fmt.Errorf("%w; restart required: %w", ErrStorageUnavailable, err)
 		return Task{}, s.poison
 	}
-	s.logger.Info().Str("task_id", task.ID).Str("kind", task.Kind).Msg("task accepted")
+	s.logger.Info().Str("task_id", task.ID).Str("kind", task.Kind).Str("namespace_id", task.NamespaceID).Str("cloud_id", task.CloudID).Msg("task accepted")
 	s.signal()
 	return task, nil
 }
@@ -143,6 +152,9 @@ func (s *Service) List(f Filter) (Page, error) {
 	all := []Task{}
 	for _, rec := range store.Records {
 		t := rec.Task
+		if (f.Scoped && t.NamespaceID != f.NamespaceID) || (f.CloudID != "" && t.CloudID != f.CloudID) {
+			continue
+		}
 		if !t.State.Terminal() {
 			page.Active++
 		}
@@ -262,6 +274,34 @@ func (s *Service) Release(id string, who Identity, reason string) (Task, error) 
 	return s.Get(id)
 }
 
+// RecoverInterrupted marks work left running by a previous process uncertain.
+// It never starts queued execution. Callers must own the repository process lock;
+// an already started executor cannot be recovered through this method.
+func (s *Service) RecoverInterrupted() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.started {
+		return ErrInvalid
+	}
+	return s.recoverInterrupted()
+}
+
+func (s *Service) recoverInterrupted() error {
+	return s.repo.Update(func(store *Store) error {
+		for id, rec := range store.Records {
+			if rec.Task.State != Running {
+				continue
+			}
+			rec.Task.OutcomeUncertain = true
+			reason := "Previous process stopped during execution. Detected during task-store recovery; actual interruption time and backend outcome are unknown. No backend failure cause is known. Inspect resources before releasing the lock."
+			finish(&rec, Interrupted, reason)
+			rec.Task.Error = &Diagnostic{Message: reason, Operation: "process interruption"}
+			store.Records[id] = rec
+		}
+		return nil
+	})
+}
+
 // Start first marks stale running tasks interrupted, then starts a bounded pool.
 // Queued work retains the authorization granted when it was durably accepted.
 func (s *Service) Start(ctx context.Context, workers int) error {
@@ -270,19 +310,7 @@ func (s *Service) Start(ctx context.Context, workers int) error {
 	if s.started || workers < 1 || workers > 32 {
 		return ErrInvalid
 	}
-	if err := s.repo.Update(func(store *Store) error {
-		for id, rec := range store.Records {
-			if rec.Task.State != Running {
-				continue
-			}
-			rec.Task.OutcomeUncertain = true
-			reason := "Previous process stopped during execution. Detected at startup; actual interruption time and backend outcome are unknown. No backend failure cause is known. Inspect resources before releasing the lock."
-			finish(&rec, Interrupted, reason)
-			rec.Task.Error = &Diagnostic{Message: reason, Operation: "process interruption"}
-			store.Records[id] = rec
-		}
-		return nil
-	}); err != nil {
+	if err := s.recoverInterrupted(); err != nil {
 		return err
 	}
 	s.started = true
@@ -368,7 +396,7 @@ func (s *Service) execute(ctx context.Context, rec Record) {
 				err = errors.New("executor panicked; inspect resource state before retrying")
 			}
 		}()
-		return s.handler.Execute(ctx, Command{Kind: rec.Task.Kind, Payload: rec.Payload, Resources: rec.Task.Resources}, e)
+		return s.handler.Execute(ctx, Command{NamespaceID: rec.Task.NamespaceID, CloudID: rec.Task.CloudID, Kind: rec.Task.Kind, Payload: rec.Payload, Resources: rec.Task.Resources}, e)
 	}()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -398,7 +426,7 @@ func (s *Service) execute(ctx context.Context, rec Record) {
 		s.logger.Error().Str("task_id", rec.Task.ID).Msg("cannot persist task outcome; locks retained")
 		return
 	}
-	s.logger.Info().Str("task_id", rec.Task.ID).Bool("failed", err != nil).Msg("task execution finished")
+	s.logger.Info().Str("task_id", rec.Task.ID).Str("namespace_id", rec.Task.NamespaceID).Str("cloud_id", rec.Task.CloudID).Bool("failed", err != nil).Msg("task execution finished")
 }
 
 // Cleanup is disabled when retention is zero. Unresolved resource locks are

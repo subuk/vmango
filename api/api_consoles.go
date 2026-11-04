@@ -19,14 +19,15 @@ import (
 )
 
 type consoleClaim struct {
-	Version int    `json:"v"`
-	Purpose string `json:"purpose"`
-	User    string `json:"user"`
-	Cloud   string `json:"cloud"`
-	VM      string `json:"vm"`
-	Kind    string `json:"kind"`
-	Force   bool   `json:"force,omitempty"`
-	Expires int64  `json:"exp"`
+	Namespace compute.NamespaceID `json:"namespace"`
+	Version   int                 `json:"v"`
+	Purpose   string              `json:"purpose"`
+	User      string              `json:"user"`
+	Cloud     string              `json:"cloud"`
+	VM        string              `json:"vm"`
+	Kind      string              `json:"kind"`
+	Force     bool                `json:"force,omitempty"`
+	Expires   int64               `json:"exp"`
 }
 
 func (e *Environ) consoleKey() ([]byte, error) {
@@ -40,7 +41,7 @@ func (e *Environ) signConsole(c consoleClaim) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"v": c.Version, "iss": auth.Issuer, "aud": "vmango-console", "sub": c.User, "purpose": c.Purpose, "cloud": c.Cloud, "vm": c.VM, "kind": c.Kind, "force": c.Force, "iat": time.Now().Unix(), "exp": c.Expires}).SignedString(key)
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"namespace": c.Namespace, "v": c.Version, "iss": auth.Issuer, "aud": "vmango-console", "sub": c.User, "purpose": c.Purpose, "cloud": c.Cloud, "vm": c.VM, "kind": c.Kind, "force": c.Force, "iat": time.Now().Unix(), "exp": c.Expires}).SignedString(key)
 }
 func (e *Environ) verifyConsole(raw, cloud, vm, kind string, now time.Time) (consoleClaim, error) {
 	var c consoleClaim
@@ -61,11 +62,12 @@ func (e *Environ) verifyConsole(raw, cloud, vm, kind string, now time.Time) (con
 	}
 	sub, _ := m.GetSubject()
 	exp, _ := m.GetExpirationTime()
-	if m["purpose"] != "console" || m["v"] != float64(2) || sub == "" || m["cloud"] != cloud || m["vm"] != vm || m["kind"] != kind || (kind != "serial" && kind != "vnc") || exp == nil {
+	namespace, _ := m["namespace"].(string)
+	if !compute.ValidCatalogID(namespace) || m["purpose"] != "console" || m["v"] != float64(3) || sub == "" || m["cloud"] != cloud || m["vm"] != vm || m["kind"] != kind || (kind != "serial" && kind != "vnc") || exp == nil {
 		return c, auth.ErrInvalid
 	}
 	force, _ := m["force"].(bool)
-	return consoleClaim{2, "console", sub, cloud, vm, kind, force, exp.Unix()}, nil
+	return consoleClaim{compute.NamespaceID(namespace), 3, "console", sub, cloud, vm, kind, force, exp.Unix()}, nil
 }
 
 type apiConsoleLinkInput struct {
@@ -87,7 +89,7 @@ func (e *Environ) registerConsoles(api huma.API, router *mux.Router) {
 		if claims(ctx).Kind != "web" {
 			return nil, authError(auth.ErrForbidden)
 		}
-		vm, err := e.clouds.GetMachine(ctx, in.Cloud, in.VM)
+		vm, err := e.getWorkloadMachine(ctx, in.Cloud, in.VM)
 		if err != nil {
 			return nil, apiError(err)
 		}
@@ -102,11 +104,11 @@ func (e *Environ) registerConsoles(api huma.API, router *mux.Router) {
 			ttl = 3600
 		}
 		expires := time.Now().Add(time.Duration(ttl) * time.Second).Truncate(time.Second)
-		token, err := e.signConsole(consoleClaim{2, "console", claims(ctx).Subject, in.Cloud, in.VM, in.Kind, in.Body.Force, expires.Unix()})
+		token, err := e.signConsole(consoleClaim{requestNamespace(ctx), 3, "console", claims(ctx).Subject, in.Cloud, in.VM, in.Kind, in.Body.Force, expires.Unix()})
 		if err != nil {
 			return nil, apiError(err)
 		}
-		link := "/console/" + url.PathEscape(in.Cloud) + "/" + url.PathEscape(in.VM) + "/" + in.Kind + "#" + token
+		link := "/console/" + url.PathEscape(in.Cloud) + "/" + url.PathEscape(in.VM) + "/" + in.Kind + "?namespace=" + url.QueryEscape(string(requestNamespace(ctx))) + "#" + token
 		if e.cfg.BaseUrl != "" {
 			link = strings.TrimRight(e.cfg.BaseUrl, "/") + link
 		}
@@ -154,6 +156,11 @@ func (e *Environ) registerConsoles(api huma.API, router *mux.Router) {
 			writeAPIProblem(w, 401, "Invalid or expired console link.")
 			return
 		}
+		if err := e.namespaces.Admit(c.Namespace, c.Cloud); err != nil {
+			writeAPIProblem(w, 404, "Console context is unavailable.")
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), namespaceContextKey{}, c.Namespace))
 		e.serveConsole(w, r, c.Cloud, c.VM, c.Kind, c.Force, time.Unix(c.Expires, 0))
 	}), false)).Methods("GET")
 
@@ -182,7 +189,7 @@ func (e *Environ) serveConsole(w http.ResponseWriter, r *http.Request, cloud, id
 		writeAPIProblem(w, 401, "Console link expired.")
 		return
 	}
-	vm, err := e.clouds.GetMachine(r.Context(), cloud, id)
+	vm, err := e.getWorkloadMachine(r.Context(), cloud, id)
 	node := ""
 	if vm != nil {
 		node = vm.NodeId
@@ -285,7 +292,9 @@ func bridgeConsole(ws *websocket.Conn, stream io.ReadWriteCloser, expires time.T
 
 const consoleProtocol = `Console protocol v1
 Native clients: GET /api/v1/clouds/{cloud}/machines/{vm}/consoles/{serial|vnc}/ws
-Send Authorization: Bearer TOKEN on the WebSocket handshake over WSS.
+Send Authorization: Bearer TOKEN and exactly one X-Vmango-Namespace header
+on the WebSocket handshake over WSS. The namespace must admit the cloud and
+match the saved machine membership.
 Access-token expiry closes the stream; reconnect with a valid token.
 Revoking a personal token through the API closes its active streams.
 The optional WebSocket subprotocol is binary. Each binary message carries raw
@@ -295,10 +304,12 @@ side disconnecting closes both transports. A slow WebSocket writer is closed
 after 15 seconds. Errors before upgrade use application/problem+json.
 Serial returns 409 when occupied; ?force=true explicitly takes over. VNC uses
 shared-client mode in the browser; the backend controls shared-client support.
-Browser links use /console/{cloud}/{vm}/{kind}#TOKEN. The public page is an empty
+Browser links use /console/{cloud}/{vm}/{kind}?namespace=ID#TOKEN. The public page is an empty
 client shell. TOKEN is sent only as a vmango.token.TOKEN WebSocket subprotocol,
 alongside binary; only binary is selected by the server. Never log that header.
-The token authorizes only its bound console. It cannot access the API or UI.
+The signed token binds namespace, cloud, VM UUID and console kind. Namespace
+existence, cloud admission and saved membership are checked again at connection.
+Legacy unbound tokens are rejected. The token cannot access the API or UI.
 Links are reusable until their absolute expiry; existing streams close then
 (code 1008 when deliverable). Reconnection does not extend the expiry.
 Key rotation rejects subsequent handshakes; it does not terminate active streams

@@ -1,3 +1,4 @@
+import { useRequest } from "../app/Workspace";
 import { useEffect, useState } from "react";
 import {
     Alert,
@@ -19,7 +20,6 @@ import {
 } from "../api/hooks";
 import { useResourceBusy, volumeResource } from "../api/tasks";
 import { ResourceTasks } from "./Tasks";
-import { request } from "../api/client";
 import {
     bytes,
     Confirm,
@@ -56,7 +56,13 @@ export function Volumes() {
                     label="Cloud"
                     value={cloudID}
                     sx={{ mb: 3, minWidth: 220 }}
-                    onChange={(e) => setParams({ cloud: e.target.value })}
+                    onChange={(e) =>
+                        setParams((old) => {
+                            const next = new URLSearchParams(old);
+                            next.set("cloud", e.target.value);
+                            return next;
+                        })
+                    }
                 >
                     {clouds.data.map((c) => (
                         <MenuItem key={c.id} value={c.id}>
@@ -187,6 +193,7 @@ export function Volumes() {
 }
 
 function VolumeActions({ volume: v }: { volume: Volume }) {
+    const request = useRequest();
     const blocked = useResourceBusy(volumeResource(v.node, v.id));
     const conflict = !!blocked.task || blocked.unavailable;
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -284,6 +291,7 @@ export function VolumeDialog({
     cloudContext?: string;
     onClose: () => void;
 }) {
+    const request = useRequest();
     const clouds = useResource<Cloud[]>("/api/v1/clouds", !volume);
     const detail = useResource<VolumeDetail>(
         volumePath(volume?.cloud || "", volume?.id || ""),

@@ -9,6 +9,7 @@ machines on existing hypervisors.
 
 Current features:
 
+* [Configuration-defined workload namespaces](docs/NAMESPACES.md)
 * SSH keys management and injection
 * Volume management
 * KVM machines via libvirt

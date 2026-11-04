@@ -94,7 +94,7 @@ func TestNativeWSSConsole(t *testing.T) {
 	server := httptest.NewTLSServer(h)
 	defer server.Close()
 	e := &Environ{cfg: &cfg.API}
-	token, err := e.signConsole(consoleClaim{2, "console", "admin", "local", "v", "vnc", false, time.Now().Add(time.Minute).Unix()})
+	token, err := e.signConsole(consoleClaim{"test", 3, "console", "admin", "local", "v", "vnc", false, time.Now().Add(time.Minute).Unix()})
 	if err != nil {
 		t.Fatal(err)
 	}

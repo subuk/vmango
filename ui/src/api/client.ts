@@ -1,5 +1,10 @@
 import createClient from "openapi-fetch";
 import type { components, paths } from "./schema";
+import {
+    namespaceSelection,
+    workloadAPI,
+    type RequestContext,
+} from "./context";
 
 export type Problem = {
     status?: number;
@@ -187,9 +192,21 @@ export async function authenticatedFetch(
     init?: RequestInit,
 ): Promise<Response> {
     const generation = identityGeneration;
+    // Capture explicit context before token refresh; retries reuse this Request.
+    const request = new Request(input, init);
+    if (workloadAPI(request.url)) {
+        if (!request.headers.has("X-Vmango-Namespace")) {
+            const selected = namespaceSelection(location.search);
+            if (selected.kind !== "selected")
+                throw new APIError(422, {
+                    code: "namespace_required",
+                    detail: "Select a valid namespace before making a workload request.",
+                });
+            request.headers.set("X-Vmango-Namespace", selected.id);
+        }
+    } else request.headers.delete("X-Vmango-Namespace");
     if (!token || Date.now() > expiresAt - 5000) await refresh();
     requireIdentity(generation);
-    const request = new Request(input, init);
     const send = async () => {
         requireIdentity(generation);
         const headers = new Headers(request.headers);
@@ -229,6 +246,12 @@ export async function authenticatedFetch(
 // Generated OpenAPI request/response types remain the contract for resource hooks.
 export const api = createClient<paths>({ fetch: authenticatedFetch });
 export type TaskReference = components["schemas"]["ApiTaskReference"];
+export function onMutationCompleted(fn: (context: RequestContext) => void) {
+    const listener = (event: Event) =>
+        fn((event as CustomEvent<RequestContext>).detail);
+    events.addEventListener("mutation-completed", listener);
+    return () => events.removeEventListener("mutation-completed", listener);
+}
 export function onTaskAccepted(fn: (task: TaskReference) => void) {
     const listener = (event: Event) =>
         fn((event as CustomEvent<TaskReference>).detail);
@@ -236,8 +259,20 @@ export function onTaskAccepted(fn: (task: TaskReference) => void) {
     return () => events.removeEventListener("task-accepted", listener);
 }
 const submissionKeys = new Map<string, string>();
-async function submissionKey(path: string, method: string, body: unknown) {
-    const command = JSON.stringify([path, method, body]);
+async function submissionKey(
+    path: string,
+    method: string,
+    body: unknown,
+    context: RequestContext,
+    generation: number,
+) {
+    const command = JSON.stringify([
+        context.principal || generation,
+        context.namespace,
+        path,
+        method,
+        body,
+    ]);
     const digest = await crypto.subtle.digest(
         "SHA-256",
         new TextEncoder().encode(command),
@@ -277,16 +312,32 @@ export async function request<T>(
     method = "GET",
     body?: unknown,
     signal?: AbortSignal,
+    context?: RequestContext,
 ): Promise<T> {
     const generation = identityGeneration;
+    const selected = namespaceSelection(location.search);
+    const captured = context || {
+        namespace: selected.kind === "selected" ? selected.id : undefined,
+    };
+    const serializedBody =
+        body === undefined ? undefined : JSON.stringify(body);
+    const snapshot =
+        serializedBody === undefined ? undefined : JSON.parse(serializedBody);
+    const scoped = workloadAPI(path);
+    if (scoped && !captured.namespace)
+        throw new APIError(422, {
+            code: "namespace_required",
+            detail: "Select a valid namespace before making a workload request.",
+        });
     const infrastructure =
         method !== "GET" &&
+        !new URL(path, location.href).pathname.endsWith("/assign/preview") &&
         !new URL(path, location.href).pathname.includes("/consoles/") &&
         /^\/api\/v1\/clouds\/[^/]+\/(?:machines|volumes)(?:\/|$)/.test(
             new URL(path, location.href).pathname,
         );
     const submission = infrastructure
-        ? await submissionKey(path, method, body)
+        ? await submissionKey(path, method, snapshot, captured, generation)
         : undefined;
     requireIdentity(generation);
     try {
@@ -294,11 +345,12 @@ export async function request<T>(
             body === undefined ? {} : { "Content-Type": "application/json" },
         );
         if (submission) headers.set("Idempotency-Key", submission.key);
+        if (scoped) headers.set("X-Vmango-Namespace", captured.namespace!);
         const response = await authenticatedFetch(path, {
             signal,
             method,
             headers,
-            body: body === undefined ? undefined : JSON.stringify(body),
+            body: serializedBody,
         });
         if (!response.ok) {
             const error = await responseProblem(response);
@@ -307,11 +359,19 @@ export async function request<T>(
             throw error;
         }
         requireIdentity(generation);
+        const completed = () => {
+            if (method !== "GET" && scoped && !path.endsWith("/assign/preview"))
+                events.dispatchEvent(
+                    new CustomEvent("mutation-completed", { detail: captured }),
+                );
+        };
         if (
             response.status === 204 ||
             response.headers.get("Content-Length") === "0"
-        )
+        ) {
+            completed();
             return undefined as T;
+        }
         let result: T;
         try {
             result = await response.json();
@@ -332,6 +392,7 @@ export async function request<T>(
                 new CustomEvent("task-accepted", { detail: accepted }),
             );
         }
+        completed();
         return result;
     } catch (error) {
         if (submission && error instanceof APIError && error.uncertain) {
@@ -340,7 +401,10 @@ export async function request<T>(
                 code: "task_submission_uncertain",
                 detail: "Submission status is unknown. Recover using the same command and idempotency key to find the accepted task safely.",
             });
-            uncertain.recover = () => request(path, method, body);
+            uncertain.recover = () => {
+                requireIdentity(generation);
+                return request(path, method, snapshot, undefined, captured);
+            };
             throw uncertain;
         }
         throw error;

@@ -168,7 +168,7 @@ func (e *Environ) registerAPI() {
 		return
 	}
 	router := mux.NewRouter()
-	router.Use(e.cloudScopeGuard)
+	router.Use(e.namespaceGuard, e.cloudScopeGuard)
 	cfg := huma.DefaultConfig("Vmango API", "1.0.0")
 	cfg.OpenAPIPath = "/api/openapi"
 	cfg.DocsPath = ""
@@ -191,6 +191,8 @@ func (e *Environ) registerAPI() {
 	api := humamux.New(router, cfg)
 	e.registerAuth(api)
 	e.registerTasks(api)
+	e.registerNamespaces(api)
+	e.registerAssignments(api)
 	e.registerClouds(api)
 	e.registerAdministration(api)
 	e.registerVMOperations(api)
@@ -199,10 +201,13 @@ func (e *Environ) registerAPI() {
 	e.registerCloudInitTemplates(api)
 	e.registerConsoles(api, router)
 	problemSchema := api.OpenAPI().Components.Schemas.Schema(reflect.TypeOf(apiProblem{}), true, "ProblemDetails")
-	for _, p := range api.OpenAPI().Paths {
+	for path, p := range api.OpenAPI().Paths {
 		for _, op := range []*huma.Operation{p.Get, p.Head, p.Post, p.Put, p.Patch, p.Delete, p.Options} {
 			if op == nil {
 				continue
+			}
+			if workloadPath(path) {
+				op.Parameters = append(op.Parameters, &huma.Param{Name: "X-Vmango-Namespace", In: "header", Required: true, Schema: &huma.Schema{Type: "string", Pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"}, Description: "Explicit configured namespace; exactly one value is required."})
 			}
 			for status, response := range op.Responses {
 				if status == "default" || strings.HasPrefix(status, "4") || strings.HasPrefix(status, "5") {

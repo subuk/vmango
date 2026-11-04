@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"subuk/vmango/api"
 	"subuk/vmango/auth"
 	"subuk/vmango/catalog"
@@ -71,18 +72,26 @@ func Web(configFilename string) error {
 	}
 	images := compute.NewImageService(imageRepo)
 
-	keyRepo, err := filesystem.NewKeyRepository(util.ExpandHomeDir(cfg.KeyFile), logger.With().Str("component", "key-repository").Logger())
+	namespaceDefinitions, err := cfg.NamespaceDefinitions()
 	if err != nil {
-		logger.Error().Err(err).Msg("cannot initialize key storage")
-		os.Exit(1)
+		return err
 	}
-
-	templateRepo, err := filesystem.NewCloudInitTemplateRepository(util.ExpandHomeDir(cfg.CloudInitTemplatesDir))
+	namespaces, err := compute.NewNamespaceService(namespaceDefinitions)
 	if err != nil {
-		return fmt.Errorf("cannot initialize cloud-init template storage: %w", err)
+		return err
 	}
-	defer templateRepo.Close()
-	cloudInitTemplates := compute.NewCloudInitTemplateService(templateRepo)
+	catalogRepo, err := filesystem.NewNamespaceCatalogRepository(filepath.Join(util.ExpandHomeDir(cfg.NamespaceDirectory), "catalogs"))
+	if err != nil {
+		return err
+	}
+	defer catalogRepo.Close()
+	keys := compute.NewNamespaceKeyService(catalogRepo, namespaces)
+	cloudInitTemplates := compute.NewNamespaceCloudInitTemplateService(catalogRepo, namespaces)
+	assignmentRepo, err := filesystem.NewVolumeAssignmentRepository(filepath.Join(util.ExpandHomeDir(cfg.NamespaceDirectory), "volumes"))
+	if err != nil {
+		return err
+	}
+	defer assignmentRepo.Close()
 
 	epub := filesystem.NewScriptedComputeEventBroker(logger.With().Str("component", "compute-event-broker").Logger())
 	for _, sub := range cfg.Subscribes {
@@ -139,7 +148,6 @@ func Web(configFilename string) error {
 	netRepo := libvirt.NewNetworkRepository(connectionPool, logger.With().Str("component", "net-repository").Logger())
 
 	network := libcompute.NewNetworkService(netRepo)
-	keys := libcompute.NewKeyService(keyRepo)
 	volpools := libcompute.NewVolumePoolService(volpoolRepo)
 	nodes := libcompute.NewNodeService(nodeRepo)
 	volumes := libcompute.NewVolumeService(volumeRepo)
@@ -158,6 +166,7 @@ func Web(configFilename string) error {
 	}
 	clouds := &compute.CloudService{Definitions: cloudDefinitions, Nodes: nodes, VMs: vms, Pools: volpools, Volumes: volumes, Manager: vmanager}
 	vmanager.Clouds = clouds
+	workloads := &compute.WorkloadService{Namespaces: namespaces, Clouds: clouds, Assignments: assignmentRepo, Scopes: nodeScopes}
 	vms.CloudMode = true
 	ownershipRepo, err := filesystem.NewVolumeOwnershipRepository(util.ExpandHomeDir(cfg.Tasks.Directory) + "-volumes")
 	if err != nil {
@@ -211,7 +220,7 @@ func Web(configFilename string) error {
 		logger.Fatal().Err(err).Msg("cannot initialize durable task storage")
 	}
 	defer taskRepo.Close()
-	taskService := tasks.New(taskRepo, &compute.CommandHandler{Clouds: clouds, Manager: vmanager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys, CloudInitTemplates: cloudInitTemplates, Scopes: nodeScopes}, logger.With().Str("component", "tasks").Logger())
+	taskService := tasks.New(taskRepo, &compute.CommandHandler{Workloads: workloads, Clouds: clouds, Manager: vmanager, VMs: vms, Volumes: volumes, Nodes: nodes, Keys: keys, CloudInitTemplates: cloudInitTemplates, Scopes: nodeScopes}, logger.With().Str("component", "tasks").Logger())
 	executionContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := taskService.Start(executionContext, cfg.Tasks.Workers); err != nil {
@@ -241,7 +250,7 @@ func Web(configFilename string) error {
 		administrationBackends[cloud.ID] = observations
 	}
 	administration := compute.NewAdministrationService(snapshot, administrationBackends)
-	apiEnv, err := api.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager, images, authentication, taskService, api.Services{Administration: administration, CloudInitTemplates: cloudInitTemplates})
+	apiEnv, err := api.New(cfg, logger, network, keys, volpools, nodes, volumes, vms, vmanager, images, authentication, taskService, api.Services{Namespaces: namespaces, Workloads: workloads, Administration: administration, CloudInitTemplates: cloudInitTemplates})
 	if err != nil {
 		logger.Fatal().Err(err).Msg("cannot initialize API")
 	}

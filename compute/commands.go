@@ -19,6 +19,10 @@ func VolumeRef(node, path string) tasks.ResourceRef {
 // InfrastructureCommand is a private, versioned desired command. Read models
 // and command payloads are deliberately separate from the public task schema.
 type InfrastructureCommand struct {
+	NamespaceID      NamespaceID
+	Label            string                     `json:",omitempty"`
+	AcceptedVolumes  map[string]string          `json:",omitempty"`
+	Assignment       *AssignmentPlan            `json:",omitempty"`
 	CreationBindings map[string]json.RawMessage `json:",omitempty"`
 	CloudID          string
 	Catalog          *Cloud             `json:",omitempty"`
@@ -87,10 +91,11 @@ func NewCommand(kind string, c InfrastructureCommand) tasks.Command {
 	if c.Disk != nil {
 		refs = append(refs, VolumeRef(c.Node, c.Disk.Path))
 	}
-	return tasks.Command{Kind: kind, Payload: payload, Resources: refs}
+	return tasks.Command{NamespaceID: string(c.NamespaceID), CloudID: c.CloudID, Kind: kind, Payload: payload, Resources: refs}
 }
 
 type CommandHandler struct {
+	Workloads          *WorkloadService
 	Clouds             *CloudService
 	Manager            *VirtualMachineManager
 	VMs                *VirtualMachineService
@@ -116,7 +121,7 @@ func (h *CommandHandler) destination(node, pool, name string) (tasks.ResourceRef
 	return VolumeRef(node, path), err
 }
 
-func (h *CommandHandler) Prepare(command tasks.Command) (tasks.Command, error) {
+func (h *CommandHandler) prepare(command tasks.Command) (tasks.Command, error) {
 	var c InfrastructureCommand
 	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 2 {
 		return command, ErrInvalid
@@ -397,7 +402,7 @@ func validateAcceptedImageContext(c InfrastructureCommand) error {
 	return nil
 }
 
-func (h *CommandHandler) Execute(ctx context.Context, command tasks.Command, progress *tasks.Execution) error {
+func (h *CommandHandler) execute(ctx context.Context, command tasks.Command, progress *tasks.Execution) error {
 	var c InfrastructureCommand
 	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 2 {
 		return ErrInvalid

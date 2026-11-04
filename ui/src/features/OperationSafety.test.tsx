@@ -92,6 +92,9 @@ it.each([false, true])(
             expect(request).toHaveBeenCalledWith(
                 `/api/v1/clouds/local/machines/example?delete_volumes=${deleteDisks}`,
                 "DELETE",
+                undefined,
+                undefined,
+                expect.objectContaining({ namespace: undefined }),
             ),
         );
     },

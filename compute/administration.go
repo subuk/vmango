@@ -39,6 +39,7 @@ type AdministrationLibvirtCloud struct {
 	Hosts []AdministrationHostReference `json:"hosts" nullable:"false"`
 }
 type AdministrationCloud struct {
+	NamespaceIDs   []NamespaceID               `json:"namespace_ids,omitempty"`
 	ID             string                      `json:"id"`
 	Name           string                      `json:"name"`
 	BackendKind    string                      `json:"backend_kind"`
@@ -249,6 +250,22 @@ func NewAdministrationService(snapshot AdministrationSnapshot, observations map[
 		backends[id] = backend
 	}
 	return &AdministrationService{snapshot: snapshot, observations: backends}
+}
+
+// WithNamespaces projects relationships from the same immutable workload registry.
+func (s *AdministrationService) WithNamespaces(registry *NamespaceService) *AdministrationService {
+	copy := *s
+	copy.snapshot = administrationCopy(s.snapshot)
+	for i := range copy.snapshot.Clouds {
+		cloud := &copy.snapshot.Clouds[i]
+		cloud.NamespaceIDs = []NamespaceID{}
+		for _, n := range registry.List() {
+			if registry.Admit(n.ID, cloud.ID) == nil {
+				cloud.NamespaceIDs = append(cloud.NamespaceIDs, n.ID)
+			}
+		}
+	}
+	return &copy
 }
 func (s *AdministrationService) Installation() AdministrationInstallation {
 	return s.snapshot.Installation

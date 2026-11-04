@@ -1,3 +1,4 @@
+import { useRequest, useResourceKey } from "../app/Workspace";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -13,7 +14,7 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
-import { APIError, request } from "../api/client";
+import { APIError } from "../api/client";
 import type { components } from "../api/schema";
 import { esc, useResource } from "../api/hooks";
 import {
@@ -31,8 +32,9 @@ type CloudInitTemplate = components["schemas"]["ApiCloudInitTemplate"];
 const templatesPath = "/api/v1/cloud-init-templates";
 
 function useTemplate(id: string) {
+    const request = useRequest();
     return useQuery({
-        queryKey: ["cloud-init-template", id],
+        queryKey: useResourceKey(`${templatesPath}/${esc(id)}`),
         queryFn: ({ signal }) =>
             request<CloudInitTemplate>(
                 `${templatesPath}/${esc(id)}`,
@@ -58,6 +60,7 @@ function TemplateEditor({
     onClose: () => void;
     reload: () => Promise<unknown>;
 }) {
+    const request = useRequest();
     const saved = useRef(false);
     const [name, setName] = useState(template?.name || "");
     const [description, setDescription] = useState(template?.description || "");
@@ -201,6 +204,8 @@ function ExistingTemplate({
 }
 
 export function CloudInitTemplates() {
+    const request = useRequest();
+    const listKey = useResourceKey(templatesPath);
     const query = useResource<CloudInitTemplateSummary[]>(templatesPath);
     const queries = useQueryClient();
     const [edit, setEdit] = useState<string>();
@@ -298,9 +303,7 @@ export function CloudInitTemplates() {
                                                 onClick={async () => {
                                                     await queries.invalidateQueries(
                                                         {
-                                                            queryKey: [
-                                                                templatesPath,
-                                                            ],
+                                                            queryKey: listKey,
                                                         },
                                                     );
                                                     setRemove(undefined);

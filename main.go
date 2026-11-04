@@ -17,6 +17,15 @@ func main() {
 	})
 	webCommand := parser.NewCommand("web", "Start web server")
 	genpwCommand := parser.NewCommand("genpw", "Generate password")
+	migrateCommand := parser.NewCommand("namespace-migrate", "Preview or apply an explicit namespace migration while the server is stopped")
+	mapping := migrateCommand.String("", "mapping", &argparse.Options{Required: true, Help: "Explicit migration mapping JSON file"})
+	apply := migrateCommand.Flag("", "apply", &argparse.Options{Help: "Apply the mapping after a durable backup; omitted means dry-run"})
+	backup := migrateCommand.String("", "backup", &argparse.Options{Help: "Absolute private backup directory, required for apply and reused to resume"})
+	recoveryCommand := parser.NewCommand("task-recover", "Inspect or recover task history while the server is stopped")
+	action := recoveryCommand.String("", "action", &argparse.Options{Default: "inspect", Help: "inspect, cancel or release"})
+	taskID := recoveryCommand.String("", "id", &argparse.Options{Help: "Task UUID; omit to inspect all history"})
+	operator := recoveryCommand.String("", "operator", &argparse.Options{Help: "Operator audit identity for cancel or release"})
+	reason := recoveryCommand.String("", "reason", &argparse.Options{Help: "Audited recovery reason; required for cancel or release"})
 	if err := parser.Parse(os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
@@ -29,5 +38,15 @@ func main() {
 		}
 	case genpwCommand.Happened():
 		bootstrap.GenPassword()
+	case migrateCommand.Happened():
+		if err := bootstrap.NamespaceMigrate(*configFilename, *mapping, *backup, *apply, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Namespace migration error: %s\n", err)
+			os.Exit(1)
+		}
+	case recoveryCommand.Happened():
+		if err := bootstrap.NamespaceTaskRecovery(*configFilename, *action, *taskID, *operator, *reason, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Task recovery error: %s\n", err)
+			os.Exit(1)
+		}
 	}
 }

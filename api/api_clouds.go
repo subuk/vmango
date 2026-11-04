@@ -76,6 +76,7 @@ type apiChangeTypeInput struct {
 // apiMachineCreate is an input projection, deliberately separate from durable
 // MachineCreateSpec so accepted tasks retain their existing host/path payloads.
 type apiMachineCreate struct {
+	Hostname         string                        `json:"hostname,omitempty" maxLength:"253" doc:"Optional guest hostname, independent of the display label."`
 	Name             string                        `json:"name"`
 	Image            string                        `json:"image"`
 	InstanceType     string                        `json:"instance_type"`
@@ -95,7 +96,7 @@ type apiExistingDisk struct {
 }
 
 func (in apiMachineCreate) domain(cloudID string, clouds *compute.CloudService) (compute.MachineCreateSpec, error) {
-	out := compute.MachineCreateSpec{Name: in.Name, Image: in.Image, InstanceType: in.InstanceType, Zone: in.Zone, Network: in.Network, StorageClass: in.StorageClass, Placement: in.Placement, Start: in.Start, KeyIDs: in.KeyIDs, UserData: in.UserData, UserDataTemplate: in.UserDataTemplate, Disks: in.Disks}
+	out := compute.MachineCreateSpec{Hostname: in.Hostname, Name: in.Name, Image: in.Image, InstanceType: in.InstanceType, Zone: in.Zone, Network: in.Network, StorageClass: in.StorageClass, Placement: in.Placement, Start: in.Start, KeyIDs: in.KeyIDs, UserData: in.UserData, UserDataTemplate: in.UserDataTemplate, Disks: in.Disks}
 	for _, disk := range in.ExistingDisks {
 		v, err := clouds.VolumeAddress(cloudID, disk.VolumeID)
 		if err != nil {
@@ -144,6 +145,14 @@ func (e *Environ) registerClouds(api huma.API) {
 		}
 		out := apiVolumeList{Items: []apiVolume{}, UnavailableHosts: volumes.UnavailableHosts}
 		for _, v := range volumes.Volumes {
+			if e.workloads != nil {
+				if err := e.workloads.ReadVolume(v); err != nil {
+					return nil, apiError(err)
+				}
+				if v.NamespaceID != requestNamespace(ctx) {
+					continue
+				}
+			}
 			if !v.Metadata.Hidden && (in.Host == "" || v.NodeId == in.Host) {
 				out.Items = append(out.Items, e.volumeDTO(v))
 			}
@@ -154,6 +163,9 @@ func (e *Environ) registerClouds(api huma.API) {
 		out := []apiCloud{}
 		if e.clouds != nil {
 			for _, c := range e.clouds.Definitions {
+				if e.namespaces.Admit(requestNamespace(ctx), c.ID) != nil {
+					continue
+				}
 				d, err := e.cloudDTO(c)
 				if err != nil {
 					return nil, apiError(err)
@@ -188,6 +200,9 @@ func (e *Environ) registerClouds(api huma.API) {
 		}
 		out := apiMachineList{Items: []apiVM{}, UnavailableHosts: result.UnavailableHosts}
 		for _, vm := range result.Machines {
+			if e.workloads != nil && vm.NamespaceID != requestNamespace(ctx) {
+				continue
+			}
 			out.Items = append(out.Items, e.machineDTO(vm))
 		}
 		return &apiResult[apiMachineList]{Body: out}, nil

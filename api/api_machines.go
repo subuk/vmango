@@ -46,7 +46,7 @@ type apiDetachInterfaceInput struct {
 }
 
 func (e *Environ) apiGetVM(ctx context.Context, cloud, id string) (*apiResult[apiVMDetail], error) {
-	v, err := e.clouds.GetMachine(ctx, cloud, id)
+	v, err := e.getWorkloadMachine(ctx, cloud, id)
 	if err != nil {
 		return nil, apiError(err)
 	}

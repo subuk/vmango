@@ -119,7 +119,8 @@ it("shows required image disks in configuration details", async () => {
                   data_disks: [{ name: "userdata", size_bytes: 16 * 2 ** 30 }],
                   settings: [],
                   source: {
-                      mode: "download", format: "qcow2",
+                      mode: "download",
+                      format: "qcow2",
                       archive_format: "zip",
                       archive_member: "bundle/vda.qcow2",
                       extracted_size_bytes: 2 * 2 ** 30,
@@ -296,6 +297,11 @@ it("shows a concise overview with catalog totals and separate installation setti
             .getByRole("link", { name: "View configuration" })
             .getAttribute("href"),
     ).toBe("/administration/configuration/");
+    expect(
+        screen
+            .getByRole("link", { name: "Open task history" })
+            .getAttribute("href"),
+    ).toBe("/administration/tasks/");
     expect(screen.getByRole("link", { name: "Remote cloud" })).toBeTruthy();
 });
 it("keeps runtime configuration on its own page", async () => {
@@ -364,3 +370,24 @@ it.each(["/tasks/", "/tasks/saved-task/"])(
         );
     },
 );
+it("links cloud admission to configured namespaces independently of workspace", async () => {
+    mocks.request.mockImplementation(async (path) =>
+        path === "/api/v1/administration/configuration"
+            ? install
+            : { ...cloud, namespace_ids: ["platform", "analytics"] },
+    );
+    show("/administration/clouds/remote.cloud/?namespace=unrelated");
+    expect(
+        (await screen.findByRole("link", { name: "platform" })).getAttribute(
+            "href",
+        ),
+    ).toBe("/administration/configuration/namespaces/platform/");
+    expect(
+        screen.getByRole("link", { name: "analytics" }).getAttribute("href"),
+    ).toBe("/administration/configuration/namespaces/analytics/");
+    expect(
+        mocks.request.mock.calls.every(([path]) =>
+            path.startsWith("/api/v1/administration/"),
+        ),
+    ).toBe(true);
+});

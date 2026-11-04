@@ -242,6 +242,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/administration/clouds/{cloud}/machines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect cloud machines across namespaces */
+        get: operations["administration-machines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/clouds/{cloud}/machines/{vm}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect machine across namespaces */
+        get: operations["administration-machine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/clouds/{cloud}/volumes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect cloud volumes across namespaces */
+        get: operations["administration-volumes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/clouds/{cloud}/volumes/{volume}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect volume across namespaces */
+        get: operations["administration-volume"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/administration/configuration": {
         parameters: {
             query?: never;
@@ -251,6 +319,74 @@ export interface paths {
         };
         /** Read the accepted installation configuration */
         get: operations["get-administration-configuration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/configuration/namespaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect configured namespaces */
+        get: operations["administration-namespaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/configuration/namespaces/{namespace}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect namespace configuration */
+        get: operations["administration-namespace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect task history across namespaces */
+        get: operations["administration-tasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/tasks/{task}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect a task across namespaces */
+        get: operations["administration-task"];
         put?: never;
         post?: never;
         delete?: never;
@@ -464,6 +600,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clouds/{cloud}/machines/{vm}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assign an unassigned machine graph to selected namespace */
+        post: operations["assign-machine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clouds/{cloud}/machines/{vm}/assign/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview complete namespace assignment graph */
+        post: operations["preview-machine-assignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/clouds/{cloud}/machines/{vm}/consoles/{kind}/links": {
         parameters: {
             query?: never;
@@ -492,7 +662,9 @@ export interface paths {
          * Binary serial or VNC WebSocket; Bearer JWT on handshake
          * @description Console protocol v1
          *     Native clients: GET /api/v1/clouds/{cloud}/machines/{vm}/consoles/{serial|vnc}/ws
-         *     Send Authorization: Bearer TOKEN on the WebSocket handshake over WSS.
+         *     Send Authorization: Bearer TOKEN and exactly one X-Vmango-Namespace header
+         *     on the WebSocket handshake over WSS. The namespace must admit the cloud and
+         *     match the saved machine membership.
          *     Access-token expiry closes the stream; reconnect with a valid token.
          *     Revoking a personal token through the API closes its active streams.
          *     The optional WebSocket subprotocol is binary. Each binary message carries raw
@@ -502,10 +674,12 @@ export interface paths {
          *     after 15 seconds. Errors before upgrade use application/problem+json.
          *     Serial returns 409 when occupied; ?force=true explicitly takes over. VNC uses
          *     shared-client mode in the browser; the backend controls shared-client support.
-         *     Browser links use /console/{cloud}/{vm}/{kind}#TOKEN. The public page is an empty
+         *     Browser links use /console/{cloud}/{vm}/{kind}?namespace=ID#TOKEN. The public page is an empty
          *     client shell. TOKEN is sent only as a vmango.token.TOKEN WebSocket subprotocol,
          *     alongside binary; only binary is selected by the server. Never log that header.
-         *     The token authorizes only its bound console. It cannot access the API or UI.
+         *     The signed token binds namespace, cloud, VM UUID and console kind. Namespace
+         *     existence, cloud admission and saved membership are checked again at connection.
+         *     Legacy unbound tokens are rejected. The token cannot access the API or UI.
          *     Links are reusable until their absolute expiry; existing streams close then
          *     (code 1008 when deliverable). Reconnection does not extend the expiry.
          *     Key rotation rejects subsequent handshakes; it does not terminate active streams
@@ -658,6 +832,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clouds/{cloud}/volumes/{volume}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assign an unassigned detached volume to selected namespace */
+        post: operations["assign-volume"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clouds/{cloud}/volumes/{volume}/assign/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview namespace assignment for a detached volume */
+        post: operations["preview-volume-assignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/clouds/{cloud}/volumes/{volume}/clone": {
         parameters: {
             query?: never;
@@ -737,6 +945,40 @@ export interface paths {
         };
         /** Get current identity and installation metadata */
         get: operations["get-me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/namespaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Discover configured workload namespaces */
+        get: operations["list-namespaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/namespaces/{namespace}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read selected namespace */
+        get: operations["get-namespace"];
         put?: never;
         post?: never;
         delete?: never;
@@ -861,6 +1103,7 @@ export interface components {
             description: string;
             id: string;
             name: string;
+            namespace_id?: string;
             revision: string;
         };
         AdministrationCapabilities: {
@@ -875,6 +1118,7 @@ export interface components {
             instance_types: components["schemas"]["InstanceType"][];
             libvirt?: components["schemas"]["AdministrationLibvirtCloud"];
             name: string;
+            namespace_ids?: string[] | null;
             networks: components["schemas"]["CatalogEntry"][];
             storage_classes: components["schemas"]["CatalogEntry"][];
             zones: components["schemas"]["CatalogEntry"][];
@@ -1043,6 +1287,10 @@ export interface components {
             items: components["schemas"]["ApiNode"][];
             unavailable_hosts: components["schemas"]["AdministrationUnavailableHost"][];
         };
+        ApiAssignmentPreview: {
+            machines: components["schemas"]["ApiVM"][];
+            volumes: components["schemas"]["ApiVolume"][];
+        };
         ApiAuthConfig: {
             oidc: boolean;
             oidc_login_url?: string;
@@ -1118,6 +1366,7 @@ export interface components {
             description: string;
             id: string;
             name: string;
+            namespace_id?: string;
             revision: string;
             user_data: string;
         };
@@ -1195,6 +1444,7 @@ export interface components {
         ApiKey: {
             comment: string;
             fingerprint: string;
+            namespace_id?: string;
             public_key: string;
             type: string;
         };
@@ -1211,6 +1461,8 @@ export interface components {
         } | null;
         ApiMachineCreate: {
             existing_disks?: components["schemas"]["ApiExistingDisk"][] | null;
+            /** @description Optional guest hostname, independent of the display label. */
+            hostname?: string;
             image: string;
             instance_type: string;
             keys?: string[] | null;
@@ -1256,6 +1508,9 @@ export interface components {
             pages_2m: number;
             /** Format: int64 */
             pages_4k: number;
+        };
+        ApiNamespaceList: {
+            items: components["schemas"]["Namespace"][];
         };
         ApiNavLink: {
             active: boolean;
@@ -1363,6 +1618,7 @@ export interface components {
         ApiVM: {
             arch: string;
             autostart: boolean;
+            backend_name?: string;
             cloud: string;
             /** @description Null means unavailable; an empty array means a known empty key configuration. */
             configured_keys: components["schemas"]["ApiConfiguredKey"][] | null;
@@ -1387,6 +1643,7 @@ export interface components {
             /** Format: int64 */
             memory_request_bytes: number;
             name: string;
+            namespace_id?: string;
             node: string;
             /** @enum {string} */
             state: "unknown" | "stopped" | "running";
@@ -1398,6 +1655,7 @@ export interface components {
         ApiVMDetail: {
             arch: string;
             autostart: boolean;
+            backend_name?: string;
             catalog: components["schemas"]["ApiMachineCatalog"];
             cloud: string;
             /** @description Null means unavailable; an empty array means a known empty key configuration. */
@@ -1423,6 +1681,7 @@ export interface components {
             /** Format: int64 */
             memory_request_bytes: number;
             name: string;
+            namespace_id?: string;
             node: string;
             /** @enum {string} */
             state: "unknown" | "stopped" | "running";
@@ -1433,10 +1692,12 @@ export interface components {
         };
         ApiVolume: {
             attached_to?: string;
+            backend_name?: string;
             cloud: string;
             format: string;
             id: string;
             name: string;
+            namespace_id?: string;
             node: string;
             owned: boolean;
             pool: string;
@@ -1457,11 +1718,13 @@ export interface components {
         };
         ApiVolumeDetail: {
             attached_to?: string;
+            backend_name?: string;
             catalog: components["schemas"]["ApiVolumeCatalog"];
             cloud: string;
             format: string;
             id: string;
             name: string;
+            namespace_id?: string;
             node: string;
             owned: boolean;
             pool: string;
@@ -1581,6 +1844,12 @@ export interface components {
             /** Format: int64 */
             vcpus: number;
         };
+        Namespace: {
+            clouds: string[];
+            description: string;
+            id: string;
+            name: string;
+        };
         Page: {
             /** Format: int64 */
             active: number;
@@ -1628,6 +1897,7 @@ export interface components {
         };
         Task: {
             blocks_resources: boolean;
+            cloud_id?: string;
             /** Format: date-time */
             created_at: string;
             effects: components["schemas"]["Effect"][] | null;
@@ -1638,6 +1908,7 @@ export interface components {
             initiator: components["schemas"]["Identity"];
             kind: string;
             lock_release?: components["schemas"]["Release"];
+            namespace_id?: string;
             outcome_uncertain: boolean;
             resources: components["schemas"]["ResourceRef"][] | null;
             stages: components["schemas"]["Stage"][] | null;
@@ -3018,6 +3289,388 @@ export interface operations {
             };
         };
     };
+    "administration-machines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cloud: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiMachineList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "administration-machine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cloud: string;
+                vm: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiVMDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "administration-volumes": {
+        parameters: {
+            query?: {
+                /** @description Filter by the observed owning host; this does not select placement. */
+                host?: string;
+                usage?: "attachable";
+            };
+            header?: never;
+            path: {
+                cloud: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiVolumeList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "administration-volume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cloud: string;
+                volume: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiVolumeDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     "get-administration-configuration": {
         parameters: {
             query?: never;
@@ -3034,6 +3687,389 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdministrationInstallation"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "administration-namespaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiNamespaceList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "administration-namespace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                namespace: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Namespace"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "administration-tasks": {
+        parameters: {
+            query?: {
+                /** @description Comma-separated lifecycle states. */
+                state?: string;
+                resource_kind?: "machine" | "volume" | "cloud" | "machine-request";
+                resource_scope?: string;
+                /** @description Machine identifier or backend volume path, matching task resource references. */
+                resource_id?: string;
+                blocking?: boolean;
+                /** @description Opaque next cursor from the preceding page. */
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "administration-task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
                 };
             };
             /** @description Bad Request */
@@ -3242,7 +4278,10 @@ export interface operations {
     "list-cloud-init-templates": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3334,7 +4373,10 @@ export interface operations {
     "create-cloud-init-template": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3430,7 +4472,10 @@ export interface operations {
     "get-cloud-init-template": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 id: string;
             };
@@ -3524,7 +4569,10 @@ export interface operations {
     "update-cloud-init-template": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 id: string;
             };
@@ -3622,7 +4670,10 @@ export interface operations {
     "delete-cloud-init-template": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 id: string;
             };
@@ -3718,7 +4769,10 @@ export interface operations {
     "list-clouds": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3810,7 +4864,10 @@ export interface operations {
     "get-cloud": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 cloud: string;
             };
@@ -3904,7 +4961,10 @@ export interface operations {
     "list-cloud-machines": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 cloud: string;
             };
@@ -4001,6 +5061,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -4100,7 +5162,10 @@ export interface operations {
     "get-vm": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 cloud: string;
                 vm: string;
@@ -4201,6 +5266,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -4300,6 +5367,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -4403,6 +5472,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -4496,10 +5567,212 @@ export interface operations {
             };
         };
     };
+    "assign-machine": {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
+            path: {
+                cloud: string;
+                vm: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTaskReference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "preview-machine-assignment": {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
+            path: {
+                cloud: string;
+                vm: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiAssignmentPreview"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     "create-console-link": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 cloud: string;
                 vm: string;
@@ -4601,7 +5874,10 @@ export interface operations {
             query?: {
                 force?: boolean;
             };
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 cloud: string;
                 vm: string;
@@ -4671,6 +5947,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -4774,6 +6052,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -4877,6 +6157,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -4978,6 +6260,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -5081,6 +6365,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -5184,6 +6470,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -5285,7 +6573,10 @@ export interface operations {
                 host?: string;
                 usage?: "attachable";
             };
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 cloud: string;
             };
@@ -5382,6 +6673,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -5481,7 +6774,10 @@ export interface operations {
     "get-volume": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 cloud: string;
                 volume: string;
@@ -5579,6 +6875,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -5672,12 +6970,213 @@ export interface operations {
             };
         };
     };
+    "assign-volume": {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
+                "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
+            path: {
+                cloud: string;
+                volume: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTaskReference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "preview-volume-assignment": {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
+            path: {
+                cloud: string;
+                volume: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiAssignmentPreview"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     "clone-volume": {
         parameters: {
             query?: never;
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -5781,6 +7280,8 @@ export interface operations {
             header: {
                 /** @description Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history. */
                 "Idempotency-Key": string;
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
             };
             path: {
                 cloud: string;
@@ -5881,7 +7382,10 @@ export interface operations {
     "list-keys": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5973,7 +7477,10 @@ export interface operations {
     "add-key": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6069,7 +7576,10 @@ export interface operations {
     "get-key": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 fingerprint: string;
             };
@@ -6163,7 +7673,10 @@ export interface operations {
     "delete-key": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 fingerprint: string;
             };
@@ -6344,6 +7857,195 @@ export interface operations {
             };
         };
     };
+    "list-namespaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiNamespaceList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "get-namespace": {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
+            path: {
+                namespace: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Namespace"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     "list-tasks": {
         parameters: {
             query?: {
@@ -6358,7 +8060,10 @@ export interface operations {
                 before?: string;
                 limit?: number;
             };
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6450,7 +8155,10 @@ export interface operations {
     "get-task": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 task: string;
             };
@@ -6544,7 +8252,10 @@ export interface operations {
     "cancel-task": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 task: string;
             };
@@ -6638,7 +8349,10 @@ export interface operations {
     "release-task-locks": {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Explicit configured namespace; exactly one value is required. */
+                "X-Vmango-Namespace": string;
+            };
             path: {
                 task: string;
             };

@@ -86,9 +86,12 @@ func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.Sto
 	}
 	scope := sha256.Sum256([]byte(repo.pool.nodeUri[nodeId]))
 	volume.Identity = hex.EncodeToString(scope[:]) + "\x00" + poolID + "\x00" + key
+	volume.PoolIdentity = poolID
+	volume.BackendKey = key
 	volume.NodeId = nodeId
 	volume.Path = virVolumeConfig.Target.Path
 	volume.Name = virVolumeConfig.Name
+	volume.Label = volume.Name
 	volume.Pool = poolConfig.Name
 	volume.Metadata = repo.metadata[virVolumeConfig.Target.Path]
 	if scoped, ok := repo.metadata[compute.VolumePolicyKey(nodeId, virVolumeConfig.Target.Path)]; ok {

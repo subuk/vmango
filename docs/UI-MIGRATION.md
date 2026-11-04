@@ -97,10 +97,11 @@ logout/identity change clears private data and isolates late responses.
 
 Administration currently follows the authenticated-operator model for existing
 local, OIDC and token credentials; transport, credential-kind and origin rules
-still apply. No temporary administrator flag, roles, namespace selector or
-namespace/context headers are introduced. Namespace/RBAC support will arrive
-separately. Configuration and diagnostics do not use incoming workspace headers
-to filter data or grant access.
+still apply. Workload routes now require an explicit namespace header, and the
+UI selects it through the current tab URL. RBAC remains separate. Configuration
+and diagnostics do not use incoming workspace headers to filter data or grant
+access. Follow [namespace migration](NAMESPACES.md) before using existing
+resources, keys or templates in the new workspace.
 
 Cloud owns each image definition. Move top-level `image` blocks and `cloud.images`
 references to nested `cloud "id" { image "id" { ... } }` blocks. Copy a formerly
@@ -162,8 +163,8 @@ the current UI context. Logout revokes refresh immediately, but existing web
 JWTs remain valid until their short expiry.
 
 Personal JWTs default to 90 days; the UI offers 30/90/365 days and the API accepts
-1–365 days. They grant the owner's current application-wide resource permissions,
-without RBAC. Token management and independent console-link issuance require an
+1–365 days. Until RBAC, they can operate in any explicitly selected configured
+namespace, with the same namespace/cloud and graph checks as web sessions. Token management and independent console-link issuance require an
 interactive web credential. Show a personal token once, store it in a protected
 client file/keychain or CI secret, replace it before expiry, then revoke the old
 one. Lists return only metadata and approximate last use.

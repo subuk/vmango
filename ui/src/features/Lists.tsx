@@ -1,3 +1,5 @@
+import { WorkspaceLink as RouterLink } from "../app/Workspace";
+import { useRequest } from "../app/Workspace";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,7 +12,7 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
-import { Link as RouterLink, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import {
     machineURL,
     useMachines,
@@ -21,7 +23,7 @@ import {
 } from "../api/hooks";
 import { useResourceBusy } from "../api/tasks";
 import { ResourceTasks } from "./Tasks";
-import { APIError, request } from "../api/client";
+import { APIError } from "../api/client";
 import {
     bytes,
     Confirm,
@@ -114,7 +116,13 @@ export function Machines() {
                     label="Cloud"
                     sx={{ maxWidth: 300, mb: 3 }}
                     value={cloudID}
-                    onChange={(e) => setParams({ cloud: e.target.value })}
+                    onChange={(e) =>
+                        setParams((old) => {
+                            const next = new URLSearchParams(old);
+                            next.set("cloud", e.target.value);
+                            return next;
+                        })
+                    }
                 >
                     {clouds.data.map((c) => (
                         <MenuItem key={c.id} value={c.id}>
@@ -252,6 +260,7 @@ export function MachineActions({
     vm: VM;
     full?: boolean;
 }) {
+    const request = useRequest();
     const blocked = useResourceBusy({
         kind: "machine",
         scope: vm.node,
@@ -453,7 +462,13 @@ export function Networks() {
                                     sx={{ mb: 3, maxWidth: 300 }}
                                     value={cloud ? cloudID : ""}
                                     onChange={(e) =>
-                                        setParams({ cloud: e.target.value })
+                                        setParams((old) => {
+                                            const next = new URLSearchParams(
+                                                old,
+                                            );
+                                            next.set("cloud", e.target.value);
+                                            return next;
+                                        })
                                     }
                                 >
                                     {catalogs.map((c) => (

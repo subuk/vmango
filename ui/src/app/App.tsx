@@ -1,3 +1,13 @@
+import { Assignment } from "../features/Assignment";
+import {
+    WorkspaceNavLink as NavLink,
+    WorkspaceNavigate as Navigate,
+    NamespacePicker,
+    WorkspaceBoundary,
+    useWorkspace,
+} from "./Workspace";
+import { workloadPage } from "../api/context";
+import { WorkspaceLink as RouterLink } from "../app/Workspace";
 import { lazy, Suspense, useState } from "react";
 import {
     Alert,
@@ -13,14 +23,7 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
-import {
-    Link as RouterLink,
-    NavLink,
-    Navigate,
-    Route,
-    Routes,
-    useLocation,
-} from "react-router";
+import { Route, Routes, useLocation } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppearance } from "./theme";
 import { useMe } from "./Auth";
@@ -228,6 +231,7 @@ function Shell() {
                         ))}
                     </TextField>
                 )}
+                <NamespacePicker />
                 <ThemeChoice />
                 <Button
                     onClick={(e) => setAccount(e.currentTarget)}
@@ -302,87 +306,98 @@ function Shell() {
                         {error}
                     </Alert>
                 )}
-                <TaskMonitor />
                 <Suspense
                     fallback={
                         <Typography role="status">Loading page…</Typography>
                     }
                 >
-                    <Routes>
-                        <Route
-                            path="/"
-                            element={<Navigate to="/machines/" replace />}
-                        />
-                        <Route
-                            path="/login/"
-                            element={<Navigate to="/machines/" replace />}
-                        />
-                        <Route element={<AdministrationLayout />}>
+                    <WorkspaceRoutes>
+                        <Routes>
                             <Route
-                                path="/administration/*"
-                                element={<Administration />}
+                                path="/"
+                                element={<Navigate to="/machines/" replace />}
                             />
-                            <Route path="/tasks/" element={<Tasks />} />
                             <Route
-                                path="/tasks/:id/"
-                                element={<TaskDetail />}
+                                path="/login/"
+                                element={<Navigate to="/machines/" replace />}
                             />
-                        </Route>
-                        <Route path="/machines/" element={<Machines />} />
-                        <Route
-                            path="/machines/add/"
-                            element={<CreateMachine />}
-                        />
-                        <Route
-                            path="/machines/add-advanced/"
-                            element={<Navigate to="/machines/add/" replace />}
-                        />
-                        <Route
-                            path="/machines/:cloud/:id/"
-                            element={<MachineDetail />}
-                        />
-                        <Route
-                            path="/machines/:cloud/:id/update/"
-                            element={<EditMachine />}
-                        />
-                        <Route
-                            path="/machines/:cloud/:id/console/"
-                            element={<Console />}
-                        />
-                        <Route
-                            path="/machines/:cloud/:id/vnc/"
-                            element={<Console />}
-                        />
-                        <Route path="/volumes/" element={<Volumes />} />
-                        <Route path="/networks/" element={<Networks />} />
-                        <Route path="/keys/" element={<Keys />} />
-                        <Route
-                            path="/cloud-init-templates/"
-                            element={<CloudInitTemplates />}
-                        />
-                        <Route
-                            path="/keys/:fingerprint/show/"
-                            element={<KeyDetail />}
-                        />
-                        <Route path="/tokens/" element={<Tokens />} />
-                        <Route path="/api/docs" element={<ApiDocs />} />
-                        <Route
-                            path="*"
-                            element={
-                                <>
-                                    <Typography variant="h1">
-                                        Page not found
-                                    </Typography>
-                                    <Button
-                                        component={RouterLink}
-                                        to="/machines/"
-                                    >
-                                        Open machines
-                                    </Button>
-                                </>
-                            }
-                        />
-                    </Routes>
+                            <Route element={<AdministrationLayout />}>
+                                <Route
+                                    path="/administration/*"
+                                    element={<Administration />}
+                                />
+                                <Route path="/tasks/" element={<Tasks />} />
+                                <Route
+                                    path="/tasks/:id/"
+                                    element={<TaskDetail />}
+                                />
+                            </Route>
+                            <Route path="/machines/" element={<Machines />} />
+                            <Route
+                                path="/machines/add/"
+                                element={<CreateMachine />}
+                            />
+                            <Route
+                                path="/machines/add-advanced/"
+                                element={
+                                    <Navigate to="/machines/add/" replace />
+                                }
+                            />
+                            <Route
+                                path="/machines/:cloud/:id/"
+                                element={<MachineDetail />}
+                            />
+                            <Route
+                                path="/machines/:cloud/:id/update/"
+                                element={<EditMachine />}
+                            />
+                            <Route
+                                path="/machines/:cloud/:id/console/"
+                                element={<Console />}
+                            />
+                            <Route
+                                path="/machines/:cloud/:id/vnc/"
+                                element={<Console />}
+                            />
+                            <Route
+                                path="/machines/:cloud/:id/assign/"
+                                element={<Assignment kind="machines" />}
+                            />
+                            <Route
+                                path="/volumes/:cloud/:id/assign/"
+                                element={<Assignment kind="volumes" />}
+                            />
+                            <Route path="/volumes/" element={<Volumes />} />
+                            <Route path="/networks/" element={<Networks />} />
+                            <Route path="/keys/" element={<Keys />} />
+                            <Route
+                                path="/cloud-init-templates/"
+                                element={<CloudInitTemplates />}
+                            />
+                            <Route
+                                path="/keys/:fingerprint/show/"
+                                element={<KeyDetail />}
+                            />
+                            <Route path="/tokens/" element={<Tokens />} />
+                            <Route path="/api/docs" element={<ApiDocs />} />
+                            <Route
+                                path="*"
+                                element={
+                                    <>
+                                        <Typography variant="h1">
+                                            Page not found
+                                        </Typography>
+                                        <Button
+                                            component={RouterLink}
+                                            to="/machines/"
+                                        >
+                                            Open machines
+                                        </Button>
+                                    </>
+                                }
+                            />
+                        </Routes>
+                    </WorkspaceRoutes>
                 </Suspense>
             </Box>
             <Box
@@ -399,5 +414,18 @@ function Shell() {
                 Vmango {me.version}
             </Box>
         </>
+    );
+}
+
+function WorkspaceRoutes({ children }: { children: React.ReactNode }) {
+    const { pathname } = useLocation();
+    const { namespace } = useWorkspace();
+    return workloadPage(pathname) ? (
+        <WorkspaceBoundary>
+            <TaskMonitor key={namespace} />
+            {children}
+        </WorkspaceBoundary>
+    ) : (
+        children
     );
 }

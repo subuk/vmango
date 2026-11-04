@@ -181,7 +181,11 @@ is under Administration → Clouds → Cloud; Tasks keeps its existing URLs.
 The old `/api/v1/nodes/...`, `/api/v1/hosts/...`, host-segment volume routes and
 global `/vms`, `/volumes` and `/networks` endpoints are removed without aliases. Read-only administrative diagnostics use
 `/api/v1/administration/clouds/{cloud}/hosts/...`.
-Authentication, keys and task history remain application-wide.
+Authentication remains installation/principal scoped. Workloads, SSH keys,
+cloud-init templates and workload task history require an explicit configured
+namespace. The same cloud may serve several namespaces; Administration inventory
+and history remain independent of workspace selection. See the repository
+[namespace migration guide](https://github.com/subuk/vmango/blob/master/docs/NAMESPACES.md).
 
 See [Automation API](/docs/api/) for Swagger UI, authentication and an overview
 of supported operations. The repository's

@@ -51,6 +51,8 @@ func (g VirtualMachineGraphic) Vnc() bool {
 }
 
 type VirtualMachine struct {
+	NamespaceID    NamespaceID
+	Label          string
 	Metadata       *MachineMetadata
 	Id             string
 	Name           string

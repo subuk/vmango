@@ -10,16 +10,21 @@ type VolumeMetadata struct {
 }
 
 type Volume struct {
-	Identity   string
-	NodeId     string
-	Path       string
-	Name       string
-	Size       Size
-	Pool       string
-	Format     VolumeFormat
-	AttachedTo string
-	AttachedAs DeviceType
-	Metadata   VolumeMetadata
+	OwnerVM      string
+	NamespaceID  NamespaceID
+	Label        string
+	PoolIdentity string
+	BackendKey   string
+	Identity     string
+	NodeId       string
+	Path         string
+	Name         string
+	Size         Size
+	Pool         string
+	Format       VolumeFormat
+	AttachedTo   string
+	AttachedAs   DeviceType
+	Metadata     VolumeMetadata
 }
 
 func (volume *Volume) Base() string {

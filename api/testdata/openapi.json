@@ -37,6 +37,9 @@
           "name": {
             "type": "string"
           },
+          "namespace_id": {
+            "type": "string"
+          },
           "revision": {
             "type": "string"
           }
@@ -94,6 +97,15 @@
           },
           "name": {
             "type": "string"
+          },
+          "namespace_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "networks": {
             "items": {
@@ -769,6 +781,28 @@
         ],
         "type": "object"
       },
+      "ApiAssignmentPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "machines": {
+            "items": {
+              "$ref": "#/components/schemas/ApiVM"
+            },
+            "type": "array"
+          },
+          "volumes": {
+            "items": {
+              "$ref": "#/components/schemas/ApiVolume"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "machines",
+          "volumes"
+        ],
+        "type": "object"
+      },
       "ApiAuthConfig": {
         "additionalProperties": false,
         "properties": {
@@ -1097,6 +1131,9 @@
           "name": {
             "type": "string"
           },
+          "namespace_id": {
+            "type": "string"
+          },
           "revision": {
             "type": "string"
           },
@@ -1359,6 +1396,9 @@
           "fingerprint": {
             "type": "string"
           },
+          "namespace_id": {
+            "type": "string"
+          },
           "public_key": {
             "type": "string"
           },
@@ -1444,6 +1484,11 @@
               "array",
               "null"
             ]
+          },
+          "hostname": {
+            "description": "Optional guest hostname, independent of the display label.",
+            "maxLength": 253,
+            "type": "string"
           },
           "image": {
             "type": "string"
@@ -1618,6 +1663,21 @@
           "free_pages_2m",
           "pages_1g",
           "free_pages_1g"
+        ],
+        "type": "object"
+      },
+      "ApiNamespaceList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Namespace"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -1950,6 +2010,9 @@
           "autostart": {
             "type": "boolean"
           },
+          "backend_name": {
+            "type": "string"
+          },
           "cloud": {
             "type": "string"
           },
@@ -2031,6 +2094,9 @@
           "name": {
             "type": "string"
           },
+          "namespace_id": {
+            "type": "string"
+          },
           "node": {
             "type": "string"
           },
@@ -2092,6 +2158,9 @@
           },
           "autostart": {
             "type": "boolean"
+          },
+          "backend_name": {
+            "type": "string"
           },
           "catalog": {
             "$ref": "#/components/schemas/ApiMachineCatalog"
@@ -2177,6 +2246,9 @@
           "name": {
             "type": "string"
           },
+          "namespace_id": {
+            "type": "string"
+          },
           "node": {
             "type": "string"
           },
@@ -2237,6 +2309,9 @@
           "attached_to": {
             "type": "string"
           },
+          "backend_name": {
+            "type": "string"
+          },
           "cloud": {
             "type": "string"
           },
@@ -2247,6 +2322,9 @@
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "namespace_id": {
             "type": "string"
           },
           "node": {
@@ -2336,6 +2414,9 @@
           "attached_to": {
             "type": "string"
           },
+          "backend_name": {
+            "type": "string"
+          },
           "catalog": {
             "$ref": "#/components/schemas/ApiVolumeCatalog"
           },
@@ -2349,6 +2430,9 @@
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "namespace_id": {
             "type": "string"
           },
           "node": {
@@ -2799,6 +2883,34 @@
         ],
         "type": "object"
       },
+      "Namespace": {
+        "additionalProperties": false,
+        "properties": {
+          "clouds": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "clouds"
+        ],
+        "type": "object"
+      },
       "Page": {
         "additionalProperties": false,
         "properties": {
@@ -2961,6 +3073,9 @@
           "blocks_resources": {
             "type": "boolean"
           },
+          "cloud_id": {
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "type": "string"
@@ -2992,6 +3107,9 @@
           },
           "lock_release": {
             "$ref": "#/components/schemas/Release"
+          },
+          "namespace_id": {
+            "type": "string"
           },
           "outcome_uncertain": {
             "type": "boolean"
@@ -4830,6 +4948,488 @@
         ]
       }
     },
+    "/api/v1/administration/clouds/{cloud}/machines": {
+      "get": {
+        "operationId": "administration-machines",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiMachineList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Inspect cloud machines across namespaces",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/machines/{vm}": {
+      "get": {
+        "operationId": "administration-machine",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vm",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiVMDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Inspect machine across namespaces",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/volumes": {
+      "get": {
+        "operationId": "administration-volumes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by the observed owning host; this does not select placement.",
+            "explode": false,
+            "in": "query",
+            "name": "host",
+            "schema": {
+              "description": "Filter by the observed owning host; this does not select placement.",
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "usage",
+            "schema": {
+              "enum": [
+                "attachable"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiVolumeList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Inspect cloud volumes across namespaces",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/clouds/{cloud}/volumes/{volume}": {
+      "get": {
+        "operationId": "administration-volume",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "volume",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiVolumeDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Inspect volume across namespaces",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
     "/api/v1/administration/configuration": {
       "get": {
         "operationId": "get-administration-configuration",
@@ -4926,6 +5526,506 @@
           }
         },
         "summary": "Read the accepted installation configuration",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/configuration/namespaces": {
+      "get": {
+        "operationId": "administration-namespaces",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiNamespaceList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Inspect configured namespaces",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/configuration/namespaces/{namespace}": {
+      "get": {
+        "operationId": "administration-namespace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Namespace"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Inspect namespace configuration",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/tasks": {
+      "get": {
+        "operationId": "administration-tasks",
+        "parameters": [
+          {
+            "description": "Comma-separated lifecycle states.",
+            "explode": false,
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "description": "Comma-separated lifecycle states.",
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "resource_kind",
+            "schema": {
+              "enum": [
+                "machine",
+                "volume",
+                "cloud",
+                "machine-request"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "resource_scope",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Machine identifier or backend volume path, matching task resource references.",
+            "explode": false,
+            "in": "query",
+            "name": "resource_id",
+            "schema": {
+              "description": "Machine identifier or backend volume path, matching task resource references.",
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "blocking",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Opaque next cursor from the preceding page.",
+            "explode": false,
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "description": "Opaque next cursor from the preceding page.",
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 25,
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Inspect task history across namespaces",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/administration/tasks/{task}": {
+      "get": {
+        "operationId": "administration-task",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Inspect a task across namespaces",
         "tags": [
           "administration"
         ]
@@ -5119,6 +6219,18 @@
     "/api/v1/cloud-init-templates": {
       "get": {
         "operationId": "list-cloud-init-templates",
+        "parameters": [
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -5221,6 +6333,18 @@
       },
       "post": {
         "operationId": "create-cloud-init-template",
+        "parameters": [
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5341,6 +6465,16 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -5454,6 +6588,16 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -5562,6 +6706,16 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -5677,6 +6831,18 @@
     "/api/v1/clouds": {
       "get": {
         "operationId": "list-clouds",
+        "parameters": [
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -5789,6 +6955,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -5898,6 +7074,16 @@
             "name": "cloud",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -6019,6 +7205,16 @@
             "name": "cloud",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -6180,6 +7376,16 @@
               "description": "Explicit opt-in to deleting attached disks.",
               "type": "boolean"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -6303,6 +7509,16 @@
             "required": true,
             "schema": {
               "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -6434,6 +7650,16 @@
             "name": "vm",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -6584,6 +7810,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -6691,6 +7927,284 @@
         ]
       }
     },
+    "/api/v1/clouds/{cloud}/machines/{vm}/assign": {
+      "post": {
+        "operationId": "assign-machine",
+        "parameters": [
+          {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vm",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTaskReference"
+                }
+              }
+            },
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Assign an unassigned machine graph to selected namespace",
+        "tags": [
+          "clouds"
+        ]
+      }
+    },
+    "/api/v1/clouds/{cloud}/machines/{vm}/assign/preview": {
+      "post": {
+        "operationId": "preview-machine-assignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vm",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiAssignmentPreview"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Preview complete namespace assignment graph",
+        "tags": [
+          "clouds"
+        ]
+      }
+    },
     "/api/v1/clouds/{cloud}/machines/{vm}/consoles/{kind}/links": {
       "post": {
         "operationId": "create-console-link",
@@ -6720,6 +8234,16 @@
                 "serial",
                 "vnc"
               ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -6834,7 +8358,7 @@
     },
     "/api/v1/clouds/{cloud}/machines/{vm}/consoles/{kind}/ws": {
       "get": {
-        "description": "Console protocol v1\nNative clients: GET /api/v1/clouds/{cloud}/machines/{vm}/consoles/{serial|vnc}/ws\nSend Authorization: Bearer TOKEN on the WebSocket handshake over WSS.\nAccess-token expiry closes the stream; reconnect with a valid token.\nRevoking a personal token through the API closes its active streams.\nThe optional WebSocket subprotocol is binary. Each binary message carries raw\nserial bytes or VNC/RFB bytes; message boundaries are not protocol boundaries.\nMessages are limited to 1 MiB. Text messages close with code 1003. EOF or either\nside disconnecting closes both transports. A slow WebSocket writer is closed\nafter 15 seconds. Errors before upgrade use application/problem+json.\nSerial returns 409 when occupied; ?force=true explicitly takes over. VNC uses\nshared-client mode in the browser; the backend controls shared-client support.\nBrowser links use /console/{cloud}/{vm}/{kind}#TOKEN. The public page is an empty\nclient shell. TOKEN is sent only as a vmango.token.TOKEN WebSocket subprotocol,\nalongside binary; only binary is selected by the server. Never log that header.\nThe token authorizes only its bound console. It cannot access the API or UI.\nLinks are reusable until their absolute expiry; existing streams close then\n(code 1008 when deliverable). Reconnection does not extend the expiry.\nKey rotation rejects subsequent handshakes; it does not terminate active streams\nbefore their original expiry. Individual link revocation is not supported.\n",
+        "description": "Console protocol v1\nNative clients: GET /api/v1/clouds/{cloud}/machines/{vm}/consoles/{serial|vnc}/ws\nSend Authorization: Bearer TOKEN and exactly one X-Vmango-Namespace header\non the WebSocket handshake over WSS. The namespace must admit the cloud and\nmatch the saved machine membership.\nAccess-token expiry closes the stream; reconnect with a valid token.\nRevoking a personal token through the API closes its active streams.\nThe optional WebSocket subprotocol is binary. Each binary message carries raw\nserial bytes or VNC/RFB bytes; message boundaries are not protocol boundaries.\nMessages are limited to 1 MiB. Text messages close with code 1003. EOF or either\nside disconnecting closes both transports. A slow WebSocket writer is closed\nafter 15 seconds. Errors before upgrade use application/problem+json.\nSerial returns 409 when occupied; ?force=true explicitly takes over. VNC uses\nshared-client mode in the browser; the backend controls shared-client support.\nBrowser links use /console/{cloud}/{vm}/{kind}?namespace=ID#TOKEN. The public page is an empty\nclient shell. TOKEN is sent only as a vmango.token.TOKEN WebSocket subprotocol,\nalongside binary; only binary is selected by the server. Never log that header.\nThe signed token binds namespace, cloud, VM UUID and console kind. Namespace\nexistence, cloud admission and saved membership are checked again at connection.\nLegacy unbound tokens are rejected. The token cannot access the API or UI.\nLinks are reusable until their absolute expiry; existing streams close then\n(code 1008 when deliverable). Reconnection does not extend the expiry.\nKey rotation rejects subsequent handshakes; it does not terminate active streams\nbefore their original expiry. Individual link revocation is not supported.\n",
         "operationId": "connect-console",
         "parameters": [
           {
@@ -6871,6 +8395,16 @@
             "schema": {
               "default": false,
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
             }
           }
         ],
@@ -6964,6 +8498,16 @@
             "name": "vm",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -7112,6 +8656,16 @@
             "name": "vm",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -7272,6 +8826,16 @@
               "description": "Volume ID, not the guest device name.",
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -7408,6 +8972,16 @@
             "name": "vm",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -7556,6 +9130,16 @@
             "name": "vm",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -7714,6 +9298,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -7853,6 +9447,16 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -7972,6 +9576,16 @@
             "name": "cloud",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -8122,6 +9736,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -8246,6 +9870,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -8346,6 +9980,283 @@
         ]
       }
     },
+    "/api/v1/clouds/{cloud}/volumes/{volume}/assign": {
+      "post": {
+        "operationId": "assign-volume",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Reuse the same key and equivalent command to recover a lost response. Keys are scoped to the authenticated principal and retained with task history.",
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "volume",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTaskReference"
+                }
+              }
+            },
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Assign an unassigned detached volume to selected namespace",
+        "tags": [
+          "clouds"
+        ]
+      }
+    },
+    "/api/v1/clouds/{cloud}/volumes/{volume}/assign/preview": {
+      "post": {
+        "operationId": "preview-volume-assignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cloud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "volume",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiAssignmentPreview"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Preview namespace assignment for a detached volume",
+        "tags": [
+          "clouds"
+        ]
+      }
+    },
     "/api/v1/clouds/{cloud}/volumes/{volume}/clone": {
       "post": {
         "operationId": "clone-volume",
@@ -8375,6 +10286,16 @@
             "name": "volume",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -8525,6 +10446,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -8645,6 +10576,18 @@
     "/api/v1/keys": {
       "get": {
         "operationId": "list-keys",
+        "parameters": [
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -8747,6 +10690,18 @@
       },
       "post": {
         "operationId": "add-key",
+        "parameters": [
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -8866,6 +10821,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -8966,6 +10931,16 @@
             "name": "fingerprint",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -9169,6 +11144,228 @@
         ]
       }
     },
+    "/api/v1/namespaces": {
+      "get": {
+        "operationId": "list-namespaces",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiNamespaceList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Discover configured workload namespaces",
+        "tags": [
+          "namespaces"
+        ]
+      }
+    },
+    "/api/v1/namespaces/{namespace}": {
+      "get": {
+        "operationId": "get-namespace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Namespace"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Read selected namespace",
+        "tags": [
+          "namespaces"
+        ]
+      }
+    },
     "/api/v1/tasks": {
       "get": {
         "operationId": "list-tasks",
@@ -9244,6 +11441,16 @@
               "maximum": 100,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
             }
           }
         ],
@@ -9355,6 +11562,16 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }
@@ -9469,6 +11686,16 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -9579,6 +11806,16 @@
             "required": true,
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Explicit configured namespace; exactly one value is required.",
+            "in": "header",
+            "name": "X-Vmango-Namespace",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
               "type": "string"
             }
           }

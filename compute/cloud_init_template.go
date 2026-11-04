@@ -14,11 +14,12 @@ const MaxCloudInitUserDataBytes = 256 << 10
 // CloudInitTemplate is a reusable user-data document. Revision identifies the
 // complete saved document, so a caller can apply exactly the version it viewed.
 type CloudInitTemplate struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	UserData    string `json:"user_data"`
-	Revision    string `json:"revision"`
+	NamespaceID NamespaceID `json:"namespace_id,omitempty"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	UserData    string      `json:"user_data"`
+	Revision    string      `json:"revision"`
 }
 
 type CloudInitTemplateInput struct {
@@ -40,7 +41,46 @@ type CloudInitTemplateRepository interface {
 	Delete(id, revision string) error
 }
 
-type CloudInitTemplateService struct{ repo CloudInitTemplateRepository }
+// NamespaceCloudInitTemplateRepository returns a namespace-only catalog view.
+type NamespaceCloudInitTemplateRepository interface {
+	Templates(namespace NamespaceID) (CloudInitTemplateRepository, error)
+}
+
+type CloudInitTemplateService struct {
+	repo       CloudInitTemplateRepository
+	scoped     NamespaceCloudInitTemplateRepository
+	namespaces *NamespaceService
+	namespace  NamespaceID
+}
+
+func NewNamespaceCloudInitTemplateService(repo NamespaceCloudInitTemplateRepository, namespaces *NamespaceService) *CloudInitTemplateService {
+	return &CloudInitTemplateService{scoped: repo, namespaces: namespaces}
+}
+
+func (s *CloudInitTemplateService) ForNamespace(id NamespaceID) (*CloudInitTemplateService, error) {
+	if s == nil || s.scoped == nil || s.namespaces == nil {
+		return nil, ErrUnavailable
+	}
+	if _, err := s.namespaces.Get(id); err != nil {
+		return nil, err
+	}
+	repo, err := s.scoped.Templates(id)
+	if err != nil {
+		return nil, err
+	}
+	return &CloudInitTemplateService{repo: repo, scoped: s.scoped, namespaces: s.namespaces, namespace: id}, nil
+}
+
+func (s *CloudInitTemplateService) check() error {
+	if s == nil || s.repo == nil {
+		return ErrUnavailable
+	}
+	if s.namespaces != nil {
+		_, err := s.namespaces.Get(s.namespace)
+		return err
+	}
+	return nil
+}
 
 func NewCloudInitTemplateService(repo CloudInitTemplateRepository) *CloudInitTemplateService {
 	return &CloudInitTemplateService{repo: repo}
@@ -90,8 +130,8 @@ func validateCloudInitTemplateInput(input CloudInitTemplateInput) error {
 }
 
 func (s *CloudInitTemplateService) List() ([]CloudInitTemplate, error) {
-	if s == nil || s.repo == nil {
-		return nil, ErrUnavailable
+	if err := s.check(); err != nil {
+		return nil, err
 	}
 	list, err := s.repo.List()
 	if err != nil {
@@ -113,8 +153,8 @@ func (s *CloudInitTemplateService) Get(id string) (CloudInitTemplate, error) {
 	if !validCloudInitTemplateID(id) {
 		return CloudInitTemplate{}, invalid("id", "Select a valid cloud-init template.")
 	}
-	if s == nil || s.repo == nil {
-		return CloudInitTemplate{}, ErrUnavailable
+	if err := s.check(); err != nil {
+		return CloudInitTemplate{}, err
 	}
 	return s.repo.Get(id)
 }
@@ -123,10 +163,10 @@ func (s *CloudInitTemplateService) Create(input CloudInitTemplateInput) (CloudIn
 	if err := validateCloudInitTemplateInput(input); err != nil {
 		return CloudInitTemplate{}, err
 	}
-	if s == nil || s.repo == nil {
-		return CloudInitTemplate{}, ErrUnavailable
+	if err := s.check(); err != nil {
+		return CloudInitTemplate{}, err
 	}
-	template := CloudInitTemplate{ID: uuid.NewString(), Name: strings.TrimSpace(input.Name), Description: input.Description, UserData: input.UserData, Revision: uuid.NewString()}
+	template := CloudInitTemplate{NamespaceID: s.namespace, ID: uuid.NewString(), Name: strings.TrimSpace(input.Name), Description: input.Description, UserData: input.UserData, Revision: uuid.NewString()}
 	if err := s.repo.Create(template); err != nil {
 		return CloudInitTemplate{}, err
 	}
@@ -140,10 +180,10 @@ func (s *CloudInitTemplateService) Update(id, revision string, input CloudInitTe
 	if err := validateCloudInitTemplateInput(input); err != nil {
 		return CloudInitTemplate{}, err
 	}
-	if s == nil || s.repo == nil {
-		return CloudInitTemplate{}, ErrUnavailable
+	if err := s.check(); err != nil {
+		return CloudInitTemplate{}, err
 	}
-	template := CloudInitTemplate{ID: id, Name: strings.TrimSpace(input.Name), Description: input.Description, UserData: input.UserData, Revision: uuid.NewString()}
+	template := CloudInitTemplate{NamespaceID: s.namespace, ID: id, Name: strings.TrimSpace(input.Name), Description: input.Description, UserData: input.UserData, Revision: uuid.NewString()}
 	if err := s.repo.Update(template, revision); err != nil {
 		return CloudInitTemplate{}, err
 	}
@@ -154,8 +194,8 @@ func (s *CloudInitTemplateService) Delete(id, revision string) error {
 	if err := validateCloudInitTemplateRef(id, revision); err != nil {
 		return err
 	}
-	if s == nil || s.repo == nil {
-		return ErrUnavailable
+	if err := s.check(); err != nil {
+		return err
 	}
 	return s.repo.Delete(id, revision)
 }

@@ -90,7 +90,11 @@ export function ApiDocs() {
             <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
                 <Typography color="text.secondary">
                     Authenticated with your browser session. Personal tokens use
-                    Authorization: Bearer for CLI/CI.
+                    Authorization: Bearer for CLI/CI. Workload operations
+                    require an explicit X-Vmango-Namespace header; discover
+                    available namespaces with GET /api/v1/namespaces.
+                    Administration requests are independent of workspace
+                    selection.
                 </Typography>
                 <Link
                     href="/api/console-protocol"

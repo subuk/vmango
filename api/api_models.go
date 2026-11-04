@@ -39,13 +39,15 @@ type apiConfiguredKey struct {
 }
 
 type apiVM struct {
-	Cloud              string `json:"cloud"`
-	Zone               string `json:"zone"`
-	InstanceType       string `json:"instance_type"`
-	Image              string `json:"image"`
-	Managed            bool   `json:"managed"`
-	CPURequest         int    `json:"cpu_request"`
-	MemoryRequestBytes uint64 `json:"memory_request_bytes"`
+	NamespaceID        compute.NamespaceID `json:"namespace_id,omitempty"`
+	BackendName        string              `json:"backend_name,omitempty"`
+	Cloud              string              `json:"cloud"`
+	Zone               string              `json:"zone"`
+	InstanceType       string              `json:"instance_type"`
+	Image              string              `json:"image"`
+	Managed            bool                `json:"managed"`
+	CPURequest         int                 `json:"cpu_request"`
+	MemoryRequestBytes uint64              `json:"memory_request_bytes"`
 
 	Node           string              `json:"node"`
 	ID             string              `json:"id"`
@@ -130,10 +132,12 @@ func (n apiInterface) domain() *compute.VirtualMachineAttachedInterface {
 }
 
 type apiVolume struct {
-	Cloud        string `json:"cloud"`
-	Zone         string `json:"zone"`
-	StorageClass string `json:"storage_class"`
-	Owned        bool   `json:"owned"`
+	NamespaceID  compute.NamespaceID `json:"namespace_id,omitempty"`
+	BackendName  string              `json:"backend_name,omitempty"`
+	Cloud        string              `json:"cloud"`
+	Zone         string              `json:"zone"`
+	StorageClass string              `json:"storage_class"`
+	Owned        bool                `json:"owned"`
 
 	ID         string `json:"id"`
 	Node       string `json:"node"`
@@ -162,6 +166,10 @@ type apiImageDefaults struct {
 
 func (e *Environ) machineDTO(vm *compute.VirtualMachine) apiVM {
 	d := vmDTO(vm)
+	d.NamespaceID, d.BackendName = vm.NamespaceID, vm.Name
+	if vm.Label != "" {
+		d.Name = vm.Label
+	}
 	d.Managed = e.clouds == nil || vm.Metadata != nil
 	if vm.Metadata != nil {
 		m := vm.Metadata
@@ -187,6 +195,10 @@ func (e *Environ) machineDTO(vm *compute.VirtualMachine) apiVM {
 }
 func (e *Environ) volumeDTO(v *compute.Volume) apiVolume {
 	d := volumeDTO(v)
+	d.NamespaceID, d.BackendName = v.NamespaceID, v.Name
+	if v.Label != "" {
+		d.Name = v.Label
+	}
 	if e.clouds == nil {
 		d.Owned = true
 		return d
@@ -197,9 +209,7 @@ func (e *Environ) volumeDTO(v *compute.Volume) apiVolume {
 		d.StorageClass = o.StorageClass
 	}
 	if c, h, err := e.clouds.ForNode(v.NodeId); err == nil {
-		if d.Cloud == "" {
-			d.Cloud = c.ID
-		}
+		d.Cloud = c.ID
 		d.Zone = h.Zone
 	}
 	return d

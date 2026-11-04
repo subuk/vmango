@@ -20,6 +20,7 @@ type VirtualMachineManagerNodeSettings struct {
 }
 
 type VirtualMachineManagerClonedVolumeParams struct {
+	Label               string
 	Cloud, StorageClass string
 	ImageID             string
 	OriginalPath        string
@@ -33,6 +34,7 @@ type VirtualMachineManagerClonedVolumeParams struct {
 }
 
 type VirtualMachineManagerCreatedVolumeParams struct {
+	Label string
 	// ImageDisk marks required image disks in the accepted creation snapshot.
 	ImageDisk           bool `json:",omitempty"`
 	Cloud, StorageClass string
@@ -48,7 +50,8 @@ type VirtualMachineManagerCreatedVolumeParams struct {
 type VirtualMachineManager struct {
 	creationBindings map[string]json.RawMessage
 	Clouds           *CloudService
-	createMu         sync.Mutex
+	createMu         *sync.Mutex
+	createOnce       sync.Once
 	images           *ImageService
 	vms              *VirtualMachineService
 	volumes          *VolumeService
@@ -59,6 +62,7 @@ type VirtualMachineManager struct {
 func NewVirtualMachineManager(vms *VirtualMachineService, volumes *VolumeService, epub EventPublisher, settings map[string]VirtualMachineManagerNodeSettings, images *ImageService) *VirtualMachineManager {
 	return &VirtualMachineManager{
 		images:   images,
+		createMu: &sync.Mutex{},
 		vms:      vms,
 		volumes:  volumes,
 		epub:     epub,
@@ -66,8 +70,19 @@ func NewVirtualMachineManager(vms *VirtualMachineService, volumes *VolumeService
 	}
 }
 
+func (m *VirtualMachineManager) coordinationLock() *sync.Mutex {
+	m.createOnce.Do(func() {
+		if m.createMu == nil {
+			m.createMu = &sync.Mutex{}
+		}
+	})
+	return m.createMu
+}
+
 func (m *VirtualMachineManager) withImages(images *ImageService) *VirtualMachineManager {
-	return NewVirtualMachineManager(m.vms, m.volumes, m.epub, m.settings, images)
+	bound := NewVirtualMachineManager(m.vms, m.volumes, m.epub, m.settings, images)
+	bound.createMu = m.coordinationLock()
+	return bound
 }
 
 func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool) error {
@@ -78,7 +93,7 @@ func (manager *VirtualMachineManager) AttachVolume(id, node string, disk *Virtua
 	if disk == nil {
 		return ErrInvalid
 	}
-	manager.createMu.Lock()
+	manager.coordinationLock().Lock()
 	defer manager.createMu.Unlock()
 	if err := manager.volumes.ValidateAttachable(disk.Path, node, manager.images); err != nil {
 		return err
@@ -134,10 +149,10 @@ func (manager *VirtualMachineManager) PrepareCreation(vm *VirtualMachine, cloneV
 		}
 	}
 	for _, p := range newVols {
-		if err := validateVolumeCreate(VolumeCreateParams{NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}); err != nil {
+		if err := validateVolumeCreate(VolumeCreateParams{NamespaceID: vm.NamespaceID, Label: p.Label, NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}); err != nil {
 			return nil, nil, err
 		}
-		if err := manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}); err != nil {
+		if err := manager.volumes.ValidateCreate(VolumeCreateParams{NamespaceID: vm.NamespaceID, Label: p.Label, NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -148,7 +163,7 @@ func (manager *VirtualMachineManager) PrepareCreation(vm *VirtualMachine, cloneV
 }
 
 func (manager *VirtualMachineManager) CreateWithImageDefaults(vm *VirtualMachine, cloneVols []VirtualMachineManagerClonedVolumeParams, newVols []VirtualMachineManagerCreatedVolumeParams, start bool, overrides ImageDefaults) error {
-	manager.createMu.Lock()
+	manager.coordinationLock().Lock()
 	defer manager.createMu.Unlock()
 	vm, cloneVols, err := manager.PrepareCreation(vm, cloneVols, newVols, overrides)
 	if err != nil {
@@ -197,17 +212,17 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 				}
 			}
 			for _, disk := range cloneVols {
-				if err := manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Pool: disk.NewPool, Name: disk.NewName, Size: disk.NewSize, Format: disk.NewFormat}); err != nil {
+				if err := manager.volumes.ValidateCreate(VolumeCreateParams{NamespaceID: vm.NamespaceID, Label: disk.Label, NodeId: vm.NodeId, Pool: disk.NewPool, Name: disk.NewName, Size: disk.NewSize, Format: disk.NewFormat}); err != nil {
 					return err
 				}
 			}
 			for _, disk := range newVols {
-				if err := manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Pool: disk.Pool, Name: disk.Name, Size: disk.Size, Format: disk.Format}); err != nil {
+				if err := manager.volumes.ValidateCreate(VolumeCreateParams{NamespaceID: vm.NamespaceID, Label: disk.Label, NodeId: vm.NodeId, Pool: disk.Pool, Name: disk.Name, Size: disk.Size, Format: disk.Format}); err != nil {
 					return err
 				}
 			}
 			if vm.Config != nil {
-				return manager.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Pool: settings.CdPool, Name: vm.Name + settings.CdSuffix, Format: VolumeFormatIso})
+				return manager.volumes.ValidateCreate(VolumeCreateParams{OwnerVM: vm.Id, NodeId: vm.NodeId, Pool: settings.CdPool, Name: vm.Name + settings.CdSuffix, Format: VolumeFormatIso})
 			}
 			return nil
 		}); err != nil {
@@ -215,7 +230,7 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 		}
 	}
 	for _, p := range cloneVols {
-		params := VolumeCloneParams{Cloud: p.Cloud, StorageClass: p.StorageClass, NodeId: vm.NodeId, Format: p.NewFormat, OriginalPath: p.OriginalPath, NewName: p.NewName, NewPool: p.NewPool, NewSize: p.NewSize}
+		params := VolumeCloneParams{NamespaceID: vm.NamespaceID, Label: p.Label, Cloud: p.Cloud, StorageClass: p.StorageClass, NodeId: vm.NodeId, Format: p.NewFormat, OriginalPath: p.OriginalPath, NewName: p.NewName, NewPool: p.NewPool, NewSize: p.NewSize}
 		if err := stage("clone-volume", vmRef, true, func() error {
 			verifiedManaged := false
 			if p.ImageID != "" && manager.images != nil {
@@ -246,7 +261,7 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 		}
 	}
 	for _, p := range newVols {
-		params := VolumeCreateParams{Cloud: p.Cloud, StorageClass: p.StorageClass, NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}
+		params := VolumeCreateParams{NamespaceID: vm.NamespaceID, Label: p.Label, Cloud: p.Cloud, StorageClass: p.StorageClass, NodeId: vm.NodeId, Name: p.Name, Pool: p.Pool, Format: p.Format, Size: p.Size}
 		if err := stage("create-volume", vmRef, true, func() error {
 			volume, err := manager.volumes.Create(params)
 			if err != nil {
@@ -308,7 +323,7 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 		var cdVolume *Volume
 		if err := stage("create-config-drive", vmRef, true, func() error {
 			var err error
-			cdVolume, err = manager.volumes.Create(VolumeCreateParams{NodeId: vm.NodeId, Name: vm.Name + settings.CdSuffix, Pool: settings.CdPool, Format: VolumeFormatIso, Size: NewSize(uint64(cdLen), SizeUnitB)})
+			cdVolume, err = manager.volumes.Create(VolumeCreateParams{OwnerVM: vm.Id, NodeId: vm.NodeId, Name: vm.Name + settings.CdSuffix, Pool: settings.CdPool, Format: VolumeFormatIso, Size: NewSize(uint64(cdLen), SizeUnitB)})
 			if err != nil {
 				return err
 			}

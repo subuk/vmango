@@ -19,6 +19,8 @@ import (
 var AppVersion string
 
 type Environ struct {
+	namespaces         *compute.NamespaceService
+	workloads          *compute.WorkloadService
 	administration     *compute.AdministrationService
 	clouds             *compute.CloudService
 	cloudInitTemplates *compute.CloudInitTemplateService
@@ -41,6 +43,8 @@ type Environ struct {
 
 // Services contains optional application services supplied by bootstrap.
 type Services struct {
+	Workloads          *compute.WorkloadService
+	Namespaces         *compute.NamespaceService
 	Administration     *compute.AdministrationService
 	CloudInitTemplates *compute.CloudInitTemplateService
 }
@@ -74,8 +78,20 @@ func New(cfg *config.Config, logger zerolog.Logger,
 		env.clouds = vmanager.Clouds
 	}
 	if len(services) > 0 {
+		env.workloads = services[0].Workloads
+		env.namespaces = services[0].Namespaces
 		env.administration = services[0].Administration
 		env.cloudInitTemplates = services[0].CloudInitTemplates
+	}
+	if env.namespaces == nil {
+		definitions, err := cfg.NamespaceDefinitions()
+		if err != nil {
+			return nil, err
+		}
+		env.namespaces, err = compute.NewNamespaceService(definitions)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if env.administration == nil {
 		snapshot, err := cfg.AdministrationSnapshot(AppVersion)
@@ -84,6 +100,7 @@ func New(cfg *config.Config, logger zerolog.Logger,
 		}
 		env.administration = compute.NewAdministrationService(snapshot, nil)
 	}
+	env.administration = env.administration.WithNamespaces(env.namespaces)
 	if cfg.API.Oidc.ClientId != "" {
 		provider, err := oidc.NewProvider(context.Background(), cfg.API.Oidc.IssuerUrl)
 		if err != nil {

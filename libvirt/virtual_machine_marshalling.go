@@ -117,6 +117,13 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	vm.Metadata = metadata
 	vm.Id = domainConfig.UUID
 	vm.Name = domainConfig.Name
+	vm.NamespaceID, vm.Label, err = readWorkloadMetadata(domainConfig)
+	if err != nil {
+		return nil, err
+	}
+	if vm.Label == "" {
+		vm.Label = vm.Name
+	}
 	vm.VCpus = int(domainConfig.VCPU.Value)
 	vm.Memory = ComputeSizeFromLibvirtSize(domainConfig.Memory.Unit, uint64(domainConfig.Memory.Value))
 	vm.Firmware = domainConfig.OS.Firmware

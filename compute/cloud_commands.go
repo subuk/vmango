@@ -328,6 +328,21 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 			return err
 		}
 		resolved.CloudID = cloud.ID
+		resolved.NamespaceID, resolved.Label = c.NamespaceID, c.Label
+		resolved.Machine.NamespaceID, resolved.Machine.Label = c.NamespaceID, c.Label
+		if c.CreateSpec.Hostname != "" && resolved.Machine.Config != nil {
+			resolved.Machine.Config.Hostname = c.CreateSpec.Hostname
+		}
+		for i := range resolved.Clones {
+			if c.Label != "" {
+				resolved.Clones[i].Label = c.Label + "_" + resolved.Clones[i].Alias
+			}
+		}
+		for i := range resolved.NewVolumes {
+			if c.Label != "" {
+				resolved.NewVolumes[i].Label = c.Label + "_" + resolved.NewVolumes[i].Alias
+			}
+		}
 		resolved.Catalog = &cloud
 		resolved.AcceptedScopes = c.AcceptedScopes
 		if resolved.Machine.Config != nil {
@@ -367,7 +382,7 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 			return invalid("storage_class", "No host has the selected storage class and sufficient capacity.")
 		}
 		b := selected.Storage[v.StorageClass]
-		resolved := InfrastructureCommand{CloudID: cloud.ID, Catalog: &cloud, AcceptedScopes: c.AcceptedScopes, Node: selected.Node, StorageClass: v.StorageClass, CreateVolume: &VolumeCreateParams{NodeId: selected.Node, Name: v.Name, Pool: b.Pool, Size: NewSize(v.SizeBytes, SizeUnitB), Format: b.Format, Cloud: cloud.ID, StorageClass: v.StorageClass}}
+		resolved := InfrastructureCommand{NamespaceID: c.NamespaceID, Label: c.Label, CloudID: cloud.ID, Catalog: &cloud, AcceptedScopes: c.AcceptedScopes, Node: selected.Node, StorageClass: v.StorageClass, CreateVolume: &VolumeCreateParams{NodeId: selected.Node, Name: v.Name, Pool: b.Pool, Size: NewSize(v.SizeBytes, SizeUnitB), Format: b.Format, Cloud: cloud.ID, StorageClass: v.StorageClass}}
 		prepared, err := h.Prepare(NewCommand("volume.create", resolved))
 		if err != nil {
 			return err
@@ -398,7 +413,7 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 				}
 			}
 		}
-		params := VolumeCreateParams{NodeId: c.Node, Name: vm.Name + "_" + d.Name, Pool: b.Pool, Format: b.Format, Size: NewSize(d.SizeBytes, SizeUnitB), Cloud: cloud.ID, StorageClass: d.StorageClass}
+		params := VolumeCreateParams{NamespaceID: c.NamespaceID, Label: d.Name, NodeId: c.Node, Name: vm.Name + "_" + d.Name, Pool: b.Pool, Format: b.Format, Size: NewSize(d.SizeBytes, SizeUnitB), Cloud: cloud.ID, StorageClass: d.StorageClass}
 		path, err := h.Volumes.ResolvePath(c.Node, b.Pool, params.Name)
 		if err != nil {
 			return err
@@ -409,7 +424,15 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		var volume *Volume
 		if err = p.Stage("create-volume", &ref, true, func() error {
 			var err error
-			volume, err = h.Volumes.Create(params)
+			volumes := h.Volumes
+			if h.Workloads != nil {
+				_, _, scoped, scopeErr := h.Workloads.Bind(WorkloadContext{Namespace: c.NamespaceID, Cloud: c.CloudID}, h.Manager)
+				if scopeErr != nil {
+					return scopeErr
+				}
+				volumes = scoped
+			}
+			volume, err = volumes.Create(params)
 			if err != nil {
 				return err
 			}
@@ -425,7 +448,15 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 			}
 		}
 		return p.Stage("attach-disk", &ref, true, func() error {
-			if err := h.Manager.AttachVolume(c.VM, c.Node, &VirtualMachineAttachedVolume{Path: volume.Path, Alias: d.Name, DeviceType: DeviceTypeDisk, DeviceBus: bus}); err != nil {
+			manager := h.Manager
+			if h.Workloads != nil {
+				scoped, _, _, scopeErr := h.Workloads.Bind(WorkloadContext{Namespace: c.NamespaceID, Cloud: c.CloudID}, h.Manager)
+				if scopeErr != nil {
+					return scopeErr
+				}
+				manager = scoped
+			}
+			if err := manager.AttachVolume(c.VM, c.Node, &VirtualMachineAttachedVolume{Path: volume.Path, Alias: d.Name, DeviceType: DeviceTypeDisk, DeviceBus: bus}); err != nil {
 				return err
 			}
 			return p.Effect(VolumeRef(c.Node, volume.Path), "attached")
@@ -446,6 +477,14 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 			return ErrUnavailable
 		}
 		return p.Stage("adopt-machine", &ref, true, func() error {
+			if h.Workloads != nil {
+				if c.Assignment == nil {
+					return ErrInvalid
+				}
+				if err := h.Workloads.ApplyAssignmentWithEffects(*c.Assignment, p.Effect); err != nil {
+					return err
+				}
+			}
 			if err := backend.Adopt(c.VM, c.Node, m); err != nil {
 				return err
 			}
@@ -488,6 +527,14 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		return nil
 	}); err != nil {
 		return err
+	}
+	if h.Workloads != nil {
+		local := *h
+		_, local.VMs, _, err = h.Workloads.Bind(WorkloadContext{Namespace: c.NamespaceID, Cloud: c.CloudID}, h.Manager)
+		if err != nil {
+			return err
+		}
+		h = &local
 	}
 	return p.Stage("change-instance-type", &ref, true, func() error {
 		current, err := h.VMs.Get(c.VM, c.Node)

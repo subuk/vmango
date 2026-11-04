@@ -1,3 +1,10 @@
+import {
+    AdministrationInventory,
+    AdministrationTasks,
+    NamespaceConfiguration,
+} from "./AdministrationInventory";
+import { TaskDetail } from "./Tasks";
+import { WorkspaceLink as RouterLink } from "../app/Workspace";
 import type { ReactNode } from "react";
 import {
     Alert,
@@ -11,13 +18,7 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
-import {
-    Link as RouterLink,
-    Route,
-    Routes,
-    useParams,
-    useSearchParams,
-} from "react-router";
+import { Route, Routes, useParams, useSearchParams } from "react-router";
 import {
     adminCloudPath,
     adminCloudURL,
@@ -68,6 +69,19 @@ export function Administration() {
         <>
             <Routes>
                 <Route index element={<AdministrationOverview />} />
+                <Route
+                    path="configuration/namespaces/"
+                    element={<NamespaceConfiguration />}
+                />
+                <Route
+                    path="configuration/namespaces/:namespace/"
+                    element={<NamespaceConfiguration />}
+                />
+                <Route path="tasks/" element={<AdministrationTasks />} />
+                <Route
+                    path="tasks/:id/"
+                    element={<TaskDetail administration />}
+                />
                 <Route path="configuration/" element={<InstallationPage />} />
                 <Route
                     path="clouds/"
@@ -245,7 +259,7 @@ function AdministrationOverview() {
                                     </Typography>
                                     <Button
                                         component={RouterLink}
-                                        to="/tasks/"
+                                        to="/administration/tasks/"
                                         sx={{ mt: 2 }}
                                     >
                                         Open task history
@@ -370,6 +384,26 @@ function CloudPages({ snapshot }: { snapshot?: string }) {
                         {link(adminCloudURL(c.id), c.name)}
                     </Breadcrumbs>
                     <Routes>
+                        <Route
+                            path="machines/"
+                            element={
+                                <AdministrationInventory kind="machines" />
+                            }
+                        />
+                        <Route
+                            path="machines/:id/"
+                            element={
+                                <AdministrationInventory kind="machines" />
+                            }
+                        />
+                        <Route
+                            path="volumes/"
+                            element={<AdministrationInventory kind="volumes" />}
+                        />
+                        <Route
+                            path="volumes/:id/"
+                            element={<AdministrationInventory kind="volumes" />}
+                        />
                         <Route
                             index
                             element={
@@ -512,6 +546,22 @@ function CloudOverview({
                         ],
                     ]}
                 />
+            </DetailSection>
+            <DetailSection title="Admitted namespaces">
+                <Stack spacing={1}>
+                    {c.namespace_ids?.map((id) => (
+                        <Link
+                            key={id}
+                            component={RouterLink}
+                            to={`/administration/configuration/namespaces/${encodeURIComponent(id)}/`}
+                        >
+                            {id}
+                        </Link>
+                    ))}
+                    {!c.namespace_ids?.length && (
+                        <Typography>No namespaces admit this cloud.</Typography>
+                    )}
+                </Stack>
             </DetailSection>
         </>
     );
@@ -1062,7 +1112,14 @@ function ImageDetail({
                                     ["Artifact format", i.source.format],
                                     ["Archive format", i.source.archive_format],
                                     ["Archive member", i.source.archive_member],
-                                    ["Declared extracted size", i.source.extracted_size_bytes ? bytes(i.source.extracted_size_bytes) : undefined],
+                                    [
+                                        "Declared extracted size",
+                                        i.source.extracted_size_bytes
+                                            ? bytes(
+                                                  i.source.extracted_size_bytes,
+                                              )
+                                            : undefined,
+                                    ],
                                     [
                                         "Declared source size",
                                         i.source.size_bytes

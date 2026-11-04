@@ -33,10 +33,11 @@ func (e *Execution) Protect(refs []ResourceRef) error {
 		e.persistenceFailed = true
 		return err
 	}
+	namespace := store.Records[e.id].Task.NamespaceID
 	delete(store.Records, e.id)
 	locks := e.service.lockRefs(refs)
 	if c := conflict(store, locks); c != nil {
-		return c
+		return scopedConflict(store, c, namespace)
 	}
 	err = e.service.change(e.id, func(rec *Record) error {
 		rec.Task.Resources = unique(append(rec.Task.Resources, refs...))

@@ -69,11 +69,17 @@ it("creates a template preserving user-data exactly", async () => {
         within(dialog).getByRole("button", { name: "Add template" }),
     );
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(request).toHaveBeenCalledWith(path, "POST", {
-        name: template.name,
-        description: template.description,
-        user_data: template.user_data,
-    });
+    expect(request).toHaveBeenCalledWith(
+        path,
+        "POST",
+        {
+            name: template.name,
+            description: template.description,
+            user_data: template.user_data,
+        },
+        undefined,
+        expect.objectContaining({ namespace: undefined }),
+    );
 });
 it("loads content only for an opened template and removes its cache on close", async () => {
     request.mockImplementation(async (url) =>
@@ -126,6 +132,8 @@ it("preserves edits on conflict and explicitly reloads the newer revision", asyn
         `${path}/setup`,
         "PUT",
         expect.objectContaining({ revision: "r1" }),
+        undefined,
+        expect.objectContaining({ namespace: undefined }),
     );
     latest = {
         ...template,
@@ -166,7 +174,13 @@ it("deletes with the listed revision and refreshes the catalog", async () => {
         screen.getByRole("button", { name: "Delete template" }),
     );
     await screen.findByText("No cloud-init templates have been added.");
-    expect(request).toHaveBeenCalledWith(`${path}/setup`, "DELETE", {
-        revision: "r1",
-    });
+    expect(request).toHaveBeenCalledWith(
+        `${path}/setup`,
+        "DELETE",
+        {
+            revision: "r1",
+        },
+        undefined,
+        expect.objectContaining({ namespace: undefined }),
+    );
 });

@@ -1,3 +1,4 @@
+import { WorkspaceNavLink as NavLink } from "../app/Workspace";
 import {
     Box,
     Divider,
@@ -7,7 +8,7 @@ import {
     Paper,
     Typography,
 } from "@mui/material";
-import { NavLink, Outlet, useMatch } from "react-router";
+import { Outlet, useMatch } from "react-router";
 import {
     adminCloudPath,
     adminCloudURL,
@@ -84,7 +85,13 @@ export function AdministrationLayout() {
                     <NavigationItem to="/administration/configuration/">
                         Configuration
                     </NavigationItem>
+                    <NavigationItem to="/administration/configuration/namespaces/">
+                        Namespaces
+                    </NavigationItem>
                     <NavigationItem to="/tasks/">Tasks</NavigationItem>
+                    <NavigationItem to="/administration/tasks/">
+                        Task history
+                    </NavigationItem>
                 </List>
                 {cloudID && cloud.data && !cloud.isError && (
                     <>
@@ -118,6 +125,12 @@ export function AdministrationLayout() {
                             </NavigationItem>
                             <NavigationItem to={`${base}images/`}>
                                 Images
+                            </NavigationItem>
+                            <NavigationItem to={`${base}machines/`}>
+                                Machine inventory
+                            </NavigationItem>
+                            <NavigationItem to={`${base}volumes/`}>
+                                Volume inventory
                             </NavigationItem>
                             {cloud.data.capabilities.host_inventory && (
                                 <NavigationItem to={`${base}hosts/`}>

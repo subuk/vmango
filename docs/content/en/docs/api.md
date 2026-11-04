@@ -59,7 +59,7 @@ Then list the clouds available on your server:
 
 ```sh
 chmod 600 ~/.config/vmango/curl.conf
-curl --config ~/.config/vmango/curl.conf \
+curl --config ~/.config/vmango/curl.conf -H "X-Vmango-Namespace: platform" \
   https://vmango.example/api/v1/clouds
 ```
 
@@ -67,7 +67,9 @@ The same configuration can fetch `/api/openapi.json`. Store tokens in a
 protected client file, keychain or CI secret; keep them out of URLs, source
 control and logs. HTTP is supported only for loopback development.
 
-Personal tokens grant your account's application-wide resource permissions.
+Before RBAC, personal tokens can select any configured namespace. Workload
+requests require `X-Vmango-Namespace`; discover choices through authenticated
+`GET /api/v1/namespaces` without that header.
 They cannot manage API tokens or issue console sharing links. Logging out of
 the browser does not revoke them: use **Revoke** on the **API tokens** page.
 Replace tokens before they expire. Missing, expired or revoked credentials

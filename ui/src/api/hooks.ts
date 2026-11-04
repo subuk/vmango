@@ -1,5 +1,5 @@
+import { useRequest, useResourceKey } from "../app/Workspace";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { request } from "./client";
 import type { components } from "./schema";
 
 export type VM = components["schemas"]["ApiVM"];
@@ -22,8 +22,9 @@ export const volumePath = (cloud: string, id: string) =>
 export const machineURL = (cloud: string, id: string) =>
     `/machines/${esc(cloud)}/${esc(id)}/`;
 export function useResource<T>(path: string, enabled = true, poll = true) {
+    const request = useRequest();
     return useQuery({
-        queryKey: [path],
+        queryKey: useResourceKey(path),
         queryFn: ({ signal }) => request<T>(path, "GET", undefined, signal),
         enabled,
         refetchInterval: poll ? 15000 : false,
@@ -35,8 +36,9 @@ export function useMachine(
     enabled = true,
     poll = true,
 ) {
+    const request = useRequest();
     return useQuery<VMDetail>({
-        queryKey: ["machine", cloud, id],
+        queryKey: useResourceKey(vmPath(cloud, id)),
         enabled,
         queryFn: ({ signal }) =>
             request<VMDetail>(vmPath(cloud, id), "GET", undefined, signal),

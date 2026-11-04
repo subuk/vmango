@@ -4,9 +4,10 @@ description: "Save reusable user-data and select one template when creating a ma
 weight: 4
 ---
 
-Cloud-init templates store reusable user-data for new machines. The catalog is
-shared across the Vmango installation, like SSH public keys. Authenticated users
-can create, view, edit and delete templates.
+Cloud-init templates store reusable user-data for new machines. Like SSH public
+keys, the catalog belongs to the selected namespace and is independent of cloud.
+Authenticated operators can select any configured namespace until RBAC is added.
+Template IDs and revision checks never resolve through another namespace.
 
 ## Create and use a template
 
@@ -55,17 +56,19 @@ same idempotency key returns its original task.
 
 ## Storage
 
-The application creates a private template directory configured by:
+The application stores namespace templates and SSH keys beneath:
 
 ```hcl
-cloud_init_templates_dir = "/var/lib/vmango/cloud-init-templates"
+namespace_directory = "/var/lib/vmango/namespaces"
 ```
 
-The default is `~/.vmango/cloud-init-templates`. The directory must be dedicated
-to this catalog and writable by the Vmango service account. Vmango uses `0700`
-for the directory and `0600` for its files; a second process cannot open the same
-catalog concurrently. Include this directory in protected backups. Template
-contents may contain credentials and are stored on disk without encryption.
+The default is `~/.vmango/namespaces`; the catalog is `catalogs/catalogs.json`
+inside that directory. It must be writable by the Vmango service account. Vmango
+uses private directories/files and a process lock. Include the namespace directory
+in protected backups. Template contents may contain credentials and are stored
+without encryption. The old `cloud_init_templates_dir` remains a legacy migration
+source; selected entries are imported explicitly with their IDs/revisions intact.
+Removing a namespace from configuration preserves its saved catalog.
 
 The catalog list omits user-data. Template detail responses require
 authentication and are not cacheable. User-data is excluded from public task
@@ -75,7 +78,8 @@ history and is removed from private task payloads when those tasks finish.
 
 Use `/api/v1/cloud-init-templates` to list or create templates and
 `/api/v1/cloud-init-templates/{id}` to read, update or delete one. Updates and
-deletions include the reviewed `revision`; stale revisions return HTTP 409.
+deletions include the reviewed `revision`; stale revisions return HTTP 409. All
+requests require `X-Vmango-Namespace` for the selected configured namespace.
 
 Machine creation accepts either `user_data` or a reference:
 

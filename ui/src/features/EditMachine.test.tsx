@@ -135,6 +135,8 @@ it("submits an explicit type change and retains backend errors", async () => {
         "/api/v1/clouds/local/machines/demo/instance-type",
         "POST",
         { instance_type: "large" },
+        undefined,
+        expect.objectContaining({ namespace: undefined }),
     );
     expect(screen.queryByRole("spinbutton", { name: "vCPUs" })).toBeNull();
 });
@@ -195,6 +197,8 @@ async function submitType(expected: string) {
         "/api/v1/clouds/local/machines/demo/instance-type",
         "POST",
         { instance_type: expected },
+        undefined,
+        expect.objectContaining({ namespace: undefined }),
     );
 }
 it.each(["", "removed"])(

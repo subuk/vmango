@@ -1,3 +1,5 @@
+import { WorkspaceLink as RouterLink } from "../app/Workspace";
+import { useRequest } from "../app/Workspace";
 import { useEffect, useRef, useState } from "react";
 import {
     Alert,
@@ -11,17 +13,17 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
-import { Link as RouterLink, useParams } from "react-router";
+import { useParams } from "react-router";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { machineURL, useMachine, vmPath, type VM } from "../api/hooks";
-import { request } from "../api/client";
 import { Confirm, Copy, ErrorMessage, PageTitle } from "../components/common";
 import { useAppearance } from "../app/theme";
 
 type LinkResponse = { url: string; expires_at: string };
 export function Console({ standalone = false }: { standalone?: boolean }) {
+    const request = useRequest();
     const { cloud = "", id = "", kind: pathKind } = useParams();
     const vm = useMachine(cloud, id, !standalone, false);
     const [kind, setKind] = useState(

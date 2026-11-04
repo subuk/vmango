@@ -52,6 +52,9 @@ func taskError(err error) error {
 	}
 	var conflict *tasks.ConflictError
 	if errors.As(err, &conflict) {
+		if conflict.TaskID == "" {
+			return &apiProblem{ErrorModel: huma.ErrorModel{Type: "about:blank", Title: "Resource busy", Status: 409, Detail: "A conflicting operation holds a shared resource lock."}, Code: "resource_busy"}
+		}
 		return &apiProblem{ErrorModel: huma.ErrorModel{Type: "about:blank", Title: "Resource busy", Status: 409, Detail: "A task holds a conflicting resource lock. Inspect that task before submitting another command."}, Code: "resource_busy", TaskID: conflict.TaskID, TaskURL: "/api/v1/tasks/" + conflict.TaskID}
 	}
 	switch {
@@ -70,6 +73,10 @@ func taskError(err error) error {
 	}
 }
 func (e *Environ) submitTask(ctx context.Context, key, kind string, c compute.InfrastructureCommand) (*apiAccepted, error) {
+	if e.workloads == nil {
+		return nil, apiError(compute.ErrUnavailable)
+	}
+	c.NamespaceID = requestNamespace(ctx)
 	task, err := e.tasks.Submit(taskIdentity(ctx), key, compute.NewCommand(kind, c))
 	if err != nil {
 		return nil, taskError(err)
@@ -80,28 +87,19 @@ func (e *Environ) submitTask(ctx context.Context, key, kind string, c compute.In
 
 func (e *Environ) registerTasks(api huma.API) {
 	registerAPI(api, http.MethodGet, "/tasks", "list-tasks", "List durable task history", func(ctx context.Context, in *apiTaskListInput) (*apiResult[tasks.Page], error) {
-		filter := tasks.Filter{Before: in.Before, Limit: in.Limit, Blocking: in.Blocking}
-		if in.State != "" {
-			for _, s := range strings.Split(in.State, ",") {
-				state := tasks.State(s)
-				if state != tasks.Queued && state != tasks.Running && !state.Terminal() {
-					return nil, huma.Error422UnprocessableEntity("Unknown task state.")
-				}
-				filter.States = append(filter.States, state)
-			}
+		filter, err := taskFilter(in)
+		if err != nil {
+			return nil, err
 		}
-		if in.ResourceKind != "" || in.ResourceScope != "" || in.ResourceID != "" {
-			filter.Resource = &tasks.ResourceRef{Kind: in.ResourceKind, Scope: in.ResourceScope, ID: in.ResourceID}
-		}
-		page, err := e.tasks.List(filter)
+		page, err := e.tasks.Scoped(string(requestNamespace(ctx))).List(filter)
 		return &apiResult[tasks.Page]{Body: page}, taskError(err)
 	})
 	registerAPI(api, http.MethodGet, "/tasks/{task}", "get-task", "Inspect a durable task and execution timeline", func(ctx context.Context, in *apiTaskInput) (*apiResult[tasks.Task], error) {
-		task, err := e.tasks.Get(in.Task)
+		task, err := e.tasks.Scoped(string(requestNamespace(ctx))).Get(in.Task)
 		return &apiResult[tasks.Task]{Body: task}, taskError(err)
 	})
 	registerAPI(api, http.MethodPost, "/tasks/{task}/cancel", "cancel-task", "Cancel a queued task before execution", func(ctx context.Context, in *apiTaskInput) (*apiResult[tasks.Task], error) {
-		task, err := e.tasks.Cancel(in.Task)
+		task, err := e.tasks.Scoped(string(requestNamespace(ctx))).Cancel(in.Task)
 		return &apiResult[tasks.Task]{Body: task}, taskError(err)
 	})
 	type releaseInput struct {
@@ -111,7 +109,25 @@ func (e *Environ) registerTasks(api huma.API) {
 		}
 	}
 	registerAPI(api, http.MethodPost, "/tasks/{task}/release", "release-task-locks", "Release uncertain resource locks after manual inspection", func(ctx context.Context, in *releaseInput) (*apiResult[tasks.Task], error) {
-		task, err := e.tasks.Release(in.Task, taskIdentity(ctx), in.Body.Reason)
+		task, err := e.tasks.Scoped(string(requestNamespace(ctx))).Release(in.Task, taskIdentity(ctx), in.Body.Reason)
 		return &apiResult[tasks.Task]{Body: task}, taskError(err)
 	})
+}
+
+func taskFilter(in *apiTaskListInput) (tasks.Filter, error) {
+	filter := tasks.Filter{Before: in.Before, Limit: in.Limit, Blocking: in.Blocking}
+	if in.State != "" {
+		for _, s := range strings.Split(in.State, ",") {
+			state := tasks.State(s)
+			if state != tasks.Queued && state != tasks.Running && !state.Terminal() {
+				return tasks.Filter{}, huma.Error422UnprocessableEntity("Unknown task state.")
+			}
+			filter.States = append(filter.States, state)
+		}
+	}
+	if in.ResourceKind != "" || in.ResourceScope != "" || in.ResourceID != "" {
+		filter.Resource = &tasks.ResourceRef{Kind: in.ResourceKind, Scope: in.ResourceScope, ID: in.ResourceID}
+	}
+
+	return filter, nil
 }

@@ -34,7 +34,7 @@ func TestTaskAPIIdempotentAcceptanceCancellationAndRestartHistory(t *testing.T) 
 	authentication := testAuthService(t, cfg)
 	newAPI := func(s *tasks.Service) http.Handler {
 		t.Helper()
-		h, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, &compute.VirtualMachineManager{Clouds: &compute.CloudService{Definitions: []compute.Cloud{{ID: "local"}}}}, nil, authentication, s)
+		h, err := newScopedTestAPI(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, &compute.VirtualMachineManager{Clouds: &compute.CloudService{Definitions: []compute.Cloud{{ID: "local"}}}}, nil, authentication, s)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -48,6 +48,7 @@ func TestTaskAPIIdempotentAcceptanceCancellationAndRestartHistory(t *testing.T) 
 		r := httptest.NewRequest("POST", "https://vmango.test/api/v1/clouds/local/machines", strings.NewReader(body)).WithContext(ctx)
 		r.Header.Set("Authorization", "Bearer "+testWebToken())
 		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("X-Vmango-Namespace", "test")
 		r.Header.Set("Idempotency-Key", key)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)

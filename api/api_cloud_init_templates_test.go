@@ -18,13 +18,13 @@ import (
 
 func cloudInitTemplateAPI(t *testing.T) http.Handler {
 	t.Helper()
-	repo, err := filesystem.NewCloudInitTemplateRepository(filepath.Join(t.TempDir(), "templates"))
+	repo, err := filesystem.NewNamespaceCatalogRepository(filepath.Join(t.TempDir(), "templates"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = repo.Close() })
 	cfg := apiTestConfig(t)
-	h, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, testAuthService(t, cfg), newTestTaskService(t, &compute.CommandHandler{}), Services{CloudInitTemplates: compute.NewCloudInitTemplateService(repo)})
+	h, err := newScopedTestAPI(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, testAuthService(t, cfg), newTestTaskService(t, &compute.CommandHandler{}), Services{Namespaces: testNamespaceRegistry(), CloudInitTemplates: compute.NewNamespaceCloudInitTemplateService(repo, testNamespaceRegistry())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestCloudInitTemplateAPIMachineSubmission(t *testing.T) {
 	cfg := apiTestConfig(t)
 	handler := &templateSubmissionHandler{}
 	clouds := &compute.CloudService{Definitions: []compute.Cloud{{ID: "local"}}}
-	h, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, &compute.VirtualMachineManager{Clouds: clouds}, nil, testAuthService(t, cfg), newTestTaskService(t, handler))
+	h, err := newScopedTestAPI(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, &compute.VirtualMachineManager{Clouds: clouds}, nil, testAuthService(t, cfg), newTestTaskService(t, handler))
 	if err != nil {
 		t.Fatal(err)
 	}

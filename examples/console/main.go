@@ -19,16 +19,20 @@ import (
 )
 
 func main() {
+	namespace := flag.String("namespace", "", "Configured workload namespace (required)")
 	endpoint := flag.String("url", "", "Vmango WebSocket URL")
 	tokenFile := flag.String("token-file", "", "Protected file containing a personal API JWT")
 	listen := flag.String("listen", "", "Optional loopback TCP address for a native VNC viewer, e.g. 127.0.0.1:5901")
 	flag.Parse()
-	if err := run(*endpoint, *tokenFile, *listen); err != nil {
+	if err := run(*endpoint, *tokenFile, *listen, *namespace); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
-func run(endpoint, tokenFile, listen string) error {
+func run(endpoint, tokenFile, listen, namespace string) error {
+	if strings.TrimSpace(namespace) == "" {
+		return fmt.Errorf("-namespace is required")
+	}
 	u, err := url.Parse(endpoint)
 	if err != nil {
 		return err
@@ -69,7 +73,7 @@ func run(endpoint, tokenFile, listen string) error {
 		input = local
 		output = local
 	}
-	header := http.Header{"Authorization": {"Bearer " + token}}
+	header := http.Header{"Authorization": {"Bearer " + token}, "X-Vmango-Namespace": {namespace}}
 	dialer := websocket.Dialer{Subprotocols: []string{"binary"}, HandshakeTimeout: 15 * time.Second}
 	ws, response, err := dialer.Dial(endpoint, header)
 	if err != nil {

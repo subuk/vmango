@@ -9,6 +9,8 @@ import (
 var ErrVolumeNotFound = errors.New("volume not found")
 
 type VolumeCloneParams struct {
+	NamespaceID         NamespaceID
+	Label               string
 	Cloud, StorageClass string
 	NodeId              string
 	Format              VolumeFormat
@@ -19,6 +21,9 @@ type VolumeCloneParams struct {
 }
 
 type VolumeCreateParams struct {
+	OwnerVM             string
+	NamespaceID         NamespaceID
+	Label               string
 	Cloud, StorageClass string
 	NodeId              string
 	Name                string

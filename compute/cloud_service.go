@@ -275,6 +275,11 @@ func (s *CloudService) ValidateCreate(c Cloud, spec MachineCreateSpec) error {
 	if spec.UserDataTemplate != nil && spec.UserData != "" {
 		return invalid("user_data_template", "Select a template or provide custom user-data, not both.")
 	}
+	if spec.Hostname != "" {
+		if _, err := GuestHostname(spec.Hostname, "", ""); err != nil {
+			return err
+		}
+	}
 	if !resourceName.MatchString(spec.Name) {
 		return invalid("name", "Invalid machine name.")
 	}
@@ -403,6 +408,9 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 				return InfrastructureCommand{}, fmt.Errorf("network model conflicts with image requirements")
 			}
 			vm := &VirtualMachine{Id: uuid.NewString(), Name: spec.Name, NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Hugepages: t.Hugepages, Autostart: t.Autostart, Config: &VirtualMachineConfig{Hostname: spec.Name, Userdata: []byte(spec.UserData)}, Interfaces: []*VirtualMachineAttachedInterface{{NetworkName: network.Network, LogicalNetwork: spec.Network, Bridge: network.Bridge, Model: network.Model, AccessVlan: network.VLAN}}, Metadata: &MachineMetadata{Cloud: c.ID, Zone: h.Zone, InstanceType: t.ID, Image: image.ID, CPURequest: t.CPURequest, MemoryRequestBytes: t.MemoryBytes, MinimumMemoryBytes: image.MinimumMemoryBytes}}
+			if spec.Hostname != "" {
+				vm.Config.Hostname = spec.Hostname
+			}
 			clones := []VirtualMachineManagerClonedVolumeParams{{Cloud: c.ID, StorageClass: spec.StorageClass, ImageID: image.ID, NewName: vm.Name + "_root", NewPool: storage.Pool, NewSize: NewSize(t.BootDiskBytes, SizeUnitB), NewFormat: storage.Format, Alias: "root", DeviceType: DeviceTypeDisk}}
 			newDisks := []VirtualMachineManagerCreatedVolumeParams{}
 			required := map[string]uint64{storage.Pool: t.BootDiskBytes}

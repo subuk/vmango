@@ -156,63 +156,67 @@ func TestLifecycle(t *testing.T) {
 	}
 	poolUUID := strings.TrimSpace(mustVir("pool-uuid", name))
 	domainUUID := ""
+	lastCreatedVM := ""
+	ownedDomains := map[string]bool{}
 	write(filepath.Join(root, "resources.txt"), "pool="+name+"\npool_uuid="+poolUUID+"\npool_path="+poolDir+"\n")
 	t.Cleanup(func() {
 		// A connection error is not evidence that the domain is gone. Never
 		// remove its storage unless domain absence/undefine was confirmed.
-		domains, err := vir("list", "--all", "--name")
+		domains, err := vir("list", "--all", "--uuid")
 		if err != nil {
 			t.Errorf("cleanup cannot list domains: %s %v", domains, err)
 			return
 		}
-		exists := false
-		for _, domain := range strings.Fields(domains) {
-			if domain == name {
-				exists = true
-			}
-		}
-		if exists {
-			xml, err := vir("dumpxml", name)
-			if err != nil {
-				t.Errorf("cleanup cannot inspect domain: %s %v", xml, err)
-				return
-			}
-			if err := os.WriteFile(filepath.Join(root, "domain.xml"), []byte(xml), 0600); err != nil {
-				t.Error(err)
-			}
-			var ownership struct {
-				UUID  string `xml:"uuid"`
-				Disks []struct {
-					Source struct {
-						File string `xml:"file,attr"`
-						Dev  string `xml:"dev,attr"`
-					} `xml:"source"`
-				} `xml:"devices>disk"`
-			}
-			if err := encodingxml.Unmarshal([]byte(xml), &ownership); err != nil || len(ownership.Disks) == 0 || (domainUUID != "" && domainUUID != ownership.UUID) {
-				t.Errorf("refusing cleanup: cannot verify test domain ownership")
-				return
-			}
-			for _, disk := range ownership.Disks {
-				if disk.Source.Dev != "" || !strings.HasPrefix(disk.Source.File, poolDir+string(os.PathSeparator)) {
-					t.Errorf("refusing cleanup: domain has storage outside the test pool")
-					return
+		for domain := range ownedDomains {
+			exists := false
+			for _, candidate := range strings.Fields(domains) {
+				if candidate == domain {
+					exists = true
 				}
 			}
-			state, err := vir("domstate", name)
-			if err != nil {
-				t.Errorf("cleanup cannot get domain state: %v", err)
-				return
-			}
-			if strings.TrimSpace(state) != "shut off" {
-				if out, err := vir("destroy", name); err != nil {
-					t.Errorf("cleanup cannot stop domain: %s %v", out, err)
+			if exists {
+				xml, err := vir("dumpxml", domain)
+				if err != nil {
+					t.Errorf("cleanup cannot inspect domain: %s %v", xml, err)
 					return
 				}
-			}
-			if out, err := vir("undefine", name, "--nvram"); err != nil {
-				t.Errorf("cleanup domain: %s %v", out, err)
-				return
+				if err := os.WriteFile(filepath.Join(root, "domain.xml"), []byte(xml), 0600); err != nil {
+					t.Error(err)
+				}
+				var ownership struct {
+					UUID  string `xml:"uuid"`
+					Disks []struct {
+						Source struct {
+							File string `xml:"file,attr"`
+							Dev  string `xml:"dev,attr"`
+						} `xml:"source"`
+					} `xml:"devices>disk"`
+				}
+				if err := encodingxml.Unmarshal([]byte(xml), &ownership); err != nil || len(ownership.Disks) == 0 || domain != ownership.UUID {
+					t.Errorf("refusing cleanup: cannot verify test domain ownership")
+					return
+				}
+				for _, disk := range ownership.Disks {
+					if disk.Source.Dev != "" || !strings.HasPrefix(disk.Source.File, poolDir+string(os.PathSeparator)) {
+						t.Errorf("refusing cleanup: domain has storage outside the test pool")
+						return
+					}
+				}
+				state, err := vir("domstate", domain)
+				if err != nil {
+					t.Errorf("cleanup cannot get domain state: %v", err)
+					return
+				}
+				if strings.TrimSpace(state) != "shut off" {
+					if out, err := vir("destroy", domain); err != nil {
+						t.Errorf("cleanup cannot stop domain: %s %v", out, err)
+						return
+					}
+				}
+				if out, err := vir("undefine", domain, "--nvram"); err != nil {
+					t.Errorf("cleanup domain: %s %v", out, err)
+					return
+				}
 			}
 		}
 		currentUUID, err := vir("pool-uuid", name)
@@ -289,6 +293,7 @@ func TestLifecycle(t *testing.T) {
 	write(filepath.Join(root, "keys"), "")
 	configuration := fmt.Sprintf(`key_file = %q
 cloud_init_templates_dir = %q
+namespace_directory = %q
 tasks { directory = %q workers = 2 }
 api {
  listen = %q
@@ -298,7 +303,7 @@ api {
  token_dir = %q
  user "acceptance" { hashed_password = %q }
 }
-`, filepath.Join(root, "keys"), filepath.Join(root, "cloud-init-templates"), filepath.Join(root, "tasks"), address, filepath.Join(root, "jwt-key"), filepath.Join(root, "console-key"), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
+`, filepath.Join(root, "keys"), filepath.Join(root, "cloud-init-templates"), filepath.Join(root, "namespaces"), filepath.Join(root, "tasks"), address, filepath.Join(root, "jwt-key"), filepath.Join(root, "console-key"), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
 
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {
@@ -340,6 +345,8 @@ cloud "offline" {
  host "offline" { uri=%q zone="offline-zone" network "lan" { network="qemu-usernet" } storage_class "standard" {pool="offline" format="qcow2"} }
 }
 `, filepath.Join(root, "offline-source.qcow2"), arch, firmware, "qemu+unix:///session?socket="+filepath.Join(root, "offline.sock"))
+	platformNamespace := `namespace "platform" { name="Platform" clouds=["acceptance", "offline"] }` + "\n"
+	configuration += "\n" + platformNamespace + `namespace "analytics" { name="Analytics" clouds=["acceptance"] }` + "\n"
 	write(config, configuration)
 	log, err := os.Create(filepath.Join(root, "vmango.log"))
 	if err != nil {
@@ -388,6 +395,7 @@ cloud "offline" {
 		}
 	}
 	access := ""
+	selectedNamespace := "platform"
 	apiRequest := func(method, path string, value any, status int) []byte {
 		t.Helper()
 		data, err := json.Marshal(value)
@@ -399,6 +407,12 @@ cloud "offline" {
 			t.Fatal(err)
 		}
 		req.Header.Set("Content-Type", "application/json")
+		for _, prefix := range []string{"/api/v1/clouds", "/api/v1/keys", "/api/v1/cloud-init-templates", "/api/v1/tasks", "/api/v1/namespaces/"} {
+			if strings.HasPrefix(path, prefix) && selectedNamespace != "" {
+				req.Header.Set("X-Vmango-Namespace", selectedNamespace)
+				break
+			}
+		}
 		if method != "GET" && strings.Contains(path, "/clouds/") && !strings.Contains(path, "/consoles/") {
 			req.Header.Set("Idempotency-Key", uuid.NewString())
 		}
@@ -433,6 +447,15 @@ cloud "offline" {
 			if err := json.Unmarshal(apiRequest("GET", accepted.StatusURL, nil, 200), &task); err != nil {
 				t.Fatal(err)
 			}
+			// Capture exact backend identities before reporting any partial failure.
+			if task.Kind == "machine.create" {
+				for _, ref := range task.Resources {
+					if ref.Kind == "machine" {
+						ownedDomains[ref.ID] = true
+						lastCreatedVM = ref.ID
+					}
+				}
+			}
 			if task.State.Terminal() {
 				if task.State != tasks.Succeeded {
 					t.Fatalf("infrastructure task %s: %+v", task.ID, task)
@@ -463,6 +486,23 @@ cloud "offline" {
 		t.Fatal(err)
 	}
 	access = credentials.AccessToken
+	selectedNamespace = ""
+	apiRequest("GET", "/api/v1/clouds", nil, 400)
+	apiRequest("GET", "/api/v1/administration/clouds", nil, 200)
+	var discovered struct {
+		Items []compute.Namespace `json:"items"`
+	}
+	if err := json.Unmarshal(apiRequest("GET", "/api/v1/namespaces", nil, 200), &discovered); err != nil || len(discovered.Items) != 2 {
+		t.Fatal("namespace bootstrap discovery failed", err)
+	}
+	selectedNamespace = "platform, analytics"
+	apiRequest("GET", "/api/v1/clouds", nil, 400)
+	selectedNamespace = "missing"
+	apiRequest("GET", "/api/v1/clouds", nil, 404)
+	selectedNamespace = "analytics"
+	apiRequest("GET", "/api/v1/clouds/offline", nil, 404)
+	selectedNamespace = "platform"
+	apiRequest("GET", "/api/v1/clouds?namespace=platform", nil, 400)
 	for _, resource := range []string{"administration/configuration", "administration/clouds", "administration/clouds/acceptance", "administration/clouds/acceptance/configuration", "administration/clouds/acceptance/configuration/hosts", "administration/clouds/acceptance/configuration/hosts/acceptance", "administration/clouds/acceptance/images", "administration/clouds/acceptance/images/boot", "administration/clouds/acceptance/images/boot/availability", "clouds", "clouds/acceptance", "clouds/acceptance/machines", "administration/clouds/acceptance/hosts", "administration/clouds/acceptance/hosts/acceptance", "administration/clouds/acceptance/hosts/acceptance/pools", "administration/clouds/acceptance/hosts/acceptance/networks", "administration/clouds/acceptance/hosts/acceptance/capabilities", "administration/clouds/acceptance/hosts/acceptance/catalog", "keys", "clouds/acceptance/volumes"} {
 		apiRequest("GET", "/api/v1/"+resource, nil, 200)
 	}
@@ -588,26 +628,34 @@ cloud "offline" {
 			t.Fatal("verified reusable cache is not reported ready", readyAvailability)
 		}
 	}
-	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
-	noInitXML := mustVir("dumpxml", name)
+	domainUUID = lastCreatedVM
+	noInitXML := mustVir("dumpxml", domainUUID)
 	if strings.Contains(noInitXML, "_config.iso") || !strings.Contains(noInitXML, "org.qemu.guest_agent.0") {
 		t.Fatal("no-init alias defaults were not applied")
 	}
 
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/instance-type", map[string]any{"instance_type": "larger"})
-	changedXML := mustVir("dumpxml", name)
-	if !strings.Contains(mustVir("dominfo", name), "enable") || !strings.Contains(mustVir("domstate", name), "shut off") || !strings.Contains(changedXML, "org.qemu.guest_agent.0") || !strings.Contains(changedXML, "127.0.0.1") {
+	changedXML := mustVir("dumpxml", domainUUID)
+	if !strings.Contains(mustVir("dominfo", domainUUID), "enable") || !strings.Contains(mustVir("domstate", domainUUID), "shut off") || !strings.Contains(changedXML, "org.qemu.guest_agent.0") || !strings.Contains(changedXML, "127.0.0.1") {
 		t.Fatal("type change did not apply autostart or preserve power/devices/listener")
 	}
 	if !strings.Contains(changedXML, "3145728") {
 		t.Fatal("instance type RAM change missing from domain XML")
 	}
-	info := mustVir("vol-info", "--pool", name, name+"_root", "--bytes")
+	var noInitDomain libvirtxml.Domain
+	if err := noInitDomain.Unmarshal(noInitXML); err != nil {
+		t.Fatal(err)
+	}
+	if noInitDomain.Devices == nil || len(noInitDomain.Devices.Disks) == 0 || noInitDomain.Devices.Disks[0].Source == nil || noInitDomain.Devices.Disks[0].Source.File == nil {
+		t.Fatal("root disk source missing")
+	}
+	rootDiskPath := noInitDomain.Devices.Disks[0].Source.File.File
+	info := mustVir("vol-info", rootDiskPath, "--bytes")
 	if !strings.Contains(info, "8589934592") {
 		t.Fatal("instance type change resized the boot disk", info)
 	}
 	// Simulate an unmanaged domain without changing any resources or claiming disks.
-	mustVir("metadata", name, "--config", "--uri", "https://vmango.org/xmlns/scheduler/1", "--remove")
+	mustVir("metadata", domainUUID, "--config", "--uri", "https://vmango.org/xmlns/scheduler/1", "--remove")
 	var observed struct {
 		Managed bool `json:"managed"`
 	}
@@ -617,7 +665,7 @@ cloud "offline" {
 	}
 	apiRequest("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/actions", map[string]string{"action": "start"}, 409)
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/adopt", map[string]any{})
-	if !strings.Contains(mustVir("dumpxml", name), "3145728") {
+	if !strings.Contains(mustVir("dumpxml", domainUUID), "3145728") {
 		t.Fatal("adoption changed resource configuration")
 	}
 	apiCommand("DELETE", "/api/v1/clouds/acceptance/machines/"+domainUUID+"?delete_volumes=true", nil)
@@ -633,36 +681,43 @@ cloud "offline" {
 	templatePath := "/api/v1/cloud-init-templates/" + userDataTemplate.ID
 	createBody := map[string]any{"name": name, "image": "boot", "instance_type": "small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false, "user_data_template": compute.CloudInitTemplateRef{ID: userDataTemplate.ID, Revision: userDataTemplate.Revision}}
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines", createBody)
-	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
+	domainUUID = lastCreatedVM
 	apiVMPath = "/api/v1/clouds/acceptance/machines/" + domainUUID
-	// A duplicate name fails during the asynchronous fresh inventory stage.
-	duplicate := apiRequest("POST", "/api/v1/clouds/acceptance/machines", createBody, 202)
-	var duplicateAccepted struct {
-		StatusURL string `json:"status_url"`
+	primaryUUID := domainUUID
+	primaryBackendName := strings.TrimSpace(mustVir("domname", primaryUUID))
+	selectedNamespace = "analytics"
+	apiRequest("GET", apiVMPath, nil, 404)
+	apiRequest("POST", apiVMPath+"/actions", map[string]string{"action": "start"}, 404)
+	apiRequest("GET", templatePath, nil, 404)
+	// A second namespace may use the same label on the same host. Its backend
+	// identity and disks must remain independent of the first machine.
+	otherRaw := apiCommand("POST", "/api/v1/clouds/acceptance/machines", aliasBody)
+	otherUUID := lastCreatedVM
+	if otherUUID == primaryUUID || strings.TrimSpace(mustVir("domname", otherUUID)) == primaryBackendName {
+		t.Fatal("equal labels reused a physical machine identity")
 	}
-	json.Unmarshal(duplicate, &duplicateAccepted)
-	for deadline := time.Now().Add(10 * time.Second); ; {
-		var task tasks.Task
-		json.Unmarshal(apiRequest("GET", duplicateAccepted.StatusURL, nil, 200), &task)
-		if task.State.Terminal() {
-			if task.State != tasks.Failed || task.OutcomeUncertain {
-				t.Fatalf("duplicate create: %+v", task)
-			}
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("duplicate create did not fail")
-		}
-		time.Sleep(50 * time.Millisecond)
+	var otherAccepted struct {
+		Task tasks.Task `json:"task"`
 	}
+	if err := json.Unmarshal(otherRaw, &otherAccepted); err != nil {
+		t.Fatal(err)
+	}
+	apiCommand("DELETE", "/api/v1/clouds/acceptance/machines/"+otherUUID+"?delete_volumes=true", nil)
+	selectedNamespace = "platform"
+	apiRequest("GET", "/api/v1/tasks/"+otherAccepted.Task.ID, nil, 404)
+	apiRequest("GET", "/api/v1/administration/tasks/"+otherAccepted.Task.ID, nil, 200)
+	lastCreatedVM = primaryUUID
+	domainUUID = primaryUUID
+	// Logical labels are reserved within namespace + cloud before acceptance.
+	apiRequest("POST", "/api/v1/clouds/acceptance/machines", createBody, 409)
 	// Removing a reusable template must not change the already provisioned guest.
 	apiRequest("DELETE", templatePath, map[string]string{"revision": userDataTemplate.Revision}, 204)
 	apiRequest("GET", templatePath, nil, 404)
 	apiRequest("PATCH", apiVMPath, map[string]any{"autostart": true}, 405)
-	domainUUID = strings.TrimSpace(mustVir("domuuid", name))
+	domainUUID = lastCreatedVM
 	write(filepath.Join(root, "resources.txt"), "pool="+name+"\npool_uuid="+poolUUID+"\npool_path="+poolDir+"\nvm_uuid="+domainUUID+"\n")
 	path := "/machines/acceptance/" + domainUUID + "/"
-	xml := mustVir("dumpxml", name)
+	xml := mustVir("dumpxml", domainUUID)
 	write(filepath.Join(root, "domain.xml"), xml)
 	if !strings.Contains(xml, "type='"+expectedType+"'") {
 		t.Fatalf("expected hardware accelerator %s; see domain.xml", expectedType)
@@ -686,9 +741,9 @@ cloud "offline" {
 		legacyPath := filepath.Join(root, "legacy-domain.xml")
 		write(legacyPath, legacyXML)
 		mustVir("define", legacyPath)
-		mustVir("metadata", name, "--config", "--uri", "https://vmango.org/xmlns/scheduler/1", "--remove")
+		mustVir("metadata", domainUUID, "--config", "--uri", "https://vmango.org/xmlns/scheduler/1", "--remove")
 		apiCommand("POST", apiVMPath+"/adopt", map[string]any{})
-		xml = mustVir("dumpxml", name, "--inactive")
+		xml = mustVir("dumpxml", domainUUID, "--inactive")
 		write(filepath.Join(root, "adopted-domain.xml"), xml)
 		adopted := &libvirtxml.Domain{}
 		if err := adopted.Unmarshal(xml); err != nil {
@@ -702,10 +757,10 @@ cloud "offline" {
 	request(path, 200)
 	t.Log("created VM and cloud-init disk through HTTP; starting guest")
 	apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "start"})
-	if state := strings.TrimSpace(mustVir("domstate", name)); state != "running" {
+	if state := strings.TrimSpace(mustVir("domstate", domainUUID)); state != "running" {
 		t.Fatalf("expected running, got %s", state)
 	}
-	headers := http.Header{"Origin": {origin}, "Authorization": {"Bearer " + access}}
+	headers := http.Header{"Origin": {origin}, "Authorization": {"Bearer " + access}, "X-Vmango-Namespace": {selectedNamespace}}
 	u, _ := url.Parse(origin)
 	for _, c := range jar.Cookies(u) {
 		headers.Add("Cookie", c.String())
@@ -797,7 +852,7 @@ cloud "offline" {
 	if adoptPower {
 		apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "shutdown"})
 		for deadline := time.Now().Add(90 * time.Second); ; {
-			if strings.TrimSpace(mustVir("domstate", name)) == "shut off" {
+			if strings.TrimSpace(mustVir("domstate", domainUUID)) == "shut off" {
 				break
 			}
 			if time.Now().After(deadline) {
@@ -806,14 +861,14 @@ cloud "offline" {
 			time.Sleep(500 * time.Millisecond)
 		}
 		time.Sleep(2 * time.Second)
-		if strings.TrimSpace(mustVir("domstate", name)) != "shut off" {
+		if strings.TrimSpace(mustVir("domstate", domainUUID)) != "shut off" {
 			t.Fatal("adopted guest restarted after shutdown")
 		}
 		t.Log("adopted guest shut down gracefully and stayed powered off")
 		apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "start"})
 	}
 	apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "poweroff"})
-	if state := strings.TrimSpace(mustVir("domstate", name)); state != "shut off" {
+	if state := strings.TrimSpace(mustVir("domstate", domainUUID)); state != "shut off" {
 		t.Fatalf("expected shut off, got %s", state)
 	}
 	// Exercise the remaining mutating routes only against this isolated VM/pool.
@@ -825,6 +880,23 @@ cloud "offline" {
 	if err := json.Unmarshal(rawDisk, &disk); err != nil {
 		t.Fatal(err)
 	}
+	selectedNamespace = "analytics"
+	apiRequest("GET", volumeBase+"/"+disk.ID, nil, 404)
+	apiRequest("POST", volumeBase+"/"+disk.ID+"/resize", map[string]any{"size_bytes": 32 << 20}, 404)
+	var otherDisk struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(apiCommand("POST", volumeBase, map[string]any{"name": "extra", "zone": "test", "storage_class": "standard", "size_bytes": 16 << 20}), &otherDisk); err != nil {
+		t.Fatal(err)
+	}
+	if otherDisk.ID == disk.ID {
+		t.Fatal("equal volume labels reused the same backend volume")
+	}
+	selectedNamespace = "platform"
+	apiRequest("POST", apiVMPath+"/disks/attach", map[string]any{"volume_id": otherDisk.ID}, 404)
+	selectedNamespace = "analytics"
+	apiCommand("DELETE", volumeBase+"/"+otherDisk.ID, nil)
+	selectedNamespace = "platform"
 	addressed, err := compute.ParseVolumeID(disk.ID)
 	if err != nil || addressed.Host != "acceptance" || addressed.Path == "" {
 		t.Fatal("volume did not expose its canonical compound address", disk.ID, err)
@@ -879,31 +951,34 @@ cloud "offline" {
 	// Restart only after the preceding task completed. The dedicated task/auth
 	// directories must retain real references and history across a process restart.
 	historyBefore := apiRequest("GET", "/api/v1/tasks?limit=100", nil, 200)
-	if err := app.Process.Kill(); err != nil {
-		t.Fatal(err)
-	}
-	_ = app.Wait()
-	restarted := exec.Command(binary, "web", "-c", config)
-	restarted.Stdout, restarted.Stderr = log, log
-	if err := restarted.Start(); err != nil {
-		t.Fatal(err)
-	}
-	app = restarted
-	restartedReady := false
-	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); {
-		resp, err := client.Get(origin + "/login/")
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == 200 {
-				restartedReady = true
-				break
-			}
+	stopApp := func() {
+		t.Helper()
+		if err := app.Process.Kill(); err != nil {
+			t.Fatal(err)
 		}
-		time.Sleep(100 * time.Millisecond)
+		_ = app.Wait()
 	}
-	if !restartedReady {
+	startApp := func() {
+		t.Helper()
+		app = exec.Command(binary, "web", "-c", config)
+		app.Stdout, app.Stderr = log, log
+		if err := app.Start(); err != nil {
+			t.Fatal(err)
+		}
+		for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); {
+			resp, err := client.Get(origin + "/login/")
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == 200 {
+					return
+				}
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
 		t.Fatal("restarted app did not become ready; see vmango.log")
 	}
+	stopApp()
+	startApp()
 	historyAfter := apiRequest("GET", "/api/v1/tasks?limit=100", nil, 200)
 	var beforeHistory, afterHistory tasks.Page
 	if err := json.Unmarshal(historyBefore, &beforeHistory); err != nil {
@@ -919,12 +994,118 @@ cloud "offline" {
 	}
 	apiRequest("GET", volumeBase+"/"+disk.ID, nil, 200)
 	t.Log("process restart retained task history, backend references and compound volume navigation")
+	// Removing configuration retains authoritative assignments and immutable
+	// history. Administration must remain usable without the removed context.
+	stopApp()
+	write(config, strings.Replace(configuration, platformNamespace, "", 1))
+	startApp()
+	apiRequest("GET", apiVMPath, nil, 404)
+	apiRequest("GET", "/api/v1/tasks", nil, 404)
+	var retained struct {
+		Namespace string `json:"namespace_id"`
+		ID        string `json:"id"`
+	}
+	if err := json.Unmarshal(apiRequest("GET", "/api/v1/administration/clouds/acceptance/machines/"+domainUUID, nil, 200), &retained); err != nil || retained.Namespace != "platform" || retained.ID != domainUUID {
+		t.Fatal("configuration removal lost VM assignment", err, retained)
+	}
+	apiRequest("GET", "/api/v1/administration/tasks", nil, 200)
+	stopApp()
+	write(config, configuration)
+	startApp()
+	apiRequest("GET", apiVMPath, nil, 200)
+	if string(apiRequest("GET", "/api/v1/tasks?limit=100", nil, 200)) != string(historyAfter) {
+		t.Fatal("removing/re-adding namespace changed saved history")
+	}
+
+	// Simulate legacy data only within this run's private VM and stores. Its
+	// existing disks keep their assignments; the additional detached disk has none.
+	stopApp()
+	mustVir("metadata", domainUUID, "--config", "--uri", "https://vmango.org/xmlns/workload/1", "--remove")
+	legacyXML := mustVir("dumpxml", domainUUID, "--inactive")
+	var legacyDomain libvirtxml.Domain
+	if err := legacyDomain.Unmarshal(legacyXML); err != nil {
+		t.Fatal(err)
+	}
+	mustVir("vol-create-as", name, "legacy-migration.qcow2", "8M", "--format", "qcow2")
+	legacyVolume := strings.TrimSpace(mustVir("vol-path", "--pool", name, "legacy-migration.qcow2"))
+	legacyPublic, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacySSH, err := ssh.NewPublicKey(legacyPublic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyFingerprint := ssh.FingerprintLegacyMD5(legacySSH)
+	write(filepath.Join(root, "keys"), string(ssh.MarshalAuthorizedKey(legacySSH)))
+	legacyTemplate := compute.CloudInitTemplate{ID: uuid.NewString(), Revision: uuid.NewString(), Name: "Legacy setup", UserData: "#cloud-config\npackages: [curl]\n"}
+	if err := os.MkdirAll(filepath.Join(root, "cloud-init-templates"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	legacyTemplateJSON, _ := json.Marshal(legacyTemplate)
+	write(filepath.Join(root, "cloud-init-templates", legacyTemplate.ID+".json"), string(legacyTemplateJSON))
+	mappingJSON, _ := json.Marshal(map[string]any{
+		"version":   1,
+		"resources": []any{map[string]any{"namespace": "platform", "cloud": "acceptance", "machines": []string{domainUUID}, "volumes": []compute.LocalDiskRef{{Host: "acceptance", Path: legacyVolume}}}},
+		"catalogs":  []any{map[string]any{"namespace": "platform", "keys": []string{legacyFingerprint}, "templates": []compute.CloudInitTemplateRef{{ID: legacyTemplate.ID, Revision: legacyTemplate.Revision}}}},
+	})
+	mappingPath, backupPath := filepath.Join(root, "migration.json"), filepath.Join(root, "migration-backup")
+	write(mappingPath, string(mappingJSON))
+	migrateArgs := []string{"namespace-migrate", "-c", config, "--mapping", mappingPath}
+	if out, err := run(binary, migrateArgs...); err != nil {
+		t.Fatalf("migration dry-run: %s %v", out, err)
+	}
+	if after := mustVir("dumpxml", domainUUID, "--inactive"); after != legacyXML {
+		t.Fatal("dry-run changed VM XML")
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		if out, err := run(binary, append(migrateArgs, "--apply", "--backup", backupPath)...); err != nil {
+			t.Fatalf("migration apply/resume: %s %v", out, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(backupPath, "manifest.json")); err != nil {
+		t.Fatal("migration backup manifest missing", err)
+	}
+	var migratedDomain libvirtxml.Domain
+	if err := migratedDomain.Unmarshal(mustVir("dumpxml", domainUUID, "--inactive")); err != nil {
+		t.Fatal(err)
+	}
+	if migratedDomain.UUID != legacyDomain.UUID || migratedDomain.Name != legacyDomain.Name || len(migratedDomain.Devices.Disks) != len(legacyDomain.Devices.Disks) {
+		t.Fatal("migration changed resource identity or disks")
+	}
+	startApp()
+	var migrated struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		Namespace string `json:"namespace_id"`
+	}
+	if err := json.Unmarshal(apiRequest("GET", apiVMPath, nil, 200), &migrated); err != nil || migrated.ID != domainUUID || migrated.Namespace != "platform" || migrated.Name != legacyDomain.Name {
+		t.Fatal("migration did not preserve legacy label/identity", err, migrated)
+	}
+	legacyVolumeID := (compute.VolumeAddress{Host: "acceptance", Path: legacyVolume}).ID()
+	apiRequest("GET", volumeBase+"/"+legacyVolumeID, nil, 200)
+	apiRequest("GET", "/api/v1/keys/"+legacyFingerprint, nil, 200)
+	var migratedTemplate compute.CloudInitTemplate
+	if err := json.Unmarshal(apiRequest("GET", "/api/v1/cloud-init-templates/"+legacyTemplate.ID, nil, 200), &migratedTemplate); err != nil || migratedTemplate.ID != legacyTemplate.ID || migratedTemplate.Revision != legacyTemplate.Revision || migratedTemplate.UserData != legacyTemplate.UserData {
+		t.Fatal("migration changed template identity/revision/content", err)
+	}
+	selectedNamespace = "analytics"
+	apiRequest("GET", "/api/v1/keys/"+legacyFingerprint, nil, 404)
+	apiRequest("GET", "/api/v1/cloud-init-templates/"+legacyTemplate.ID, nil, 404)
+	apiRequest("GET", volumeBase+"/"+legacyVolumeID, nil, 404)
+	selectedNamespace = "platform"
+	if string(apiRequest("GET", "/api/v1/tasks?limit=100", nil, 200)) != string(historyAfter) {
+		t.Fatal("migration changed historical task attribution")
+	}
+	// Assignment must not grant deletion ownership for the externally created disk.
+	apiRequest("DELETE", volumeBase+"/"+legacyVolumeID, nil, 409)
+	t.Log("namespace removal/re-addition and CLI dry-run/apply/resume retained IDs, templates, assignments and task history")
 	apiRequest("DELETE", volumeBase+"/"+disk.ID, nil, 409)
 	apiCommand("DELETE", apiVMPath+"/disks/"+disk.ID, nil)
 	apiCommand("DELETE", volumeBase+"/"+disk.ID, nil)
 	apiCommand("DELETE", volumeBase+"/"+clone.ID, nil)
 	if imageURL == "" {
-		apiRequest("DELETE", volumeBase+"/"+(compute.VolumeAddress{Host: "acceptance", Path: base}).ID(), nil, 409)
+		apiRequest("DELETE", volumeBase+"/"+(compute.VolumeAddress{Host: "acceptance", Path: base}).ID(), nil, 404)
 	} else {
 		apiRequest("DELETE", volumeBase+"/"+(compute.VolumeAddress{Host: "acceptance", Path: base}).ID(), nil, 404)
 	}
@@ -943,14 +1124,30 @@ cloud "offline" {
 	fp := ssh.FingerprintLegacyMD5(pub)
 	apiRequest("POST", "/api/v1/keys", map[string]string{"public_key": key}, 201)
 	apiRequest("GET", "/api/v1/keys/"+fp, nil, 200)
+	selectedNamespace = "analytics"
+	apiRequest("GET", "/api/v1/keys/"+fp, nil, 404)
+	apiRequest("POST", "/api/v1/keys", map[string]string{"public_key": key}, 201)
+	selectedNamespace = "platform"
 	apiRequest("POST", "/api/v1/keys", map[string]string{"public_key": key}, 409)
 	apiRequest("DELETE", "/api/v1/keys/"+fp, nil, 204)
 	apiRequest("GET", "/api/v1/keys/"+fp, nil, 404)
+	selectedNamespace = "analytics"
+	apiRequest("GET", "/api/v1/keys/"+fp, nil, 200)
+	apiRequest("DELETE", "/api/v1/keys/"+fp, nil, 204)
+	selectedNamespace = "platform"
 	apiCommand("DELETE", apiVMPath+"?delete_volumes=true", nil)
-	if _, err := vir("dominfo", name); err == nil {
+	if _, err := vir("dominfo", domainUUID); err == nil {
 		t.Fatal("VM still exists after HTTP delete")
 	}
-	for _, file := range []string{name + "_root", name + "_config.iso"} {
+	var deletedDomain libvirtxml.Domain
+	if err := deletedDomain.Unmarshal(xml); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range deletedDomain.Devices.Disks {
+		if d.Source == nil || d.Source.File == nil {
+			continue
+		}
+		file := d.Source.File.File
 		if _, err := vir("vol-info", "--pool", name, file); err == nil {
 			t.Fatalf("volume remains after HTTP delete: %s (%v)", file, err)
 		}

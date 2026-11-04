@@ -42,11 +42,16 @@ and end times, lifecycle transitions, confirmed effects and sanitized backend
 diagnostics. Private command data is never returned. Polling errors mean status
 is temporarily unavailable; they do not change the last known task state.
 
-All authenticated web and personal-token users currently have application-wide
-task read, submission, cancellation and lock-release permissions. RBAC is not
-implemented. Tasks retain the authorization granted at acceptance; logging out,
+All authenticated web and personal-token users can select every configured
+namespace until RBAC is implemented. Workload task reads, submission, cancellation
+and lock release require the selected namespace; cross-namespace and legacy
+history is read-only in Administration. Tasks retain immutable namespace/cloud
+attribution from acceptance, and queued execution revalidates that context.
+Removing a namespace or its cloud admission fails queued work before effects.
+Logging out,
 revoking the submitting token or later changing its owner's eligibility does
-not cancel accepted queued or running work.
+not cancel accepted queued or running work. See [namespace migration and offline
+operator recovery](NAMESPACES.md) for legacy tasks and removed namespaces.
 
 ## Lifecycle and completion
 

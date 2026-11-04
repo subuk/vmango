@@ -237,3 +237,41 @@ The corresponding ignored artifact directories are
 `result/vmango-acceptance-73847964-55ae-44a0-a020-71656cf42145/`.
 This verification establishes neither Linux/KVM or remote behavior nor package
 builds/installations. Browser checks are separate from the lifecycle harness.
+
+## Namespace lifecycle and migration verification
+
+The harness configures `platform` and `analytics` against the same isolated
+cloud/host; `platform` also admits the deliberately offline cloud. Namespace
+selection is explicit on workload HTTP requests and native console handshakes.
+All namespace assignments, keys, templates and task history use the run's own
+application directories. The test never edits the installation configuration.
+
+The namespace checks cover:
+
+- Missing, combined and unknown context, cloud admission, and rejection of API
+  query selectors; bootstrap and Administration remain context-free.
+- Equal machine and volume display labels in different namespaces, with distinct
+  backend identities; cross-namespace reads, mutations, disk attachment, template
+  lookup and task lookup fail before effects.
+- Equal SSH fingerprints with independent catalog entries, and preservation of
+  guest hostname behavior despite generated backend names.
+- Restart persistence, removal and re-addition of namespace configuration, and
+  read-only Administration access to preserved assignments and history.
+- Offline CLI migration with an explicit VM/disk/key/template mapping: dry-run
+  leaves XML unchanged; apply creates a private backup; reapplying the same
+  manifest succeeds without changing IDs, template revisions, disks or historical
+  task attribution. Assignment does not grant deletion ownership.
+
+Cleanup tracks exact VM UUIDs recorded in accepted tasks, verifies their disk
+paths against the owned pool, and checks the pool UUID before removing it. It
+never uses a display label or a shared prefix to infer resource ownership.
+
+Recorded on 2026-11-04: the namespace harness passed with the existing local
+Ubuntu ARM64 cloud image on macOS/libvirt/HVF (38.52 seconds). This run also
+verified guest cloud-init, native and signed serial/VNC connections, disk
+operations and cleanup. Artifacts remain in
+`result/vmango-acceptance-474cad44-83bc-4f87-b566-5309006a011f/`, including the
+migration backup and effects. The tested storage combination is a local `dir`
+pool with QCOW2 volumes. This result does not establish remote libvirt,
+read-only connections, Linux/KVM, other storage combinations, browser rendering
+or package builds/installations.

@@ -1,3 +1,4 @@
+import { WorkspaceLink as RouterLink } from "../app/Workspace";
 import {
     Box,
     Breadcrumbs,
@@ -11,14 +12,8 @@ import {
     TableRow,
     Typography,
 } from "@mui/material";
-import { Link as RouterLink, useParams } from "react-router";
-import {
-    esc,
-    machineURL,
-    type Network,
-    type Node,
-    type Pool,
-} from "../api/hooks";
+import { useParams } from "react-router";
+import { esc, type Network, type Node, type Pool } from "../api/hooks";
 import {
     adminCloudPath,
     adminCloudURL,
@@ -173,10 +168,7 @@ export function NodeDetail() {
                                                                     component={
                                                                         RouterLink
                                                                     }
-                                                                    to={machineURL(
-                                                                        cloud,
-                                                                        pin.vm,
-                                                                    )}
+                                                                    to={`${adminCloudURL(cloud)}machines/${esc(pin.vm)}/`}
                                                                 >
                                                                     {pin.vm}
                                                                 </Link>

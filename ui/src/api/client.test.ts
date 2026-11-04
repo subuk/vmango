@@ -8,6 +8,7 @@ const response = (body: unknown, status = 200) =>
 let fetchMock: ReturnType<typeof vi.fn>;
 let client: typeof import("./client");
 beforeEach(async () => {
+    window.history.replaceState(null, "", "/machines/?namespace=platform");
     vi.resetModules();
     vi.stubGlobal("BroadcastChannel", undefined);
     Object.defineProperty(navigator, "locks", {
@@ -393,4 +394,111 @@ it("does not accept a late login response over a newer identity", async () => {
     oldLogin.resolve(response({ access_token: "old-user", expires_in: 600 }));
     await checked;
     expect(await client.authorization()).toBe("Bearer different-user");
+});
+
+describe("namespace request context", () => {
+    it("requires a valid URL context before workload calls and keeps Administration independent", async () => {
+        await loggedIn();
+        for (const search of [
+            "",
+            "?namespace=",
+            "?namespace=a&namespace=b",
+            "?namespace=bad%20id",
+        ]) {
+            window.history.replaceState(null, "", `/machines/${search}`);
+            await expect(
+                client.request("/api/v1/clouds"),
+            ).rejects.toMatchObject({ status: 422 });
+        }
+        expect(fetchMock).not.toHaveBeenCalled();
+        fetchMock.mockResolvedValueOnce(response([]));
+        await client.request("http://localhost/api/v1/administration/clouds");
+        expect(
+            (fetchMock.mock.calls[0][0] as Request).headers.has(
+                "X-Vmango-Namespace",
+            ),
+        ).toBe(false);
+    });
+    it("captures namespace before authentication awaits", async () => {
+        const pending = deferred<Response>();
+        fetchMock
+            .mockReturnValueOnce(pending.promise)
+            .mockResolvedValueOnce(response([]));
+        const operation = client.request("http://localhost/api/v1/clouds");
+        window.history.replaceState(null, "", "/machines/?namespace=analytics");
+        pending.resolve(response({ access_token: "web", expires_in: 600 }));
+        await operation;
+        expect(
+            (fetchMock.mock.calls[1][0] as Request).headers.get(
+                "X-Vmango-Namespace",
+            ),
+        ).toBe("platform");
+    });
+    it("recovers the original namespace and idempotency key after switching", async () => {
+        await loggedIn();
+        fetchMock.mockRejectedValueOnce(new TypeError("lost response"));
+        let uncertain: InstanceType<typeof client.APIError> | undefined;
+        try {
+            await client.request(
+                "http://localhost/api/v1/clouds/local/machines",
+                "POST",
+                { name: "same" },
+            );
+        } catch (error) {
+            uncertain = error as InstanceType<typeof client.APIError>;
+        }
+        const first = fetchMock.mock.calls[0][0] as Request;
+        window.history.replaceState(null, "", "/machines/?namespace=analytics");
+        fetchMock.mockResolvedValueOnce(
+            response(
+                { task: { id: "saved" }, status_url: "/api/v1/tasks/saved" },
+                202,
+            ),
+        );
+        await uncertain!.recover!();
+        const recovered = fetchMock.mock.calls[1][0] as Request;
+        expect(recovered.headers.get("X-Vmango-Namespace")).toBe("platform");
+        expect(recovered.headers.get("Idempotency-Key")).toBe(
+            first.headers.get("Idempotency-Key"),
+        );
+        fetchMock.mockResolvedValueOnce(
+            response(
+                { task: { id: "new" }, status_url: "/api/v1/tasks/new" },
+                202,
+            ),
+        );
+        await client.request(
+            "http://localhost/api/v1/clouds/local/machines",
+            "POST",
+            { name: "same" },
+        );
+        const other = fetchMock.mock.calls[2][0] as Request;
+        expect(other.headers.get("X-Vmango-Namespace")).toBe("analytics");
+        expect(other.headers.get("Idempotency-Key")).not.toBe(
+            first.headers.get("Idempotency-Key"),
+        );
+    });
+});
+it("snapshots the submitted body before asynchronous idempotency preparation", async () => {
+    await loggedIn();
+    fetchMock.mockResolvedValueOnce(
+        response(
+            { task: { id: "saved" }, status_url: "/api/v1/tasks/saved" },
+            202,
+        ),
+    );
+    const body = { name: "Accepted label", disks: [{ volume_id: "original" }] };
+    const pending = client.request(
+        "http://localhost/api/v1/clouds/local/machines",
+        "POST",
+        body,
+    );
+    body.name = "Later edits";
+    body.disks[0].volume_id = "different";
+    await pending;
+    const sent = fetchMock.mock.calls[0][0] as Request;
+    expect(await sent.json()).toEqual({
+        name: "Accepted label",
+        disks: [{ volume_id: "original" }],
+    });
 });

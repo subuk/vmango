@@ -244,13 +244,13 @@ func TestMachineDetailCatalogReusesResolvedMachine(t *testing.T) {
 	}
 }
 
-func TestHiddenVolumeDetailRemainsReadableForExistingDiskLabels(t *testing.T) {
+func TestHiddenVolumeDetailIsNotAWorkloadResource(t *testing.T) {
 	repo := &volumeMigrationRepo{hidden: true}
 	h := volumeMigrationAPI(t, repo, &volumeMigrationPools{})
 	id := (compute.VolumeAddress{Host: "a", Path: "/same"}).ID()
 	w := apiRequest(h, "GET", "/api/v1/clouds/one/volumes/"+id, "", true)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"name":"same"`) || !strings.Contains(w.Body.String(), `"storage_classes":[]`) {
-		t.Fatal("existing hidden source detail changed visibility or exposed clone choices", w.Code, w.Body)
+	if w.Code != 404 {
+		t.Fatal("hidden source was addressable as a workload volume", w.Code, w.Body)
 	}
 	w = apiRequest(h, "GET", "/api/v1/clouds/one/volumes", "", true)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"items":[]`) {
@@ -282,13 +282,14 @@ func TestVolumeSubmissionRecoveryPrecedesBackendResolution(t *testing.T) {
 			backend := &volumeMigrationRepo{}
 			volumes := compute.NewVolumeService(backend)
 			clouds := &compute.CloudService{Definitions: []compute.Cloud{{ID: "one", Hosts: []compute.CloudHost{{Node: "a"}, {Node: "b"}}}}, Volumes: volumes}
-			h, err := New(cfg, zerolog.Nop(), nil, nil, nil, nil, volumes, nil, &compute.VirtualMachineManager{Clouds: clouds}, nil, testAuthService(t, cfg), service)
+			h, err := newScopedTestAPI(cfg, zerolog.Nop(), nil, nil, nil, nil, volumes, nil, &compute.VirtualMachineManager{Clouds: clouds}, nil, testAuthService(t, cfg), service)
 			if err != nil {
 				t.Fatal(err)
 			}
 			submit := func(path, body string) *httptest.ResponseRecorder {
 				r := httptest.NewRequest(test.method, "https://vmango.test"+path, strings.NewReader(body))
 				r.Header.Set("Authorization", "Bearer "+testWebToken())
+				r.Header.Set("X-Vmango-Namespace", "test")
 				r.Header.Set("Idempotency-Key", "same-submission-key")
 				if body != "" {
 					r.Header.Set("Content-Type", "application/json")

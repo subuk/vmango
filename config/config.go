@@ -238,6 +238,8 @@ type SubscribeConfig struct {
 }
 
 type Config struct {
+	Namespaces            []NamespaceConfig   `hcl:"namespace"`
+	NamespaceDirectory    string              `hcl:"namespace_directory"`
 	Clouds                []CloudConfig       `hcl:"cloud"`
 	ImageTransfers        ImageTransferConfig `hcl:"image_transfers"`
 	Tasks                 TaskConfig          `hcl:"tasks"`
@@ -267,6 +269,7 @@ type TaskConfig struct {
 
 func Default() *Config {
 	return &Config{
+		NamespaceDirectory:    "~/.vmango/namespaces",
 		ImageTransfers:        ImageTransferConfig{MaxBytes: 16 << 30, TimeoutSeconds: 3600, IdleTimeoutSeconds: 120},
 		Tasks:                 TaskConfig{Directory: "~/.vmango/tasks", Workers: 2},
 		LogLevel:              "info",
@@ -413,6 +416,9 @@ func Parse(filename string) (*Config, error) {
 		return nil, err
 	}
 	if _, err := config.CloudDefinitions(); err != nil {
+		return nil, err
+	}
+	if _, err := config.NamespaceDefinitions(); err != nil {
 		return nil, err
 	}
 	if config.ImageTransfers.MaxBytes <= 0 || config.ImageTransfers.MaxBytes > 1<<40 || config.ImageTransfers.TimeoutSeconds < 1 || config.ImageTransfers.TimeoutSeconds > 86400 || config.ImageTransfers.IdleTimeoutSeconds < 1 || config.ImageTransfers.IdleTimeoutSeconds > config.ImageTransfers.TimeoutSeconds {

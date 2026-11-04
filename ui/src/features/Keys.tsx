@@ -1,3 +1,5 @@
+import { WorkspaceLink as RouterLink } from "../app/Workspace";
+import { useRequest } from "../app/Workspace";
 import { useState } from "react";
 import {
     Box,
@@ -7,15 +9,15 @@ import {
     TextField,
     Typography,
 } from "@mui/material";
-import { Link as RouterLink, useParams } from "react-router";
+import { useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { esc, useResource, type Key } from "../api/hooks";
-import { request } from "../api/client";
 import { Confirm, Copy, PageTitle, QueryState } from "../components/common";
 import { ResourceTable } from "../components/ResourceTable";
 import { fieldError, OperationDialog } from "../components/OperationDialog";
 
 export function Keys() {
+    const request = useRequest();
     const q = useResource<Key[]>("/api/v1/keys");
     const [add, setAdd] = useState(false);
     const [remove, setRemove] = useState<Key>();

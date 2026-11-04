@@ -1,8 +1,8 @@
 # VM automation API v1
 
 The JSON API powers the embedded React UI. Authenticated operators retain their
-existing application-wide resource authority, including Administration, until
-namespace/RBAC support is introduced separately. Existing credential-kind,
+authority to select any configured namespace and inspect Administration until
+RBAC is introduced separately. Workload calls require explicit namespace context. Existing credential-kind,
 transport and origin checks still apply. Infrastructure mutations use durable
 asynchronous tasks. The UI requires
 the API; the legacy `web` block and `api_disabled=true` fail with a migration
@@ -96,9 +96,16 @@ Malformed IDs, including the former path-only IDs, return 422. A decoded host
 outside the requested cloud returns 404 before storage access; a missing volume
 returns 404 and an unavailable backend returns 503.
 
-SSH keys remain application-wide and identified by their fingerprint. Sizes are
-integer **bytes**. Enums are strings. Unknown fields and invalid types are
-rejected. No namespace selection or workspace headers are introduced here.
+SSH keys and cloud-init templates are namespace-wide. A key's identity is its
+namespace plus fingerprint. All workload routes require exactly one valid
+`X-Vmango-Namespace` header. `GET /namespaces` discovers configured choices without
+that header; `GET /namespaces/{namespace}` requires matching context. Body/query
+namespace selectors are rejected. Administration ignores workspace selection and
+provides read-only cross-namespace machine/volume inventory and task history.
+See [namespace configuration and migration](NAMESPACES.md).
+
+Sizes are integer **bytes**. Enums are strings. Unknown fields and invalid types
+are rejected.
 Paths below are relative to `/api/v1`.
 
 | Resource | Operations |
@@ -209,7 +216,8 @@ Administration is available to users authenticated through the existing
 local/OIDC/token flows, subject to the same credential-kind, transport and origin
 restrictions. It adds no temporary administrator flag or role system. Configuration
 and diagnostics do not send or use workspace namespace/context headers for
-filtering or authority. Namespace scope and RBAC are separate later changes.
+filtering or authority. Workload namespace context is mandatory; RBAC remains a
+separate feature.
 
 | GET path | Result |
 | --- | --- |
@@ -269,9 +277,10 @@ of global image references. Public cloud catalogs expose user-facing OS,
 requirements and guest compatibility, with administrative sources/download/cache
 settings omitted by the server.
 
-Tasks remain at `/tasks...`, with their existing API methods, scope, references,
-polling and cancel/release safety checks. Their placement in Administration
-navigation does not change the task contract. The removed `/hosts/{node}/cloud`
+Tasks remain at `/tasks...`, with namespace-scoped lists, detail, cancellation
+and lock release. Their placement in Administration navigation does not change
+that scope. Read-only all-namespace history uses `/administration/tasks...`.
+Accepted namespace/cloud attribution, real references and recovery safety are retained. The removed `/hosts/{node}/cloud`
 reverse lookup has no replacement endpoint.
 
 ## Create a VM
@@ -292,8 +301,8 @@ selects that image ID. User-data is literal text for images with guest initializ
 optional `keys` contains fingerprints returned by `/api/v1/keys`.
 
 ```sh
-curl --config ~/.config/vmango/curl.conf https://vmango.example/api/v1/clouds/local
-curl --config ~/.config/vmango/curl.conf -H "Idempotency-Key: demo-create-001" --json @vm.json https://vmango.example/api/v1/clouds/local/machines
+curl --config ~/.config/vmango/curl.conf -H "X-Vmango-Namespace: platform" https://vmango.example/api/v1/clouds/local
+curl --config ~/.config/vmango/curl.conf -H "X-Vmango-Namespace: platform" -H "Idempotency-Key: demo-create-001" --json @vm.json https://vmango.example/api/v1/clouds/local/machines
 ```
 
 The protected curl configuration (mode 0600) contains
@@ -321,13 +330,13 @@ the instance type's `autostart` policy.
 
 See [configured clouds](CLOUDS.md) for placement, local disk ownership, adoption
 and API migration rules. Binary archives include this reference as `API.md`,
-alongside `CLOUDS.md`, `IMAGES.md`, `TASKS.md` and `MIGRATION.md`; in an extracted
+alongside `CLOUDS.md`, `IMAGES.md`, `NAMESPACES.md`, `TASKS.md` and `MIGRATION.md`; in an extracted
 archive use `IMAGES.md` for the image guide.
 
 ## Consoles
 
 The full stream protocol is also served at `/api/console-protocol` and included
-in OpenAPI. Native clients send Bearer JWTs on the WebSocket handshake:
+in OpenAPI. Native clients send a Bearer JWT and `X-Vmango-Namespace` on the WebSocket handshake:
 
 `/api/v1/clouds/{cloud}/machines/{vm}/consoles/{serial|vnc}/ws`
 
@@ -345,10 +354,10 @@ clients request shared mode; actual sharing is controlled by the backend.
 Run the native example with a protected file containing your personal JWT:
 
 ```sh
-go run -mod=vendor ./examples/console -token-file ~/.config/vmango/token \
+go run -mod=vendor ./examples/console -namespace platform -token-file ~/.config/vmango/token \
   -url wss://vmango.example/api/v1/clouds/local/machines/550e8400-e29b-41d4-a716-446655440000/consoles/serial/ws
 
-go run -mod=vendor ./examples/console -token-file ~/.config/vmango/token -listen 127.0.0.1:5901 \
+go run -mod=vendor ./examples/console -namespace platform -token-file ~/.config/vmango/token -listen 127.0.0.1:5901 \
   -url wss://vmango.example/api/v1/clouds/local/machines/550e8400-e29b-41d4-a716-446655440000/consoles/vnc/ws
 ```
 
@@ -359,7 +368,7 @@ viewer connection and exits when it disconnects.
 ### Reusable browser links
 
 ```sh
-curl --config ~/.config/vmango/web-curl.conf --json '{}' \
+curl --config ~/.config/vmango/web-curl.conf -H "X-Vmango-Namespace: platform" --json '{}' \
   https://vmango.example/api/v1/clouds/local/machines/550e8400-e29b-41d4-a716-446655440000/consoles/vnc/links
 ```
 
@@ -371,7 +380,7 @@ page provides the same issuance/sharing flow.
 The response contains `url` and `expires_at`. Serial issuance accepts
 `{"force":true}` to authorize explicit takeover for connections using that link.
 Links use HS256 JWTs with a distinct `vmango-console` audience,
-binding purpose, issuing user, cloud, machine UUID, console type, force permission and
+binding purpose, issuing user, namespace, cloud, machine UUID, console type, force permission and
 absolute expiry. The payload is not encrypted and contains no account password.
 A link grants only console access; the public page is an empty client shell.
 

@@ -95,6 +95,8 @@ type Release struct {
 }
 
 type Task struct {
+	NamespaceID      string        `json:"namespace_id,omitempty"`
+	CloudID          string        `json:"cloud_id,omitempty"`
 	ID               string        `json:"id"`
 	Kind             string        `json:"kind"`
 	State            State         `json:"state"`
@@ -135,9 +137,11 @@ type Repository interface {
 }
 
 type Command struct {
-	Kind      string
-	Payload   json.RawMessage
-	Resources []ResourceRef
+	NamespaceID string
+	CloudID     string
+	Kind        string
+	Payload     json.RawMessage
+	Resources   []ResourceRef
 	// ExecutionGroups serialize accepted commands without occupying a worker
 	// while another member runs. They are scheduling hints, not dependencies.
 	ExecutionGroups []string
@@ -156,11 +160,14 @@ type LockResolver interface {
 }
 
 type Filter struct {
-	States   []State
-	Resource *ResourceRef
-	Blocking bool
-	Before   string
-	Limit    int
+	NamespaceID string
+	CloudID     string
+	Scoped      bool
+	States      []State
+	Resource    *ResourceRef
+	Blocking    bool
+	Before      string
+	Limit       int
 }
 type Page struct {
 	Items  []Task `json:"items"`
@@ -178,4 +185,12 @@ var (
 
 type ConflictError struct{ TaskID string }
 
-func (e *ConflictError) Error() string { return "resource is blocked by task " + e.TaskID }
+func (e *ConflictError) Error() string {
+	if e.TaskID == "" {
+		return "resource is blocked by another operation"
+	}
+	return "resource is blocked by task " + e.TaskID
+}
+
+// ContextValidator validates active request scope before replay without backend reads.
+type ContextValidator interface{ ValidateContext(Command) error }
