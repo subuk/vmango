@@ -189,8 +189,8 @@ func Web(configFilename string) error {
 	}
 	images.ManagedSources = compute.NewManagedImageService(volumeRepo, artifactRepo, imageBindings, compute.ImageTransferLimits{MaxBytes: uint64(cfg.ImageTransfers.MaxBytes), Timeout: time.Duration(cfg.ImageTransfers.TimeoutSeconds) * time.Second, IdleTimeout: time.Duration(cfg.ImageTransfers.IdleTimeoutSeconds) * time.Second})
 
-	if err := cfg.API.LoadSigningKeys(); err != nil {
-		logger.Fatal().Err(err).Msg("cannot initialize signing keys")
+	if err := cfg.API.LoadSigningKey(); err != nil {
+		logger.Fatal().Err(err).Msg("cannot initialize signing key")
 	}
 	sessions, err := filesystem.NewAuthRepository(util.ExpandHomeDir(cfg.API.SessionDir), "refresh")
 	if err != nil {

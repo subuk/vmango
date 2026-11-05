@@ -157,7 +157,6 @@ api {
     listen = "127.0.0.1:8080"
     base_url = "http://localhost:8080"
     jwt_signing_key_file = "~/.vmango/jwt_signing_key"
-    console_signing_key_file = "~/.vmango/console_signing_key"
 
     user "admin" {
         hashed_password = "REPLACE_WITH_GENPW_OUTPUT"
@@ -263,14 +262,14 @@ Run `./vmango genpw` (PowerShell: `.\vmango.exe genpw`), enter your administrato
 password, and paste the printed bcrypt hash into `hashed_password` without
 changing its `$` characters. Run this in an interactive terminal.
 
-Independent Ed25519 signing keys are stored as unencrypted PKCS#8 PEM files with
-mode `0600`. Defaults are `~/.vmango/jwt_signing_key` and
-`~/.vmango/console_signing_key`. Override them with `api.jwt_signing_key_file` and
-`api.console_signing_key_file`. Missing files and contents that cannot be decoded
-as PEM, including old hex secrets, are replaced automatically at startup. This
-invalidates old signed tokens and console links. Unsupported or invalid keys in
-decodable PEM files cause a startup error and are left untouched. Preserve the new
-private files across restarts and remove any old inline key settings.
+API JWTs and console links share one Ed25519 signing key, stored as an unencrypted
+PKCS#8 PEM file with mode `0600`. The default is `~/.vmango/jwt_signing_key`;
+override it with `api.jwt_signing_key_file`. A missing file or contents that cannot
+be decoded as PEM, including an old hex secret, is replaced automatically at
+startup. This invalidates old signed tokens and console links. An unsupported or
+invalid key in a decodable PEM file causes a startup error and is left untouched.
+Preserve the private file across restarts. Remove the obsolete
+`api.console_signing_key_file` and any old inline key settings from configuration.
 Start from the extracted directory, which must be writable:
 
 ```sh

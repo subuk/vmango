@@ -56,7 +56,6 @@ api {
     base_url = "https://vmango.example.com"
     session_secure = true
     jwt_signing_key_file = "/var/lib/vmango/jwt_signing_key"
-    console_signing_key_file = "/var/lib/vmango/console_signing_key"
     session_dir = "/var/lib/vmango/sessions"
     token_dir = "/var/lib/vmango/tokens"
 
@@ -162,7 +161,7 @@ bound to `127.0.0.1`. Configure both `api.base_url` with an HTTPS URL and
 in another container, put both on a private Docker network and proxy to
 `http://vmango:8080` instead of the proxy container's own localhost.
 
-The named volume stores signing keys, SSH key records, sessions, API-token
+The named volume stores the signing key, SSH key records, sessions, API-token
 metadata and durable task/image/volume metadata. VM disks and downloaded cloud
 images remain in the storage pools on the hypervisors.
 

@@ -298,12 +298,11 @@ tasks { directory = %q workers = 2 }
 api {
  listen = %q
  jwt_signing_key_file = %q
- console_signing_key_file = %q
  session_dir = %q
  token_dir = %q
  user "acceptance" { hashed_password = %q }
 }
-`, filepath.Join(root, "keys"), filepath.Join(root, "cloud-init-templates"), filepath.Join(root, "namespaces"), filepath.Join(root, "tasks"), address, filepath.Join(root, "jwt-key"), filepath.Join(root, "console-key"), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
+`, filepath.Join(root, "keys"), filepath.Join(root, "cloud-init-templates"), filepath.Join(root, "namespaces"), filepath.Join(root, "tasks"), address, filepath.Join(root, "jwt-key"), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
 
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {

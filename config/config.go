@@ -41,9 +41,7 @@ type OidcConfig struct {
 
 type APIConfig struct {
 	JWTSigningKeyFile          string          `hcl:"jwt_signing_key_file"`
-	ConsoleSigningKeyFile      string          `hcl:"console_signing_key_file"`
 	APIDisabled                bool            `hcl:"api_disabled"`
-	ConsoleSigningKey          string          `hcl:"-"`
 	ConsoleLinkLifetimeSeconds int             `hcl:"console_link_lifetime_seconds"`
 	Listen                     string          `hcl:"listen"`
 	TLSCertFile                string          `hcl:"tls_cert_file"`
@@ -277,7 +275,6 @@ func Default() *Config {
 		CloudInitTemplatesDir: "~/.vmango/cloud-init-templates",
 		API: APIConfig{
 			JWTSigningKeyFile:          "~/.vmango/jwt_signing_key",
-			ConsoleSigningKeyFile:      "~/.vmango/console_signing_key",
 			Listen:                     ":8080",
 			Debug:                      false,
 			SessionDir:                 "~/.vmango/sessions",
@@ -320,7 +317,7 @@ func Parse(filename string) (*Config, error) {
 		}
 		for _, item := range list.Filter("api").Items {
 			if obj, ok := item.Val.(*ast.ObjectType); ok {
-				for _, removed := range []string{"jwt_signing_key", "console_signing_key", "session_secret", "session_domain", "session_max_age", "static_version", "media_upload_tmp"} {
+				for _, removed := range []string{"jwt_signing_key", "console_signing_key", "console_signing_key_file", "session_secret", "session_domain", "session_max_age", "static_version", "media_upload_tmp"} {
 					if len(obj.List.Filter(removed).Items) > 0 {
 						return nil, fmt.Errorf("api.%s was removed; follow docs/UI-MIGRATION.md and configure JWT signing and credential stores", removed)
 					}
@@ -400,16 +397,6 @@ func Parse(filename string) (*Config, error) {
 	}
 	if config.API.ConsoleLinkLifetimeSeconds < 1 || config.API.ConsoleLinkLifetimeSeconds > 86400*30 {
 		return nil, fmt.Errorf("console_link_lifetime_seconds must be between 1 and 2592000")
-	}
-	if config.API.ConsoleSigningKey != "" {
-		if err := auth.ValidateKey(config.API.ConsoleSigningKey); err != nil {
-			return nil, fmt.Errorf("console_signing_key: %w", err)
-		}
-		if config.API.JWTSigningKey != "" {
-			if err := auth.ValidateSigningKeys(config.API.JWTSigningKey, config.API.ConsoleSigningKey); err != nil {
-				return nil, err
-			}
-		}
 	}
 	if _, _, err := config.ImageDefinitions(); err != nil {
 		return nil, err

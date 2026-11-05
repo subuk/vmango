@@ -17,8 +17,9 @@ cp vmango.dist.conf vmango.conf
 ```
 
 Edit `vmango.conf` for your host and web login before starting the server.
-Use `./bin/vmango genpw` to generate a password hash and replace the example
-JWT and console signing keys. The [quick-start guide](/docs/start/#connect-a-hypervisor)
+Use `./bin/vmango genpw` to generate a password hash for your configured user.
+The shared JWT and console signing key is generated on startup when missing.
+The [quick-start guide](/docs/start/#connect-a-hypervisor)
 explains host connections, storage pools and authentication; use
 `./bin/vmango` in place of `./vmango` when following it with a source build.
 The [example configuration](https://github.com/subuk/vmango/blob/master/vmango.dist.conf)

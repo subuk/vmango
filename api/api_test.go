@@ -39,7 +39,6 @@ func apiTestConfig(t *testing.T) *config.Config {
 	}
 	cfg.API.Users = []config.UserAPIConfig{{Id: "admin", HashedPassword: string(hash)}}
 	cfg.API.JWTSigningKey = testJWTKey
-	cfg.API.ConsoleSigningKey = testConsoleKey
 	return cfg
 }
 func apiRequest(h http.Handler, method, path, body string, auth bool) *httptest.ResponseRecorder {
@@ -303,7 +302,7 @@ func TestConsoleTokenBinding(t *testing.T) {
 			t.Fatal("accepted tampering")
 		}
 	}
-	cfg.API.ConsoleSigningKey = testRotatedConsoleKey
+	cfg.API.JWTSigningKey = testRotatedJWTKey
 	if _, err := e.verifyConsole(token, "node", "vm", "serial", now); err == nil {
 		t.Fatal("rotation did not invalidate link")
 	}
@@ -317,7 +316,7 @@ func TestConsoleEd25519SignatureAndAlgorithm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key, err := auth.ParseSigningKey(testConsoleKey)
+	key, err := auth.ParseSigningKey(testJWTKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +329,7 @@ func TestConsoleEd25519SignatureAndAlgorithm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	apiKey, err := auth.ParseSigningKey(testJWTKey)
+	otherKey, err := auth.ParseSigningKey(testRotatedJWTKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +341,7 @@ func TestConsoleEd25519SignatureAndAlgorithm(t *testing.T) {
 		{"legacy HMAC", jwt.SigningMethodHS256, []byte(strings.Repeat("abcdef01", 8))},
 		{"public key HMAC", jwt.SigningMethodHS256, []byte(key.Public().(ed25519.PublicKey))},
 		{"old algorithm identifier", jwt.SigningMethodEdDSA, key},
-		{"API signing key", auth.SigningMethodEd25519, apiKey},
+		{"unrelated signing key", auth.SigningMethodEd25519, otherKey},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			forged, err := jwt.NewWithClaims(tc.method, parsed.Claims).SignedString(tc.key)
@@ -354,9 +353,71 @@ func TestConsoleEd25519SignatureAndAlgorithm(t *testing.T) {
 			}
 		})
 	}
-	cfg.API.ConsoleSigningKey = "\n" + testJWTKey
-	if _, err := e.signConsole(consoleClaim{}); err == nil {
-		t.Fatal("console accepted API key with different PEM formatting")
+}
+
+func TestSharedSigningKeySeparatesTokenPurposes(t *testing.T) {
+	cfg := apiTestConfig(t)
+	e := &Environ{cfg: &cfg.API}
+	service := testAuthService(t, cfg)
+	now := time.Now()
+	web := testWebToken()
+	console, err := e.signConsole(consoleClaim{"test", 3, "console", "admin", "node", "vm", "serial", false, now.Add(auth.AccessLifetime).Unix()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Authenticate(web); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Authenticate(console); err == nil {
+		t.Fatal("console link accepted by API")
+	}
+	if _, err := e.verifyConsole(web, "node", "vm", "serial", now); err == nil {
+		t.Fatal("API token accepted as console link")
+	}
+
+	key, err := auth.ParseSigningKey(testJWTKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := jwt.Parse(web, func(*jwt.Token) (any, error) { return key.Public(), nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Make every other claim valid for both consumers to isolate the audience
+	// and purpose checks rather than relying on missing fields for rejection.
+	base := parsed.Claims.(jwt.MapClaims)
+	base["namespace"], base["v"] = "test", 3
+	base["cloud"], base["vm"], base["kind"] = "node", "vm", "serial"
+	for _, tc := range []struct {
+		name, audience, purpose string
+		api, console            bool
+	}{
+		{"API", auth.Audience, "access", true, false},
+		{"console", "vmango-console", "console", false, true},
+		{"wrong API audience", "vmango-console", "access", false, false},
+		{"wrong console audience", auth.Audience, "console", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base["aud"], base["purpose"] = tc.audience, tc.purpose
+			raw, err := jwt.NewWithClaims(auth.SigningMethodEd25519, base).SignedString(key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, apiErr := service.Authenticate(raw)
+			_, consoleErr := e.verifyConsole(raw, "node", "vm", "serial", now)
+			if (apiErr == nil) != tc.api || (consoleErr == nil) != tc.console {
+				t.Fatalf("unexpected credential acceptance: API=%v console=%v", apiErr, consoleErr)
+			}
+		})
+	}
+
+	cfg.API.JWTSigningKey = testRotatedJWTKey
+	rotated := testAuthService(t, cfg)
+	if _, err := rotated.Authenticate(web); err == nil {
+		t.Fatal("shared key rotation did not invalidate API token")
+	}
+	if _, err := e.verifyConsole(console, "node", "vm", "serial", now); err == nil {
+		t.Fatal("shared key rotation did not invalidate console link")
 	}
 }
 
@@ -519,13 +580,8 @@ MC4CAQAwBQYDK2VwBCIEIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB
 -----END PRIVATE KEY-----
 `
 
-const testConsoleKey = `-----BEGIN PRIVATE KEY-----
+const testRotatedJWTKey = `-----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC
------END PRIVATE KEY-----
-`
-
-const testRotatedConsoleKey = `-----BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIAMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD
 -----END PRIVATE KEY-----
 `
 

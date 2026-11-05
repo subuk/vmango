@@ -25,10 +25,10 @@ Sec-Fetch-Site, set the public `api.base_url` and enable `api.session_secure`.
 Keep the backend listener inaccessible to untrusted clients. Arbitrary forwarded
 headers are not trusted. HTTP is supported for loopback development.
 
-Vmango generates **two independent Ed25519 private keys** on startup and stores
-them in unencrypted PKCS#8 PEM files with mode `0600`. Preserve these files across
-restarts. To provision them manually, use `openssl genpkey -algorithm ED25519`
-for each key and restrict file access to the service account:
+Vmango generates **one shared Ed25519 private key** for API JWTs and console links
+on startup and stores it in an unencrypted PKCS#8 PEM file with mode `0600`.
+Preserve this file across restarts. To provision it manually, use
+`openssl genpkey -algorithm ED25519` and restrict file access to the service account:
 
 ```hcl
 api {
@@ -36,7 +36,6 @@ api {
     base_url = "https://vmango.example"
     session_secure = true
     jwt_signing_key_file = "~/.vmango/jwt_signing_key"
-    console_signing_key_file = "~/.vmango/console_signing_key"
     session_dir = "/var/lib/vmango/sessions"
     token_dir = "/var/lib/vmango/tokens"
     # Move your existing user, oidc and link blocks here.
@@ -193,14 +192,15 @@ records are removed at startup and hourly. Rate limiting is not implemented.
 
 ## Restart, key changes and backups
 
-Restarting with the same keys/directories preserves login and personal tokens.
-There is one persistent Ed25519 API signing key and no seamless multi-key rotation.
-Missing files and contents that cannot be decoded as PEM are automatically replaced
-with new keys. A decodable PEM with an invalid or unsupported key causes startup
-to fail without replacing the file. Changing a key invalidates existing browser
-and personal JWTs.
+Restarting with the same key/directories preserves login and personal tokens.
+There is one persistent Ed25519 signing key shared by API JWTs and console links,
+with no seamless multi-key rotation.
+A missing file or contents that cannot be decoded as PEM is automatically replaced
+with a new key. A decodable PEM with an invalid or unsupported key causes startup
+to fail without replacing the file. Changing the key invalidates existing browser
+and personal JWTs and console links.
 Valid refresh sessions may issue web JWTs under the new key; personal tokens must
-be reissued. Console credentials have a separate key and audience.
+be reissued. Console credentials have a separate audience and purpose.
 
 Deleting the session directory while stopped invalidates refresh credentials;
 already issued web JWTs can survive until expiry. Restoring old session/token
@@ -256,12 +256,17 @@ mutation endpoints. Configure a dedicated tasks directory; package examples use
 that survives navigation and reload. See [task storage and restart semantics](TASKS.md)
 for interruption, manual lock release, private payload cleanup and retention.
 
-Signing keys live in files configured through `jwt_signing_key_file` and
-`console_signing_key_file`; remove the old inline settings. Both API JWTs and
-console links now use Ed25519 signatures with `alg: Ed25519`. Existing hex secret
-files are automatically replaced with independent PKCS#8 PEM private keys at
-startup. Old HS256 tokens and console links are rejected; personal tokens must be
-reissued and console links recreated. Valid refresh sessions may issue new web
-JWTs. There is no compatibility period. Preserve the new key files across restarts.
-PEM files containing a different key type, encrypted keys or invalid key data are
-reported as errors and left untouched. Read/write errors also fail startup.
+The signing key lives in the file configured through `jwt_signing_key_file`;
+remove the old inline settings and `console_signing_key_file`. Both API JWTs and
+console links use the same Ed25519 key with `alg: Ed25519`. An existing hex secret
+file is automatically replaced with a PKCS#8 PEM private key at startup. Old HS256
+tokens and console links are rejected; personal tokens must be reissued and
+console links recreated. Valid refresh sessions may issue new web JWTs. There is
+no compatibility period. Preserve the new key file across restarts. PEM files
+containing a different key type, encrypted keys or invalid key data are reported
+as errors and left untouched. Read/write errors also fail startup.
+
+When upgrading from separate Ed25519 keys, preserve `jwt_signing_key_file` and
+remove `console_signing_key_file` from configuration. Existing API JWTs remain
+valid; console links signed with the former console key must be recreated. The
+old console key file is no longer used and is left untouched.

@@ -67,8 +67,8 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	if taskService == nil {
 		return nil, fmt.Errorf("durable task service is required")
 	}
-	if err := auth.ValidateSigningKeys(cfg.API.JWTSigningKey, cfg.API.ConsoleSigningKey); err != nil {
-		return nil, fmt.Errorf("signing keys: %w", err)
+	if err := auth.ValidateKey(cfg.API.JWTSigningKey); err != nil {
+		return nil, fmt.Errorf("jwt_signing_key: %w", err)
 	}
 
 	env := &Environ{cfg: &cfg.API, logger: logger, router: mux.NewRouter(), networks: networks, keys: keys, volpools: volpools, nodes: nodes, volumes: volumes, vms: vms, vmanager: vmanager, images: images, auth: authentication, tasks: taskService}

@@ -16,42 +16,33 @@ import (
 	"testing"
 )
 
-func TestSigningKeyFiles(t *testing.T) {
+func TestSigningKeyFile(t *testing.T) {
 	dir := t.TempDir()
-	c := APIConfig{JWTSigningKeyFile: filepath.Join(dir, "private", "jwt"), ConsoleSigningKeyFile: filepath.Join(dir, "private", "console")}
-	if err := c.LoadSigningKeys(); err != nil {
+	c := APIConfig{JWTSigningKeyFile: filepath.Join(dir, "private", "jwt")}
+	if err := c.LoadSigningKey(); err != nil {
 		t.Fatal(err)
 	}
-	jwt, console := c.JWTSigningKey, c.ConsoleSigningKey
-	if jwt == console {
-		t.Fatal("keys must differ")
-	}
-	if err := c.LoadSigningKeys(); err != nil {
+	key := c.JWTSigningKey
+	if err := c.LoadSigningKey(); err != nil {
 		t.Fatal(err)
 	}
-	if jwt != c.JWTSigningKey || console != c.ConsoleSigningKey {
-		t.Fatal("keys changed")
+	if key != c.JWTSigningKey {
+		t.Fatal("key changed")
 	}
-	for _, path := range []string{c.JWTSigningKeyFile, c.ConsoleSigningKeyFile} {
-		assertPrivateSigningKey(t, path)
-	}
+	assertPrivateSigningKey(t, c.JWTSigningKeyFile)
 
 	for _, data := range []string{"", "short", strings.Repeat("abcdef01", 8), "-----BEGIN PRIVATE KEY-----\ncorrupt\n-----END PRIVATE KEY-----"} {
-		for _, path := range []string{c.JWTSigningKeyFile, c.ConsoleSigningKeyFile} {
-			if err := os.WriteFile(path, []byte(data), 0600); err != nil {
-				t.Fatal(err)
-			}
-		}
-		if err := c.LoadSigningKeys(); err != nil {
+		if err := os.WriteFile(c.JWTSigningKeyFile, []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
-		for _, path := range []string{c.JWTSigningKeyFile, c.ConsoleSigningKeyFile} {
-			assertPrivateSigningKey(t, path)
+		if err := c.LoadSigningKey(); err != nil {
+			t.Fatal(err)
 		}
-		if c.JWTSigningKey == jwt || c.ConsoleSigningKey == console {
-			t.Fatal("invalid files did not receive new keys")
+		assertPrivateSigningKey(t, c.JWTSigningKeyFile)
+		if c.JWTSigningKey == key {
+			t.Fatal("invalid file did not receive a new key")
 		}
-		jwt, console = c.JWTSigningKey, c.ConsoleSigningKey
+		key = c.JWTSigningKey
 	}
 }
 
@@ -113,20 +104,6 @@ func TestSigningKeyReadErrorDoesNotGenerate(t *testing.T) {
 	}
 	if info, err := os.Stat(path); err != nil || !info.IsDir() {
 		t.Fatal("directory replaced", err)
-	}
-}
-
-func TestSigningKeyRejectsSameMaterial(t *testing.T) {
-	dir := t.TempDir()
-	c := APIConfig{JWTSigningKeyFile: filepath.Join(dir, "jwt"), ConsoleSigningKeyFile: filepath.Join(dir, "console")}
-	if err := c.LoadSigningKeys(); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(c.ConsoleSigningKeyFile, []byte("\n"+c.JWTSigningKey+"\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.LoadSigningKeys(); err == nil {
-		t.Fatal("same key accepted with different whitespace")
 	}
 }
 

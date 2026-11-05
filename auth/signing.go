@@ -46,19 +46,3 @@ func ValidateKey(value string) error {
 	_, err := ParseSigningKey(value)
 	return err
 }
-
-// ValidateSigningKeys compares key material, independent of PEM formatting.
-func ValidateSigningKeys(apiKey, consoleKey string) error {
-	a, err := ParseSigningKey(apiKey)
-	if err != nil {
-		return err
-	}
-	b, err := ParseSigningKey(consoleKey)
-	if err != nil {
-		return err
-	}
-	if a.Equal(b) {
-		return errors.New("JWT and console signing keys must be distinct")
-	}
-	return nil
-}

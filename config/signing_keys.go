@@ -12,20 +12,15 @@ import (
 	"subuk/vmango/util"
 )
 
-// LoadSigningKeys loads persistent Ed25519 keys, replacing missing or non-PEM files.
-func (c *APIConfig) LoadSigningKeys() error {
-	for _, key := range []struct {
-		path  string
-		value *string
-	}{{c.JWTSigningKeyFile, &c.JWTSigningKey}, {c.ConsoleSigningKeyFile, &c.ConsoleSigningKey}} {
-		path := util.ExpandHomeDir(key.path)
-		value, err := loadSigningKey(path)
-		if err != nil {
-			return fmt.Errorf("signing key file %s: %w", path, err)
-		}
-		*key.value = value
+// LoadSigningKey loads the shared Ed25519 key, replacing a missing or non-PEM file.
+func (c *APIConfig) LoadSigningKey() error {
+	path := util.ExpandHomeDir(c.JWTSigningKeyFile)
+	value, err := loadSigningKey(path)
+	if err != nil {
+		return fmt.Errorf("signing key file %s: %w", path, err)
 	}
-	return auth.ValidateSigningKeys(c.JWTSigningKey, c.ConsoleSigningKey)
+	c.JWTSigningKey = value
+	return nil
 }
 
 func readSigningKey(path string) (string, bool, error) {

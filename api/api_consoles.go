@@ -32,10 +32,11 @@ type consoleClaim struct {
 }
 
 func (e *Environ) consoleKey() (ed25519.PrivateKey, error) {
-	if err := auth.ValidateSigningKeys(e.cfg.JWTSigningKey, e.cfg.ConsoleSigningKey); err != nil {
+	key, err := auth.ParseSigningKey(e.cfg.JWTSigningKey)
+	if err != nil {
 		return nil, compute.ErrUnavailable
 	}
-	return auth.ParseSigningKey(e.cfg.ConsoleSigningKey)
+	return key, nil
 }
 func (e *Environ) signConsole(c consoleClaim) (string, error) {
 	key, err := e.consoleKey()

@@ -77,6 +77,7 @@ func TestAPIConfiguration(t *testing.T) {
 		{`api { console_link_lifetime_seconds = -1 }`, false, false, 0},
 		{`api { console_link_lifetime_seconds = 2592001 }`, false, false, 0},
 		{`api { console_signing_key = "short" }`, false, false, 0},
+		{`api { console_signing_key_file = "/unused/console-key" }`, false, false, 0},
 	} {
 		file := filepath.Join(t.TempDir(), "vmango.conf")
 		if err := os.WriteFile(file, []byte(tc.body), 0600); err != nil {
