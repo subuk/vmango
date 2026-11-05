@@ -41,6 +41,7 @@ def package(version, target, binary, runtime=None):
             "/docs/start/": "QUICKSTART.md",
             "/docs/docker/": "DOCKER.md",
             "/docs/clouds/": "CLOUDS.md",
+            "/docs/namespaces/": "NAMESPACES.md",
             "/docs/images/": "IMAGES.md",
         }
         for source, destination in guides.items():
