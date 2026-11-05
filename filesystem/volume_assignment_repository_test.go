@@ -114,9 +114,9 @@ func TestVolumeAssignmentStorageErrorsNeverMeanUnassigned(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Close()
-	if err := os.Rename(dir, dir+"-unavailable"); err != nil {
-		t.Fatal(err)
-	}
+	// Point reads at a missing store without renaming the live lock directory,
+	// which Windows does not allow while the repository holds its lock file.
+	r.dir = dir + "-unavailable"
 	if got, err := r.Get(assignmentVolume(), "scope"); err == nil || got != nil {
 		t.Fatal("unavailable registry returned empty membership")
 	}
