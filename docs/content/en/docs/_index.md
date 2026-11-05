@@ -24,6 +24,8 @@ and manage machines from your browser.
   Debian or RHEL.
 - [Configured clouds and scheduling](/docs/clouds/): define instance types, AZs,
   logical networks, storage classes and automatic placement.
+- [Namespaces](/docs/namespaces/): organize workloads into workspaces, select
+  a namespace and cloud, and assign existing machines and disks.
 - [Cloud images and provisioning](/docs/images/): choose an OS image, register
   it in Vmango and create your first machine.
 - [Automation API](/docs/api/): open Swagger UI, create an API token and
@@ -35,7 +37,8 @@ documents settings for hosts, images, authentication and event hooks.
 
 ## Explore the interface
 
-Review machine states, configured resources and IP addresses in one inventory.
+Choose a namespace and cloud, then review machine states, configured resources
+and IP addresses in that workspace's inventory.
 Filter by host or state, and open a machine to inspect its settings or connect to
 its console. These screenshots use demonstration data; select a screenshot to
 view it at full size.

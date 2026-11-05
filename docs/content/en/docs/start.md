@@ -132,11 +132,16 @@ with the bundled client:
 ```
 
 Edit the archive's `vmango.quickstart.conf` and save it as `vmango.conf`. Keep
-its shipped `image` and `cloud` blocks. The excerpt below shows only connection
+its shipped `namespace`, `image` and `cloud` blocks. The excerpt below shows only connection
 and login settings; it is not a complete cloud configuration:
 
 ```hcl
 key_file = "./authorized_keys"
+
+namespace "platform" {
+    name = "Platform"
+    clouds = ["local"]
+}
 
 cloud "local" {
     # Keep the shipped images, zone, instance types, network and storage class.
@@ -276,9 +281,16 @@ On Windows:
 ```
 
 Open [http://localhost:8080/](http://localhost:8080/) and log in as `admin` with
-the password you just entered. The configured cloud should appear after login;
-read-only host diagnostics are available under Hosts. Stop the
+the password you just entered. Choose **Platform** in the **Namespace** selector,
+then select the **local** cloud. Read-only host diagnostics are available under
+**Administration → Clouds → local → Hosts**. Stop the
 foreground server with Ctrl+C.
+
+A namespace groups your machines, disks, keys, templates and tasks into a
+workspace. The shipped configuration allows Platform to use the local cloud.
+See [Namespaces](/docs/namespaces/) to add workspaces or use multiple clouds.
+Existing machines and disks need explicit assignment after an upgrade; find
+them in Administration and follow the guide's migration instructions.
 
 To create a VM, first check the [cloud catalog and host bindings](/docs/clouds/),
 then follow the [cloud images and provisioning guide](/docs/images/)
@@ -299,6 +311,9 @@ VNC port; a successful libvirt TLS connection alone does not tunnel VNC.
 
 ## Troubleshooting empty clouds or hosts
 
+- Select a namespace and confirm its `clouds` list includes the desired cloud.
+  An empty selector requires a namespace block in the configuration and a restart.
+  Existing unassigned machines remain visible in Administration inventory.
 - Check the startup log for the configuration filename. Use `-c` explicitly
   if the current directory differs from the extracted archive.
 - Define at least one `host "name"` inside a cloud, including its `uri`.

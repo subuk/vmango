@@ -1,5 +1,9 @@
 # Namespace configuration and migration
 
+For an introduction and everyday browser workflows, start with the
+[namespace user guide](https://github.com/subuk/vmango/blob/master/docs/content/en/docs/namespaces.md). This guide covers the
+installation's storage, upgrade, migration and recovery procedures.
+
 Namespaces assign workload resources to an explicit logical owner. A namespace
 can use several clouds, and several namespaces can share a cloud. Until RBAC is
 introduced, every authenticated operator can select every configured namespace.
@@ -133,8 +137,8 @@ is assigned from a name, creator, host placement or an automatic default.
 4. Preview, then apply to an absolute private backup directory:
 
 ```sh
-vmango -c /etc/vmango.conf namespace-migrate --mapping migration.json
-vmango -c /etc/vmango.conf namespace-migrate --mapping migration.json \
+vmango namespace-migrate -c /etc/vmango.conf --mapping migration.json
+vmango namespace-migrate -c /etc/vmango.conf --mapping migration.json \
   --apply --backup /var/lib/vmango-backups/namespace-migration-01
 ```
 
@@ -151,6 +155,11 @@ addresses and deletion-safety records. Exact repeated imports are idempotent;
 conflicting target content is rejected rather than overwritten. Selected legacy
 entries are copied only into explicitly named destinations; their originals are
 retained. Read operations never perform assignment.
+
+5. After successful application, start Vmango with the updated configuration.
+   Sign in, select the destination namespace and cloud, and check its machines,
+   volumes, keys and templates. Unmapped resources remain in Administration.
+   Update API clients to send the namespace header and issue fresh console links.
 
 Queued or uncertain tasks holding selected resources block migration. Inspect
 and recover them before proceeding. Legacy queued commands without reliable
@@ -172,11 +181,11 @@ It uses the existing task service and safety rules, acquires the task-store
 process lock, and never starts queued execution:
 
 ```sh
-vmango -c /etc/vmango.conf task-recover --action inspect
-vmango -c /etc/vmango.conf task-recover --action inspect --id TASK_UUID
-vmango -c /etc/vmango.conf task-recover --action cancel --id TASK_UUID \
+vmango task-recover -c /etc/vmango.conf --action inspect
+vmango task-recover -c /etc/vmango.conf --action inspect --id TASK_UUID
+vmango task-recover -c /etc/vmango.conf --action cancel --id TASK_UUID \
   --operator maintainer --reason 'Cancel obsolete queued work after upgrade'
-vmango -c /etc/vmango.conf task-recover --action release --id TASK_UUID \
+vmango task-recover -c /etc/vmango.conf --action release --id TASK_UUID \
   --operator maintainer --reason 'Backend inspected; partial effects reconciled'
 ```
 

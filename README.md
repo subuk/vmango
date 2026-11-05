@@ -9,7 +9,7 @@ machines on existing hypervisors.
 
 Current features:
 
-* [Configuration-defined workload namespaces](docs/NAMESPACES.md)
+* [Workload namespaces: configuration and everyday use](docs/content/en/docs/namespaces.md)
 * SSH keys management and injection
 * Volume management
 * KVM machines via libvirt
@@ -19,6 +19,13 @@ Current features:
 * Bridged network
 
 ## Binary quick start
+
+Namespaces group machines, disks, SSH keys, templates and tasks into workspaces.
+Each workspace can use one or more configured clouds; several workspaces can
+share the same hosts. See the [namespace user guide](docs/content/en/docs/namespaces.md)
+for setup and browser workflows, or [upgrade and migration](docs/NAMESPACES.md)
+when updating an existing installation. All authenticated operators can currently
+select all configured namespaces; per-user permissions are separate future work.
 
 Download a ready-built archive for **Linux x64**, **Windows x64** or
 **macOS arm64** from [GitHub Releases](https://github.com/subuk/vmango/releases),

@@ -471,6 +471,10 @@ Linux/KVM compatibility, accelerated graphics, audio or application compatibilit
 
 ## Launch a machine
 
+Choose a [namespace](/docs/namespaces/) before opening **Create machine**, then
+select one of its allowed clouds. Keys and saved templates come from that
+namespace; the new machine and its disks will belong to it.
+
 1. **Choose a configuration.** In the selected cloud, choose an image, instance
    type, availability zone, logical network and storage class. Valid single
    choices are selected automatically.
