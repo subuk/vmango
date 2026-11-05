@@ -17,6 +17,28 @@ func currentAuthSID() (*windows.SID, error) {
 	}
 	return u.User.Sid, nil
 }
+
+func createAuthDirectory(path string) error {
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	sid, err := currentAuthSID()
+	if err != nil {
+		return err
+	}
+	// Set ownership and protected access at creation, including elevated tokens.
+	sd, err := windows.SecurityDescriptorFromString("O:" + sid.String() + "D:P(A;OICI;FA;;;" + sid.String() + ")")
+	if err != nil {
+		return err
+	}
+	attributes := &windows.SecurityAttributes{
+		Length:             uint32(unsafe.Sizeof(windows.SecurityAttributes{})),
+		SecurityDescriptor: sd,
+	}
+	return windows.CreateDirectory(p, attributes)
+}
+
 func makeAuthDirectory(path string) error {
 	_, err := os.Lstat(path)
 	missing := errors.Is(err, os.ErrNotExist)

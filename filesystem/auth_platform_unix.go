@@ -9,7 +9,8 @@ import (
 	"syscall"
 )
 
-func makeAuthDirectory(path string) error { return os.MkdirAll(path, 0700) }
+func makeAuthDirectory(path string) error   { return os.MkdirAll(path, 0700) }
+func createAuthDirectory(path string) error { return os.Mkdir(path, 0700) }
 func checkAuthPath(path string, dir bool) error {
 	info, err := os.Lstat(path)
 	if err != nil {

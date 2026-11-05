@@ -104,8 +104,7 @@ func TestNamespaceCatalogMigrationDryRunApplyResume(t *testing.T) {
 	}
 	catalog.Close()
 	for _, name := range []string{"manifest.json", "effects.json", "legacy-templates/" + template.ID + ".json", "legacy-keys", "vmango.conf"} {
-		info, err := os.Stat(filepath.Join(backup, name))
-		if err != nil || info.Mode().Perm() != 0600 {
+		if err := filesystem.CheckPrivateBackupPath(filepath.Join(backup, name), false); err != nil {
 			t.Fatal("missing or unsafe backup", name, err)
 		}
 	}
@@ -169,7 +168,7 @@ func TestMigrationBackupRejectsSymlinkAndIncompleteDirectory(t *testing.T) {
 	if err := copyMigrationPath(link, filepath.Join(root, "copy")); err == nil {
 		t.Fatal("symlink backup accepted")
 	}
-	if err := writeMigrationFile(link, []byte("replacement")); err == nil {
+	if err := filesystem.WritePrivateBackupFile(link, []byte("replacement")); err == nil {
 		t.Fatal("symlink target overwritten")
 	}
 	data, _ := os.ReadFile(source)

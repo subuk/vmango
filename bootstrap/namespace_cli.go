@@ -324,7 +324,7 @@ func NamespaceMigrate(configPath, mappingPath, backupDir string, apply bool, out
 			return errors.New("apply requires an absolute --backup directory")
 		}
 		if _, err := os.Lstat(filepath.Join(backupDir, "manifest.json")); err == nil {
-			if err := privateMigrationDirectory(backupDir); err != nil {
+			if err := filesystem.CheckPrivateBackupPath(backupDir, true); err != nil {
 				return err
 			}
 			if err := readMigrationJSON(filepath.Join(backupDir, "manifest.json"), &manifest); err != nil {
@@ -409,62 +409,12 @@ func NamespaceMigrate(configPath, mappingPath, backupDir string, apply bool, out
 	return nil
 }
 
-func privateMigrationDirectory(dir string) error {
-	info, err := os.Lstat(dir)
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0700 {
-		return errors.New("migration backup must be a private real directory with mode 0700")
-	}
-	return nil
-}
-func syncMigrationDirectory(dir string) error {
-	f, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return f.Sync()
-}
 func writeMigrationJSON(path string, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
-	return writeMigrationFile(path, append(data, '\n'))
-}
-func writeMigrationFile(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	if err := privateMigrationDirectory(dir); err != nil {
-		return err
-	}
-	if info, err := os.Lstat(path); err == nil {
-		if !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
-			return errors.New("unsafe migration backup file")
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	f, err := os.CreateTemp(dir, ".pending-")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if _, err = f.Write(data); err == nil {
-		err = f.Sync()
-	}
-	closeErr := f.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	if err = os.Rename(f.Name(), path); err != nil {
-		return err
-	}
-	return syncMigrationDirectory(dir)
+	return filesystem.WritePrivateBackupFile(path, append(data, '\n'))
 }
 func copyMigrationPath(source, destination string) error {
 	info, err := os.Lstat(source)
@@ -478,7 +428,7 @@ func copyMigrationPath(source, destination string) error {
 		return errors.New("migration backup refuses symlink sources")
 	}
 	if info.IsDir() {
-		if err := os.Mkdir(destination, 0700); err != nil {
+		if err := filesystem.CreatePrivateBackupDirectory(destination); err != nil {
 			return err
 		}
 		entries, err := os.ReadDir(source)
@@ -493,7 +443,7 @@ func copyMigrationPath(source, destination string) error {
 				return err
 			}
 		}
-		return syncMigrationDirectory(destination)
+		return filesystem.SyncPrivateBackupDirectory(destination)
 	}
 	if !info.Mode().IsRegular() {
 		return errors.New("migration backup refuses special files")
@@ -502,7 +452,7 @@ func copyMigrationPath(source, destination string) error {
 	if err != nil {
 		return err
 	}
-	return writeMigrationFile(destination, data)
+	return filesystem.WritePrivateBackupFile(destination, data)
 }
 func backupMigration(dir, configPath, mappingPath string, cfg *config.Config, r *namespaceRuntime, manifest migrationManifest) error {
 	sources := map[string]string{"namespace-store": util.ExpandHomeDir(cfg.NamespaceDirectory), "tasks": util.ExpandHomeDir(cfg.Tasks.Directory), "volume-ownership": util.ExpandHomeDir(cfg.Tasks.Directory) + "-volumes", "legacy-templates": util.ExpandHomeDir(cfg.CloudInitTemplatesDir), "legacy-keys": util.ExpandHomeDir(cfg.KeyFile)}
@@ -516,11 +466,11 @@ func backupMigration(dir, configPath, mappingPath string, cfg *config.Config, r 
 			return errors.New("backup directory must be outside application stores")
 		}
 	}
-	if err := os.Mkdir(dir, 0700); err != nil {
+	if err := filesystem.CreatePrivateBackupDirectory(dir); err != nil {
 		if !errors.Is(err, os.ErrExist) {
 			return err
 		}
-		if err := privateMigrationDirectory(dir); err != nil {
+		if err := filesystem.CheckPrivateBackupPath(dir, true); err != nil {
 			return err
 		}
 		entries, err := os.ReadDir(dir)
@@ -543,7 +493,7 @@ func backupMigration(dir, configPath, mappingPath string, cfg *config.Config, r 
 		}
 	}
 	xmlDir := filepath.Join(dir, "domains")
-	if err := os.Mkdir(xmlDir, 0700); err != nil {
+	if err := filesystem.CreatePrivateBackupDirectory(xmlDir); err != nil {
 		return err
 	}
 	for _, p := range manifest.Plans {
@@ -553,14 +503,14 @@ func backupMigration(dir, configPath, mappingPath string, cfg *config.Config, r 
 				return err
 			}
 			name := migrationHash([]byte(vm.NodeId+"\x00"+vm.Id)) + ".xml"
-			if err := writeMigrationFile(filepath.Join(xmlDir, name), []byte(xml)); err != nil {
+			if err := filesystem.WritePrivateBackupFile(filepath.Join(xmlDir, name), []byte(xml)); err != nil {
 				return err
 			}
 		}
 	}
 	// The manifest is the commit marker for a complete, durable backup. A
 	// partial backup has no manifest and can never be used for apply/resume.
-	if err := syncMigrationDirectory(dir); err != nil {
+	if err := filesystem.SyncPrivateBackupDirectory(dir); err != nil {
 		return err
 	}
 	return writeMigrationJSON(filepath.Join(dir, "manifest.json"), manifest)
