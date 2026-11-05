@@ -263,11 +263,14 @@ Run `./vmango genpw` (PowerShell: `.\vmango.exe genpw`), enter your administrato
 password, and paste the printed bcrypt hash into `hashed_password` without
 changing its `$` characters. Run this in an interactive terminal.
 
-Signing keys are generated on startup when their files are missing. Defaults are
-`~/.vmango/jwt_signing_key` and `~/.vmango/console_signing_key`. Override them with
-`api.jwt_signing_key_file` and `api.console_signing_key_file`. Preserve these private
-files across restarts. To migrate, write each existing secret into its corresponding
-file and remove the old inline settings.
+Independent Ed25519 signing keys are stored as unencrypted PKCS#8 PEM files with
+mode `0600`. Defaults are `~/.vmango/jwt_signing_key` and
+`~/.vmango/console_signing_key`. Override them with `api.jwt_signing_key_file` and
+`api.console_signing_key_file`. Missing files and contents that cannot be decoded
+as PEM, including old hex secrets, are replaced automatically at startup. This
+invalidates old signed tokens and console links. Unsupported or invalid keys in
+decodable PEM files cause a startup error and are left untouched. Preserve the new
+private files across restarts and remove any old inline key settings.
 Start from the extracted directory, which must be writable:
 
 ```sh

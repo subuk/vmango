@@ -3,6 +3,8 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
@@ -37,7 +39,7 @@ func apiTestConfig(t *testing.T) *config.Config {
 	}
 	cfg.API.Users = []config.UserAPIConfig{{Id: "admin", HashedPassword: string(hash)}}
 	cfg.API.JWTSigningKey = testJWTKey
-	cfg.API.ConsoleSigningKey = "938f251d85b54115ae5466f999682d803c8ad5926ba4b11ee7cd123a69cf790ed"
+	cfg.API.ConsoleSigningKey = testConsoleKey
 	return cfg
 }
 func apiRequest(h http.Handler, method, path, body string, auth bool) *httptest.ResponseRecorder {
@@ -301,9 +303,60 @@ func TestConsoleTokenBinding(t *testing.T) {
 			t.Fatal("accepted tampering")
 		}
 	}
-	cfg.API.ConsoleSigningKey = strings.Repeat("k", 32)
+	cfg.API.ConsoleSigningKey = testRotatedConsoleKey
 	if _, err := e.verifyConsole(token, "node", "vm", "serial", now); err == nil {
 		t.Fatal("rotation did not invalidate link")
+	}
+}
+
+func TestConsoleEd25519SignatureAndAlgorithm(t *testing.T) {
+	cfg := apiTestConfig(t)
+	e := &Environ{cfg: &cfg.API}
+	now := time.Now()
+	raw, err := e.signConsole(consoleClaim{"test", 3, "console", "admin", "node", "vm", "serial", false, now.Add(time.Hour).Unix()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := auth.ParseSigningKey(testConsoleKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.Split(raw, ".")
+	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil || !ed25519.Verify(key.Public().(ed25519.PublicKey), []byte(parts[0]+"."+parts[1]), sig) {
+		t.Fatal("console signature cannot be verified with public key", err)
+	}
+	parsed, err := jwt.Parse(raw, func(*jwt.Token) (any, error) { return key.Public(), nil }, jwt.WithValidMethods([]string{"Ed25519"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiKey, err := auth.ParseSigningKey(testJWTKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		method jwt.SigningMethod
+		key    any
+	}{
+		{"legacy HMAC", jwt.SigningMethodHS256, []byte(strings.Repeat("abcdef01", 8))},
+		{"public key HMAC", jwt.SigningMethodHS256, []byte(key.Public().(ed25519.PublicKey))},
+		{"old algorithm identifier", jwt.SigningMethodEdDSA, key},
+		{"API signing key", auth.SigningMethodEd25519, apiKey},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			forged, err := jwt.NewWithClaims(tc.method, parsed.Claims).SignedString(tc.key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := e.verifyConsole(forged, "node", "vm", "serial", now); err == nil {
+				t.Fatal("accepted token with wrong algorithm or signing key")
+			}
+		})
+	}
+	cfg.API.ConsoleSigningKey = "\n" + testJWTKey
+	if _, err := e.signConsole(consoleClaim{}); err == nil {
+		t.Fatal("console accepted API key with different PEM formatting")
 	}
 }
 
@@ -461,13 +514,30 @@ func TestAPIValidationDoesNotEchoCloudInit(t *testing.T) {
 	}
 }
 
-const testJWTKey = "e702acd09d76676cd386642a315038470691f711b3821e1552bfffd37cb15b983"
+const testJWTKey = `-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB
+-----END PRIVATE KEY-----
+`
+
+const testConsoleKey = `-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC
+-----END PRIVATE KEY-----
+`
+
+const testRotatedConsoleKey = `-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIAMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD
+-----END PRIVATE KEY-----
+`
 
 func testWebToken() string {
 	now := time.Now()
 	p := auth.Principal{Method: "local", LocalID: "admin"}
 	c := auth.Claims{RegisteredClaims: jwt.RegisteredClaims{Issuer: auth.Issuer, Audience: jwt.ClaimStrings{auth.Audience}, Subject: p.ID(), ID: strings.Repeat("a", 64), IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(auth.AccessLifetime))}, Kind: "web", Purpose: "access", Principal: p}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString([]byte(testJWTKey))
+	key, err := auth.ParseSigningKey(testJWTKey)
+	if err != nil {
+		panic(err)
+	}
+	token, err := jwt.NewWithClaims(auth.SigningMethodEd25519, c).SignedString(key)
 	if err != nil {
 		panic(err)
 	}

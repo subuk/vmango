@@ -401,15 +401,14 @@ func Parse(filename string) (*Config, error) {
 	if config.API.ConsoleLinkLifetimeSeconds < 1 || config.API.ConsoleLinkLifetimeSeconds > 86400*30 {
 		return nil, fmt.Errorf("console_link_lifetime_seconds must be between 1 and 2592000")
 	}
-	if config.API.ConsoleSigningKey != "" && len(config.API.ConsoleSigningKey) < 32 {
-		return nil, fmt.Errorf("console_signing_key must contain at least 32 random bytes")
-	}
 	if config.API.ConsoleSigningKey != "" {
 		if err := auth.ValidateKey(config.API.ConsoleSigningKey); err != nil {
 			return nil, fmt.Errorf("console_signing_key: %w", err)
 		}
-		if config.API.ConsoleSigningKey == config.API.JWTSigningKey {
-			return nil, fmt.Errorf("console_signing_key must differ from jwt_signing_key")
+		if config.API.JWTSigningKey != "" {
+			if err := auth.ValidateSigningKeys(config.API.JWTSigningKey, config.API.ConsoleSigningKey); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if _, _, err := config.ImageDefinitions(); err != nil {

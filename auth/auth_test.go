@@ -16,7 +16,15 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const signingKey = "e702acd09d76676cd386642a315038470691f711b3821e1552bfffd37cb15b983"
+const signingKey = `-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB
+-----END PRIVATE KEY-----
+`
+
+const rotatedSigningKey = `-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC
+-----END PRIVATE KEY-----
+`
 
 type testService struct {
 	*auth.Service
@@ -245,25 +253,29 @@ func TestJWTProfilesAndStableOwners(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		change    func(*auth.Claims)
-		algorithm *jwt.SigningMethodHMAC
+		algorithm jwt.SigningMethod
 		valid     bool
 	}{
-		{"valid", func(*auth.Claims) {}, jwt.SigningMethodHS256, true},
-		{"missing kind", func(c *auth.Claims) { c.Kind = "" }, jwt.SigningMethodHS256, false},
-		{"unknown kind", func(c *auth.Claims) { c.Kind = "other" }, jwt.SigningMethodHS256, false},
-		{"wrong purpose", func(c *auth.Claims) { c.Purpose = "console" }, jwt.SigningMethodHS256, false},
-		{"wrong audience", func(c *auth.Claims) { c.Audience = jwt.ClaimStrings{"console"} }, jwt.SigningMethodHS256, false},
-		{"wrong issuer", func(c *auth.Claims) { c.Issuer = "other" }, jwt.SigningMethodHS256, false},
-		{"missing expiry", func(c *auth.Claims) { c.ExpiresAt = nil }, jwt.SigningMethodHS256, false},
-		{"missing issued at", func(c *auth.Claims) { c.IssuedAt = nil }, jwt.SigningMethodHS256, false},
-		{"long web lifetime", func(c *auth.Claims) { c.ExpiresAt = jwt.NewNumericDate(now.Add(time.Hour)) }, jwt.SigningMethodHS256, false},
-		{"unregistered personal", func(c *auth.Claims) { c.Kind = "personal" }, jwt.SigningMethodHS256, false},
-		{"wrong algorithm", func(*auth.Claims) {}, jwt.SigningMethodHS384, false},
+		{"valid", func(*auth.Claims) {}, auth.SigningMethodEd25519, true},
+		{"missing kind", func(c *auth.Claims) { c.Kind = "" }, auth.SigningMethodEd25519, false},
+		{"unknown kind", func(c *auth.Claims) { c.Kind = "other" }, auth.SigningMethodEd25519, false},
+		{"wrong purpose", func(c *auth.Claims) { c.Purpose = "console" }, auth.SigningMethodEd25519, false},
+		{"wrong audience", func(c *auth.Claims) { c.Audience = jwt.ClaimStrings{"console"} }, auth.SigningMethodEd25519, false},
+		{"wrong issuer", func(c *auth.Claims) { c.Issuer = "other" }, auth.SigningMethodEd25519, false},
+		{"missing expiry", func(c *auth.Claims) { c.ExpiresAt = nil }, auth.SigningMethodEd25519, false},
+		{"missing issued at", func(c *auth.Claims) { c.IssuedAt = nil }, auth.SigningMethodEd25519, false},
+		{"long web lifetime", func(c *auth.Claims) { c.ExpiresAt = jwt.NewNumericDate(now.Add(time.Hour)) }, auth.SigningMethodEd25519, false},
+		{"unregistered personal", func(c *auth.Claims) { c.Kind = "personal" }, auth.SigningMethodEd25519, false},
+		{"wrong algorithm", func(*auth.Claims) {}, jwt.SigningMethodEdDSA, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := valid
 			tc.change(&c)
-			raw, err := jwt.NewWithClaims(tc.algorithm, &c).SignedString([]byte(signingKey))
+			key, err := auth.ParseSigningKey(signingKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err := jwt.NewWithClaims(tc.algorithm, &c).SignedString(key)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -294,7 +306,7 @@ func TestJWTProfilesAndStableOwners(t *testing.T) {
 	if strings.Contains(string(data), raw) {
 		t.Fatal("metadata contains bearer")
 	}
-	rotated, err := auth.New(strings.Replace(signingKey, "e702", "abcd", 1), s.sessions, s.tokens, func(auth.Principal) bool { return true })
+	rotated, err := auth.New(rotatedSigningKey, s.sessions, s.tokens, func(auth.Principal) bool { return true })
 	if err != nil {
 		t.Fatal(err)
 	}

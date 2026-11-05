@@ -379,7 +379,7 @@ page provides the same issuance/sharing flow.
 
 The response contains `url` and `expires_at`. Serial issuance accepts
 `{"force":true}` to authorize explicit takeover for connections using that link.
-Links use HS256 JWTs with a distinct `vmango-console` audience,
+Links use Ed25519 JWTs (`alg: Ed25519`) with a distinct `vmango-console` audience,
 binding purpose, issuing user, namespace, cloud, machine UUID, console type, force permission and
 absolute expiry. The payload is not encrypted and contains no account password.
 A link grants only console access; the public page is an empty client shell.
@@ -399,8 +399,15 @@ only guarantees rejection at the next authentication check.
 
 Signing keys are loaded from `api.console_signing_key_file` and
 `api.jwt_signing_key_file`, defaulting to `~/.vmango/console_signing_key` and
-`~/.vmango/jwt_signing_key`. Missing files are generated privately on startup;
-existing files must contain distinct random secrets of at least 32 bytes.
+`~/.vmango/jwt_signing_key`. Both API JWTs and console links use Ed25519 signatures
+with `alg: Ed25519` (RFC 9864); verification accepts only that algorithm.
+Files contain distinct, unencrypted PKCS#8 PEM Ed25519 private keys
+(`BEGIN PRIVATE KEY`). Public verification keys are derived from the private keys.
+Missing files or contents that cannot be decoded as PEM (including legacy hex
+secrets) are atomically replaced on startup with new keys, mode `0600`. Generation
+uses a private `.lock` file beside each key to serialize concurrent starters.
+Valid PEM with an unsupported or invalid key is rejected without replacement;
+file access errors also fail startup. Old HS256 credentials are not accepted.
 There is no legacy session-secret fallback. Restarting with the same key
 preserves links; changing it rejects subsequent handshakes. Already active
 sharing streams retain their original expiry. Individual link revocation and

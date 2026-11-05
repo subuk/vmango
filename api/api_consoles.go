@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
 	"github.com/golang-jwt/jwt/v5"
 	"io"
@@ -30,18 +31,18 @@ type consoleClaim struct {
 	Expires   int64               `json:"exp"`
 }
 
-func (e *Environ) consoleKey() ([]byte, error) {
-	if len(e.cfg.ConsoleSigningKey) < 32 || e.cfg.ConsoleSigningKey == e.cfg.JWTSigningKey {
+func (e *Environ) consoleKey() (ed25519.PrivateKey, error) {
+	if err := auth.ValidateSigningKeys(e.cfg.JWTSigningKey, e.cfg.ConsoleSigningKey); err != nil {
 		return nil, compute.ErrUnavailable
 	}
-	return []byte(e.cfg.ConsoleSigningKey), nil
+	return auth.ParseSigningKey(e.cfg.ConsoleSigningKey)
 }
 func (e *Environ) signConsole(c consoleClaim) (string, error) {
 	key, err := e.consoleKey()
 	if err != nil {
 		return "", err
 	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"namespace": c.Namespace, "v": c.Version, "iss": auth.Issuer, "aud": "vmango-console", "sub": c.User, "purpose": c.Purpose, "cloud": c.Cloud, "vm": c.VM, "kind": c.Kind, "force": c.Force, "iat": time.Now().Unix(), "exp": c.Expires}).SignedString(key)
+	return jwt.NewWithClaims(auth.SigningMethodEd25519, jwt.MapClaims{"namespace": c.Namespace, "v": c.Version, "iss": auth.Issuer, "aud": "vmango-console", "sub": c.User, "purpose": c.Purpose, "cloud": c.Cloud, "vm": c.VM, "kind": c.Kind, "force": c.Force, "iat": time.Now().Unix(), "exp": c.Expires}).SignedString(key)
 }
 func (e *Environ) verifyConsole(raw, cloud, vm, kind string, now time.Time) (consoleClaim, error) {
 	var c consoleClaim
@@ -52,7 +53,7 @@ func (e *Environ) verifyConsole(raw, cloud, vm, kind string, now time.Time) (con
 	if err != nil {
 		return c, err
 	}
-	token, err := jwt.Parse(raw, func(*jwt.Token) (any, error) { return key, nil }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithIssuer(auth.Issuer), jwt.WithAudience("vmango-console"), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithTimeFunc(func() time.Time { return now }))
+	token, err := jwt.Parse(raw, func(*jwt.Token) (any, error) { return key.Public(), nil }, jwt.WithValidMethods([]string{auth.SigningMethodEd25519.Alg()}), jwt.WithIssuer(auth.Issuer), jwt.WithAudience("vmango-console"), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithTimeFunc(func() time.Time { return now }))
 	if err != nil {
 		return c, auth.ErrInvalid
 	}

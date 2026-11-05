@@ -2,6 +2,7 @@
 package auth
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -115,7 +116,8 @@ type TokenMetadata struct {
 }
 
 type Service struct {
-	key              []byte
+	key              ed25519.PrivateKey
+	publicKey        ed25519.PublicKey
 	sessions, tokens Repository
 	eligible         func(Principal) bool
 	now              func() time.Time
@@ -126,27 +128,14 @@ type Service struct {
 type streamHandle struct{ close func() }
 
 func New(key string, sessions, tokens Repository, eligible func(Principal) bool) (*Service, error) {
-	if err := ValidateKey(key); err != nil {
+	privateKey, err := ParseSigningKey(key)
+	if err != nil {
 		return nil, err
 	}
 	if sessions == nil || tokens == nil || eligible == nil {
 		return nil, errors.New("authentication repositories and eligibility policy are required")
 	}
-	return &Service{key: []byte(key), sessions: sessions, tokens: tokens, eligible: eligible, now: time.Now, streams: make(map[string]map[*streamHandle]struct{})}, nil
-}
-
-func ValidateKey(key string) error {
-	if len(key) < 32 || len(key) > 4096 || strings.Contains(strings.ToLower(key), "changeme") || strings.Contains(strings.ToLower(key), "replace") {
-		return errors.New("jwt_signing_key must contain at least 32 random bytes; generate a persistent key with openssl rand -hex 32")
-	}
-	distinct := map[rune]bool{}
-	for _, c := range key {
-		distinct[c] = true
-	}
-	if len(distinct) < 8 {
-		return errors.New("jwt_signing_key has insufficient diversity; generate it with openssl rand -hex 32")
-	}
-	return nil
+	return &Service{key: privateKey, publicKey: privateKey.Public().(ed25519.PublicKey), sessions: sessions, tokens: tokens, eligible: eligible, now: time.Now, streams: make(map[string]map[*streamHandle]struct{})}, nil
 }
 
 func randomID() (string, error) {
@@ -162,7 +151,7 @@ func same(a, b string) bool  { return subtle.ConstantTimeCompare([]byte(a), []by
 func (s *Service) sign(p Principal, kind, id string, lifetime time.Duration) (string, error) {
 	now := s.now().UTC().Truncate(time.Second)
 	c := Claims{RegisteredClaims: jwt.RegisteredClaims{Issuer: Issuer, Audience: jwt.ClaimStrings{Audience}, Subject: p.ID(), ID: id, IssuedAt: jwt.NewNumericDate(now), NotBefore: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(lifetime))}, Kind: kind, Purpose: "access", Principal: p}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString(s.key)
+	return jwt.NewWithClaims(SigningMethodEd25519, c).SignedString(s.key)
 }
 
 func (s *Service) WebToken(p Principal) (string, error) {
@@ -181,7 +170,7 @@ func (s *Service) Authenticate(raw string) (*Claims, error) {
 		return nil, ErrInvalid
 	}
 	c := &Claims{}
-	_, err := jwt.ParseWithClaims(raw, c, func(*jwt.Token) (any, error) { return s.key, nil }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithIssuer(Issuer), jwt.WithAudience(Audience), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithTimeFunc(s.now))
+	_, err := jwt.ParseWithClaims(raw, c, func(*jwt.Token) (any, error) { return s.publicKey, nil }, jwt.WithValidMethods([]string{SigningMethodEd25519.Alg()}), jwt.WithIssuer(Issuer), jwt.WithAudience(Audience), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithTimeFunc(s.now))
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) && !errors.Is(err, jwt.ErrTokenSignatureInvalid) && !errors.Is(err, jwt.ErrTokenMalformed) {
 			return nil, ErrExpired

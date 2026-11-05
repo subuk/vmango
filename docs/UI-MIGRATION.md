@@ -25,8 +25,10 @@ Sec-Fetch-Site, set the public `api.base_url` and enable `api.session_secure`.
 Keep the backend listener inaccessible to untrusted clients. Arbitrary forwarded
 headers are not trusted. HTTP is supported for loopback development.
 
-Generate **two independent** keys with `openssl rand -hex 32`; store them in
-private configuration and preserve them across restarts:
+Vmango generates **two independent Ed25519 private keys** on startup and stores
+them in unencrypted PKCS#8 PEM files with mode `0600`. Preserve these files across
+restarts. To provision them manually, use `openssl genpkey -algorithm ED25519`
+for each key and restrict file access to the service account:
 
 ```hcl
 api {
@@ -192,8 +194,11 @@ records are removed at startup and hourly. Rate limiting is not implemented.
 ## Restart, key changes and backups
 
 Restarting with the same keys/directories preserves login and personal tokens.
-There is one persistent API signing key; no automatic regeneration or seamless
-multi-key rotation. Changing it invalidates existing browser and personal JWTs.
+There is one persistent Ed25519 API signing key and no seamless multi-key rotation.
+Missing files and contents that cannot be decoded as PEM are automatically replaced
+with new keys. A decodable PEM with an invalid or unsupported key causes startup
+to fail without replacing the file. Changing a key invalidates existing browser
+and personal JWTs.
 Valid refresh sessions may issue web JWTs under the new key; personal tokens must
 be reissued. Console credentials have a separate key and audience.
 
@@ -251,8 +256,12 @@ mutation endpoints. Configure a dedicated tasks directory; package examples use
 that survives navigation and reload. See [task storage and restart semantics](TASKS.md)
 for interruption, manual lock release, private payload cleanup and retention.
 
-Signing keys now live in files. Before upgrading, write each existing inline
-secret into its corresponding file (mode `0600`), then replace `jwt_signing_key`
-and `console_signing_key` with the `_file` settings shown above. Missing files
-are generated automatically. Preserve them across restarts; replacing them
-invalidates existing signed credentials and console links.
+Signing keys live in files configured through `jwt_signing_key_file` and
+`console_signing_key_file`; remove the old inline settings. Both API JWTs and
+console links now use Ed25519 signatures with `alg: Ed25519`. Existing hex secret
+files are automatically replaced with independent PKCS#8 PEM private keys at
+startup. Old HS256 tokens and console links are rejected; personal tokens must be
+reissued and console links recreated. Valid refresh sessions may issue new web
+JWTs. There is no compatibility period. Preserve the new key files across restarts.
+PEM files containing a different key type, encrypted keys or invalid key data are
+reported as errors and left untouched. Read/write errors also fail startup.

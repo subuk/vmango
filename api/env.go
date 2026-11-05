@@ -67,12 +67,10 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	if taskService == nil {
 		return nil, fmt.Errorf("durable task service is required")
 	}
-	if err := auth.ValidateKey(cfg.API.ConsoleSigningKey); err != nil {
-		return nil, fmt.Errorf("console_signing_key: %w", err)
+	if err := auth.ValidateSigningKeys(cfg.API.JWTSigningKey, cfg.API.ConsoleSigningKey); err != nil {
+		return nil, fmt.Errorf("signing keys: %w", err)
 	}
-	if cfg.API.ConsoleSigningKey == cfg.API.JWTSigningKey {
-		return nil, fmt.Errorf("console_signing_key must differ from jwt_signing_key")
-	}
+
 	env := &Environ{cfg: &cfg.API, logger: logger, router: mux.NewRouter(), networks: networks, keys: keys, volpools: volpools, nodes: nodes, volumes: volumes, vms: vms, vmanager: vmanager, images: images, auth: authentication, tasks: taskService}
 	if vmanager != nil {
 		env.clouds = vmanager.Clouds
