@@ -92,11 +92,17 @@ func archiveTestBytes(t *testing.T, format string, members []archiveTestMember, 
 
 type archivePayloadBackend struct {
 	*imageBackend
-	payloadMu sync.Mutex
-	payloads  map[string][]byte
+	payloadMu       sync.Mutex
+	payloads        map[string][]byte
+	uploadReadDelay time.Duration
+	uploadDuration  time.Duration
 }
 
 func (b *archivePayloadBackend) UploadImage(ctx context.Context, binding compute.ImageBinding, r io.Reader, size uint64) error {
+	if b.uploadReadDelay > 0 {
+		r = archiveDelayedReader{ctx: ctx, reader: r, delay: b.uploadReadDelay}
+	}
+	started := time.Now()
 	var payload bytes.Buffer
 	if err := b.imageBackend.UploadImage(ctx, binding, io.TeeReader(r, &payload), size); err != nil {
 		return err
@@ -104,7 +110,25 @@ func (b *archivePayloadBackend) UploadImage(ctx context.Context, binding compute
 	b.payloadMu.Lock()
 	defer b.payloadMu.Unlock()
 	b.payloads[binding.Path] = append([]byte(nil), payload.Bytes()...)
+	b.uploadDuration = time.Since(started)
 	return nil
+}
+
+type archiveDelayedReader struct {
+	ctx    context.Context
+	reader io.Reader
+	delay  time.Duration
+}
+
+func (r archiveDelayedReader) Read(p []byte) (int, error) {
+	timer := time.NewTimer(r.delay)
+	defer timer.Stop()
+	select {
+	case <-r.ctx.Done():
+		return 0, r.ctx.Err()
+	case <-timer.C:
+		return r.reader.Read(p)
+	}
 }
 
 func archiveService(t *testing.T, url string, data []byte, format, member string) (*compute.ManagedImageService, *archivePayloadBackend, compute.Image) {
@@ -359,6 +383,7 @@ func TestManagedZipSecondRequestFailure(t *testing.T) {
 }
 
 func TestManagedZipCachedPayloadProgressDoesNotTimeOut(t *testing.T) {
+	const idleTimeout = time.Second
 	payload := bytes.Repeat([]byte{0x42}, 1<<20)
 	archive := archiveTestBytes(t, "zip", []archiveTestMember{{"disk.img", payload, false}}, false)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -367,17 +392,29 @@ func TestManagedZipCachedPayloadProgressDoesNotTimeOut(t *testing.T) {
 	}))
 	defer server.Close()
 	_, base, repo, image := imageSetup(t, server.URL, archive)
-	backend := &archivePayloadBackend{imageBackend: base, payloads: map[string][]byte{}}
-	images := compute.NewManagedImageService(backend, repo, map[string]compute.ImageBinding{"one": {Scope: "backend:one", Pool: "images-one"}}, compute.ImageTransferLimits{MaxBytes: 4 << 20, Timeout: 5 * time.Second, IdleTimeout: 100 * time.Millisecond})
+	backend := &archivePayloadBackend{imageBackend: base, payloads: map[string][]byte{}, uploadReadDelay: 10 * time.Millisecond}
+	images := compute.NewManagedImageService(backend, repo, map[string]compute.ImageBinding{"one": {Scope: "backend:one", Pool: "images-one"}}, compute.ImageTransferLimits{MaxBytes: 4 << 20, Timeout: 7 * time.Second, IdleTimeout: idleTimeout})
 	image.Download.ArchiveFormat = "zip"
 	image.Download.ArchiveMember = "disk.img"
 	s, _ := imageTasks(t, images)
 	task := submitImage(t, s, images, image, "one", "cached-payload-progress")
 	// The compressed payload fits in the metadata tail, so selected reads do not
-	// touch the second HTTP response. The fake upload takes >250 ms while making
-	// steady progress, which must reset the 100 ms idle timer.
+	// touch the second HTTP response. Allow slow staging fsyncs on Windows, then
+	// upload slowly enough that progress must reset the idle timer to succeed.
 	if result := waitImage(t, s, task.ID); result.State != tasks.Succeeded {
 		t.Fatalf("productive cached extraction timed out: %+v", result)
+	}
+	binding, err := images.Bind("one", image)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.payloadMu.Lock()
+	defer backend.payloadMu.Unlock()
+	if backend.uploadDuration <= idleTimeout {
+		t.Fatalf("upload took %s, so idle timeout heartbeat was not exercised", backend.uploadDuration)
+	}
+	if !bytes.Equal(backend.payloads[binding.Path], payload) {
+		t.Fatal("slow upload did not receive the complete cached payload")
 	}
 }
 
