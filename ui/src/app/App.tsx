@@ -231,7 +231,9 @@ function Shell() {
                         ))}
                     </TextField>
                 )}
-                <NamespacePicker />
+                <Box sx={{ width: { xs: "100%", sm: 190 }, flexShrink: 0 }}>
+                    <NamespacePicker />
+                </Box>
                 <ThemeChoice />
                 <Button
                     onClick={(e) => setAccount(e.currentTarget)}

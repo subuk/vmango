@@ -45,7 +45,9 @@ export function AdministrationOverview() {
                     </Button>
                 }
             />
-            <AdministrationActivity />
+            <Box sx={{ mb: 2 }}>
+                <AdministrationActivity />
+            </Box>
             <QueryState query={clouds}>
                 {(items) => (
                     <Stack spacing={2}>
@@ -255,7 +257,7 @@ function CloudHostObservations({ cloud }: { cloud: AdminCloud }) {
                 </Button>
                 <Typography variant="caption" color="text.secondary">
                     {q.dataUpdatedAt
-                        ? `Observed ${new Date(q.dataUpdatedAt).toLocaleTimeString()}`
+                        ? `Updated ${new Date(q.dataUpdatedAt).toLocaleTimeString()}`
                         : "Observation pending"}
                 </Typography>
                 {link(`${adminCloudURL(cloud.id)}hosts/`, "Inspect hosts")}

@@ -306,7 +306,7 @@ function ImageAvailabilityMatrix({
                     {query.isFetching
                         ? "Observing current page…"
                         : query.dataUpdatedAt
-                          ? `Observed ${new Date(query.dataUpdatedAt).toLocaleTimeString()}`
+                          ? `Updated ${new Date(query.dataUpdatedAt).toLocaleTimeString()}`
                           : "No observations yet"}
                 </Typography>
             </Stack>
