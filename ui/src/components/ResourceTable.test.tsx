@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { ResourceTable } from "./ResourceTable";
@@ -127,13 +127,14 @@ it("persists optional columns per table and principal and supports keyboard row 
     expect(
         JSON.parse(localStorage.getItem("vmango.columns.one:machines")!),
     ).toEqual(["name", "id"]);
-    await router.navigate("/two");
-    expect(await screen.findByRole("button", { name: "Columns" })).toBeTruthy();
+    await act(async () => {
+        await router.navigate("/two");
+    });
     expect(screen.queryByRole("columnheader", { name: "ID" })).toBeNull();
-    await router.navigate("/one");
-    expect(
-        await screen.findByRole("columnheader", { name: "ID" }),
-    ).toBeTruthy();
+    await act(async () => {
+        await router.navigate("/one");
+    });
+    expect(screen.getByRole("columnheader", { name: "ID" })).toBeTruthy();
 });
 
 it("toggles column menu options with Enter and Space while keeping a visible column", async () => {
