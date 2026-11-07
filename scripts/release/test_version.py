@@ -21,6 +21,7 @@ class VersionTest(unittest.TestCase):
             (self.root / name).mkdir(parents=True)
         (self.root / 'ui/src/main.ts').write_text("console.log('fixture');\n")
         (self.root / 'ui/dist/index.html').write_text('<script src="/assets/main.js"></script>\n')
+        (self.root / 'ui/dist/install.html').write_text('<script src="/assets/main.js"></script>\n')
         (self.root / 'ui/dist/assets/main.js').write_text("console.log('fixture');\n")
         (self.root / 'api/testdata/openapi.json').write_text('{}\n')
         (self.root / '.gitignore').write_text('/ui/dist/\n')
@@ -92,7 +93,9 @@ class VersionTest(unittest.TestCase):
         value = self.run_command('tar', '-xOf', f'dist/packages/vmango-{version}.tar.gz',
                                  f'vmango-{version}/VERSION')
         self.assertEqual(value, version)
-        self.assertIn('index.html', self.run_command('tar', '-tzf', f'dist/packages/vmango-{version}.tar.gz'))
+        members = self.run_command('tar', '-tzf', f'dist/packages/vmango-{version}.tar.gz')
+        self.assertIn(f'vmango-{version}/ui/dist/index.html', members)
+        self.assertIn(f'vmango-{version}/ui/dist/install.html', members)
 
     def test_tarball_preserves_override_without_git(self):
         tar = shutil.which('gtar') or shutil.which('tar')

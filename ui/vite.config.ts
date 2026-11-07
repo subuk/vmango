@@ -11,6 +11,7 @@ export default defineConfig({
     plugins: [react()],
     server: {
         proxy: {
+            "/install/api": proxy,
             "/api": proxy,
             "/login-oidc": proxy,
             "/login-oidc-callback": proxy,
@@ -20,5 +21,11 @@ export default defineConfig({
             },
         },
     },
-    build: { outDir: "dist", emptyOutDir: true },
+    build: {
+        outDir: "dist",
+        emptyOutDir: true,
+        rollupOptions: {
+            input: { main: "index.html", install: "install.html" },
+        },
+    },
 });

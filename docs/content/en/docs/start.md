@@ -11,6 +11,18 @@ architecture. No Docker or Go compiler is needed.
 
 To run a container instead, follow [Docker installation](/docs/docker/).
 
+## Optional web setup
+
+On macOS and Linux, `vmango install --config /absolute/path/vmango.conf` starts
+a temporary loopback wizard for preparing Linux hosts locally or over SSH.
+It requires a separately supplied pinned Richt executable. Review OS changes,
+network/storage changes and the final configuration independently; the wizard
+does not start or restart the Vmango server. See the
+[installer guide](https://github.com/subuk/vmango/blob/master/docs/INSTALLER.md)
+for the exact runtime build, prerequisites, permissions and recovery steps.
+Local macOS hypervisor provisioning and Windows controllers are outside this
+wizard's scope. The manual setup below remains available.
+
 ## Choose an archive
 
 Replace `VERSION` below with the version shown on the release, without its `v` prefix.

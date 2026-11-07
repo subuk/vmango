@@ -301,6 +301,16 @@ func Parse(filename string) (*Config, error) {
 	if err != nil {
 		return nil, util.NewError(err, "cannot read configuration file")
 	}
+	config, err := ParseBytes(content)
+	if err == nil && len(config.LegacyBridges) > 0 {
+		fmt.Println(OLD_BRIDGES_WARNING)
+	}
+	return config, err
+}
+
+// ParseBytes validates configuration without opening stores, generating keys or
+// starting services. Callers can validate a candidate before publishing it.
+func ParseBytes(content []byte) (*Config, error) {
 	config := &Config{}
 	parsed, err := hcl.ParseBytes(content)
 	if err != nil {
@@ -339,10 +349,6 @@ func Parse(filename string) (*Config, error) {
 	if err := config.API.ValidateTLS(); err != nil {
 		return nil, err
 	}
-	if len(config.LegacyBridges) > 0 {
-		fmt.Println(OLD_BRIDGES_WARNING)
-	}
-
 	for cloudIndex := range config.Clouds {
 		cloud := &config.Clouds[cloudIndex]
 		for hostIndex := range cloud.Hosts {

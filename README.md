@@ -2,10 +2,10 @@
 
 Vmango is a virtual machines management web interface written using [Go](http://golang.org/).
 
-The main goal of project is not to provide a hypervisor configuration tool,
-because that problem already solved by many configuration management systems
-like Ansible or Puppet, but provide a convenient way to manage virtual
-machines on existing hypervisors.
+Vmango provides a convenient way to manage virtual machines on libvirt
+hypervisors. The optional [web setup wizard](docs/INSTALLER.md) prepares Linux
+hosts through a separately supplied Richt executable and writes a reviewed
+Vmango configuration.
 
 Current features:
 
@@ -37,6 +37,14 @@ DLLs for remote hosts; ISO tools are separate.
 
 See [HOWTO-RELEASE.md](HOWTO-RELEASE.md) for CI and the manually triggered
 release workflow, its inputs and verification scope.
+
+## Web setup wizard
+
+On macOS or Linux, run `vmango install --config /absolute/path/vmango.conf`
+with the pinned Richt executable available through `--richt` or `PATH`.
+The wizard reviews OS preparation, NAT networks/directory pools and the final
+configuration in separate stages. It does not start or restart Vmango.
+See [setup, prerequisites and recovery](docs/INSTALLER.md).
 
 ## Installation
 

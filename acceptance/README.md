@@ -10,7 +10,7 @@ randomly named `vmango-acceptance-*` storage pool and VM (2 vCPU, 2 GiB RAM,
 - Build dependencies from the main README, plus `virsh`, `qemu-img`, `mkisofs`
   and `isoinfo` on PATH.
 - A working local `qemu:///session` connection, QEMU and suitable firmware.
-  macOS requires HVF and EFI; Linux requires KVM (the x86 test uses the backend's default firmware). Software emulation fails the test.
+  macOS requires HVF and EFI; Linux requires KVM (the x86 test uses the backend's default firmware). Software emulation is rejected by default; the explicit QEMU test mode below can verify it separately.
 - For local-file mode, an Ubuntu cloud image matching the host architecture,
   with cloud-init enabled. Managed mode uses the pinned Alpine URLs below.
 - Enough space for the downloaded image, a converted copy and a cloned VM disk.
@@ -59,7 +59,7 @@ user-data selected through the template API, and deleting that template after
 provisioning does not alter the guest configuration.
 It also checks API discovery, duplicate-create conflicts and rejection of the removed machine PATCH route. It checks administrator-owned autostart during an explicit type change and a loopback graphics binding. It checks the image-selected SCSI/virtio-scsi configuration, explicit guest agent
 disablement and presence/absence of the config drive. It checks the generated domain
-uses hardware acceleration, starts it through HTTP and checks libvirt reports
+uses the expected virtualization type (hardware acceleration by default), starts it through HTTP and checks libvirt reports
 it running. It then checks the VNC WebSocket proxy's RFB greeting and reads the
 serial WebSocket until cloud-init runs the supplied guest command, verifies the
 hostname and prints a unique marker. Merely reaching libvirt's `running` state
@@ -119,6 +119,38 @@ test pool. Cleanup errors fail the test. Killing the test
 process or its overall timeout may prevent cleanup; use the exact resource name
 from the printed artifact path to inspect/remove leftovers with `virsh`. Never
 use a wildcard deletion against a shared libvirt host.
+
+## Explicit software-emulation checks
+
+For disposable Linux hosts without nested KVM, set `ACCEPTANCE_VIRT_TYPE=qemu`.
+This changes the expected domain XML type in the test only. It does not add a
+Vmango configuration option or force libvirt to choose another backend. The host
+must provide a QEMU binary with software emulation and libvirt must report
+`qemu` domain capabilities. If its QEMU build only supports KVM, installation of
+libvirt packages alone does not make the emulation test possible.
+
+Set the image, URI, architecture and remote-mode variables using the examples
+below, and run:
+
+```sh
+make
+ACCEPTANCE_VIRT_TYPE=qemu ACCEPTANCE_BOOT_TIMEOUT=20m \
+  go test -mod=vendor -tags=acceptance -count=1 -v -timeout=30m ./acceptance
+```
+
+`ACCEPTANCE_VIRT_TYPE` accepts `kvm`, `hvf` or `qemu`. Omission retains the
+existing Linux/KVM and local macOS/HVF expectations. `ACCEPTANCE_BOOT_TIMEOUT`
+controls the serial-console wait for the cloud-init marker; it defaults to five
+minutes and accepts durations from one second through twenty minutes. The test
+process's overall timeout must allow provisioning, the selected boot wait and
+cleanup; `make acceptance` retains its ordinary fifteen-minute limit.
+
+The same guest, storage, config-drive and console assertions run in QEMU mode.
+A pass establishes software-emulated functionality, not hardware KVM or nested
+virtualization. Installer acceptance on the reusable disposable hosts will use
+this mode where supported; this paragraph records the test procedure, not a
+claim that those hosts have passed it.
+
 
 ## Lazy managed images (local or remote)
 

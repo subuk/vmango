@@ -374,12 +374,7 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compu
 		return nil, err
 	}
 	if strings.Contains(connUri.Scheme, "ssh") {
-		portStr := fmt.Sprintf("%d", graphicPort)
-		args := []string{
-			"ssh", "-l", connUri.User.Username(), connUri.Hostname(),
-			graphicsForwardCommand(consoleHost, portStr),
-		}
-		cmd := exec.Command(args[0], args[1:]...)
+		cmd := exec.Command("ssh", graphicsSSHArguments(connUri, consoleHost, graphicPort)...)
 		repo.logger.Debug().Strs("args", cmd.Args).Msg("executing ssh forwarding command")
 
 		stdout, err := cmd.StdoutPipe()

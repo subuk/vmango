@@ -32,7 +32,7 @@ def outputs():
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "verify"
-    if not (DIST / "index.html").is_file():
+    if any(not (DIST / entry).is_file() for entry in ("index.html", "install.html")):
         raise ValueError("Frontend artifact missing: run make ui before building Go")
     expected = {"version": 1, "sources": inputs(), "assets": outputs()}
     if mode == "write":

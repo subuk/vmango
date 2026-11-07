@@ -33,10 +33,13 @@ def package(version, target, binary, runtime=None):
             "docs/TASKS.md": "TASKS.md",
             "docs/CLOUDS.md": "CLOUDS.md",
             "docs/NAMESPACES.md": "NAMESPACES.md",
+            "docs/INSTALLER.md": "INSTALLER.md",
+            "acceptance/README.md": "ACCEPTANCE.md",
             "docs/content/en/docs/images.md": "IMAGES.md",
         }
         guide_links = {
             "UI-MIGRATION.md": "MIGRATION.md",
+            "../acceptance/README.md": "ACCEPTANCE.md",
             "content/en/docs/images.md": "IMAGES.md",
             "/docs/start/": "QUICKSTART.md",
             "/docs/docker/": "DOCKER.md",

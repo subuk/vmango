@@ -19,6 +19,8 @@ class UIManifestTest(unittest.TestCase):
         (self.root / "api/testdata/openapi.json").write_text('{}\n')
         (self.root / "ui/src/main.ts").write_text("console.log('application');\n")
         (self.root / "ui/dist/index.html").write_text('<script src="/assets/app.js"></script>\n')
+        (self.root / "ui/dist/install.html").write_text('<script src="/assets/install.js"></script>\n')
+        (self.root / "ui/dist/assets/install.js").write_text("console.log('installer');\n")
         (self.root / "ui/dist/assets/app.js").write_text("console.log('application');\n")
         self.assertEqual(self.run_manifest("write").returncode, 0)
 
@@ -49,6 +51,13 @@ class UIManifestTest(unittest.TestCase):
         result = self.run_manifest()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("run make ui", result.stderr)
+
+    def test_missing_installer_cannot_be_signed_into_a_manifest(self):
+        (self.root / "ui/dist/install.html").unlink()
+        for mode in ("write", "verify"):
+            result = self.run_manifest(mode)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("run make ui", result.stderr)
 
 
 if __name__ == "__main__":

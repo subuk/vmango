@@ -98,6 +98,10 @@ func TestLifecycle(t *testing.T) {
 	if remote && arch == "aarch64" {
 		firmware = "efi"
 	}
+	expectedType, bootTimeout, err := acceptanceRuntimeOptions(expectedType, os.Getenv("ACCEPTANCE_VIRT_TYPE"), os.Getenv("ACCEPTANCE_BOOT_TIMEOUT"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if imageURL != "" && len(imageSHA) != 64 {
 		t.Fatal("ACCEPTANCE_IMAGE_SHA256 is required with ACCEPTANCE_IMAGE_URL")
 	}
@@ -718,8 +722,12 @@ cloud "offline" {
 	path := "/machines/acceptance/" + domainUUID + "/"
 	xml := mustVir("dumpxml", domainUUID)
 	write(filepath.Join(root, "domain.xml"), xml)
-	if !strings.Contains(xml, "type='"+expectedType+"'") {
-		t.Fatalf("expected hardware accelerator %s; see domain.xml", expectedType)
+	var runtimeDomain libvirtxml.Domain
+	if err := runtimeDomain.Unmarshal(xml); err != nil {
+		t.Fatal(err)
+	}
+	if runtimeDomain.Type != expectedType {
+		t.Fatalf("expected virtualization type %s, got %s; see domain.xml", expectedType, runtimeDomain.Type)
 	}
 	if !strings.Contains(xml, "virtio-scsi") || strings.Contains(xml, "org.qemu.guest_agent.0") || !strings.Contains(xml, "_config.iso") {
 		t.Fatal("image launch defaults did not reach domain XML")
@@ -777,7 +785,7 @@ cloud "offline" {
 	}
 	console := dial("serial/ws")
 	defer console.Close()
-	console.SetReadDeadline(time.Now().Add(5 * time.Minute))
+	console.SetReadDeadline(time.Now().Add(bootTimeout))
 	consoleLog, err := os.Create(filepath.Join(root, "console.log"))
 	if err != nil {
 		t.Fatal(err)
@@ -1152,4 +1160,54 @@ cloud "offline" {
 		}
 	}
 	t.Log("PASS: create → start → VNC/serial → guest cloud-init → poweroff → delete VM and disks")
+}
+
+// These settings describe what the test must observe. They do not change the
+// application's backend choice or weaken the guest boot and console assertions.
+func acceptanceRuntimeOptions(defaultType, requestedType, requestedTimeout string) (string, time.Duration, error) {
+	virtualization := defaultType
+	if requestedType != "" {
+		switch requestedType {
+		case "kvm", "hvf", "qemu":
+			virtualization = requestedType
+		default:
+			return "", 0, fmt.Errorf("ACCEPTANCE_VIRT_TYPE must be kvm, hvf or qemu")
+		}
+	}
+	bootTimeout := 5 * time.Minute
+	if requestedTimeout != "" {
+		var err error
+		bootTimeout, err = time.ParseDuration(requestedTimeout)
+		if err != nil || bootTimeout < time.Second || bootTimeout > 20*time.Minute {
+			return "", 0, fmt.Errorf("ACCEPTANCE_BOOT_TIMEOUT must be a duration between 1s and 20m")
+		}
+	}
+	return virtualization, bootTimeout, nil
+}
+
+func TestAcceptanceRuntimeOptions(t *testing.T) {
+	for _, tt := range []struct {
+		defaultType, requestedType, timeout, wantType string
+		wantTimeout                                   time.Duration
+		invalid                                       bool
+	}{
+		{"kvm", "", "", "kvm", 5 * time.Minute, false},
+		{"hvf", "", "", "hvf", 5 * time.Minute, false},
+		{"kvm", "qemu", "20m", "qemu", 20 * time.Minute, false},
+		{"kvm", "other", "", "", 0, true},
+		{"kvm", "qemu", "21m", "", 0, true},
+		{"kvm", "qemu", "0s", "", 0, true},
+		{"kvm", "qemu", "invalid", "", 0, true},
+	} {
+		got, timeout, err := acceptanceRuntimeOptions(tt.defaultType, tt.requestedType, tt.timeout)
+		if tt.invalid {
+			if err == nil {
+				t.Fatalf("accepted invalid options: %+v", tt)
+			}
+			continue
+		}
+		if err != nil || got != tt.wantType || timeout != tt.wantTimeout {
+			t.Fatalf("options %+v: %s %s %v", tt, got, timeout, err)
+		}
+	}
 }
