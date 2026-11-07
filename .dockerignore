@@ -10,6 +10,7 @@
 !vmango.quickstart.conf
 !docs/data/image-sources.json
 !bootstrap/**
+!installer/**
 !compute/**
 !tasks/**
 !auth/**
