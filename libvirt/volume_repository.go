@@ -66,6 +66,9 @@ func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.Sto
 	if err := virVolumeConfig.Unmarshal(virVolumeXml); err != nil {
 		return nil, repositoryError(err, "cannot unmarshal volume xml")
 	}
+	if virVolumeConfig.Target == nil || virVolumeConfig.Target.Path == "" || virVolumeConfig.Capacity == nil {
+		return nil, fmt.Errorf("volume metadata is missing its path or capacity")
+	}
 	poolXml, err := pool.GetXMLDesc(0)
 	if err != nil {
 		return nil, repositoryError(err, "cannot get storage pool xml")
@@ -111,6 +114,7 @@ func (repo *VolumeRepository) virVolumeToVolume(nodeId string, pool *libvirt.Sto
 	case "qcow2":
 		volume.Format = compute.VolumeFormatQcow2
 	}
+	volume.BackingStore = backingStore(virVolumeConfig)
 
 	return volume, nil
 }
@@ -309,86 +313,120 @@ func (repo *VolumeRepository) Create(params compute.VolumeCreateParams) (result 
 func (repo *VolumeRepository) Clone(params compute.VolumeCloneParams) (result *compute.Volume, err error) {
 	var effects []tasks.Effect
 	ref := compute.VolumeRef(params.NodeId, params.NewName)
-	defer func() { err = mutationError(err, "storage-volume.clone", ref, effects) }()
-
+	defer func() {
+		err = cloneMutationError(err, params, ref, effects)
+	}()
 	conn, err := repo.pool.Acquire(params.NodeId)
 	if err != nil {
 		return nil, repositoryError(err, "cannot acquire connection")
 	}
 	defer repo.pool.Release(params.NodeId)
-
-	settings := repo.settings[params.NodeId]
-
-	originalVirVolume, err := conn.LookupStorageVolByPath(params.OriginalPath)
+	original, err := conn.LookupStorageVolByPath(params.OriginalPath)
 	if err != nil {
 		return nil, repositoryError(err, "cannot lookup original volume")
 	}
-
-	originalVirVolumeInfo, err := originalVirVolume.GetInfo()
+	defer original.Free()
+	sourcePool, err := original.LookupPoolByVolume()
 	if err != nil {
-		return nil, repositoryError(err, "cannot get original volume info")
+		return nil, repositoryError(err, "cannot lookup source pool")
 	}
-
-	virPool, err := conn.LookupStoragePoolByName(params.NewPool)
+	defer sourcePool.Free()
+	if err = sourcePool.Refresh(0); err != nil {
+		return nil, repositoryError(err, "cannot refresh clone source metadata")
+	}
+	source, err := repo.virVolumeToVolume(params.NodeId, sourcePool, original)
 	if err != nil {
-		return nil, repositoryError(err, "cannot lookup libvirt pool")
+		return nil, err
 	}
-	virPoolXml, err := virPool.GetXMLDesc(0)
-	if err != nil {
-		return nil, repositoryError(err, "cannot get pool xml")
+	if params.SourceIdentity != "" && params.SourceIdentity != source.Identity {
+		return nil, fmt.Errorf("%w: clone source identity changed", compute.ErrConflict)
 	}
-	virPoolConfig := libvirtxml.StoragePool{}
-	if err := virPoolConfig.Unmarshal(virPoolXml); err != nil {
-		return nil, repositoryError(err, "cannot parse pool xml")
-	}
-
-	virVolumeConfig := &libvirtxml.StorageVolume{}
-	virVolumeConfig.Capacity = &libvirtxml.StorageVolumeSize{
-		Unit:  ComputeSizeUnitToLibvirtUnit(params.NewSize.Unit),
-		Value: params.NewSize.Value,
-	}
-
-	virVolumeConfig.Name = params.NewName
-	switch params.Format {
-	case compute.VolumeFormatRaw:
-		virVolumeConfig.Target = &libvirtxml.StorageVolumeTarget{
-			Format: &libvirtxml.StorageVolumeTargetFormat{
-				Type: "raw",
-			},
+	if source.BackingStore != nil {
+		base, e := conn.LookupStorageVolByPath(source.BackingStore.Path)
+		if e != nil {
+			return nil, repositoryError(e, "cannot inspect clone source backing chain")
 		}
-	case compute.VolumeFormatQcow2:
-		virVolumeConfig.Target = &libvirtxml.StorageVolumeTarget{
-			Format: &libvirtxml.StorageVolumeTargetFormat{
-				Type: "qcow2",
-			},
+		basePool, e := base.LookupPoolByVolume()
+		if e != nil {
+			base.Free()
+			return nil, repositoryError(e, "cannot locate backing source pool")
+		}
+		e = basePool.Refresh(0)
+		basePool.Free()
+		if e != nil {
+			base.Free()
+			return nil, repositoryError(e, "cannot refresh backing source metadata")
+		}
+		config, e := readStorageVolume(base)
+		base.Free()
+		if e != nil {
+			return nil, e
+		}
+		if backingStore(config) != nil {
+			return nil, fmt.Errorf("%w: unsupported backing chain: more than one level", compute.ErrInvalid)
+		}
+		if getVolTargetFormatType(config) != source.BackingStore.Format.String() {
+			return nil, fmt.Errorf("%w: backing format does not match source", compute.ErrInvalid)
 		}
 	}
-
-	virVolumeXml, err := virVolumeConfig.Marshal()
+	config, err := cloneVolumeConfig(params, source)
 	if err != nil {
-		return nil, repositoryError(err, "cannot marshal libvirt volume config")
+		return nil, err
 	}
-
-	virVolCreateFlags := libvirt.StorageVolCreateFlags(0)
-	if params.Format == compute.VolumeFormatQcow2 && settings.QcowPreallocMetadata {
-		virVolCreateFlags |= libvirt.STORAGE_VOL_CREATE_PREALLOC_METADATA
-	}
-
-	virVolume, err := virPool.StorageVolCreateXMLFrom(virVolumeXml, originalVirVolume, virVolCreateFlags)
+	pool, err := conn.LookupStoragePoolByName(params.NewPool)
 	if err != nil {
-		return nil, repositoryError(err, "cannot clone volume")
+		return nil, repositoryError(err, "cannot lookup destination pool")
 	}
-	if path, e := virVolume.GetPath(); e == nil {
-		ref = compute.VolumeRef(params.NodeId, path)
+	defer pool.Free()
+	poolDescription, err := pool.GetXMLDesc(0)
+	if err != nil {
+		return nil, repositoryError(err, "cannot inspect destination pool")
+	}
+	var poolConfig libvirtxml.StoragePool
+	if err = poolConfig.Unmarshal(poolDescription); err != nil {
+		return nil, err
+	}
+	if poolConfig.Target != nil && poolConfig.Target.Path != "" {
+		ref = compute.VolumeRef(params.NodeId, path.Join(poolConfig.Target.Path, params.NewName))
+	}
+	description, err := config.Marshal()
+	if err != nil {
+		return nil, repositoryError(err, "cannot marshal clone volume XML")
+	}
+	flags := libvirt.StorageVolCreateFlags(0)
+	if params.Format == compute.VolumeFormatQcow2 && repo.settings[params.NodeId].QcowPreallocMetadata {
+		flags |= libvirt.STORAGE_VOL_CREATE_PREALLOC_METADATA
+	}
+	var created *libvirt.StorageVol
+	if params.CloneMode.Effective() == compute.CloneModeOverlay {
+		created, err = pool.StorageVolCreateXML(description, flags)
+	} else {
+		created, err = pool.StorageVolCreateXMLFrom(description, original, flags)
+	}
+	if err != nil {
+		return nil, repositoryError(err, "cannot create cloned volume")
+	}
+	defer created.Free()
+	if p, e := created.GetPath(); e == nil {
+		ref = compute.VolumeRef(params.NodeId, p)
+	} else {
 		effects = append(effects, confirmed(ref, "created"))
+		return nil, repositoryError(e, "cannot read created clone path")
 	}
-
-	if params.Format == compute.VolumeFormatQcow2 && originalVirVolumeInfo.Capacity < params.NewSize.Bytes() {
-		if err := virVolume.Resize(params.NewSize.Bytes(), 0); err != nil {
-			return nil, repositoryError(err, "cannot resize qcow2 image after clone")
+	effects = append(effects, confirmed(ref, "created"))
+	if params.CloneMode.Effective() == compute.CloneModeCopy && params.Format == compute.VolumeFormatQcow2 && source.Size.Bytes() < params.NewSize.Bytes() {
+		if err = created.Resize(params.NewSize.Bytes(), 0); err != nil {
+			return nil, repositoryError(err, "cannot resize qcow2 volume after clone")
 		}
 	}
-	return repo.virVolumeToVolume(params.NodeId, virPool, virVolume)
+	result, err = repo.virVolumeToVolume(params.NodeId, pool, created)
+	if err != nil {
+		return result, err
+	}
+	if err = verifyClonedVolume(params, source, result); err != nil {
+		return result, err
+	}
+	return result, nil
 }
 
 func (repo *VolumeRepository) Resize(path, node string, newSize compute.Size) error {

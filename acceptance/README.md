@@ -307,3 +307,59 @@ migration backup and effects. The tested storage combination is a local `dir`
 pool with QCOW2 volumes. This result does not establish remote libvirt,
 read-only connections, Linux/KVM, other storage combinations, browser rendering
 or package builds/installations.
+
+## Storage class cloning and shared bases
+
+The lifecycle suite also creates small, nonzero raw and qcow2 volumes in its
+owned pool. For each source it creates two larger overlays, checks their explicit
+backing path/format and capacity, rejects nested overlays and base mutation,
+writes a distinct child-only block, and copies that overlay into an independent
+disk. It then deletes the complete
+source chain and reads the independent copy to verify preserved data. Base
+contents are compared before and after the operations. With a test VM present,
+starting that VM with a referenced base attached writable must fail.
+
+Set `ACCEPTANCE_OVERLAY=1` to boot the main guest from the `efficient` storage
+class. The suite verifies the actual backing metadata, guest cloud-init marker,
+and unchanged source image bytes after guest shutdown. The ordinary mode keeps
+booting an independent copy. Both modes run the storage checks above.
+
+On an authorized host where existing allocations prevent VM admission, set
+`ACCEPTANCE_STORAGE_ONLY=1` with the normal local/remote image settings. This
+runs only the volume matrix through the HTTP API and libvirt; it creates no
+VM and does not bypass admission. It does not establish guest boot or start
+protection on that host. Run `ACCEPTANCE_CAPACITY_REJECTION=1` separately to
+record admission failure. Existing workloads must never be changed to make
+these tests fit. Logs and downloaded comparison images stay under the run's
+`result/` directory; only that run's exact pool and volumes are cleaned up.
+
+Recorded on 2026-11-07: the local macOS/libvirt/HVF overlay lifecycle passed
+with the Ubuntu ARM64 cloud image (62.63 seconds), including create-and-start,
+explicit start, guest cloud-init, unchanged source bytes, both raw/qcow2 storage
+matrices, referenced-base start protection, process restart and cleanup. Artifacts
+remain in `result/vmango-acceptance-56a65ac6-a77e-4425-8ac0-37912b14052b/`.
+A subsequent storage-only run also verified specific dependency-conflict
+explanations and preservation of child-only changed blocks (9.83 seconds), under
+`result/vmango-acceptance-be1e3098-4bdd-4d11-9ad5-19feeb4a3e91/`.
+The existing local VMs were preserved; the test used the existing default
+admission policy without overriding host allocation settings.
+
+Run suites against the same libvirt host sequentially. Another suite's cleanup
+can remove its pool during a host-wide dependency scan; the affected operation
+then correctly fails without mutation because the scan is incomplete.
+
+The remote Linux/libvirt/KVM overlay lifecycle on `lanst.net.krglv.com` passed
+separately with the pinned Alpine x86_64 managed image (276.00 seconds), including
+image streaming/reuse, both startup paths, guest cloud-init, unchanged base
+contents, raw/qcow2 volume checks, protected-base startup, restart, migration
+and cleanup. Artifacts remain in
+`result/vmango-acceptance-6d997e41-3413-476a-a619-cbc65df260f2/`.
+No CPU overcommit setting was changed: both hosts used the application's
+existing default admission policy. These results establish the tested `dir`
+pools and guests, not other storage backends or package builds/installations.
+A final Linux storage-only run verified specific conflict explanations and
+preserved child-only changed blocks after source-chain deletion for both source
+formats (69.60 seconds), with artifacts in
+`result/vmango-acceptance-75e65605-eb3d-4463-bae2-4281032cf95a/`.
+Final read-only inventories confirmed all original VM states, allocations and
+autostart settings were unchanged and no acceptance VMs or pools remained.

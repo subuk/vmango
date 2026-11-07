@@ -19,45 +19,47 @@ func VolumeRef(node, path string) tasks.ResourceRef {
 // InfrastructureCommand is a private, versioned desired command. Read models
 // and command payloads are deliberately separate from the public task schema.
 type InfrastructureCommand struct {
-	NamespaceID      NamespaceID
-	Label            string                     `json:",omitempty"`
-	AcceptedVolumes  map[string]string          `json:",omitempty"`
-	Assignment       *AssignmentPlan            `json:",omitempty"`
-	CreationBindings map[string]json.RawMessage `json:",omitempty"`
-	CloudID          string
-	Catalog          *Cloud             `json:",omitempty"`
-	CreateSpec       *MachineCreateSpec `json:",omitempty"`
-	VolumeSpec       *CloudVolumeSpec   `json:",omitempty"`
-	InstanceType     string
-	StorageClass     string
-	AcceptedScopes   map[string]string `json:",omitempty"`
-	AcceptedKeys     []*Key            `json:",omitempty"`
-	SelectedType     *InstanceType     `json:",omitempty"`
-	Adoption         *MachineMetadata  `json:",omitempty"`
-	NewDisk          *DataDiskSpec     `json:",omitempty"`
-	Version          int
-	Node             string
-	VM               string
-	Machine          *VirtualMachine `json:",omitempty"`
-	Defaults         ImageDefaults
-	Clones           []VirtualMachineManagerClonedVolumeParams
-	NewVolumes       []VirtualMachineManagerCreatedVolumeParams
-	Start            bool
-	KeyIDs           []string
-	DeleteVolumes    bool
-	Disks            []*VirtualMachineAttachedVolume
-	Disk             *VirtualMachineAttachedVolume    `json:",omitempty"`
-	Interface        *VirtualMachineAttachedInterface `json:",omitempty"`
-	InterfaceCount   int
-	MAC              string
-	Path             string
-	CreateVolume     *VolumeCreateParams `json:",omitempty"`
-	CloneVolume      *VolumeCloneParams  `json:",omitempty"`
-	Size             Size
-	Settings         VirtualMachineManagerNodeSettings
-	Images           []Image                 `json:",omitempty"`
-	ImageBindings    map[string]ImageBinding `json:",omitempty"`
-	AutoImageSizes   []bool                  `json:",omitempty"`
+	NamespaceID           NamespaceID
+	Label                 string                     `json:",omitempty"`
+	AcceptedVolumes       map[string]string          `json:",omitempty"`
+	Assignment            *AssignmentPlan            `json:",omitempty"`
+	CreationBindings      map[string]json.RawMessage `json:",omitempty"`
+	CloudID               string
+	Catalog               *Cloud             `json:",omitempty"`
+	CreateSpec            *MachineCreateSpec `json:",omitempty"`
+	VolumeSpec            *CloudVolumeSpec   `json:",omitempty"`
+	InstanceType          string
+	StorageClass          string
+	AcceptedScopes        map[string]string       `json:",omitempty"`
+	AcceptedImageSources  map[string]string       `json:",omitempty"`
+	AcceptedImageBindings map[string]ImageBinding `json:",omitempty"`
+	AcceptedKeys          []*Key                  `json:",omitempty"`
+	SelectedType          *InstanceType           `json:",omitempty"`
+	Adoption              *MachineMetadata        `json:",omitempty"`
+	NewDisk               *DataDiskSpec           `json:",omitempty"`
+	Version               int
+	Node                  string
+	VM                    string
+	Machine               *VirtualMachine `json:",omitempty"`
+	Defaults              ImageDefaults
+	Clones                []VirtualMachineManagerClonedVolumeParams
+	NewVolumes            []VirtualMachineManagerCreatedVolumeParams
+	Start                 bool
+	KeyIDs                []string
+	DeleteVolumes         bool
+	Disks                 []*VirtualMachineAttachedVolume
+	Disk                  *VirtualMachineAttachedVolume    `json:",omitempty"`
+	Interface             *VirtualMachineAttachedInterface `json:",omitempty"`
+	InterfaceCount        int
+	MAC                   string
+	Path                  string
+	CreateVolume          *VolumeCreateParams `json:",omitempty"`
+	CloneVolume           *VolumeCloneParams  `json:",omitempty"`
+	Size                  Size
+	Settings              VirtualMachineManagerNodeSettings
+	Images                []Image                 `json:",omitempty"`
+	ImageBindings         map[string]ImageBinding `json:",omitempty"`
+	AutoImageSizes        []bool                  `json:",omitempty"`
 }
 
 func NewCommand(kind string, c InfrastructureCommand) tasks.Command {
@@ -185,7 +187,7 @@ func (h *CommandHandler) prepare(command tasks.Command) (tasks.Command, error) {
 					if images.ManagedSources == nil {
 						return command, fmt.Errorf("managed image storage is unavailable")
 					}
-					b, err := images.ManagedSources.Bind(c.Node, i)
+					b, err := images.imageBinding(c.Node, i)
 					if err != nil {
 						return command, err
 					}
@@ -215,6 +217,17 @@ func (h *CommandHandler) prepare(command tasks.Command) (tasks.Command, error) {
 			ref := VolumeRef(c.Node, clone.OriginalPath)
 			ref.ReadOnly = clone.ImageID != ""
 			add(ref)
+			if clone.ImageID == "" || c.ImageBindings[clone.ImageID].Path == "" {
+				source, err := h.Volumes.Get(clone.OriginalPath, c.Node)
+				if err != nil {
+					return command, err
+				}
+				if source.BackingStore != nil {
+					base := VolumeRef(c.Node, source.BackingStore.Path)
+					base.ReadOnly = true
+					add(base)
+				}
+			}
 			if err := destination(clone.NewPool, clone.NewName); err != nil {
 				return command, err
 			}
@@ -342,6 +355,11 @@ func (h *CommandHandler) prepare(command tasks.Command) (tasks.Command, error) {
 			if err := validateVolumeCreate(create); err != nil {
 				return command, err
 			}
+			p.CloneMode = p.CloneMode.Effective()
+			p.SourceIdentity = source.Identity
+			if err := validateCloneSource(*p, source); err != nil {
+				return command, err
+			}
 			if p.NewSize.Bytes() < source.Size.Bytes() {
 				return command, ErrInvalid
 			}
@@ -349,6 +367,11 @@ func (h *CommandHandler) prepare(command tasks.Command) (tasks.Command, error) {
 				return command, err
 			}
 			add(VolumeRef(c.Node, p.OriginalPath))
+			if source.BackingStore != nil {
+				base := VolumeRef(c.Node, source.BackingStore.Path)
+				base.ReadOnly = true
+				add(base)
+			}
 			if err := destination(p.NewPool, p.NewName); err != nil {
 				return command, err
 			}
@@ -496,6 +519,24 @@ func (h *CommandHandler) execute(ctx context.Context, command tasks.Command, pro
 	}
 	switch command.Kind {
 	case "machine.delete":
+		if c.DeleteVolumes {
+			paths := []string{}
+			for _, disk := range c.Disks {
+				if h.Clouds != nil {
+					volume, err := h.Volumes.Get(disk.Path, c.Node)
+					if err != nil {
+						return err
+					}
+					if !h.Volumes.Owned(volume) {
+						continue
+					}
+				}
+				paths = append(paths, disk.Path)
+			}
+			if err := h.Volumes.ValidateUnreferenced(c.Node, paths); err != nil {
+				return err
+			}
+		}
 		if err := stage("delete-machine", func() error {
 			if err := h.VMs.Delete(c.VM, c.Node); err != nil {
 				return err
@@ -544,6 +585,11 @@ func (h *CommandHandler) execute(ctx context.Context, command tasks.Command, pro
 		return nil
 	case "machine.start", "machine.reboot", "machine.shutdown", "machine.poweroff":
 		action := strings.TrimPrefix(command.Kind, "machine.")
+		if action == "start" {
+			if err := progress.Stage("validate-storage-dependencies", &ref, false, func() error { return h.VMs.ValidateStart(c.VM, c.Node) }); err != nil {
+				return err
+			}
+		}
 		if err := stage(action+"-machine", func() error {
 			if err := h.VMs.Action(c.VM, c.Node, action); err != nil {
 				return err
@@ -631,6 +677,9 @@ func (h *CommandHandler) execute(ctx context.Context, command tasks.Command, pro
 		}
 		return h.verifyVolume(progress, c.Node, volume.Path, expected)
 	case "volume.resize":
+		if err := progress.Stage("validate-storage-dependencies", &ref, false, func() error { return h.Volumes.ValidateUnreferenced(c.Node, []string{c.Path}) }); err != nil {
+			return err
+		}
 		if err := stage("resize-volume", func() error {
 			if err := h.Volumes.Resize(c.Path, c.Node, c.Size); err != nil {
 				return err
@@ -641,6 +690,9 @@ func (h *CommandHandler) execute(ctx context.Context, command tasks.Command, pro
 		}
 		return h.verifyVolume(progress, c.Node, c.Path, c.Size.Bytes())
 	case "volume.delete":
+		if err := progress.Stage("validate-storage-dependencies", &ref, false, func() error { return h.Volumes.ValidateUnreferenced(c.Node, []string{c.Path}) }); err != nil {
+			return err
+		}
 		if err := stage("delete-volume", func() error {
 			if err := h.Volumes.Delete(c.Path, c.Node); err != nil {
 				return err

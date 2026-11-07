@@ -12,7 +12,7 @@ func TestImageDataDisksPlacementAndCapacity(t *testing.T) {
 	manager := NewVirtualMachineManager(NewVirtualMachineService(&cloudImageVMBackend{}), NewVolumeService(volumes), nil, nil, images)
 	service := CloudService{Manager: manager, Volumes: manager.volumes}
 	host := CloudHost{Node: "a", Zone: "z", Networks: map[string]NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]StorageBinding{"fast": {Pool: "pool", Format: VolumeFormatQcow2}}}
-	cloud := Cloud{ID: "c", Images: []string{"image"}, Zones: []CatalogEntry{{ID: "z"}}, Networks: []CatalogEntry{{ID: "lan"}}, StorageClasses: []CatalogEntry{{ID: "fast"}}, InstanceTypes: []InstanceType{testType()}, Hosts: []CloudHost{host}}
+	cloud := Cloud{ID: "c", Images: []string{"image"}, Zones: []CatalogEntry{{ID: "z"}}, Networks: []CatalogEntry{{ID: "lan"}}, StorageClasses: []StorageClass{{ID: "fast"}}, InstanceTypes: []InstanceType{testType()}, Hosts: []CloudHost{host}}
 	inventory := testInventory()
 	inventory.Host = host
 	inventory.Node.CpuArch = ArchAmd64
@@ -105,7 +105,7 @@ func TestImageDataDisksOffersRequireSpaceAndVirtio(t *testing.T) {
 	volumes := NewVolumeService(&imageDataDiskVolumes{})
 	vms := NewVirtualMachineService(&cloudImageVMBackend{})
 	s := CloudService{VMs: vms, Volumes: volumes, Nodes: NewNodeService(imageDiskOfferNode{}), Manager: NewVirtualMachineManager(vms, volumes, nil, nil, images)}
-	cloud := Cloud{ID: "c", Images: []string{"image"}, InstanceTypes: []InstanceType{testType()}, Networks: []CatalogEntry{{ID: "lan"}}, StorageClasses: []CatalogEntry{{ID: "fast"}}, Hosts: []CloudHost{{Node: "a", Zone: "z", Networks: map[string]NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]StorageBinding{"fast": {Pool: "pool", Format: VolumeFormatRaw}}}}}
+	cloud := Cloud{ID: "c", Images: []string{"image"}, InstanceTypes: []InstanceType{testType()}, Networks: []CatalogEntry{{ID: "lan"}}, StorageClasses: []StorageClass{{ID: "fast"}}, Hosts: []CloudHost{{Node: "a", Zone: "z", Networks: map[string]NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]StorageBinding{"fast": {Pool: "pool", Format: VolumeFormatRaw}}}}}
 	for _, free := range []uint64{26 << 30, (26 << 30) - 1} {
 		s.Pools = NewVolumePoolService(imageDiskOfferPools{free: free})
 		offers, err := s.Offers(cloud)

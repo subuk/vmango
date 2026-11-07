@@ -115,7 +115,7 @@
           },
           "storage_classes": {
             "items": {
-              "$ref": "#/components/schemas/CatalogEntry"
+              "$ref": "#/components/schemas/StorageClass"
             },
             "type": "array"
           },
@@ -1034,7 +1034,7 @@
           },
           "storage_classes": {
             "items": {
-              "$ref": "#/components/schemas/CatalogEntry"
+              "$ref": "#/components/schemas/StorageClass"
             },
             "type": "array"
           },
@@ -1459,7 +1459,7 @@
           },
           "storage_classes": {
             "items": {
-              "$ref": "#/components/schemas/CatalogEntry"
+              "$ref": "#/components/schemas/StorageClass"
             },
             "type": "array"
           }
@@ -2312,6 +2312,14 @@
           "backend_name": {
             "type": "string"
           },
+          "clone_mode": {
+            "description": "Observed disk dependency, independent of current storage class policy.",
+            "enum": [
+              "copy",
+              "overlay"
+            ],
+            "type": "string"
+          },
           "cloud": {
             "type": "string"
           },
@@ -2362,7 +2370,8 @@
           "pool",
           "size_bytes",
           "format",
-          "protected"
+          "protected",
+          "clone_mode"
         ],
         "type": "object"
       },
@@ -2371,7 +2380,7 @@
         "properties": {
           "storage_classes": {
             "items": {
-              "$ref": "#/components/schemas/CatalogEntry"
+              "$ref": "#/components/schemas/StorageClass"
             },
             "type": "array"
           }
@@ -2419,6 +2428,14 @@
           },
           "catalog": {
             "$ref": "#/components/schemas/ApiVolumeCatalog"
+          },
+          "clone_mode": {
+            "description": "Observed disk dependency, independent of current storage class policy.",
+            "enum": [
+              "copy",
+              "overlay"
+            ],
+            "type": "string"
           },
           "cloud": {
             "type": "string"
@@ -2471,7 +2488,8 @@
           "pool",
           "size_bytes",
           "format",
-          "protected"
+          "protected",
+          "clone_mode"
         ],
         "type": "object"
       },
@@ -2787,7 +2805,7 @@
           },
           "storage_classes": {
             "items": {
-              "$ref": "#/components/schemas/CatalogEntry"
+              "$ref": "#/components/schemas/StorageClass"
             },
             "type": "array"
           }
@@ -3064,6 +3082,33 @@
         "required": [
           "zone",
           "storage_classes"
+        ],
+        "type": "object"
+      },
+      "StorageClass": {
+        "additionalProperties": false,
+        "properties": {
+          "clone_mode": {
+            "enum": [
+              "copy",
+              "overlay"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "clone_mode"
         ],
         "type": "object"
       },

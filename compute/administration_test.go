@@ -21,7 +21,7 @@ func (b *administrationTestBackend) Host(_ context.Context, _ string, node strin
 }
 
 func TestAdministrationCommonCloudHasNoHostDependency(t *testing.T) {
-	snapshot := AdministrationSnapshot{Clouds: []AdministrationCloud{{ID: "external", Name: "External cloud", BackendKind: "external", Zones: []CatalogEntry{}, InstanceTypes: []InstanceType{}, Networks: []CatalogEntry{}, StorageClasses: []CatalogEntry{}, Images: []string{"linux"}}}, Images: []AdministrationImage{{CloudID: "external", ID: "linux", Name: "Linux"}}}
+	snapshot := AdministrationSnapshot{Clouds: []AdministrationCloud{{ID: "external", Name: "External cloud", BackendKind: "external", Zones: []CatalogEntry{}, InstanceTypes: []InstanceType{}, Networks: []CatalogEntry{}, StorageClasses: []StorageClass{}, Images: []string{"linux"}}}, Images: []AdministrationImage{{CloudID: "external", ID: "linux", Name: "Linux"}}}
 	s := NewAdministrationService(snapshot, nil)
 	if c, err := s.Cloud("external"); err != nil || c.Name != "External cloud" || c.Libvirt != nil {
 		t.Fatal(c, err)

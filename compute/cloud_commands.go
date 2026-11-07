@@ -90,6 +90,33 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 			c.CreateSpec.UserDataTemplate = nil
 		}
 		c.Images = []Image{image}
+		c.AcceptedImageSources = map[string]string{}
+		c.AcceptedImageBindings = map[string]ImageBinding{}
+		for _, host := range cloud.Hosts {
+			if host.Zone != c.CreateSpec.Zone {
+				continue
+			}
+			if _, ok := host.Storage[c.CreateSpec.StorageClass]; !ok {
+				continue
+			}
+			if image.Managed() {
+				if h.Manager.images.ManagedSources == nil {
+					return command, c, ErrUnavailable
+				}
+				binding, bindErr := h.Manager.images.ManagedSources.Bind(host.Node, image)
+				if bindErr == nil {
+					c.AcceptedImageBindings[host.Node] = binding
+				}
+			} else {
+				source, sourceErr := h.Volumes.Get(image.SourcePath, host.Node)
+				if sourceErr == nil && !source.Metadata.Hidden && source.AttachedTo == "" {
+					c.AcceptedImageSources[host.Node] = source.Identity
+				}
+			}
+		}
+		if image.Managed() && len(c.AcceptedImageBindings) == 0 || !image.Managed() && len(c.AcceptedImageSources) == 0 {
+			return command, c, invalid("image", "No eligible host has an available image source.")
+		}
 		c.CreationBindings = map[string]json.RawMessage{}
 		for _, host := range cloud.Hosts {
 			binding, err := h.VMs.SnapshotCreationBinding(host.Node)
@@ -115,7 +142,7 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 		}
 	} else if c.VolumeSpec != nil {
 		v := c.VolumeSpec
-		if command.Kind != "volume.create" || !resourceName.MatchString(v.Name) || v.SizeBytes == 0 || !hasEntry(cloud.Zones, v.Zone) || !hasEntry(cloud.StorageClasses, v.StorageClass) {
+		if command.Kind != "volume.create" || !resourceName.MatchString(v.Name) || v.SizeBytes == 0 || !hasEntry(cloud.Zones, v.Zone) || !hasStorageClass(cloud.StorageClasses, v.StorageClass) {
 			return command, c, ErrInvalid
 		}
 	} else if c.NewDisk != nil {
@@ -200,6 +227,11 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 			c.CloneVolume.Format = b.Format
 			c.CloneVolume.Cloud = cloud.ID
 			c.CloneVolume.StorageClass = c.StorageClass
+			class, err := cloud.StorageClass(c.StorageClass)
+			if err != nil {
+				return command, c, err
+			}
+			c.CloneVolume.CloneMode = class.CloneMode
 		}
 		if command.Kind == "machine.attach-interface" {
 			if c.Interface == nil {
@@ -319,6 +351,8 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 	}
 	if c.CreateSpec != nil {
 		images := h.Manager.images.ForCloud(cloud.ID).Snapshot(c.Images, nil, true)
+		images.AcceptedSources = c.AcceptedImageSources
+		images.AcceptedBindings = c.AcceptedImageBindings
 		var resolved InfrastructureCommand
 		if err := p.Stage("schedule-machine", nil, false, func() error {
 			var err error

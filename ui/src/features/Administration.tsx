@@ -667,10 +667,37 @@ function CloudConfiguration({
                             />
                         </DetailSection>
                         <Catalog title="Logical networks" rows={c.networks} />
-                        <Catalog
-                            title="Storage classes"
-                            rows={c.storage_classes}
-                        />
+                        <DetailSection title="Storage classes">
+                            <ResourceTable
+                                rows={c.storage_classes}
+                                rowKey={(s) => s.id}
+                                search={(s) =>
+                                    `${s.id} ${s.name} ${s.description || ""} ${s.clone_mode}`
+                                }
+                                columns={[
+                                    {
+                                        id: "name",
+                                        label: "Name",
+                                        value: (s) => s.name,
+                                    },
+                                    {
+                                        id: "id",
+                                        label: "ID",
+                                        value: (s) => s.id,
+                                    },
+                                    {
+                                        id: "description",
+                                        label: "Description",
+                                        value: (s) => s.description || "—",
+                                    },
+                                    {
+                                        id: "clone_mode",
+                                        label: "Clone mode",
+                                        value: (s) => s.clone_mode || "copy",
+                                    },
+                                ]}
+                            />
+                        </DetailSection>
                         <DetailSection title="Image references">
                             {c.images.length
                                 ? c.images.map((i) => (

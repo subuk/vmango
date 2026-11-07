@@ -38,7 +38,8 @@ type NetworkValidator interface {
 
 type VirtualMachineService struct {
 	VirtualMachineRepository
-	CloudMode bool
+	CloudMode    bool
+	Dependencies StorageDependencyRepository
 }
 
 func NewVirtualMachineService(repo VirtualMachineRepository) *VirtualMachineService {
@@ -59,7 +60,7 @@ func (service *VirtualMachineService) Action(id string, node, action string) err
 	case "poweroff":
 		return service.VirtualMachineRepository.Poweroff(id, node)
 	case "start":
-		return service.VirtualMachineRepository.Start(id, node)
+		return service.Start(id, node)
 	}
 }
 

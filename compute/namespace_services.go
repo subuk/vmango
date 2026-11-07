@@ -18,7 +18,7 @@ func (s *VirtualMachineService) ForNamespace(c WorkloadContext, workload *Worklo
 	if err := workload.Namespaces.Admit(c.Namespace, c.Cloud); err != nil {
 		return nil, err
 	}
-	return &VirtualMachineService{VirtualMachineRepository: &namespaceVMRepository{VirtualMachineRepository: s.VirtualMachineRepository, context: c, workload: workload}, CloudMode: s.CloudMode}, nil
+	return &VirtualMachineService{VirtualMachineRepository: &namespaceVMRepository{VirtualMachineRepository: s.VirtualMachineRepository, context: c, workload: workload}, CloudMode: s.CloudMode, Dependencies: s.Dependencies}, nil
 }
 
 func (s *VolumeService) ForNamespace(c WorkloadContext, workload *WorkloadService) (*VolumeService, error) {
@@ -28,7 +28,7 @@ func (s *VolumeService) ForNamespace(c WorkloadContext, workload *WorkloadServic
 	if err := workload.Namespaces.Admit(c.Namespace, c.Cloud); err != nil {
 		return nil, err
 	}
-	return &VolumeService{VolumeRepository: &namespaceVolumeRepository{VolumeRepository: s.VolumeRepository, context: c, workload: workload}, Ownership: s.Ownership}, nil
+	return &VolumeService{VolumeRepository: &namespaceVolumeRepository{VolumeRepository: s.VolumeRepository, context: c, workload: workload}, Ownership: s.Ownership, Dependencies: s.Dependencies}, nil
 }
 
 func (s *WorkloadService) Bind(c WorkloadContext, manager *VirtualMachineManager) (*VirtualMachineManager, *VirtualMachineService, *VolumeService, error) {

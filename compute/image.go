@@ -134,11 +134,13 @@ type ImageRepository interface {
 
 type ImageService struct {
 	ImageRepository
-	CloudID        string
-	NodeClouds     map[string]string
-	ManagedSources *ManagedImageService
-	PinnedBindings map[string]ImageBinding
-	Preflight      bool
+	CloudID          string
+	NodeClouds       map[string]string
+	ManagedSources   *ManagedImageService
+	PinnedBindings   map[string]ImageBinding
+	AcceptedSources  map[string]string
+	AcceptedBindings map[string]ImageBinding
+	Preflight        bool
 }
 
 // Snapshot uses the accepted definitions and bindings without consulting a
@@ -185,11 +187,20 @@ func (s *ImageService) Snapshot(images []Image, bindings map[string]ImageBinding
 			pinned[n].CloudID = s.CloudID
 		}
 	}
-	return &ImageService{ImageRepository: pinnedImages(pinned), CloudID: s.CloudID, NodeClouds: s.NodeClouds, ManagedSources: s.ManagedSources, PinnedBindings: bindings, Preflight: preflight}
+	return &ImageService{ImageRepository: pinnedImages(pinned), CloudID: s.CloudID, NodeClouds: s.NodeClouds, ManagedSources: s.ManagedSources, PinnedBindings: bindings, Preflight: preflight, AcceptedSources: s.AcceptedSources, AcceptedBindings: s.AcceptedBindings}
 }
 func (s *ImageService) Source(i Image, node string, volumes *VolumeService) (*Volume, error) {
 	if !i.Managed() {
-		return volumes.Get(i.SourcePath, node)
+		v, err := volumes.Get(i.SourcePath, node)
+		if err != nil {
+			return nil, err
+		}
+		if s.AcceptedSources != nil {
+			if identity, ok := s.AcceptedSources[node]; !ok || identity != v.Identity {
+				return nil, fmt.Errorf("%w: accepted image source changed or is unavailable on this host", ErrConflict)
+			}
+		}
+		return v, nil
 	}
 	if s.ManagedSources == nil {
 		return nil, fmt.Errorf("managed image storage is unavailable")
@@ -197,7 +208,7 @@ func (s *ImageService) Source(i Image, node string, volumes *VolumeService) (*Vo
 	b, ok := s.PinnedBindings[i.ID]
 	if !ok {
 		var err error
-		b, err = s.ManagedSources.Bind(node, i)
+		b, err = s.imageBinding(node, i)
 		if err != nil {
 			return nil, err
 		}
@@ -288,4 +299,17 @@ func (d ImageDefaults) Display() (GraphicType, VideoModel) {
 		v = NewVideoModel(d.VideoModel)
 	}
 	return g, v
+}
+
+// imageBinding honors the accepted host-local image destination. Download hashes
+// are already pinned in Image; missing artifacts have no volume identity yet.
+func (s *ImageService) imageBinding(node string, i Image) (ImageBinding, error) {
+	if s.AcceptedBindings != nil {
+		b, ok := s.AcceptedBindings[node]
+		if !ok {
+			return ImageBinding{}, fmt.Errorf("%w: no accepted image source on this host", ErrConflict)
+		}
+		return b, nil
+	}
+	return s.ManagedSources.Bind(node, i)
 }

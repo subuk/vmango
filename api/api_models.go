@@ -76,7 +76,7 @@ type apiVM struct {
 type apiMachineCatalog struct {
 	_              struct{}               `nullable:"true"`
 	Networks       []compute.CatalogEntry `json:"networks" nullable:"false"`
-	StorageClasses []compute.CatalogEntry `json:"storage_classes" nullable:"false"`
+	StorageClasses []compute.StorageClass `json:"storage_classes" nullable:"false"`
 }
 type APIVMFields = apiVM
 type APIVolumeFields = apiVolume
@@ -87,7 +87,7 @@ type apiVMDetail struct {
 }
 type apiVolumeCatalog struct {
 	_              struct{}               `nullable:"true"`
-	StorageClasses []compute.CatalogEntry `json:"storage_classes" nullable:"false"`
+	StorageClasses []compute.StorageClass `json:"storage_classes" nullable:"false"`
 }
 type apiVolumeDetail struct {
 	APIVolumeFields
@@ -139,18 +139,23 @@ type apiVolume struct {
 	StorageClass string              `json:"storage_class"`
 	Owned        bool                `json:"owned"`
 
-	ID         string `json:"id"`
-	Node       string `json:"node"`
-	Name       string `json:"name"`
-	Pool       string `json:"pool"`
-	SizeBytes  uint64 `json:"size_bytes"`
-	Format     string `json:"format"`
-	AttachedTo string `json:"attached_to,omitempty"`
-	Protected  bool   `json:"protected"`
+	ID         string            `json:"id"`
+	Node       string            `json:"node"`
+	Name       string            `json:"name"`
+	Pool       string            `json:"pool"`
+	SizeBytes  uint64            `json:"size_bytes"`
+	Format     string            `json:"format"`
+	AttachedTo string            `json:"attached_to,omitempty"`
+	Protected  bool              `json:"protected"`
+	CloneMode  compute.CloneMode `json:"clone_mode" enum:"copy,overlay" doc:"Observed disk dependency, independent of current storage class policy."`
 }
 
 func volumeDTO(v *compute.Volume) apiVolume {
-	return apiVolume{ID: volumeID(v.NodeId, v.Path), Node: v.NodeId, Name: v.Name, Pool: v.Pool, SizeBytes: v.Size.Bytes(), Format: v.Format.String(), AttachedTo: v.AttachedTo, Protected: v.Metadata.Protected}
+	mode := compute.CloneModeCopy
+	if v.BackingStore != nil {
+		mode = compute.CloneModeOverlay
+	}
+	return apiVolume{CloneMode: mode, ID: volumeID(v.NodeId, v.Path), Node: v.NodeId, Name: v.Name, Pool: v.Pool, SizeBytes: v.Size.Bytes(), Format: v.Format.String(), AttachedTo: v.AttachedTo, Protected: v.Metadata.Protected}
 }
 
 type apiImageDefaults struct {

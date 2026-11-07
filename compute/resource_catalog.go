@@ -9,11 +9,11 @@ import (
 // It describes current choices without reserving capacity or accepting commands.
 type HostCatalog struct {
 	Networks       []CatalogEntry `json:"networks" nullable:"false"`
-	StorageClasses []CatalogEntry `json:"storage_classes" nullable:"false"`
+	StorageClasses []StorageClass `json:"storage_classes" nullable:"false"`
 }
 
 func (s *CloudService) HostCatalog(cloudID, node string, vm *VirtualMachine) (HostCatalog, error) {
-	out := HostCatalog{Networks: []CatalogEntry{}, StorageClasses: []CatalogEntry{}}
+	out := HostCatalog{Networks: []CatalogEntry{}, StorageClasses: []StorageClass{}}
 	c, h, err := s.ForHost(cloudID, node)
 	if err != nil {
 		return out, err
@@ -59,12 +59,12 @@ func (s *CloudService) MachineCatalog(cloudID string, vm *VirtualMachine) (HostC
 
 // VolumeCatalog uses the already-read volume and its host. Attached sources
 // cannot be cloned; an empty selection records that successfully known fact.
-func (s *CloudService) VolumeCatalog(cloudID string, v *Volume) ([]CatalogEntry, error) {
+func (s *CloudService) VolumeCatalog(cloudID string, v *Volume) ([]StorageClass, error) {
 	c, h, err := s.ForHost(cloudID, v.NodeId)
 	if err != nil {
 		return nil, err
 	}
-	out := []CatalogEntry{}
+	out := []StorageClass{}
 	if v.AttachedTo != "" || v.Metadata.Hidden {
 		return out, nil
 	}

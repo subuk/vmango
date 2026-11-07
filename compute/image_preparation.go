@@ -93,7 +93,31 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 	}
 	for n := range clones {
 		p := &clones[n]
+		p.CloneMode = p.CloneMode.Effective()
 		if p.ImageID == "" {
+			source, err := m.volumes.Get(p.OriginalPath, vm.NodeId)
+			if err != nil {
+				return nil, nil, err
+			}
+			if source.Metadata.Hidden || source.OwnerVM != "" {
+				return nil, nil, ErrVolumeNotFound
+			}
+			if source.AttachedTo != "" {
+				return nil, nil, fmt.Errorf("%w: source volume is attached", ErrConflict)
+			}
+			if p.NewFormat == VolumeFormatUnknown {
+				p.NewFormat = source.Format
+			}
+			if err := validateCloneSource(VolumeCloneParams{CloneMode: p.CloneMode, SourceIdentity: p.SourceIdentity, Format: p.NewFormat}, source); err != nil {
+				return nil, nil, err
+			}
+			p.SourceIdentity = source.Identity
+			if p.NewSize.Value == 0 {
+				p.NewSize = source.Size
+			}
+			if p.NewSize.Bytes() < source.Size.Bytes() {
+				return nil, nil, fmt.Errorf("%w: clone cannot shrink source", ErrInvalid)
+			}
 			continue
 		}
 		hasImages = true
@@ -123,6 +147,10 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		if source.Format != VolumeFormatQcow2 && source.Format != VolumeFormatRaw {
 			return nil, nil, fmt.Errorf("image %q source format is unsupported", i.ID)
 		}
+		if p.SourceIdentity != "" && p.SourceIdentity != source.Identity {
+			return nil, nil, fmt.Errorf("%w: accepted source identity changed", ErrConflict)
+		}
+		p.SourceIdentity = source.Identity
 		p.OriginalPath = source.Path
 		if p.NewName == "" || p.NewPool == "" {
 			return nil, nil, fmt.Errorf("image %q needs a destination name and pool", i.ID)
@@ -147,6 +175,9 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		}
 		if p.NewFormat != VolumeFormatRaw && p.NewFormat != VolumeFormatQcow2 {
 			return nil, nil, fmt.Errorf("unsupported clone format")
+		}
+		if e := validateCloneSource(VolumeCloneParams{CloneMode: p.CloneMode, Format: p.NewFormat, SourceIdentity: p.SourceIdentity}, source); e != nil {
+			return nil, nil, e
 		}
 		if p.DeviceType == DeviceTypeUnknown {
 			p.DeviceType = DeviceTypeDisk

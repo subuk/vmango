@@ -218,3 +218,17 @@ func TestExplicitInterfacesOverrideConflictingNICDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestManualClonePinsSourceIdentity(t *testing.T) {
+	manager, repo, vm, _ := setup(t)
+	repo.source.Identity = "accepted"
+	clones := []compute.VirtualMachineManagerClonedVolumeParams{{OriginalPath: "/ordinary", NewName: "copy", NewPool: "pool"}}
+	_, accepted, err := manager.PrepareImages(vm, clones, nil, compute.ImageDefaults{})
+	if err != nil || accepted[0].SourceIdentity != "accepted" || accepted[0].CloneMode != compute.CloneModeCopy {
+		t.Fatalf("source not pinned: %+v %v", accepted, err)
+	}
+	repo.source.Identity = "replacement"
+	if _, _, err = manager.PrepareImages(vm, accepted, nil, compute.ImageDefaults{}); err == nil {
+		t.Fatal("replacement source accepted")
+	}
+}

@@ -1,3 +1,7 @@
+import {
+    diskDependencyLabel,
+    dependentDiskNotice,
+} from "../components/StorageClassDescription";
 import { WorkspaceLink as RouterLink } from "../app/Workspace";
 import { useRequest } from "../app/Workspace";
 import { useEffect, useState } from "react";
@@ -371,6 +375,28 @@ function Disks({ vm }: { vm: VM }) {
                         id: "bus",
                         label: "Bus",
                         value: (d) => d.bus || "virtio",
+                    },
+                    {
+                        id: "dependency",
+                        label: "Source dependency",
+                        value: (d) =>
+                            d.volume
+                                ? diskDependencyLabel(d.volume.clone_mode)
+                                : "—",
+                        render: (d) =>
+                            d.volume ? (
+                                <Typography
+                                    title={
+                                        d.volume.clone_mode === "overlay"
+                                            ? dependentDiskNotice
+                                            : undefined
+                                    }
+                                >
+                                    {diskDependencyLabel(d.volume.clone_mode)}
+                                </Typography>
+                            ) : (
+                                "—"
+                            ),
                     },
                     {
                         id: "size",

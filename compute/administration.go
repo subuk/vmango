@@ -47,7 +47,7 @@ type AdministrationCloud struct {
 	Zones          []CatalogEntry              `json:"zones" nullable:"false"`
 	InstanceTypes  []InstanceType              `json:"instance_types" nullable:"false"`
 	Networks       []CatalogEntry              `json:"networks" nullable:"false"`
-	StorageClasses []CatalogEntry              `json:"storage_classes" nullable:"false"`
+	StorageClasses []StorageClass              `json:"storage_classes" nullable:"false"`
 	Images         []string                    `json:"images" nullable:"false"`
 	Libvirt        *AdministrationLibvirtCloud `json:"libvirt,omitempty"`
 }
@@ -216,7 +216,7 @@ func NewAdministrationService(snapshot AdministrationSnapshot, observations map[
 			c.Networks = []CatalogEntry{}
 		}
 		if c.StorageClasses == nil {
-			c.StorageClasses = []CatalogEntry{}
+			c.StorageClasses = []StorageClass{}
 		}
 		if c.Images == nil {
 			c.Images = []string{}

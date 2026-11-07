@@ -322,3 +322,30 @@ execution. Inspect old tasks and resubmit through the new API. New commands reta
 the resolved host and UUID, and idempotent recovery happens before backend reads.
 
 Host `cpu_overcommit` is an integer multiplier (default `4`, minimum `1`). CPU request capacity is `(host CPUs - cpu_reserve) * cpu_overcommit`; this applies to creation, adoption and instance type changes. Memory is not overcommitted.
+
+## Storage clone policy
+
+Cloud-level storage classes carry `description` and `clone_mode = "copy" | "overlay"`.
+Omission selects `copy`; host bindings continue to choose pool and destination
+format. The accepted command pins the policy and source identity. The same image
+can serve either class, and blank disk creation is unaffected.
+
+An overlay is a qcow2 child of an unbacked raw/qcow2 source. Multiple children are
+allowed; deeper creation is rejected. A copy from a supported one-level overlay
+must be independent. Backend readback verifies format, capacity and backing
+relationship. Actual disk dependency is returned separately from today's class
+policy; no source paths are exposed by the dependency presentation.
+
+Dependency checks protect Vmango starts and base mutation/deletion by inspecting
+the whole host, including stopped/unmanaged domains and unattached volumes.
+Incomplete scans and unsupported chains fail the affected operation. Existing task
+locks coordinate operations; dependencies are rediscovered after restart, without
+a persistent registry. Administrators remain responsible for compatible backend
+configuration and keeping bases available and unchanged while dependents exist.
+External tools, other hosts and libvirt autostart bypass Vmango checks; keep native
+QEMU/libvirt locking enabled. No flatten/rebase or automatic base cleanup is added.
+
+An inactive storage pool or a domain disk whose metadata cannot be read makes
+the host dependency scan incomplete. Dependency-sensitive operations can then
+be blocked even for other disks on that host; the administrator must restore
+a complete, readable inventory before retrying.

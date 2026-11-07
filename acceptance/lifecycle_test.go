@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	encodingxml "encoding/xml"
 	"fmt"
@@ -318,15 +319,19 @@ cloud "acceptance" {
  instance_type "larger" { cpu=2 memory_mib=3072 boot_disk_gib=16 autostart=true }
  network "lan" {}
  storage_class "standard" {}
+ storage_class "efficient" { name="Space-efficient" description="Shares its source." clone_mode="overlay" }
+ storage_class "raw" { clone_mode="copy" }
  host "acceptance" {
  uri = %q
  config_drive_pool = %q
  image_pool = %q
  qcow_prealloc_metadata = false
  graphics_listen = "127.0.0.1"
- zone="test" labels={rack="test"} network "lan" { network="qemu-usernet" } storage_class "standard" {pool=%q format="qcow2"} }
+ zone="test" labels={rack="test"} network "lan" { network="qemu-usernet" } storage_class "standard" {pool=%q format="qcow2"}
+ storage_class "efficient" {pool=%q format="qcow2"}
+ storage_class "raw" {pool=%q format="raw"} }
 }
-`, base, arch, firmware, initialization, base, arch, firmware, uri, name, name, name)
+`, base, arch, firmware, initialization, base, arch, firmware, uri, name, name, name, name, name)
 	if imageURL != "" {
 		if strings.Contains(imageURL, "alpinelinux.org/") {
 			configuration = strings.ReplaceAll(configuration, `os_name = "Ubuntu"`, `os_name = "Alpine Linux"`)
@@ -428,8 +433,11 @@ cloud "offline" {
 		}
 		defer response.Body.Close()
 		body, _ := io.ReadAll(response.Body)
-		if response.StatusCode != status {
+		if status != 0 && response.StatusCode != status {
 			t.Fatalf("%s %s: %d, want %d: %s", method, path, response.StatusCode, status, body)
+		}
+		if status == 0 && response.StatusCode != 202 && response.StatusCode != 409 && response.StatusCode != 422 {
+			t.Fatalf("unexpected rejection response %d: %s", response.StatusCode, body)
 		}
 		return body
 	}
@@ -579,6 +587,10 @@ cloud "offline" {
 	}
 	userdata := fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, 'test \"$(hostname)\" = %s && echo %s > %s']\n", name, marker, serialDevice)
 	// Check image constraints and the no-init alias through the same JSON API.
+	if os.Getenv("ACCEPTANCE_STORAGE_ONLY") == "1" {
+		testStorageCloning(t, root, name, "", apiRequest, apiCommand, mustVir, run)
+		return
+	}
 	aliasBody := map[string]any{"name": name, "image": "boot", "instance_type": "too-small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false}
 	apiRequest("POST", "/api/v1/clouds/acceptance/machines", aliasBody, 422)
 	if _, err := vir("vol-info", "--pool", name, name+"_root"); err == nil {
@@ -596,6 +608,11 @@ cloud "offline" {
 		for deadline := time.Now().Add(30 * time.Second); ; {
 			var task tasks.Task
 			json.Unmarshal(apiRequest("GET", accepted.StatusURL, nil, 200), &task)
+			for _, ref := range task.Resources {
+				if ref.Kind == "machine" {
+					ownedDomains[ref.ID] = true
+				}
+			}
 			if task.State.Terminal() {
 				if task.State != tasks.Failed || task.OutcomeUncertain || len(task.Effects) != 0 || task.Error == nil || !strings.Contains(task.Error.Message, "capacity") {
 					t.Fatalf("unexpected admission result: %+v", task)
@@ -618,7 +635,13 @@ cloud "offline" {
 		t.Log("PASS: overcommitted real host rejected placement before provisioning; lifecycle was not run")
 		return
 	}
+	aliasBody["start"] = true
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines", aliasBody)
+	if state := strings.TrimSpace(mustVir("domstate", lastCreatedVM)); state != "running" {
+		t.Fatalf("create-and-start did not start its VM: %s", state)
+	}
+	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+lastCreatedVM+"/actions", map[string]string{"action": "poweroff"})
+	aliasBody["start"] = false
 	if imageURL != "" {
 		if _, err := vir("vol-info", base); err != nil {
 			t.Fatal("verified image missing", err)
@@ -682,7 +705,23 @@ cloud "offline" {
 		t.Fatal("template content or identity changed")
 	}
 	templatePath := "/api/v1/cloud-init-templates/" + userDataTemplate.ID
-	createBody := map[string]any{"name": name, "image": "boot", "instance_type": "small", "zone": "test", "network": "lan", "storage_class": "standard", "start": false, "user_data_template": compute.CloudInitTemplateRef{ID: userDataTemplate.ID, Revision: userDataTemplate.Revision}}
+	baseDigest := func(label string) [32]byte {
+		t.Helper()
+		target := filepath.Join(root, label)
+		mustVir("vol-download", "--pool", name, base, target)
+		data, err := os.ReadFile(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sha256.Sum256(data)
+	}
+	var initialBaseDigest [32]byte
+	bootClass := "standard"
+	if os.Getenv("ACCEPTANCE_OVERLAY") == "1" {
+		bootClass = "efficient"
+		initialBaseDigest = baseDigest("boot-base-before.qcow2")
+	}
+	createBody := map[string]any{"name": name, "image": "boot", "instance_type": "small", "zone": "test", "network": "lan", "storage_class": bootClass, "start": false, "user_data_template": compute.CloudInitTemplateRef{ID: userDataTemplate.ID, Revision: userDataTemplate.Revision}}
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines", createBody)
 	domainUUID = lastCreatedVM
 	apiVMPath = "/api/v1/clouds/acceptance/machines/" + domainUUID
@@ -725,6 +764,18 @@ cloud "offline" {
 	var runtimeDomain libvirtxml.Domain
 	if err := runtimeDomain.Unmarshal(xml); err != nil {
 		t.Fatal(err)
+	}
+	if bootClass == "efficient" {
+		if runtimeDomain.Devices == nil || len(runtimeDomain.Devices.Disks) == 0 || runtimeDomain.Devices.Disks[0].Source == nil || runtimeDomain.Devices.Disks[0].Source.File == nil {
+			t.Fatal("missing overlay boot disk")
+		}
+		var bootVolume libvirtxml.StorageVolume
+		if err := bootVolume.Unmarshal(mustVir("vol-dumpxml", "--pool", name, runtimeDomain.Devices.Disks[0].Source.File.File)); err != nil {
+			t.Fatal(err)
+		}
+		if bootVolume.BackingStore == nil || bootVolume.BackingStore.Path != base {
+			t.Fatal("boot disk does not depend on selected image")
+		}
 	}
 	if runtimeDomain.Type != expectedType {
 		t.Fatalf("expected virtualization type %s, got %s; see domain.xml", expectedType, runtimeDomain.Type)
@@ -878,6 +929,10 @@ cloud "offline" {
 	if state := strings.TrimSpace(mustVir("domstate", domainUUID)); state != "shut off" {
 		t.Fatalf("expected shut off, got %s", state)
 	}
+	if bootClass == "efficient" && initialBaseDigest != baseDigest("boot-base-after.qcow2") {
+		t.Fatal("guest boot changed shared image contents")
+	}
+	testStorageCloning(t, root, name, apiVMPath, apiRequest, apiCommand, mustVir, run)
 	// Exercise the remaining mutating routes only against this isolated VM/pool.
 	volumeBase := "/api/v1/clouds/acceptance/volumes"
 	var disk struct {
@@ -919,7 +974,7 @@ cloud "offline" {
 	if err := json.Unmarshal(apiRequest("GET", volumeBase+"/"+disk.ID, nil, 200), &volumeDetail); err != nil {
 		t.Fatal(err)
 	}
-	if volumeDetail.Catalog == nil || len(volumeDetail.Catalog.StorageClasses) != 1 || volumeDetail.Catalog.StorageClasses[0].ID != "standard" {
+	if volumeDetail.Catalog == nil || len(volumeDetail.Catalog.StorageClasses) != 3 {
 		t.Fatal("volume detail lacks applicable logical choices", volumeDetail)
 	}
 	apiCommand("POST", volumeBase+"/"+disk.ID+"/resize", map[string]any{"size_bytes": 32 << 20})
@@ -943,7 +998,7 @@ cloud "offline" {
 	if err := json.Unmarshal(apiRequest("GET", apiVMPath, nil, 200), &machineDetail); err != nil {
 		t.Fatal(err)
 	}
-	if machineDetail.Catalog == nil || len(machineDetail.Catalog.Networks) != 1 || len(machineDetail.Catalog.StorageClasses) != 1 {
+	if machineDetail.Catalog == nil || len(machineDetail.Catalog.Networks) != 1 || len(machineDetail.Catalog.StorageClasses) != 3 {
 		t.Fatal("machine detail lacks applicable logical choices", machineDetail)
 	}
 	attached := false

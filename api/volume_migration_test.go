@@ -64,7 +64,7 @@ func volumeMigrationAPI(t *testing.T, repo *volumeMigrationRepo, pools *volumeMi
 	t.Helper()
 	volumes := compute.NewVolumeService(repo)
 	poolService := compute.NewVolumePoolService(pools)
-	clouds := &compute.CloudService{Definitions: []compute.Cloud{{ID: "one", Hosts: []compute.CloudHost{{Node: "a", Zone: "zone", Storage: map[string]compute.StorageBinding{"standard": {Pool: "pool", Format: compute.VolumeFormatQcow2}}}, {Node: "b", Zone: "zone"}}, StorageClasses: []compute.CatalogEntry{{ID: "standard", Name: "Standard"}}}, {ID: "two", Hosts: []compute.CloudHost{{Node: "c"}}}}, Volumes: volumes, Pools: poolService}
+	clouds := &compute.CloudService{Definitions: []compute.Cloud{{ID: "one", Hosts: []compute.CloudHost{{Node: "a", Zone: "zone", Storage: map[string]compute.StorageBinding{"standard": {Pool: "pool", Format: compute.VolumeFormatQcow2}}}, {Node: "b", Zone: "zone"}}, StorageClasses: []compute.StorageClass{{ID: "standard", Name: "Standard"}}}, {ID: "two", Hosts: []compute.CloudHost{{Node: "c"}}}}, Volumes: volumes, Pools: poolService}
 	return newTestAPI(t, apiTestConfig(t), zerolog.Nop(), nil, nil, poolService, nil, volumes, nil, &compute.VirtualMachineManager{Clouds: clouds}, nil)
 }
 func TestFlatVolumeAPIAndDetailCatalog(t *testing.T) {

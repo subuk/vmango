@@ -283,7 +283,7 @@ func (s *CloudService) ValidateCreate(c Cloud, spec MachineCreateSpec) error {
 	if !resourceName.MatchString(spec.Name) {
 		return invalid("name", "Invalid machine name.")
 	}
-	if !hasEntry(c.Zones, spec.Zone) || !hasEntry(c.Networks, spec.Network) || !hasEntry(c.StorageClasses, spec.StorageClass) {
+	if !hasEntry(c.Zones, spec.Zone) || !hasEntry(c.Networks, spec.Network) || !hasStorageClass(c.StorageClasses, spec.StorageClass) {
 		return invalid("zone", "Select a configured zone, network and storage class.")
 	}
 	if !slices.Contains(c.Images, spec.Image) {
@@ -311,7 +311,7 @@ func (s *CloudService) ValidateCreate(c Cloud, spec MachineCreateSpec) error {
 		seen[d.Name] = true
 	}
 	for _, d := range spec.Disks {
-		if !resourceName.MatchString(d.Name) || seen[d.Name] || !hasEntry(c.StorageClasses, d.StorageClass) || d.SizeBytes == 0 {
+		if !resourceName.MatchString(d.Name) || seen[d.Name] || !hasStorageClass(c.StorageClasses, d.StorageClass) || d.SizeBytes == 0 {
 			return invalid("new_disks", "Invalid additional disk, duplicate name or name reserved by the image.")
 		}
 		seen[d.Name] = true
@@ -411,7 +411,11 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 			if spec.Hostname != "" {
 				vm.Config.Hostname = spec.Hostname
 			}
-			clones := []VirtualMachineManagerClonedVolumeParams{{Cloud: c.ID, StorageClass: spec.StorageClass, ImageID: image.ID, NewName: vm.Name + "_root", NewPool: storage.Pool, NewSize: NewSize(t.BootDiskBytes, SizeUnitB), NewFormat: storage.Format, Alias: "root", DeviceType: DeviceTypeDisk}}
+			class, err := c.StorageClass(spec.StorageClass)
+			if err != nil {
+				return InfrastructureCommand{}, err
+			}
+			clones := []VirtualMachineManagerClonedVolumeParams{{CloneMode: class.CloneMode, Cloud: c.ID, StorageClass: spec.StorageClass, ImageID: image.ID, NewName: vm.Name + "_root", NewPool: storage.Pool, NewSize: NewSize(t.BootDiskBytes, SizeUnitB), NewFormat: storage.Format, Alias: "root", DeviceType: DeviceTypeDisk}}
 			newDisks := []VirtualMachineManagerCreatedVolumeParams{}
 			required := map[string]uint64{storage.Pool: t.BootDiskBytes}
 			for _, d := range image.DataDisks {
@@ -442,7 +446,7 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 				vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{Path: d.Path, DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio})
 			}
 			if image.Managed() {
-				b, err := images.ManagedSources.Bind(h.Node, image)
+				b, err := images.imageBinding(h.Node, image)
 				if err != nil {
 					return InfrastructureCommand{}, err
 				}

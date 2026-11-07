@@ -30,7 +30,7 @@ type apiCloud struct {
 	Zones               []compute.CatalogEntry        `json:"zones" nullable:"false"`
 	InstanceTypes       []compute.InstanceType        `json:"instance_types" nullable:"false"`
 	Networks            []compute.CatalogEntry        `json:"networks" nullable:"false"`
-	StorageClasses      []compute.CatalogEntry        `json:"storage_classes" nullable:"false"`
+	StorageClasses      []compute.StorageClass        `json:"storage_classes" nullable:"false"`
 	Images              []apiCloudImage               `json:"images" nullable:"false"`
 	Placement           apiPlacementCapabilities      `json:"placement"`
 	Offers              []compute.CloudOffer          `json:"offers" nullable:"false"`

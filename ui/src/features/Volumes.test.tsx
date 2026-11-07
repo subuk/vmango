@@ -194,3 +194,33 @@ it.each([
             ).disabled,
         ).toBe(true);
 });
+
+it("reports actual disk dependencies independently of the current class policy", async () => {
+    request.mockImplementation(async (path: string) =>
+        path === "/api/v1/clouds"
+            ? [
+                  {
+                      ...clouds[0],
+                      storage_classes: [
+                          {
+                              id: "standard",
+                              name: "Standard",
+                              clone_mode: "copy",
+                          },
+                      ],
+                  },
+              ]
+            : {
+                  items: [
+                      {
+                          ...volume("a"),
+                          storage_class: "standard",
+                          clone_mode: "overlay",
+                      },
+                  ],
+                  unavailable_hosts: [],
+              },
+    );
+    show();
+    expect(await screen.findByText("Depends on its source")).toBeTruthy();
+});

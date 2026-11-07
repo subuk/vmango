@@ -14,6 +14,8 @@ type VolumeCloneParams struct {
 	Cloud, StorageClass string
 	NodeId              string
 	Format              VolumeFormat
+	CloneMode           CloneMode
+	SourceIdentity      string
 	OriginalPath        string
 	NewName             string
 	NewPool             string
@@ -64,11 +66,13 @@ type VolumeRepository interface {
 
 type VolumeService struct {
 	VolumeRepository
-	Ownership VolumeOwnershipRepository
+	Ownership    VolumeOwnershipRepository
+	Dependencies StorageDependencyRepository
 }
 
 func NewVolumeService(repo VolumeRepository) *VolumeService {
-	return &VolumeService{VolumeRepository: repo}
+	dependencies, _ := repo.(StorageDependencyRepository)
+	return &VolumeService{VolumeRepository: repo, Dependencies: dependencies}
 }
 
 func (s *VolumeService) ListInventory(options VolumeListOptions) (VolumeInventory, error) {

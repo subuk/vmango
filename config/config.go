@@ -425,6 +425,7 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 	owners := map[string]string{
 		"guest_agent": "image", "graphics": "image", "video_model": "image",
 		"autostart":       "instance_type",
+		"clone_mode":      "cloud.storage_class",
 		"graphics_listen": "host", "uri": "host", "image_pool": "host",
 		"config_drive_suffix": "host", "config_drive_pool": "host",
 		"config_drive_write_format": "host", "emulator": "host",
@@ -452,6 +453,10 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 		}
 		if object, ok := item.Val.(*ast.ObjectType); ok {
 			switch key {
+			case "storage_class":
+				if err := validatePolicyOwners(object.List, owner+".storage_class"); err != nil {
+					return err
+				}
 			case "image", "cloud", "host", "instance_type":
 				if err := validatePolicyOwners(object.List, key); err != nil {
 					return err

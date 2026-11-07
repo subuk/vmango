@@ -171,6 +171,13 @@ func (repo *VolumeRepository) UploadImage(ctx context.Context, b compute.ImageBi
 	if actual != b {
 		return errors.New("image pool changed before upload")
 	}
+	dependencies, err := repo.InspectDependencies(b.Node)
+	if err != nil {
+		return err
+	}
+	if err = dependencies.ValidateUnreferenced([]string{b.Path}); err != nil {
+		return err
+	}
 	// A transfer gets its own connection. The ordinary connection mutex must not
 	// block task submissions or unrelated operations for the duration of HTTP IO.
 	uri, ok := repo.pool.nodeUri[b.Node]
@@ -236,6 +243,13 @@ func (repo *VolumeRepository) DeleteImage(b compute.ImageBinding) error {
 	}
 	if actual != b {
 		return errors.New("image pool changed; refusing cleanup")
+	}
+	dependencies, err := repo.InspectDependencies(b.Node)
+	if err != nil {
+		return err
+	}
+	if err = dependencies.ValidateUnreferenced([]string{b.Path}); err != nil {
+		return err
 	}
 	conn, err := repo.pool.Acquire(b.Node)
 	if err != nil {

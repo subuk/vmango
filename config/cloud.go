@@ -10,6 +10,13 @@ type CatalogEntryConfig struct {
 	ID   string `hcl:",key"`
 	Name string `hcl:"name"`
 }
+type StorageClassConfig struct {
+	ID          string `hcl:",key"`
+	Name        string `hcl:"name"`
+	Description string `hcl:"description"`
+	CloneMode   string `hcl:"clone_mode"`
+}
+
 type InstanceTypeConfig struct {
 	ID               string `hcl:",key"`
 	Name             string `hcl:"name"`
@@ -28,7 +35,7 @@ type CloudConfig struct {
 	Zones          []CatalogEntryConfig `hcl:"zone"`
 	InstanceTypes  []InstanceTypeConfig `hcl:"instance_type"`
 	Networks       []CatalogEntryConfig `hcl:"network"`
-	StorageClasses []CatalogEntryConfig `hcl:"storage_class"`
+	StorageClasses []StorageClassConfig `hcl:"storage_class"`
 	Hosts          []CloudHostConfig    `hcl:"host"`
 }
 type CloudHostConfig struct {
@@ -95,10 +102,17 @@ func (cfg *Config) CloudDefinitions() ([]compute.Cloud, error) {
 		for _, pair := range []struct {
 			from []CatalogEntryConfig
 			to   *[]compute.CatalogEntry
-		}{{entry.Zones, &c.Zones}, {entry.Networks, &c.Networks}, {entry.StorageClasses, &c.StorageClasses}} {
+		}{{entry.Zones, &c.Zones}, {entry.Networks, &c.Networks}} {
 			for _, e := range pair.from {
 				*pair.to = append(*pair.to, compute.CatalogEntry{ID: e.ID, Name: displayName(e.ID, e.Name)})
 			}
+		}
+		for _, class := range entry.StorageClasses {
+			mode := compute.CloneMode(class.CloneMode).Effective()
+			if !mode.Valid() {
+				return nil, fmt.Errorf("cloud %s: storage class %s has invalid clone_mode %q", entry.ID, class.ID, class.CloneMode)
+			}
+			c.StorageClasses = append(c.StorageClasses, compute.StorageClass{ID: class.ID, Name: displayName(class.ID, class.Name), Description: class.Description, CloneMode: mode})
 		}
 		for _, t := range entry.InstanceTypes {
 			memory, err := byteSize(t.MemoryMiB, 20)

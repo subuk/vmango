@@ -38,6 +38,9 @@ func (s *VirtualMachineService) Start(id, node string) error {
 	if err := s.RequireManaged(id, node); err != nil {
 		return err
 	}
+	if err := s.ValidateStart(id, node); err != nil {
+		return err
+	}
 	return s.VirtualMachineRepository.Start(id, node)
 }
 func (s *VirtualMachineService) Reboot(id, node string) error {

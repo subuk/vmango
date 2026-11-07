@@ -22,6 +22,7 @@ type Volume struct {
 	Size         Size
 	Pool         string
 	Format       VolumeFormat
+	BackingStore *VolumeBackingStore
 	AttachedTo   string
 	AttachedAs   DeviceType
 	Metadata     VolumeMetadata

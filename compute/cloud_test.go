@@ -67,7 +67,7 @@ func TestPlacementCapabilitiesRejectUnknownAndEmptyLabels(t *testing.T) {
 	}
 }
 func TestInstanceTypeRejectsMemoryOverselling(t *testing.T) {
-	c := Cloud{ID: "local", Name: "Local", Zones: []CatalogEntry{{"z", "Zone"}}, Networks: []CatalogEntry{{"n", "Network"}}, StorageClasses: []CatalogEntry{{"s", "Storage"}}, InstanceTypes: []InstanceType{testType()}, Images: []string{"ubuntu"}, Hosts: []CloudHost{{Node: "a", Zone: "z"}}}
+	c := Cloud{ID: "local", Name: "Local", Zones: []CatalogEntry{{"z", "Zone"}}, Networks: []CatalogEntry{{"n", "Network"}}, StorageClasses: []StorageClass{{ID: "s", Name: "Storage"}}, InstanceTypes: []InstanceType{testType()}, Images: []string{"ubuntu"}, Hosts: []CloudHost{{Node: "a", Zone: "z"}}}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func TestMissingRetrievableImageCanBePlacedAndSharesStorageBudget(t *testing.T) 
 	manager := NewVirtualMachineManager(NewVirtualMachineService(&cloudImageVMBackend{}), NewVolumeService(volumes), nil, nil, images)
 	s := CloudService{Manager: manager, Volumes: manager.volumes}
 	host := CloudHost{Node: "a", Zone: "z", Networks: map[string]NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]StorageBinding{"fast": {Pool: "pool", Format: VolumeFormatRaw}}}
-	cloud := Cloud{ID: "c", InstanceTypes: []InstanceType{testType()}, Hosts: []CloudHost{host}}
+	cloud := Cloud{ID: "c", StorageClasses: []StorageClass{{ID: "fast"}}, InstanceTypes: []InstanceType{testType()}, Hosts: []CloudHost{host}}
 	i := testInventory()
 	i.Host = host
 	i.Node.CpuArch = ArchAmd64

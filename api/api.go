@@ -47,6 +47,10 @@ func apiError(err error) error {
 	case errors.Is(err, compute.ErrInvalid), errors.Is(err, compute.ErrInvalidImageRequest):
 		status, detail = 422, "Request violates resource validation or backend capability constraints."
 	}
+	var dependency *compute.DependencyConflictError
+	if errors.As(err, &dependency) {
+		return huma.Error409Conflict(dependency.Message)
+	}
 	var validation *compute.ValidationError
 	if errors.As(err, &validation) {
 		return &huma.ErrorModel{Type: "about:blank", Title: "Validation failed", Status: 422, Detail: "Correct the indicated field.", Errors: []*huma.ErrorDetail{{Location: "body." + validation.Field, Message: validation.Message}}}

@@ -23,7 +23,11 @@ cloud "local" {
 
     zone "local" { name = "Local zone" }
     network "lan" { name = "Private LAN" }
-    storage_class "standard" { name = "Standard storage" }
+    storage_class "standard" {
+        name = "Standard storage"
+        description = "Independent copies of source disks."
+        clone_mode = "copy"
+    }
 
     instance_type "small" {
         name = "Small"
@@ -91,6 +95,58 @@ Placement is optional. Required equality labels filter candidates; preferred
 labels affect scoring and do not guarantee a match. Only advertised attributes
 are accepted. These semantics are independent of libvirt node names. With no
 hints, placement is automatic within the selected AZ.
+
+## Storage class cloning policy
+
+Set `clone_mode` on the cloud-level storage class to `copy` (the default) or
+`overlay`. Host bindings still choose the destination pool and format. Users
+select a class when creating a VM or cloning a volume; there is no per-operation
+mode override, and an image needs no extra settings.
+
+```hcl
+storage_class "efficient" {
+    name = "Space-efficient"
+    description = "Disks share their source and store only changes."
+    clone_mode = "overlay"
+}
+```
+
+Bind this class on each applicable host with a pool and `format = "qcow2"`.
+The source of the operation is the base: a managed image, a path-based catalog
+image or an otherwise eligible existing volume. A `copy` class creates an
+independent disk. An `overlay` class creates a space-saving disk that continues
+to depend on its source. Blank disks are created normally in either class.
+The policy and source identity are pinned for accepted tasks; later configuration
+changes affect future operations, not accepted tasks or existing disks. Disk
+information shows the dependency observed from the disk itself.
+
+Only one level is supported: a raw or qcow2 base without a backing store, followed
+by a qcow2 overlay. Several overlays may share one base. Creating an overlay from
+another overlay is rejected; copying a one-level overlay to a `copy` class creates
+an independent disk. Conflicting destination formats are rejected without fallback
+or configuration changes. Requested capacity must satisfy source size and image
+minimums. A larger disk does not automatically enlarge guest partitions or
+filesystems. Downloaded managed images still require an active directory pool
+and must not contain backing files.
+
+Administrators are responsible for pool/backend compatibility. Libvirt may reject
+an unsupported operation during provisioning, or the subsequent VM start may fail.
+Vmango verifies created disk metadata and reports partial results rather than
+silently changing clone mode or deleting a shared base during cleanup.
+
+Keep bases available and unchanged for as long as any dependent disk exists,
+including when dependent VMs are stopped or their disks are detached. Through
+Vmango, referenced bases cannot be deleted, resized or overwritten, and a VM
+cannot start with a referenced base opened writable. These checks discover current
+dependencies across the libvirt host, including unmanaged VMs and unattached
+volumes. An incomplete scan or unsupported deeper chain prevents operations that
+need a reliable dependency check. Removing an overlay removes only that disk;
+detaching one does not remove its dependency.
+
+These checks cover Vmango operations. Libvirt autostart, external tools, other
+hosts and direct file changes bypass them. Keep native QEMU/libvirt locking
+enabled. Vmango does not maintain a dependency registry, monitor external
+changes, flatten or rebase disks, or automatically garbage-collect bases.
 
 ## Disks, interfaces and existing machines
 
@@ -196,3 +252,8 @@ routes, task behavior and console examples. Binary
 archives include `QUICKSTART.md`, `API.md`, `CLOUDS.md`, `IMAGES.md`, `TASKS.md`
 and `MIGRATION.md` for offline reference. They use the maintained repository
 guides, with internal guide links adjusted to the archive filenames.
+
+An inactive storage pool or a domain disk whose metadata cannot be read makes
+the host dependency scan incomplete. Dependency-sensitive operations can then
+be blocked even for other disks on that host; the administrator must restore
+a complete, readable inventory before retrying.

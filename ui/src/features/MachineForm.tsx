@@ -1,3 +1,4 @@
+import { StorageClassDescription } from "../components/StorageClassDescription";
 import { WorkspaceLink as RouterLink } from "../app/Workspace";
 import { useRequest } from "../app/Workspace";
 import { useEffect, useState } from "react";
@@ -473,6 +474,12 @@ function CreateMachineForm() {
                                         value={storageClass}
                                         entries={storageClasses}
                                         set={setStorage}
+                                    />
+                                    <StorageClassDescription
+                                        storageClass={storageClasses.find(
+                                            (s) => s.id === storageClass,
+                                        )}
+                                        cloning
                                     />
                                     {imageDisks.length > 0 && (
                                         <Box

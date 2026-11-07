@@ -172,3 +172,47 @@ func TestRemovedLibvirtConfigurationRequiresMigration(t *testing.T) {
 		}
 	}
 }
+
+func TestStorageClassClonePolicy(t *testing.T) {
+	for _, tc := range []struct{ mode, want string }{{"", "copy"}, {"copy", "copy"}, {"overlay", "overlay"}} {
+		t.Run(tc.want+tc.mode, func(t *testing.T) {
+			body := `name="Fast" description="Shared source disks"`
+			if tc.mode != "" {
+				body += ` clone_mode="` + tc.mode + `"`
+			}
+			cfg, err := parseCloudTest(t, strings.Replace(cloudConfig, `name="Fast"`, body, 1))
+			if err != nil {
+				t.Fatal(err)
+			}
+			clouds, err := cfg.CloudDefinitions()
+			if err != nil {
+				t.Fatal(err)
+			}
+			class := clouds[0].StorageClasses[0]
+			if string(class.CloneMode) != tc.want || class.Description != "Shared source disks" {
+				t.Fatalf("class policy lost: %+v", class)
+			}
+			// Bindings retain their administrator-selected format, even when
+			// an overlay operation would reject a raw destination.
+			if clouds[0].Hosts[1].Storage["fast"].Format.String() != "raw" {
+				t.Fatal("class policy rewrote host binding")
+			}
+		})
+	}
+	_, err := parseCloudTest(t, strings.Replace(cloudConfig, `name="Fast"`, `name="Fast" clone_mode="reflink"`, 1))
+	if err == nil || !strings.Contains(err.Error(), "invalid clone_mode") {
+		t.Fatalf("invalid clone mode accepted: %v", err)
+	}
+}
+
+func TestClonePolicyBelongsToCloudStorageClass(t *testing.T) {
+	for _, replacement := range []struct{ old, new string }{
+		{`pool="nvme"`, `pool="nvme" clone_mode="overlay"`},
+		{`os_arch="x86_64"`, `os_arch="x86_64" clone_mode="overlay"`},
+	} {
+		_, err := parseCloudTest(t, strings.Replace(cloudConfig, replacement.old, replacement.new, 1))
+		if err == nil || !strings.Contains(err.Error(), "clone_mode belongs only in cloud.storage_class") {
+			t.Fatalf("misplaced clone policy accepted: %v", err)
+		}
+	}
+}

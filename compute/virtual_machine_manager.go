@@ -22,6 +22,8 @@ type VirtualMachineManagerNodeSettings struct {
 type VirtualMachineManagerClonedVolumeParams struct {
 	Label               string
 	Cloud, StorageClass string
+	CloneMode           CloneMode
+	SourceIdentity      string
 	ImageID             string
 	OriginalPath        string
 	NewName             string
@@ -60,6 +62,9 @@ type VirtualMachineManager struct {
 }
 
 func NewVirtualMachineManager(vms *VirtualMachineService, volumes *VolumeService, epub EventPublisher, settings map[string]VirtualMachineManagerNodeSettings, images *ImageService) *VirtualMachineManager {
+	if vms != nil && volumes != nil && vms.Dependencies == nil {
+		vms.Dependencies = volumes.Dependencies
+	}
 	return &VirtualMachineManager{
 		images:   images,
 		createMu: &sync.Mutex{},
@@ -230,7 +235,7 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 		}
 	}
 	for _, p := range cloneVols {
-		params := VolumeCloneParams{NamespaceID: vm.NamespaceID, Label: p.Label, Cloud: p.Cloud, StorageClass: p.StorageClass, NodeId: vm.NodeId, Format: p.NewFormat, OriginalPath: p.OriginalPath, NewName: p.NewName, NewPool: p.NewPool, NewSize: p.NewSize}
+		params := VolumeCloneParams{CloneMode: p.CloneMode, SourceIdentity: p.SourceIdentity, NamespaceID: vm.NamespaceID, Label: p.Label, Cloud: p.Cloud, StorageClass: p.StorageClass, NodeId: vm.NodeId, Format: p.NewFormat, OriginalPath: p.OriginalPath, NewName: p.NewName, NewPool: p.NewPool, NewSize: p.NewSize}
 		if err := stage("clone-volume", vmRef, true, func() error {
 			verifiedManaged := false
 			if p.ImageID != "" && manager.images != nil {
@@ -373,6 +378,9 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 		return err
 	}
 	if start {
+		if err := stage("validate-storage-dependencies", vmRef, false, func() error { return manager.vms.ValidateStart(vm.Id, vm.NodeId) }); err != nil {
+			return err
+		}
 		if err := stage("start-vm", vmRef, true, func() error {
 			if err := manager.vms.Start(vm.Id, vm.NodeId); err != nil {
 				return err
@@ -395,6 +403,13 @@ func (manager *VirtualMachineManager) Delete(id, node string, deleteVolumes bool
 		for _, volume := range vm.Volumes {
 			volumesToDelete = append(volumesToDelete, volume)
 		}
+	}
+	paths := []string{}
+	for _, volume := range volumesToDelete {
+		paths = append(paths, volume.Path)
+	}
+	if err := manager.volumes.ValidateUnreferenced(node, paths); err != nil {
+		return err
 	}
 	if err := manager.vms.Delete(id, node); err != nil {
 		return util.NewError(err, "cannot delete vm")

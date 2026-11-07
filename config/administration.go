@@ -29,7 +29,7 @@ func (cfg *Config) AdministrationSnapshot(version string) (compute.Administratio
 		hostConfig[h.Node] = h
 	}
 	for _, c := range clouds {
-		d := compute.AdministrationCloud{ID: c.ID, Name: c.Name, BackendKind: "libvirt", Capabilities: compute.AdministrationCapabilities{HostInventory: true, ImageAvailability: true}, Zones: append([]compute.CatalogEntry{}, c.Zones...), InstanceTypes: append([]compute.InstanceType{}, c.InstanceTypes...), Networks: append([]compute.CatalogEntry{}, c.Networks...), StorageClasses: append([]compute.CatalogEntry{}, c.StorageClasses...), Images: append([]string{}, c.Images...), Libvirt: &compute.AdministrationLibvirtCloud{Hosts: []compute.AdministrationHostReference{}}}
+		d := compute.AdministrationCloud{ID: c.ID, Name: c.Name, BackendKind: "libvirt", Capabilities: compute.AdministrationCapabilities{HostInventory: true, ImageAvailability: true}, Zones: append([]compute.CatalogEntry{}, c.Zones...), InstanceTypes: append([]compute.InstanceType{}, c.InstanceTypes...), Networks: append([]compute.CatalogEntry{}, c.Networks...), StorageClasses: append([]compute.StorageClass{}, c.StorageClasses...), Images: append([]string{}, c.Images...), Libvirt: &compute.AdministrationLibvirtCloud{Hosts: []compute.AdministrationHostReference{}}}
 		sort.Slice(d.Zones, func(i, j int) bool { return d.Zones[i].ID < d.Zones[j].ID })
 		sort.Slice(d.InstanceTypes, func(i, j int) bool { return d.InstanceTypes[i].ID < d.InstanceTypes[j].ID })
 		sort.Slice(d.Networks, func(i, j int) bool { return d.Networks[i].ID < d.Networks[j].ID })

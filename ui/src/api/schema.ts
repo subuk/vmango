@@ -1120,7 +1120,7 @@ export interface components {
             name: string;
             namespace_ids?: string[] | null;
             networks: components["schemas"]["CatalogEntry"][];
-            storage_classes: components["schemas"]["CatalogEntry"][];
+            storage_classes: components["schemas"]["StorageClass"][];
             zones: components["schemas"]["CatalogEntry"][];
         };
         AdministrationFieldState: {
@@ -1345,7 +1345,7 @@ export interface components {
             offers: components["schemas"]["CloudOffer"][];
             placement: components["schemas"]["ApiPlacementCapabilities"];
             storage_availability: components["schemas"]["StorageAvailability"][];
-            storage_classes: components["schemas"]["CatalogEntry"][];
+            storage_classes: components["schemas"]["StorageClass"][];
             unavailable_hosts: string[];
             zones: components["schemas"]["CatalogEntry"][];
         };
@@ -1457,7 +1457,7 @@ export interface components {
         };
         ApiMachineCatalog: {
             networks: components["schemas"]["CatalogEntry"][];
-            storage_classes: components["schemas"]["CatalogEntry"][];
+            storage_classes: components["schemas"]["StorageClass"][];
         } | null;
         ApiMachineCreate: {
             existing_disks?: components["schemas"]["ApiExistingDisk"][] | null;
@@ -1693,6 +1693,11 @@ export interface components {
         ApiVolume: {
             attached_to?: string;
             backend_name?: string;
+            /**
+             * @description Observed disk dependency, independent of current storage class policy.
+             * @enum {string}
+             */
+            clone_mode: "copy" | "overlay";
             cloud: string;
             format: string;
             id: string;
@@ -1708,7 +1713,7 @@ export interface components {
             zone: string;
         };
         ApiVolumeCatalog: {
-            storage_classes: components["schemas"]["CatalogEntry"][];
+            storage_classes: components["schemas"]["StorageClass"][];
         } | null;
         ApiVolumeCreate: {
             name: string;
@@ -1720,6 +1725,11 @@ export interface components {
             attached_to?: string;
             backend_name?: string;
             catalog: components["schemas"]["ApiVolumeCatalog"];
+            /**
+             * @description Observed disk dependency, independent of current storage class policy.
+             * @enum {string}
+             */
+            clone_mode: "copy" | "overlay";
             cloud: string;
             format: string;
             id: string;
@@ -1817,7 +1827,7 @@ export interface components {
         };
         HostCatalog: {
             networks: components["schemas"]["CatalogEntry"][];
-            storage_classes: components["schemas"]["CatalogEntry"][];
+            storage_classes: components["schemas"]["StorageClass"][];
         };
         Identity: {
             id: string;
@@ -1894,6 +1904,13 @@ export interface components {
         StorageAvailability: {
             storage_classes: string[];
             zone: string;
+        };
+        StorageClass: {
+            /** @enum {string} */
+            clone_mode: "copy" | "overlay";
+            description?: string;
+            id: string;
+            name: string;
         };
         Task: {
             blocks_resources: boolean;

@@ -117,6 +117,9 @@ func (s *VolumeService) clone(p VolumeCloneParams, verifiedManaged bool) (*Volum
 	if err != nil {
 		return nil, err
 	}
+	if source.OwnerVM != "" {
+		return nil, ErrNotFound
+	}
 	if source.Metadata.Hidden && !verifiedManaged {
 		return nil, ErrVolumeNotFound
 	}
@@ -137,6 +140,9 @@ func (s *VolumeService) clone(p VolumeCloneParams, verifiedManaged bool) (*Volum
 		return nil, fmt.Errorf("%w: clone cannot shrink source", ErrInvalid)
 	}
 	if err := s.ValidateCreate(create); err != nil {
+		return nil, err
+	}
+	if err := validateCloneSource(p, source); err != nil {
 		return nil, err
 	}
 	v, err := s.VolumeRepository.Clone(p)
@@ -167,6 +173,9 @@ func (s *VolumeService) Resize(path, node string, size Size) error {
 	if err != nil || b == 0 || b < v.Size.Bytes() {
 		return fmt.Errorf("%w: resize cannot shrink volume", ErrInvalid)
 	}
+	if err := s.ValidateUnreferenced(node, []string{path}); err != nil {
+		return err
+	}
 	return s.VolumeRepository.Resize(path, node, size)
 }
 
@@ -183,6 +192,9 @@ func (s *VolumeService) Delete(path, node string) error {
 	}
 	if v.Metadata.Protected || v.AttachedTo != "" {
 		return fmt.Errorf("%w: volume is protected or attached", ErrConflict)
+	}
+	if err := s.ValidateUnreferenced(node, []string{path}); err != nil {
+		return err
 	}
 	// Revoke before deletion so a later disk recreated at the same backend
 	// path/key cannot inherit stale ownership, including after interruption.

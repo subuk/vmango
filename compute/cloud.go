@@ -14,7 +14,7 @@ type Cloud struct {
 	Zones          []CatalogEntry `json:"zones"`
 	InstanceTypes  []InstanceType `json:"instance_types"`
 	Networks       []CatalogEntry `json:"networks"`
-	StorageClasses []CatalogEntry `json:"storage_classes"`
+	StorageClasses []StorageClass `json:"storage_classes"`
 	Images         []string       `json:"images"`
 	Hosts          []CloudHost    `json:"hosts"`
 }
@@ -154,7 +154,7 @@ func (c Cloud) Validate() error {
 	if !resourceName.MatchString(c.ID) || c.Name == "" {
 		return fmt.Errorf("invalid cloud identity %q", c.ID)
 	}
-	for _, entries := range [][]CatalogEntry{c.Zones, c.Networks, c.StorageClasses} {
+	for _, entries := range [][]CatalogEntry{c.Zones, c.Networks} {
 		seen := map[string]bool{}
 		if len(entries) == 0 {
 			return fmt.Errorf("cloud %s: catalog must not be empty", c.ID)
@@ -167,6 +167,16 @@ func (c Cloud) Validate() error {
 		}
 	}
 	seen := map[string]bool{}
+	if len(c.StorageClasses) == 0 {
+		return fmt.Errorf("cloud %s: storage classes must not be empty", c.ID)
+	}
+	for _, class := range c.StorageClasses {
+		if !resourceName.MatchString(class.ID) || seen[class.ID] || class.Name == "" || !class.CloneMode.Valid() {
+			return fmt.Errorf("cloud %s: invalid or duplicate storage class %q", c.ID, class.ID)
+		}
+		seen[class.ID] = true
+	}
+	seen = map[string]bool{}
 	for _, t := range c.InstanceTypes {
 		if t.MemoryRequestBytes != t.MemoryBytes {
 			return fmt.Errorf("instance type %s: memory overselling is not supported yet; memory requests must equal limits", t.ID)
@@ -193,7 +203,7 @@ func (c Cloud) Validate() error {
 		}
 		seen[h.Node] = true
 		for id, b := range h.Storage {
-			if !hasEntry(c.StorageClasses, id) || b.Pool == "" || (b.Format != VolumeFormatRaw && b.Format != VolumeFormatQcow2) {
+			if !hasStorageClass(c.StorageClasses, id) || b.Pool == "" || (b.Format != VolumeFormatRaw && b.Format != VolumeFormatQcow2) {
 				return fmt.Errorf("host %s: invalid storage binding %s", h.Node, id)
 			}
 		}

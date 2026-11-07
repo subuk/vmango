@@ -1,3 +1,7 @@
+import {
+    StorageClassDescription,
+    diskDependencyLabel,
+} from "../components/StorageClassDescription";
 import { useRequest } from "../app/Workspace";
 import { useEffect, useState } from "react";
 import {
@@ -155,6 +159,12 @@ export function Volumes() {
                                     id: "format",
                                     label: "Format",
                                     value: (v) => v.format,
+                                },
+                                {
+                                    id: "dependency",
+                                    label: "Source dependency",
+                                    value: (v) =>
+                                        diskDependencyLabel(v.clone_mode),
                                 },
                                 {
                                     id: "size",
@@ -432,6 +442,12 @@ export function VolumeDialog({
                                     </MenuItem>
                                 ))}
                             </TextField>
+                            <StorageClassDescription
+                                storageClass={classes.find(
+                                    (s) => s.id === storage,
+                                )}
+                                cloning={mode === "clone"}
+                            />
                         </>
                     )}
                     <TextField
