@@ -18,7 +18,7 @@ Current features:
 * Custom userdata for cloud-init
 * Bridged network
 
-## Binary quick start
+## Workload namespaces
 
 Namespaces group machines, disks, SSH keys, templates and tasks into workspaces.
 Each workspace can use one or more configured clouds; several workspaces can
@@ -26,6 +26,8 @@ share the same hosts. See the [namespace user guide](docs/content/en/docs/namesp
 for setup and browser workflows, or [upgrade and migration](docs/NAMESPACES.md)
 when updating an existing installation. All authenticated operators can currently
 select all configured namespaces; per-user permissions are separate future work.
+
+## Binary quick start
 
 Download a ready-built archive for **Linux x64**, **Windows x64** or
 **macOS arm64** from [GitHub Releases](https://github.com/subuk/vmango/releases),
