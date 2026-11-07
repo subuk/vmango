@@ -1,7 +1,9 @@
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
     Box,
     Button,
+    Checkbox,
+    Menu,
     MenuItem,
     Stack,
     Table,
@@ -22,6 +24,14 @@ export type Column<T> = {
     value: (row: T) => string | number;
     render?: (row: T) => ReactNode;
     numeric?: boolean;
+    defaultHidden?: boolean;
+};
+export type ResourceFilter<T> = {
+    id: string;
+    label: string;
+    value: (row: T) => string;
+    options?: { value: string; label: string }[];
+    allLabel?: string;
 };
 export function ResourceTable<T>({
     rows,
@@ -34,6 +44,13 @@ export function ResourceTable<T>({
     poolLabel = "Pool",
     actions,
     empty = "No resources yet.",
+    filters = [],
+    paramPrefix = "",
+    preferenceKey,
+    selectedKey,
+    onSelect,
+    scrollKey,
+    ariaLabel = "Scrollable resources",
 }: {
     rows: T[];
     columns: Column<T>[];
@@ -45,37 +62,109 @@ export function ResourceTable<T>({
     poolLabel?: string;
     actions?: (row: T) => ReactNode;
     empty?: string;
+    filters?: ResourceFilter<T>[];
+    paramPrefix?: string;
+    preferenceKey?: string;
+    selectedKey?: string;
+    onSelect?: (row: T) => void;
+    scrollKey?: string;
+    ariaLabel?: string;
 }) {
     const [params, setParams] = useSearchParams();
-    const update = (key: string, value: string) =>
+    const [menu, setMenu] = useState<HTMLElement | null>(null);
+    const [preference, setPreference] = useState<{
+        key: string;
+        ids: string[];
+    }>();
+    const container = useRef<HTMLDivElement>(null);
+    const storageKey = preferenceKey
+        ? `vmango.columns.${preferenceKey}`
+        : undefined;
+    let stored: string[] | undefined;
+    if (storageKey) {
+        if (preference?.key === storageKey) stored = preference.ids;
+        else
+            try {
+                const value: unknown = JSON.parse(
+                    localStorage.getItem(storageKey) || "null",
+                );
+                if (
+                    Array.isArray(value) &&
+                    value.every((id) => typeof id === "string")
+                )
+                    stored = value;
+            } catch {
+                /* Storage may be unavailable in private browsing. */
+            }
+    }
+    const visible = columns.filter((c) =>
+        stored ? stored.includes(c.id) : !c.defaultHidden,
+    );
+    if (!visible.length && columns.length) visible.push(columns[0]);
+    const key = (name: string) => `${paramPrefix}${name}`;
+    const get = (name: string) => params.get(key(name)) || "";
+    const update = (name: string, value: string) =>
         setParams(
             (old) => {
-                const p = new URLSearchParams(old);
-                value ? p.set(key, value) : p.delete(key);
-                return p;
+                const next = new URLSearchParams(old);
+                value ? next.set(key(name), value) : next.delete(key(name));
+                return next;
             },
             { replace: true },
         );
-    const query = params.get("q") || "";
-    const selectedNode = params.get("node") || "";
-    const selectedState = params.get("state") || "";
-    const selectedPool = params.get("pool") || "";
-    const sort = params.get("sort") || columns[0].id;
-    const desc = params.get("direction") === "desc";
-    const column = columns.find((c) => c.id === sort) || columns[0];
+    const allFilters: ResourceFilter<T>[] = [
+        ...(node
+            ? [
+                  {
+                      id: "node",
+                      label: "Host",
+                      value: node,
+                      allLabel: "All hosts",
+                  },
+              ]
+            : []),
+        ...(state
+            ? [
+                  {
+                      id: "state",
+                      label: "State",
+                      value: state,
+                      allLabel: "All states",
+                  },
+              ]
+            : []),
+        ...(pool
+            ? [
+                  {
+                      id: "pool",
+                      label: poolLabel,
+                      value: pool,
+                      allLabel:
+                          poolLabel === "Storage class"
+                              ? "All storage classes"
+                              : "All pools",
+                  },
+              ]
+            : []),
+        ...filters,
+    ];
+    const query = get("q");
+    const column = columns.find((c) => c.id === get("sort")) || visible[0];
+    const desc = get("direction") === "desc";
     const filtered = rows.filter(
-        (r) =>
+        (row) =>
             (!query ||
-                search(r)
+                search(row)
                     .toLocaleLowerCase()
                     .includes(query.toLocaleLowerCase())) &&
-            (!node || !selectedNode || node(r) === selectedNode) &&
-            (!state || !selectedState || state(r) === selectedState) &&
-            (!pool || !selectedPool || pool(r) === selectedPool),
+            allFilters.every(
+                (filter) =>
+                    !get(filter.id) || filter.value(row) === get(filter.id),
+            ),
     );
     filtered.sort((a, b) => {
-        const x = column.value(a);
-        const y = column.value(b);
+        const x = column.value(a),
+            y = column.value(b);
         const order =
             typeof x === "number" && typeof y === "number"
                 ? x - y
@@ -84,7 +173,21 @@ export function ResourceTable<T>({
                   });
         return (desc ? -order : order) || rowKey(a).localeCompare(rowKey(b));
     });
-    const active = query || selectedNode || selectedState || selectedPool;
+    const active = query || allFilters.some((f) => get(f.id));
+    useLayoutEffect(() => {
+        if (!scrollKey || !container.current) return;
+        try {
+            const position = JSON.parse(
+                sessionStorage.getItem(`vmango.scroll.${scrollKey}`) || "null",
+            );
+            if (position) {
+                container.current.scrollTop = position.top;
+                container.current.scrollLeft = position.left;
+            }
+        } catch {
+            /* Scroll restoration is best effort. */
+        }
+    }, [scrollKey]);
     return (
         <Box className="resource-panel">
             <Stack
@@ -98,72 +201,50 @@ export function ResourceTable<T>({
                     onChange={(e) => update("q", e.target.value)}
                     sx={{ maxWidth: 300 }}
                 />
-                {node && (
-                    <TextField
-                        select
-                        label="Host"
-                        slotProps={{
-                            select: { displayEmpty: true },
-                            inputLabel: { shrink: true },
-                        }}
-                        value={selectedNode}
-                        onChange={(e) => update("node", e.target.value)}
-                        sx={{ width: 210 }}
-                    >
-                        <MenuItem value="">All hosts</MenuItem>
-                        {[...new Set([...rows.map(node)])].map((n) => (
-                            <MenuItem key={n} value={n}>
-                                {n}
+                {allFilters.map((filter) => {
+                    const options =
+                        (filter.options && [...filter.options]) ||
+                        [...new Set(rows.map(filter.value))]
+                            .sort()
+                            .map((value) => ({ value, label: value }));
+                    if (
+                        get(filter.id) &&
+                        !options.some((o) => o.value === get(filter.id))
+                    )
+                        options.push({
+                            value: get(filter.id),
+                            label: get(filter.id),
+                        });
+                    return (
+                        <TextField
+                            key={filter.id}
+                            select
+                            label={filter.label}
+                            slotProps={{
+                                select: { displayEmpty: true },
+                                inputLabel: { shrink: true },
+                            }}
+                            value={get(filter.id)}
+                            onChange={(e) => update(filter.id, e.target.value)}
+                            sx={{ minWidth: 150 }}
+                        >
+                            <MenuItem value="">
+                                {filter.allLabel ||
+                                    `All ${filter.label.toLowerCase()}s`}
                             </MenuItem>
-                        ))}
-                    </TextField>
-                )}
-                {state && (
-                    <TextField
-                        select
-                        label="State"
-                        slotProps={{
-                            select: { displayEmpty: true },
-                            inputLabel: { shrink: true },
-                        }}
-                        value={selectedState}
-                        onChange={(e) => update("state", e.target.value)}
-                        sx={{ width: 160 }}
-                    >
-                        <MenuItem value="">All states</MenuItem>
-                        {[...new Set(rows.map(state))].map((s) => (
-                            <MenuItem key={s} value={s}>
-                                {s}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                )}
-                {pool && (
-                    <TextField
-                        select
-                        label={poolLabel}
-                        slotProps={{
-                            select: { displayEmpty: true },
-                            inputLabel: { shrink: true },
-                        }}
-                        value={selectedPool}
-                        onChange={(e) => update("pool", e.target.value)}
-                        sx={{ width: 180 }}
-                    >
-                        <MenuItem value="">
-                            All{" "}
-                            {poolLabel === "Storage class"
-                                ? "storage classes"
-                                : "pools"}
-                        </MenuItem>
-                        {[...new Set(rows.map(pool))].map((p) => (
-                            <MenuItem key={p} value={p}>
-                                {p}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                )}
+                            {options.map((option) => (
+                                <MenuItem
+                                    key={option.value}
+                                    value={option.value}
+                                >
+                                    {option.label}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    );
+                })}
                 <Button
+                    disabled={!active && !get("sort") && !get("direction")}
                     onClick={() =>
                         setParams(
                             (old) => {
@@ -175,31 +256,108 @@ export function ResourceTable<T>({
                                     "pool",
                                     "sort",
                                     "direction",
-                                ].forEach((key) => next.delete(key));
+                                    ...allFilters.map((f) => f.id),
+                                ].forEach((name) => next.delete(key(name)));
                                 return next;
                             },
                             { replace: true },
                         )
                     }
-                    disabled={!active && !params.has("sort")}
                 >
                     Reset
                 </Button>
+                {storageKey && (
+                    <>
+                        <Button
+                            onClick={(e) => setMenu(e.currentTarget)}
+                            aria-haspopup="menu"
+                            aria-expanded={!!menu}
+                        >
+                            Columns
+                        </Button>
+                        <Menu
+                            anchorEl={menu}
+                            open={!!menu}
+                            onClose={() => setMenu(null)}
+                        >
+                            {columns.map((c) => (
+                                <MenuItem
+                                    key={c.id}
+                                    role="menuitemcheckbox"
+                                    aria-checked={visible.includes(c)}
+                                    disabled={
+                                        visible.length === 1 &&
+                                        visible.includes(c)
+                                    }
+                                    onClick={() => {
+                                        const ids = columns
+                                            .filter((candidate) =>
+                                                candidate.id === c.id
+                                                    ? !visible.includes(c)
+                                                    : visible.includes(
+                                                          candidate,
+                                                      ),
+                                            )
+                                            .map((candidate) => candidate.id);
+                                        setPreference({ key: storageKey, ids });
+                                        try {
+                                            localStorage.setItem(
+                                                storageKey,
+                                                JSON.stringify(ids),
+                                            );
+                                        } catch {
+                                            /* Keep in-memory preferences when storage is disabled. */
+                                        }
+                                    }}
+                                >
+                                    <Checkbox
+                                        checked={visible.includes(c)}
+                                        tabIndex={-1}
+                                        disableRipple
+                                        slotProps={{
+                                            input: {
+                                                "aria-hidden": true,
+                                                readOnly: true,
+                                            },
+                                        }}
+                                        sx={{ pointerEvents: "none" }}
+                                    />
+                                    {c.label}
+                                </MenuItem>
+                            ))}
+                        </Menu>
+                    </>
+                )}
             </Stack>
             <TableContainer
                 component={Box}
+                ref={container}
                 sx={{
                     borderTop: 1,
                     borderColor: "divider",
                     bgcolor: "background.paper",
                 }}
                 tabIndex={0}
-                aria-label="Scrollable resources"
+                aria-label={ariaLabel}
+                onScroll={() => {
+                    if (!scrollKey || !container.current) return;
+                    try {
+                        sessionStorage.setItem(
+                            `vmango.scroll.${scrollKey}`,
+                            JSON.stringify({
+                                top: container.current.scrollTop,
+                                left: container.current.scrollLeft,
+                            }),
+                        );
+                    } catch {
+                        /* Scroll restoration is best effort. */
+                    }
+                }}
             >
                 <Table size="small">
                     <TableHead>
                         <TableRow>
-                            {columns.map((c) => (
+                            {visible.map((c) => (
                                 <TableCell
                                     key={c.id}
                                     align={c.numeric ? "right" : "left"}
@@ -217,19 +375,19 @@ export function ResourceTable<T>({
                                         onClick={() =>
                                             setParams(
                                                 (old) => {
-                                                    const p =
+                                                    const next =
                                                         new URLSearchParams(
                                                             old,
                                                         );
-                                                    p.set("sort", c.id);
-                                                    p.set(
-                                                        "direction",
+                                                    next.set(key("sort"), c.id);
+                                                    next.set(
+                                                        key("direction"),
                                                         column.id === c.id &&
                                                             !desc
                                                             ? "desc"
                                                             : "asc",
                                                     );
-                                                    return p;
+                                                    return next;
                                                 },
                                                 { replace: true },
                                             )
@@ -245,14 +403,69 @@ export function ResourceTable<T>({
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {filtered.map((r) => (
-                            <TableRow key={rowKey(r)} hover>
-                                {columns.map((c) => (
+                        {filtered.map((row) => (
+                            <TableRow
+                                key={rowKey(row)}
+                                hover
+                                selected={
+                                    !!onSelect && rowKey(row) === selectedKey
+                                }
+                                aria-selected={
+                                    onSelect
+                                        ? rowKey(row) === selectedKey
+                                        : undefined
+                                }
+                                tabIndex={onSelect ? 0 : undefined}
+                                onClick={
+                                    onSelect
+                                        ? (event) => {
+                                              if (
+                                                  !(
+                                                      event.target as HTMLElement
+                                                  ).closest(
+                                                      "a,button,input,select,textarea",
+                                                  )
+                                              )
+                                                  onSelect(row);
+                                          }
+                                        : undefined
+                                }
+                                onKeyDown={
+                                    onSelect
+                                        ? (event) => {
+                                              if (
+                                                  event.target ===
+                                                      event.currentTarget &&
+                                                  (event.key === "Enter" ||
+                                                      event.key === " ")
+                                              ) {
+                                                  event.preventDefault();
+                                                  onSelect(row);
+                                              }
+                                          }
+                                        : undefined
+                                }
+                                sx={
+                                    onSelect
+                                        ? {
+                                              cursor: "pointer",
+                                              "&:focus-visible": {
+                                                  outline: "2px solid",
+                                                  outlineColor: "primary.main",
+                                                  outlineOffset: -2,
+                                              },
+                                          }
+                                        : undefined
+                                }
+                            >
+                                {visible.map((c) => (
                                     <TableCell
                                         key={c.id}
                                         align={c.numeric ? "right" : "left"}
                                     >
-                                        {c.render ? c.render(r) : c.value(r)}
+                                        {c.render
+                                            ? c.render(row)
+                                            : c.value(row)}
                                     </TableCell>
                                 ))}
                                 {actions && (
@@ -267,7 +480,7 @@ export function ResourceTable<T>({
                                             },
                                         }}
                                     >
-                                        {actions(r)}
+                                        {actions(row)}
                                     </TableCell>
                                 )}
                             </TableRow>
@@ -275,7 +488,7 @@ export function ResourceTable<T>({
                     </TableBody>
                 </Table>
             </TableContainer>
-            {filtered.length === 0 && (
+            {!filtered.length && (
                 <Typography
                     color="text.secondary"
                     sx={{ py: 4, textAlign: "center" }}

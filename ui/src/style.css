@@ -396,3 +396,59 @@ a:focus-visible {
         margin-bottom: 0;
     }
 }
+
+/* Administration favors compact observations while retaining readable type. */
+.administration-layout {
+    grid-template-columns: 208px minmax(0, 1fr);
+    gap: 20px;
+}
+.administration-content .summary-grid {
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.administration-content .summary-item {
+    padding: 14px 16px;
+}
+.administration-content .section-heading {
+    padding: 14px 16px;
+}
+.administration-content .section-content {
+    padding: 16px;
+}
+.administration-content .details dt,
+.administration-content .details dd {
+    padding-block: 7px;
+}
+.administration-content .resource-panel .filter-toolbar {
+    padding: 12px;
+    gap: 12px;
+}
+.administration-content .MuiTableCell-root {
+    padding: 8px 12px;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+.administration-content .MuiTableCell-head {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.administration-content :focus-visible,
+.administration-sidebar :focus-visible {
+    outline: 2px solid var(--focus-ring, #608bea);
+    outline-offset: 3px;
+}
+@media (max-width: 899px) {
+    .administration-layout {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+    }
+    .administration-sidebar {
+        max-height: none;
+    }
+    .administration-sidebar .MuiFormControl-root {
+        max-width: 340px;
+    }
+    .administration-content .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

@@ -120,8 +120,8 @@ func (e *Environ) registerNamespaces(api huma.API) {
 		n, err := e.namespaces.Get(compute.NamespaceID(in.Namespace))
 		return &apiResult[compute.Namespace]{Body: n}, apiError(err)
 	})
-	registerAPI(api, "GET", "/administration/tasks", "administration-tasks", "Inspect task history across namespaces", func(ctx context.Context, in *apiTaskListInput) (*apiResult[tasks.Page], error) {
-		f, err := taskFilter(in)
+	registerAPI(api, "GET", "/administration/tasks", "administration-tasks", "Inspect task history across namespaces", func(ctx context.Context, in *apiAdministrationTaskListInput) (*apiResult[tasks.Page], error) {
+		f, err := administrationTaskFilter(in)
 		if err != nil {
 			return nil, err
 		}

@@ -175,6 +175,15 @@ func (s *Service) List(f Filter) (Page, error) {
 		if f.Resource != nil {
 			found := false
 			for _, r := range t.Resources {
+				if len(f.ResourceKinds) > 0 {
+					allowed := false
+					for _, kind := range f.ResourceKinds {
+						allowed = allowed || r.Kind == kind
+					}
+					if !allowed {
+						continue
+					}
+				}
 				if (f.Resource.Kind == "" || r.Kind == f.Resource.Kind) && (f.Resource.Scope == "" || r.Scope == f.Resource.Scope) && (f.Resource.ID == "" || r.ID == f.Resource.ID) {
 					found = true
 				}

@@ -4,7 +4,6 @@ import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Networks } from "./Lists";
-import { NodeDetail } from "./NodeDetail";
 
 const request = vi.hoisted(() => vi.fn());
 vi.mock("../api/client", async (original) => ({
@@ -119,56 +118,4 @@ it("does not silently show another cloud for an unknown selection", async () => 
         ),
     ).toBeTruthy();
     expect(screen.queryByText("Private LAN")).toBeNull();
-});
-
-it("keeps backend network names in explicitly labeled host diagnostics", async () => {
-    request.mockImplementation(async (path: string) => {
-        if (path.endsWith("/networks"))
-            return [{ node: "host-a", name: "backend-private" }];
-        if (path.endsWith("/pools")) return [];
-        if (path.endsWith("/catalog"))
-            return { networks: [], storage_classes: [] };
-        if (path.endsWith("/capabilities"))
-            return { arch: "x86_64", max_vcpus: 8 };
-        return {
-            id: "host-a",
-            hostname: "host-a",
-            arch: "x86_64",
-            memory_bytes: 1024,
-            cpus: [],
-            numa: [],
-        };
-    });
-    const router = createMemoryRouter(
-        [
-            {
-                path: "/administration/clouds/:cloud/hosts/:node/",
-                element: <NodeDetail />,
-            },
-        ],
-        { initialEntries: ["/administration/clouds/west/hosts/host-a/"] },
-    );
-    render(
-        <QueryClientProvider
-            client={
-                new QueryClient({
-                    defaultOptions: { queries: { retry: false } },
-                })
-            }
-        >
-            <RouterProvider router={router} />
-        </QueryClientProvider>,
-    );
-    expect(await screen.findByText("backend-private")).toBeTruthy();
-    expect(
-        screen.getByRole("heading", {
-            name: "Backend networks (read-only diagnostics)",
-        }),
-    ).toBeTruthy();
-    expect(request).toHaveBeenCalledWith(
-        "/api/v1/administration/clouds/west/hosts/host-a/networks",
-        "GET",
-        undefined,
-        expect.any(AbortSignal),
-    );
 });

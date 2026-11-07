@@ -597,6 +597,7 @@ export function TaskDetail({
     const request = useRequest();
     const { id = "" } = useParams();
     const query = useTask(id, administration);
+    const [detailParams] = useSearchParams();
     const queries = useQueryClient();
     const [confirm, setConfirm] = useState<"cancel" | "release">();
     const [reason, setReason] = useState("");
@@ -627,7 +628,7 @@ export function TaskDetail({
                         component={RouterLink}
                         to={
                             administration
-                                ? "/administration/tasks/"
+                                ? `/administration/tasks/${detailParams.toString() ? `?${detailParams}` : ""}`
                                 : "/tasks/"
                         }
                     >
@@ -638,11 +639,11 @@ export function TaskDetail({
             <QueryState query={query}>
                 {(task) => (
                     <Stack
-                        spacing={3}
+                        spacing={administration ? 2 : 3}
                         sx={{
                             maxWidth: 1200,
                             "& > .MuiBox-root": {
-                                p: { xs: 2, sm: 3 },
+                                p: administration ? 2 : { xs: 2, sm: 3 },
                                 border: "1px solid",
                                 borderColor: "divider",
                                 borderRadius: 2,

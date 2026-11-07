@@ -99,6 +99,9 @@ it("links an unassigned resource to an explicit destination without mutating Adm
         <AdministrationInventory kind="machines" />,
     );
     await userEvent.click(
+        await screen.findByRole("button", { name: "Assign to namespace…" }),
+    );
+    await userEvent.click(
         await screen.findByRole("combobox", { name: "Destination namespace" }),
     );
     expect(screen.queryByRole("option", { name: "Other" })).toBeNull();
@@ -127,7 +130,7 @@ it("keeps cross-namespace task inspection read-only including uncertain locks", 
     ).toBeNull();
     expect(
         screen.getByRole("link", { name: "All tasks" }).getAttribute("href"),
-    ).toBe("/administration/tasks/");
+    ).toBe("/administration/tasks/?namespace=unrelated");
     expect(
         request.mock.calls.every(([path]) =>
             path.startsWith("/api/v1/administration/"),
@@ -135,11 +138,19 @@ it("keeps cross-namespace task inspection read-only including uncertain locks", 
     ).toBe(true);
 });
 it("shows namespace-free legacy history and paginates independently of workspace query", async () => {
-    request.mockResolvedValue({
-        items: [{ ...task, namespace_id: undefined }],
-        active: 0,
-        next: "cursor",
-    });
+    request.mockImplementation(async (path: string) =>
+        path === "/api/v1/administration/configuration"
+            ? { snapshot_id: "accepted" }
+            : path === "/api/v1/administration/clouds"
+              ? [{ id: "local", name: "Local" }]
+              : path.endsWith("/configuration/namespaces")
+                ? { items: [] }
+                : {
+                      items: [{ ...task, namespace_id: undefined }],
+                      active: 0,
+                      next: "cursor",
+                  },
+    );
     show(
         "/administration/tasks/?namespace=unrelated",
         <AdministrationTasks />,

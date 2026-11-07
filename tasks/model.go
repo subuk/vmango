@@ -160,14 +160,15 @@ type LockResolver interface {
 }
 
 type Filter struct {
-	NamespaceID string
-	CloudID     string
-	Scoped      bool
-	States      []State
-	Resource    *ResourceRef
-	Blocking    bool
-	Before      string
-	Limit       int
+	NamespaceID   string
+	CloudID       string
+	Scoped        bool
+	States        []State
+	Resource      *ResourceRef
+	ResourceKinds []string
+	Blocking      bool
+	Before        string
+	Limit         int
 }
 type Page struct {
 	Items  []Task `json:"items"`

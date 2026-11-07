@@ -3979,6 +3979,13 @@ export interface operations {
                 /** @description Opaque next cursor from the preceding page. */
                 before?: string;
                 limit?: number;
+                cloud_id?: string;
+                /** @description Filter persisted task attribution, independently of workload context. */
+                namespace_id?: string;
+                /** @description Only tasks without namespace attribution. */
+                unassigned?: boolean;
+                /** @description Tasks referencing a machine or volume on this host. */
+                host?: string;
             };
             header?: never;
             path?: never;

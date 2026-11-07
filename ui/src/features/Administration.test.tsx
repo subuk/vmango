@@ -103,32 +103,36 @@ function base() {
 }
 it("shows required image disks in configuration details", async () => {
     mocks.request.mockImplementation(async (path: string) =>
-        path.endsWith("/images/android")
-            ? {
-                  id: "android",
-                  cloud_id: cloud.id,
-                  name: "Android",
-                  os_name: "Android",
-                  os_version: "16",
-                  arch: "aarch64",
-                  minimum_memory_bytes: 2 ** 31,
-                  minimum_disk_bytes: 2 ** 30,
-                  protected: true,
-                  hidden: false,
-                  defaults: { initialization: "none" },
-                  data_disks: [{ name: "userdata", size_bytes: 16 * 2 ** 30 }],
-                  settings: [],
-                  source: {
-                      mode: "download",
-                      format: "qcow2",
-                      archive_format: "zip",
-                      archive_member: "bundle/vda.qcow2",
-                      extracted_size_bytes: 2 * 2 ** 30,
-                  },
-              }
-            : path === "/api/v1/administration/configuration"
-              ? install
-              : cloud,
+        path.endsWith("/clouds")
+            ? [cloud]
+            : path.endsWith("/images/android")
+              ? {
+                    id: "android",
+                    cloud_id: cloud.id,
+                    name: "Android",
+                    os_name: "Android",
+                    os_version: "16",
+                    arch: "aarch64",
+                    minimum_memory_bytes: 2 ** 31,
+                    minimum_disk_bytes: 2 ** 30,
+                    protected: true,
+                    hidden: false,
+                    defaults: { initialization: "none" },
+                    data_disks: [
+                        { name: "userdata", size_bytes: 16 * 2 ** 30 },
+                    ],
+                    settings: [],
+                    source: {
+                        mode: "download",
+                        format: "qcow2",
+                        archive_format: "zip",
+                        archive_member: "bundle/vda.qcow2",
+                        extracted_size_bytes: 2 * 2 ** 30,
+                    },
+                }
+              : path === "/api/v1/administration/configuration"
+                ? install
+                : cloud,
     );
     show("/administration/clouds/remote.cloud/images/android/");
     const disks = await screen.findByRole("region", {
@@ -158,6 +162,7 @@ it("renders hostless clouds without host navigation or diagnostic requests", asy
         queries
             .getQueryCache()
             .getAll()
+            .filter((q) => !String(q.queryKey[2]).includes("/tasks?"))
             .every(
                 (q) =>
                     (q.options as { refetchInterval?: number | false })
@@ -193,35 +198,36 @@ it("replaces cached details after a denied refresh", async () => {
     expect(await screen.findByText("Access denied")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Remote cloud" })).toBeNull();
 });
-it("keeps supported offline host navigation and explicit incomplete live inventory", async () => {
+it("keeps supported offline hosts visible alongside their accepted placement", async () => {
     mocks.request.mockImplementation(async (path: string) =>
-        path.endsWith("/hosts")
-            ? {
-                  items: [],
-                  unavailable_hosts: [
-                      { id: "offline", code: "host_unavailable" },
-                  ],
-              }
-            : path === "/api/v1/administration/configuration"
-              ? install
-              : {
-                    ...cloud,
-                    capabilities: {
-                        host_inventory: true,
-                        image_availability: true,
+        path.endsWith("/clouds")
+            ? [cloud]
+            : path.endsWith("/configuration/hosts")
+              ? [{ id: "offline", cloud_id: cloud.id, zone: "z" }]
+              : path.endsWith("/hosts")
+                ? {
+                      items: [],
+                      unavailable_hosts: [
+                          { id: "offline", code: "host_unavailable" },
+                      ],
+                  }
+                : path === "/api/v1/administration/configuration"
+                  ? install
+                  : {
+                        ...cloud,
+                        capabilities: {
+                            host_inventory: true,
+                            image_availability: true,
+                        },
                     },
-                    libvirt: {
-                        hosts: [
-                            { id: "offline", cloud_id: cloud.id, zone: "z" },
-                        ],
-                    },
-                },
     );
     show("/administration/clouds/remote.cloud/hosts/");
-    expect(await screen.findByText(/Unavailable hosts: offline/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Hosts" })).toBeTruthy();
-    expect(screen.getByText("Live inventory is unavailable.")).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "offline" })).toBeTruthy();
+    expect(screen.getByText("Unavailable")).toBeTruthy();
+    expect(screen.getByText("host_unavailable")).toBeTruthy();
+    expect(screen.getByText("z")).toBeTruthy();
 });
+
 it("separates private configuration cache keys by principal", async () => {
     base();
     const view = show("/administration/clouds/remote.cloud/");
@@ -251,9 +257,11 @@ it("refreshes configuration under the new accepted snapshot after a restart", as
     const { queries } = show("/administration/clouds/remote.cloud/");
     await screen.findByRole("heading", { name: "Remote cloud" });
     mocks.request.mockImplementation(async (path: string) =>
-        path === "/api/v1/administration/configuration"
-            ? { ...install, snapshot_id: "after-restart" }
-            : cloud,
+        path.endsWith("/clouds")
+            ? [cloud]
+            : path === "/api/v1/administration/configuration"
+              ? { ...install, snapshot_id: "after-restart" }
+              : cloud,
     );
     await userEvent.click(
         await screen.findByRole("button", { name: "Refresh" }),
@@ -319,7 +327,7 @@ it("keeps runtime configuration on its own page", async () => {
     });
     expect(
         within(nav)
-            .getByRole("link", { name: "Configuration" })
+            .getByRole("link", { name: "Installation configuration" })
             .getAttribute("aria-current"),
     ).toBe("page");
 });
@@ -327,44 +335,42 @@ it.each(["/tasks/", "/tasks/saved-task/"])(
     "retains Administration navigation on %s",
     async (path) => {
         mocks.request.mockImplementation(async (url: string) =>
-            url.includes("/tasks?")
-                ? { items: [], active: 0 }
-                : url.includes("/tasks/")
-                  ? {
-                        id: "saved-task",
-                        kind: "volume.create",
-                        state: "succeeded",
-                        created_at: "2026-10-31T12:00:00Z",
-                        initiator: { id: "one", name: "Operator" },
-                        resources: [],
-                        stages: [],
-                        effects: [],
-                        transitions: [],
-                        outcome_uncertain: false,
-                        blocks_resources: false,
-                    }
-                  : install,
+            url.endsWith("/clouds")
+                ? [cloud]
+                : url.includes("/tasks?")
+                  ? { items: [], active: 0 }
+                  : url.includes("/tasks/")
+                    ? {
+                          id: "saved-task",
+                          kind: "volume.create",
+                          state: "succeeded",
+                          created_at: "2026-10-31T12:00:00Z",
+                          initiator: { id: "one", name: "Operator" },
+                          resources: [],
+                          stages: [],
+                          effects: [],
+                          transitions: [],
+                          outcome_uncertain: false,
+                          blocks_resources: false,
+                      }
+                    : install,
         );
         const { router } = show(path);
         const nav = screen.getByRole("navigation", {
-            name: "Administration navigation",
+            name: "Operations navigation",
         });
         expect(
             within(nav)
-                .getByRole("link", { name: "Tasks" })
+                .getByRole("link", { name: "Workspace tasks" })
                 .getAttribute("aria-current"),
         ).toBe("page");
         expect(
-            within(nav)
-                .getByRole("link", { name: "Clouds" })
-                .getAttribute("href"),
+            screen.getByRole("link", { name: "Clouds" }).getAttribute("href"),
         ).toBe("/administration/clouds/");
         mocks.request.mockImplementation(async (url: string) =>
             url.endsWith("/clouds") ? [cloud] : install,
         );
-        await userEvent.click(
-            within(nav).getByRole("link", { name: "Overview" }),
-        );
+        await userEvent.click(screen.getByRole("link", { name: "Overview" }));
         await waitFor(() =>
             expect(router.state.location.pathname).toBe("/administration/"),
         );
@@ -372,9 +378,11 @@ it.each(["/tasks/", "/tasks/saved-task/"])(
 );
 it("links cloud admission to configured namespaces independently of workspace", async () => {
     mocks.request.mockImplementation(async (path) =>
-        path === "/api/v1/administration/configuration"
-            ? install
-            : { ...cloud, namespace_ids: ["platform", "analytics"] },
+        path.endsWith("/clouds")
+            ? [cloud]
+            : path === "/api/v1/administration/configuration"
+              ? install
+              : { ...cloud, namespace_ids: ["platform", "analytics"] },
     );
     show("/administration/clouds/remote.cloud/?namespace=unrelated");
     expect(
@@ -391,3 +399,175 @@ it("links cloud admission to configured namespaces independently of workspace", 
         ),
     ).toBe(true);
 });
+
+it("bounds global observations to the selected cloud without scanning machines or volumes", async () => {
+    const configured = ["first", "second"].map((id) => ({
+        ...cloud,
+        id,
+        name: `${id} cloud`,
+        capabilities: { host_inventory: true, image_availability: true },
+        libvirt: { hosts: [{ id: `${id}-host`, cloud_id: id, zone: "zone" }] },
+    }));
+    mocks.request.mockImplementation(async (path: string) => {
+        if (path === "/api/v1/administration/configuration") return install;
+        if (path.endsWith("/clouds")) return configured;
+        if (path.includes("/tasks?")) return { items: [], active: 0 };
+        if (path.endsWith("/hosts"))
+            return {
+                items: [],
+                unavailable_hosts: [
+                    {
+                        id: `${path.includes("first") ? "first" : "second"}-host`,
+                        code: "host_unavailable",
+                    },
+                ],
+            };
+        throw new Error(`Unexpected overview request: ${path}`);
+    });
+    show("/administration/");
+    await screen.findByRole("link", { name: "first-host" });
+    expect(
+        screen.getByText(
+            /Inventory and capacity below cover observed hosts only/,
+        ),
+    ).toBeTruthy();
+    expect(
+        mocks.request.mock.calls.filter(([path]) => path.endsWith("/hosts")),
+    ).toHaveLength(1);
+    await userEvent.click(
+        screen.getByRole("combobox", { name: "Observation cloud" }),
+    );
+    await userEvent.click(screen.getByRole("option", { name: "second cloud" }));
+    await screen.findByRole("link", { name: "second-host" });
+    expect(
+        mocks.request.mock.calls.filter(([path]) => path.endsWith("/hosts")),
+    ).toHaveLength(2);
+    expect(
+        mocks.request.mock.calls.some(([path]) =>
+            /\/(machines|volumes)/.test(path),
+        ),
+    ).toBe(false);
+});
+
+it("retains configured cloud facts and links when host observations fail", async () => {
+    const capable = {
+        ...cloud,
+        capabilities: { host_inventory: true, image_availability: true },
+        libvirt: {
+            hosts: [{ id: "offline", cloud_id: cloud.id, zone: "zone" }],
+        },
+    };
+    mocks.request.mockImplementation(async (path: string) => {
+        if (path === "/api/v1/administration/configuration") return install;
+        if (path.endsWith("/clouds")) return [capable];
+        if (path.endsWith("/hosts")) throw new Error("Live connection failed");
+        if (path.includes("/tasks?")) return { items: [], active: 0 };
+        return capable;
+    });
+    show("/administration/clouds/remote.cloud/");
+    expect(await screen.findByText("Live connection failed")).toBeTruthy();
+    expect(
+        screen.getByRole("heading", { name: "Configured cloud" }),
+    ).toBeTruthy();
+    expect(
+        screen
+            .getByRole("link", {
+                name: "Configured cloud settings remain available",
+            })
+            .getAttribute("href"),
+    ).toBe("/administration/clouds/remote.cloud/configuration/");
+    expect(
+        screen.queryByLabelText("Remote cloud observed host summary"),
+    ).toBeNull();
+});
+
+it("keeps each configuration catalog filter independent", async () => {
+    const configured = {
+        ...cloud,
+        zones: [{ id: "zone-a", name: "Zone A" }],
+        networks: [{ id: "network-b", name: "Network B" }],
+    };
+    mocks.request.mockImplementation(async (path: string) =>
+        path === "/api/v1/administration/configuration"
+            ? install
+            : path.endsWith("/clouds")
+              ? [configured]
+              : configured,
+    );
+    const { router } = show(
+        "/administration/clouds/remote.cloud/configuration/",
+    );
+    const zones = await screen.findByRole("region", { name: "Zones" });
+    await userEvent.type(
+        within(zones).getByRole("textbox", { name: "Search" }),
+        "no-zone",
+    );
+    expect(within(zones).queryByText("Zone A")).toBeNull();
+    expect(
+        within(
+            screen.getByRole("region", { name: "Logical networks" }),
+        ).getByText("Network B"),
+    ).toBeTruthy();
+    expect(
+        new URLSearchParams(router.state.location.search).get("zones.q"),
+    ).toBe("no-zone");
+});
+
+it.each([
+    ["second", "second", false],
+    ["missing", "first", true],
+])(
+    "restores observation cloud %s from the URL with an explicit invalid-scope fallback",
+    async (selected, expected, fallback) => {
+        const configured = ["first", "second"].map((id) => ({
+            ...cloud,
+            id,
+            name: `${id} cloud`,
+            capabilities: { host_inventory: true, image_availability: true },
+            libvirt: {
+                hosts: [{ id: `${id}-host`, cloud_id: id, zone: "zone" }],
+            },
+        }));
+        mocks.request.mockImplementation(async (path: string) => {
+            if (path === "/api/v1/administration/configuration") return install;
+            if (path.endsWith("/clouds")) return configured;
+            if (path.includes("/tasks?")) return { items: [], active: 0 };
+            if (path.endsWith("/hosts"))
+                return { items: [], unavailable_hosts: [] };
+            throw new Error(`Unexpected request ${path}`);
+        });
+        const { router } = show(
+            `/administration/?observation_cloud=${selected}&namespace=unrelated`,
+        );
+        await screen.findByLabelText(`${expected} cloud observed host summary`);
+        expect(
+            mocks.request.mock.calls
+                .filter(([path]) => path.endsWith("/hosts"))
+                .map(([path]) => path),
+        ).toEqual([`/api/v1/administration/clouds/${expected}/hosts`]);
+        expect(
+            !!screen.queryByText(
+                /The requested observation cloud is unavailable/,
+            ),
+        ).toBe(fallback);
+        await userEvent.click(
+            screen.getByRole("combobox", { name: "Observation cloud" }),
+        );
+        await userEvent.click(
+            screen.getByRole("option", { name: "second cloud" }),
+        );
+        expect(
+            new URLSearchParams(router.state.location.search).get(
+                "observation_cloud",
+            ),
+        ).toBe("second");
+        expect(
+            new URLSearchParams(router.state.location.search).get("namespace"),
+        ).toBe("unrelated");
+        expect(
+            mocks.request.mock.calls.some(([path]) =>
+                path.includes("namespace="),
+            ),
+        ).toBe(false);
+    },
+);

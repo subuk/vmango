@@ -5864,6 +5864,47 @@
               "minimum": 1,
               "type": "integer"
             }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "cloud_id",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter persisted task attribution, independently of workload context.",
+            "explode": false,
+            "in": "query",
+            "name": "namespace_id",
+            "schema": {
+              "description": "Filter persisted task attribution, independently of workload context.",
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only tasks without namespace attribution.",
+            "explode": false,
+            "in": "query",
+            "name": "unassigned",
+            "schema": {
+              "description": "Only tasks without namespace attribution.",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Tasks referencing a machine or volume on this host.",
+            "explode": false,
+            "in": "query",
+            "name": "host",
+            "schema": {
+              "description": "Tasks referencing a machine or volume on this host.",
+              "maxLength": 128,
+              "type": "string"
+            }
           }
         ],
         "responses": {
