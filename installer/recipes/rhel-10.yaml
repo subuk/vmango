@@ -1,0 +1,32 @@
+order: 10
+binaries:
+  - {type: rpm, manager: dnf, package: qemu-kvm}
+  - {type: rpm, manager: dnf, package: libvirt-daemon-kvm}
+  - {type: rpm, manager: dnf, package: libvirt-daemon-proxy}
+  - {type: rpm, manager: dnf, package: libvirt-client}
+  - {type: rpm, manager: dnf, package: genisoimage}
+  - {type: rpm, manager: dnf, package: nmap-ncat}
+  - {type: rpm, manager: dnf, package: polkit}
+configs:
+  - {type: group, group: libvirt, system: true}
+  - path: /etc/polkit-1/rules.d/49-vmango-libvirt.rules
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+    template:
+      inline: |
+        // Vmango libvirt access. Membership is explicitly approved by the installer.
+        polkit.addRule(function(action, subject) {
+          if ((action.id == "org.libvirt.unix.manage" || action.id == "org.libvirt.unix.monitor") && subject.isInGroup("libvirt")) {
+            return polkit.Result.YES;
+          }
+        });
+processes:
+  - {type: systemd, unit: virtqemud.socket, state: running, enabled: true, timeout: 30s}
+  - {type: systemd, unit: virtnetworkd.socket, state: running, enabled: true, timeout: 30s}
+  - {type: systemd, unit: virtstoraged.socket, state: running, enabled: true, timeout: 30s}
+  - {type: systemd, unit: virtnodedevd.socket, state: running, enabled: true, timeout: 30s}
+  - {type: systemd, unit: virtnwfilterd.socket, state: running, enabled: true, timeout: 30s}
+  - {type: systemd, unit: virtsecretd.socket, state: running, enabled: true, timeout: 30s}
+  - {type: systemd, unit: virtproxyd.socket, state: running, enabled: true, timeout: 30s}

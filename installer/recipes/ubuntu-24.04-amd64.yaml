@@ -1,0 +1,27 @@
+order: 10
+binaries:
+  - {type: deb, package: qemu-system-x86}
+  - {type: deb, package: qemu-utils}
+  - {type: deb, package: libvirt-daemon-system}
+  - {type: deb, package: libvirt-clients}
+  - {type: deb, package: dnsmasq-base}
+  - {type: deb, package: genisoimage}
+  - {type: deb, package: netcat-openbsd}
+  - {type: deb, package: policykit-1}
+configs:
+  - {type: group, group: libvirt, system: true}
+  - path: /etc/polkit-1/rules.d/49-vmango-libvirt.rules
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+    template:
+      inline: |
+        // Vmango libvirt access. Membership is explicitly approved by the installer.
+        polkit.addRule(function(action, subject) {
+          if ((action.id == "org.libvirt.unix.manage" || action.id == "org.libvirt.unix.monitor") && subject.isInGroup("libvirt")) {
+            return polkit.Result.YES;
+          }
+        });
+processes:
+  - {type: systemd, unit: libvirtd.socket, state: running, enabled: true, timeout: 30s}
