@@ -15,7 +15,7 @@ To run a container instead, follow [Docker installation](/docs/docker/).
 
 On macOS and Linux, `vmango install --config /absolute/path/vmango.conf` starts
 a temporary loopback wizard for preparing Linux hosts locally or over SSH.
-It requires a separately supplied pinned Richt executable. Review OS changes,
+It requires a separately supplied Richt executable. Review OS changes,
 network/storage changes and the final configuration independently; the wizard
 does not start or restart the Vmango server. See the
 [installer guide](https://github.com/subuk/vmango/blob/master/docs/INSTALLER.md)

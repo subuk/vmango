@@ -82,6 +82,7 @@ type Plan struct {
 
 type Client struct {
 	binary, binaryDigest, stateDir, wrapperDir string
+	executableVersion                          string
 	parallelism                                int
 }
 
@@ -128,9 +129,10 @@ func New(o Options) (*Client, error) {
 		return nil, err
 	}
 	out, err := c.run(ctx, nil, nil, "--version")
-	if err != nil || strings.TrimSpace(string(out)) != "richt "+runtimeManifest.Version {
-		return nil, errors.New("Richt executable version does not match the pinned installer runtime")
+	if err != nil {
+		return nil, fmt.Errorf("could not query Richt executable version: %w", err)
 	}
+	c.executableVersion = strings.TrimPrefix(strings.TrimSpace(string(out)), "richt ")
 	return c, nil
 }
 
@@ -416,7 +418,7 @@ func verifyExecutable(path, expected string) error {
 		return err
 	}
 	if hex.EncodeToString(h.Sum(nil)) != expected {
-		return errors.New("Richt executable checksum differs from the pinned runtime")
+		return errors.New("Richt executable checksum changed during the installation session")
 	}
 	return nil
 }

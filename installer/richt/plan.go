@@ -28,7 +28,7 @@ func (c *Client) Prepare(ctx context.Context, targets []Target, log func(string)
 	if err := writeYAML(invPath, inv); err != nil {
 		return nil, err
 	}
-	p := &Plan{ID: filepath.Base(dir), Path: filepath.Join(dir, "plan.json"), Version: PlanVersion, BinaryDigest: c.binaryDigest, ExecutableVersion: SupportedRevision, RecipeRevision: RecipeRevision, RecipeDigests: pins}
+	p := &Plan{ID: filepath.Base(dir), Path: filepath.Join(dir, "plan.json"), Version: PlanVersion, BinaryDigest: c.binaryDigest, ExecutableVersion: c.executableVersion, RecipeRevision: RecipeRevision, RecipeDigests: pins}
 	for _, t := range targets {
 		p.Hosts = append(p.Hosts, t.ID)
 	}
@@ -48,7 +48,7 @@ func (c *Client) Prepare(ctx context.Context, targets []Target, log func(string)
 }
 
 func (c *Client) VerifyPlan(p *Plan) error {
-	if p == nil || p.Version != PlanVersion || p.BinaryDigest != c.binaryDigest || p.ExecutableVersion != SupportedRevision {
+	if p == nil || p.Version != PlanVersion || p.BinaryDigest != c.binaryDigest {
 		return errors.New("saved installation requires the exact Richt executable used during preparation")
 	}
 	if err := verifyExecutable(c.binary, c.binaryDigest); err != nil {

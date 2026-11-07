@@ -27,30 +27,18 @@ names on two hosts do not make their networks or storage shared.
 Local macOS QEMU/HVF setup and Windows controllers are outside this command's
 scope. The ordinary Vmango server's existing platform support is unchanged.
 
-## Supply the pinned Richt executable
+## Supply the Richt executable
 
 Richt runs as a separate executable, not as a Vmango Go dependency. Provide its
 path with `--richt`; if omitted, Vmango searches `PATH`. The installer does not
-download or upgrade that executable. The supported source revision is
-`43f24f90aae04766f8c5979b06ce08cb33e703eb`, with saved-plan format `1.8`.
-A generic development build or a differently versioned binary is rejected.
+download or upgrade that executable and does not require a specific source
+revision or version string. Development builds are accepted. Richt must support
+the installer's commands, facts output and saved-plan format `1.8`.
 
-To build the pinned executable for the current macOS or Linux controller, use
-Richt's required Go toolchain (Go 1.27.3 for this revision):
-
-```sh
-git clone https://github.com/subuk/richt.git richt-installer-runtime
-cd richt-installer-runtime
-git checkout --detach 43f24f90aae04766f8c5979b06ce08cb33e703eb
-make build VERSION=43f24f90aae04766f8c5979b06ce08cb33e703eb
-./bin/richt --version
-```
-
-Pass the resulting `bin/richt` as an absolute path. This build requirement
-belongs to Richt; it does not raise Vmango's own minimum Go version. A binary
-built by another trusted machine must match the controller's OS and CPU
-architecture. Vmango records its digest and rejects replacement during the
-session or incompatible continuation.
+Use a Richt executable built for the controller's OS and CPU architecture.
+Vmango records its reported version and digest and rejects replacement during
+the session or continuation of a plan prepared with a different executable.
+After updating Richt, prepare and review a new plan.
 
 Recipe source bytes live under `installer/recipes/`. Preparation references
 immutable HTTPS sources at the pinned repository revision and checks each
@@ -60,7 +48,7 @@ rerun does not silently fetch newer recipes.
 
 ## Prerequisites and identities
 
-The controller needs the normal Vmango runtime libraries, OpenSSH, the pinned
+The controller needs the normal Vmango runtime libraries, OpenSSH, the
 Richt executable and the ISO tools used for config drives. The browser needs no
 Node.js runtime; the wizard is included in Vmango's verified embedded assets.
 

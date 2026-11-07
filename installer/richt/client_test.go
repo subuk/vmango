@@ -22,7 +22,7 @@ func fakeClient(t *testing.T) *Client {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "richt")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nif [ \"$1\" = --version ]; then printf '%s\\n' 'richt "+SupportedRevision+"'; exit 0; fi\nexit 7\n"), 0700); err != nil {
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nif [ \"$1\" = --version ]; then printf '%s\\n' 'richt dev'; exit 0; fi\nexit 7\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	c, err := New(Options{StateDir: filepath.Join(dir, "state"), Binary: path})
@@ -32,7 +32,7 @@ func fakeClient(t *testing.T) *Client {
 	return c
 }
 
-func TestDiscoveryPinsExecutable(t *testing.T) {
+func TestDiscoveryDetectsExecutableReplacement(t *testing.T) {
 	c := fakeClient(t)
 	if err := os.WriteFile(c.binary, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
 		t.Fatal(err)
@@ -42,13 +42,40 @@ func TestDiscoveryPinsExecutable(t *testing.T) {
 	}
 }
 
-func TestRejectsUnversionedBinary(t *testing.T) {
-	dir := t.TempDir()
-	_ = os.Chmod(dir, 0700)
-	path := filepath.Join(dir, "richt")
-	_ = os.WriteFile(path, []byte("#!/bin/sh\necho 'richt dev'\n"), 0700)
-	if _, err := New(Options{StateDir: filepath.Join(dir, "state"), Binary: path}); err == nil {
-		t.Fatal("unversioned binary accepted")
+func TestAcceptsDifferentExecutableVersions(t *testing.T) {
+	for _, version := range []string{"dev", "v2.0.0", strings.Repeat("a", 40)} {
+		t.Run(version, func(t *testing.T) {
+			c := fakeClient(t)
+			script := "#!/bin/sh\nprintf '%s\\n' " + shellQuote("richt "+version) + "\n"
+			if err := os.WriteFile(c.binary, []byte(script), 0700); err != nil {
+				t.Fatal(err)
+			}
+			c, err := New(Options{StateDir: c.stateDir, Binary: c.binary})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.executableVersion != version {
+				t.Fatalf("version = %q, want %q", c.executableVersion, version)
+			}
+			p := writeTestPlan(t, c, initialPlan)
+			if err := c.VerifyPlan(p); err != nil {
+				t.Fatalf("plan rejected for version %q: %v", version, err)
+			}
+			p.BinaryDigest = strings.Repeat("0", 64)
+			if err := c.VerifyPlan(p); err == nil {
+				t.Fatal("plan prepared with another executable accepted")
+			}
+		})
+	}
+}
+
+func TestRejectsFailedVersionCommand(t *testing.T) {
+	c := fakeClient(t)
+	if err := os.WriteFile(c.binary, []byte("#!/bin/sh\nexit 23\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New(Options{StateDir: c.stateDir, Binary: c.binary}); err == nil || !strings.Contains(err.Error(), "could not query Richt executable version") {
+		t.Fatalf("failed version command accepted or misleading error: %v", err)
 	}
 }
 
@@ -98,7 +125,7 @@ func writeTestPlan(t *testing.T, c *Client, body string) *Plan {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &Plan{ID: filepath.Base(dir), Path: filepath.Join(dir, "plan.json"), Version: PlanVersion, BinaryDigest: c.binaryDigest, ExecutableVersion: SupportedRevision, Hosts: []string{"a", "b"}}
+	p := &Plan{ID: filepath.Base(dir), Path: filepath.Join(dir, "plan.json"), Version: PlanVersion, BinaryDigest: c.binaryDigest, ExecutableVersion: c.executableVersion, Hosts: []string{"a", "b"}}
 	if err := os.WriteFile(p.Path, []byte(body), 0600); err != nil {
 		t.Fatal(err)
 	}

@@ -25,17 +25,12 @@ of the embedded source bytes. A mismatched or unavailable remote source fails
 preparation. Saved-plan application does not refetch recipes, although package
 transactions still require their configured repositories.
 
-Use the local Richt executable built from the exact revision declared by
-`richt.SupportedRevision`, with its version set to that revision:
+Supply a local Richt executable through
+`vmango install --richt /absolute/path/to/richt`, or place it on `PATH`.
+Vmango does not require a specific Richt source revision or version string;
+development builds are accepted. Richt must support the installer's commands,
+facts output and saved-plan format `1.8`.
 
-```sh
-go build -trimpath \
-  -ldflags '-X github.com/subuk/richt/cli.Version=43f24f90aae04766f8c5979b06ce08cb33e703eb' \
-  -o /absolute/path/to/richt .
-```
-
-Run that command in a clean Richt checkout at the named commit. Pass the
-result through `vmango install --richt /absolute/path/to/richt`, or place it on
-`PATH`. Vmango records its SHA-256 in saved-plan metadata and refuses a changed
-executable during execution or continuation. Binary downloading is deliberately
-outside this delivery.
+Vmango records the executable's reported version and SHA-256 in saved-plan
+metadata and refuses a changed executable during execution or continuation.
+Binary downloading is deliberately outside this delivery.

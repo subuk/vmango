@@ -11,19 +11,13 @@ import (
 	"path/filepath"
 )
 
-// SupportedRevision pins the separately built local Richt executable. Build
-// with -X github.com/subuk/richt/cli.Version=<revision>; do not use a dev binary.
-const SupportedRevision = "43f24f90aae04766f8c5979b06ce08cb33e703eb"
-
-var runtimeManifest = struct{ Version string }{SupportedRevision}
-
 func discover(_ context.Context, explicit, _ string) (string, string, error) {
 	path := explicit
 	var err error
 	if path == "" {
 		path, err = exec.LookPath("richt")
 		if err != nil {
-			return "", "", errors.New("Richt is required: provide --richt /absolute/path/to/richt or install the pinned binary on PATH")
+			return "", "", errors.New("Richt is required: provide --richt /absolute/path/to/richt or install Richt on PATH")
 		}
 	}
 	path, err = filepath.Abs(path)

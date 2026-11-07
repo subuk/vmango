@@ -43,7 +43,7 @@ release workflow, its inputs and verification scope.
 ## Web setup wizard
 
 On macOS or Linux, run `vmango install --config /absolute/path/vmango.conf`
-with the pinned Richt executable available through `--richt` or `PATH`.
+with the Richt executable available through `--richt` or `PATH`.
 The wizard reviews OS preparation, NAT networks/directory pools and the final
 configuration in separate stages. It does not start or restart Vmango.
 See [setup, prerequisites and recovery](docs/INSTALLER.md).
