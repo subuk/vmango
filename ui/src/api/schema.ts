@@ -1449,7 +1449,7 @@ export interface components {
         ApiDisk: {
             alias?: string;
             /** @enum {string} */
-            bus?: "virtio" | "scsi" | "ide";
+            bus?: "virtio" | "scsi" | "ide" | "sata";
             /**
              * @default disk
              * @enum {string}
@@ -1463,9 +1463,9 @@ export interface components {
         };
         ApiImageDefaults: {
             /** @enum {string} */
-            disk_bus?: "virtio" | "scsi" | "ide";
+            disk_bus?: "virtio" | "scsi" | "ide" | "sata";
             /** @enum {string} */
-            disk_controller?: "virtio-scsi";
+            disk_controller?: "virtio-scsi" | "lsilogic" | "lsisas1068" | "vmpvscsi";
             /** @enum {string} */
             firmware?: "auto" | "bios" | "efi";
             /** @enum {string} */
@@ -1500,6 +1500,7 @@ export interface components {
             guest_system?: components["schemas"]["GuestSystemObservation"];
             profile: components["schemas"]["Profile"];
             simple_cpu_topology: boolean;
+            storage?: components["schemas"]["StorageObservation"];
             /** Format: int64 */
             version: number;
         };
@@ -1888,6 +1889,7 @@ export interface components {
         };
         ConfigDrive: {
             bus: string;
+            controller_model?: string;
             device_type: string;
             enabled?: boolean;
             format: string;
@@ -1935,6 +1937,25 @@ export interface components {
             message: string;
             operation?: string;
             resource?: components["schemas"]["ResourceRef"];
+        };
+        DiskAddress: {
+            /** Format: int64 */
+            bus: number;
+            /** Format: int64 */
+            controller: number;
+            /** Format: int64 */
+            function?: number;
+            /** Format: int64 */
+            slot?: number;
+            /** Format: int64 */
+            target: number;
+            type: string;
+            /** Format: int64 */
+            unit: number;
+        };
+        Disks: {
+            bus: string;
+            controller_model?: string;
         };
         Effect: {
             action: string;
@@ -2069,6 +2090,7 @@ export interface components {
             firmware: components["schemas"]["FirmwareBinding"];
             guest_system: components["schemas"]["GuestSystemObservation"];
             machine: string;
+            storage?: components["schemas"]["StorageObservation"];
         };
         ObservedTimer: {
             catchup?: components["schemas"]["ObservedCatchUp"];
@@ -2110,6 +2132,7 @@ export interface components {
             cpu?: components["schemas"]["CPU"];
             disk_bus: string;
             disk_controller?: string;
+            disks?: components["schemas"]["Disks"];
             firmware: string;
             firmware_policy?: components["schemas"]["Firmware"];
             graphics: string;
@@ -2177,6 +2200,24 @@ export interface components {
             description?: string;
             id: string;
             name: string;
+        };
+        StorageController: {
+            /** Format: int64 */
+            index: number;
+            model?: string;
+            type: string;
+        };
+        StorageDisk: {
+            address?: components["schemas"]["DiskAddress"];
+            alias?: string;
+            bus: string;
+            controller_model?: string;
+            device: string;
+            target: string;
+        };
+        StorageObservation: {
+            controllers: components["schemas"]["StorageController"][] | null;
+            disks: components["schemas"]["StorageDisk"][] | null;
         };
         SystemInfo: {
             family?: string;

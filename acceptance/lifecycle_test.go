@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 	"subuk/vmango/tasks"
 	"testing"
 	"time"
@@ -93,12 +94,31 @@ func TestLifecycle(t *testing.T) {
 	if configDriveDevice == "" {
 		configDriveDevice = "disk"
 	}
-	if configDriveBus != "virtio" && configDriveBus != "scsi" && configDriveBus != "ide" {
+	if configDriveBus != "virtio" && configDriveBus != "scsi" && configDriveBus != "ide" && configDriveBus != "sata" {
 		t.Fatal("invalid ACCEPTANCE_CONFIG_DRIVE_BUS")
 	}
 	if configDriveDevice != "disk" && configDriveDevice != "cdrom" {
 		t.Fatal("invalid ACCEPTANCE_CONFIG_DRIVE_DEVICE")
 	}
+	diskBus := os.Getenv("ACCEPTANCE_DISK_BUS")
+	if diskBus == "" {
+		diskBus = "scsi"
+	}
+	diskModel := os.Getenv("ACCEPTANCE_SCSI_MODEL")
+	if diskBus == "scsi" && diskModel == "" {
+		diskModel = "virtio-scsi"
+	}
+	cdModel := os.Getenv("ACCEPTANCE_CONFIG_DRIVE_CONTROLLER")
+	if configDriveBus == "scsi" && cdModel == "" {
+		cdModel = "virtio-scsi"
+	}
+	if _, e := hardware.NormalizeDisks(hardware.Disks{Bus: diskBus, ControllerModel: diskModel}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := hardware.NormalizeDisks(hardware.Disks{Bus: configDriveBus, ControllerModel: cdModel}); e != nil {
+		t.Fatal(e)
+	}
+	disksBlock := fmt.Sprintf(`disks {bus=%q controller_model=%q}`, diskBus, diskModel)
 	firmware := "auto"
 	firmwareTest := os.Getenv("ACCEPTANCE_FIRMWARE") != ""
 	firmwareSecure := os.Getenv("ACCEPTANCE_FIRMWARE") == "secure"
@@ -377,7 +397,7 @@ api {
 	}
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {
- hardware_profile "boot" { %s machine { type = %q acceleration = %q } %s disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" config_drive { format = %q device_type = %q bus = %q } }
+ hardware_profile "boot" { %s machine { type = %q acceleration = %q } %s %s guest_agent = false graphics = "vnc" video_model = "none" config_drive { format = %q device_type = %q bus = %q controller_model=%q } }
  hardware_profile "no-init" { %s machine { type = %q acceleration = %q } %s config_drive { enabled = false } }
  image "boot" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "boot" protected = true minimum_memory_mib = 1024 minimum_disk_gib = 8 }
  image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "no-init" }
@@ -399,7 +419,7 @@ cloud "acceptance" {
  storage_class "efficient" {pool=%q format="qcow2"}
  storage_class "raw" {pool=%q format="raw"} }
 }
-`, guestPolicy, machineType, machineAcceleration, firmwareBlock, initialization, configDriveDevice, configDriveBus, guestPolicy, machineType, machineAcceleration, firmwareBlock, base, arch, base, arch, uri, name, name, name, name, name)
+`, guestPolicy, machineType, machineAcceleration, firmwareBlock, disksBlock, initialization, configDriveDevice, configDriveBus, cdModel, guestPolicy, machineType, machineAcceleration, firmwareBlock, base, arch, base, arch, uri, name, name, name, name, name)
 	if loader := os.Getenv("ACCEPTANCE_FIRMWARE_LOADER"); loader != "" {
 		template, format := os.Getenv("ACCEPTANCE_FIRMWARE_TEMPLATE"), os.Getenv("ACCEPTANCE_FIRMWARE_FORMAT")
 		if !firmwareTest || template == "" || (format != "raw" && format != "qcow2") {
@@ -691,6 +711,11 @@ cloud "offline" {
 		}
 		userdata = fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, '%stest \"$(hostname)\" = %s && echo %s > %s']\n", commands, name, marker, serialDevice)
 	}
+	storageTopology := os.Getenv("ACCEPTANCE_STORAGE_TOPOLOGY") == "1"
+	dataMarker := "VMANGO_DATA_OK_" + uuid.NewString()
+	if storageTopology {
+		userdata += fmt.Sprintf("\nwrite_files:\n  - path: /var/lib/cloud/scripts/per-boot/vmango-storage\n    permissions: '0755'\n    content: |\n      #!/bin/sh\n      for size in /sys/block/*/size; do\n        if [ \"$(cat \"$size\")\" = 32768 ]; then echo %s > %s; fi\n      done\n", dataMarker, serialDevice)
+	}
 	// Check image constraints and the no-init alias through the same JSON API.
 	if os.Getenv("ACCEPTANCE_STORAGE_ONLY") == "1" {
 		testStorageCloning(t, root, name, "", apiRequest, apiCommand, mustVir, run)
@@ -943,11 +968,14 @@ cloud "offline" {
 	if runtimeDomain.Type != expectedType {
 		t.Fatalf("expected virtualization type %s, got %s; see domain.xml", expectedType, runtimeDomain.Type)
 	}
-	if !strings.Contains(xml, "virtio-scsi") || strings.Contains(xml, "org.qemu.guest_agent.0") || !strings.Contains(xml, "_config.iso") {
+	if strings.Contains(xml, "org.qemu.guest_agent.0") || !strings.Contains(xml, "_config.iso") {
 		t.Fatal("image launch defaults did not reach domain XML")
 	}
 	foundConfigDrive := false
 	for _, disk := range runtimeDomain.Devices.Disks {
+		if disk.Device == "disk" && (disk.Alias == nil || disk.Alias.Name != "ua-configdrive") && (disk.Target == nil || disk.Target.Bus != diskBus) {
+			t.Fatal("ordinary disk ignored selected bus", disk)
+		}
 		if disk.Alias != nil && disk.Alias.Name == "ua-configdrive" {
 			foundConfigDrive = true
 			if disk.Device != configDriveDevice || disk.Target == nil || disk.Target.Bus != configDriveBus || disk.Boot != nil {
@@ -1053,6 +1081,30 @@ cloud "offline" {
 		templateDigest = sha256.Sum256(firmwareRead(t, uri, runtimeDomain.OS.NVRam.Template))
 	}
 	t.Log("guest ran cloud-init userdata and confirmed its hostname")
+	if storageTopology {
+		testStorageTopology(t, domainUUID, apiVMPath, diskBus, name, apiRequest, apiCommand, mustVir)
+		serial := dial("serial/ws")
+		serial.SetReadDeadline(time.Now().Add(3 * time.Minute))
+		seen := ""
+		for !strings.Contains(seen, dataMarker) {
+			_, data, e := serial.ReadMessage()
+			if e != nil {
+				serial.Close()
+				t.Fatal("guest did not discover newly attached data disk after restart", e)
+			}
+			consoleLog.Write(data)
+			seen += string(data)
+		}
+		serial.Close()
+		apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "poweroff"})
+		apiCommand("DELETE", apiVMPath+"?delete_volumes=true", nil)
+		if _, e := vir("dominfo", domainUUID); e == nil {
+			t.Fatal("storage topology VM remains after deletion")
+		}
+		t.Log("PASS: storage topology guest boot/config-drive discovery, data-disk discovery after stopped attach/detach/reattach, restart persistence and cleanup")
+		return
+	}
+
 	// Test signed browser transports without browser refresh cookies or resource Bearer headers.
 	for _, kind := range []string{"serial", "vnc"} {
 		var link struct {
@@ -1179,7 +1231,11 @@ cloud "offline" {
 	if err := json.Unmarshal(rawClone, &clone); err != nil {
 		t.Fatal(err)
 	}
-	apiRequest("POST", apiVMPath+"/disks/attach", map[string]any{"volume_id": disk.ID, "bus": "virtio"}, 422)
+	conflictingBus := "virtio"
+	if diskBus == "virtio" {
+		conflictingBus = "scsi"
+	}
+	apiRequest("POST", apiVMPath+"/disks/attach", map[string]any{"volume_id": disk.ID, "bus": conflictingBus}, 422)
 	apiCommand("POST", apiVMPath+"/disks/attach", map[string]any{"volume_id": disk.ID})
 	var machineDetail struct {
 		Disks []struct {
@@ -1201,8 +1257,8 @@ cloud "offline" {
 	for _, d := range machineDetail.Disks {
 		if d.ID == disk.ID {
 			attached = true
-			if d.Bus != "scsi" {
-				t.Fatalf("later disk ignored applied SCSI policy: %s", d.Bus)
+			if d.Bus != diskBus {
+				t.Fatalf("later disk ignored applied storage policy: %s", d.Bus)
 			}
 		}
 	}

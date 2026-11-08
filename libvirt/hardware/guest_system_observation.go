@@ -30,9 +30,10 @@ type ObservedCatchUp struct {
 	Limit     uint `json:"limit"`
 }
 type ObservedHardware struct {
-	Firmware     FirmwareBinding `json:"firmware"`
-	EffectiveCPU *CPUObservation `json:"effective_cpu,omitempty"`
-	CPU          CPUObservation  `json:"cpu"`
+	Storage      StorageObservation `json:"storage,omitempty"`
+	Firmware     FirmwareBinding    `json:"firmware"`
+	EffectiveCPU *CPUObservation    `json:"effective_cpu,omitempty"`
+	CPU          CPUObservation     `json:"cpu"`
 	PlatformBinding
 	GuestSystem GuestSystemObservation `json:"guest_system"`
 }

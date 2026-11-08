@@ -88,10 +88,10 @@ export function HardwareProfileFields({
                 ["Firmware", profile.firmware_policy?.profile ? `${profile.firmware} · ${profile.firmware_policy.profile}` : profile.firmware],
                 ["Secure Boot support", profile.firmware_policy?.secure_boot === undefined ? "Unspecified / platform default" : profile.firmware_policy.secure_boot ? "Required" : "Firmware without Secure Boot"],
                 ["Initial enrolled keys", profile.firmware_policy?.secure_boot ? (profile.firmware_policy.enrolled_keys ? "Required" : "Not enrolled") : "Inapplicable"],
-                ["Ordinary disk bus", profile.disk_bus],
+                ["Ordinary disk bus", profile.disks?.bus || profile.disk_bus],
                 [
                     "Disk controller",
-                    profile.disk_controller || "Per-device / platform default",
+                    profile.disks?.controller_model || profile.disk_controller || (profile.disk_bus === "sata" ? "AHCI (platform mapping)" : profile.disk_bus === "virtio" ? "Virtio-blk per disk" : "Platform IDE"),
                 ],
                 ["Network device", profile.nic_model],
                 ["Graphics", profile.graphics],
@@ -102,7 +102,7 @@ export function HardwareProfileFields({
                     "Config drive",
                     cd.enabled === false
                         ? "Disabled"
-                        : `${cd.format} · ${cd.device_type} · ${cd.bus}`,
+                        : `${cd.format} · ${cd.device_type} · ${cd.bus}${cd.controller_model ? ` · ${cd.controller_model}` : ""}`,
                 ],
             ]}
         />

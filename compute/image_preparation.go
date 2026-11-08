@@ -344,6 +344,12 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 			if err := backend.ResolveDiskAttachment(&topology, vm.ConfigDriveAttachment); err != nil {
 				return nil, nil, err
 			}
+			topology.Volumes = append(topology.Volumes, vm.ConfigDriveAttachment)
+		}
+		if planner, ok := backend.(MachineAttachmentPlanner); ok {
+			if err := planner.ValidateDiskAttachments(vm, topology.Volumes); err != nil {
+				return nil, nil, err
+			}
 		}
 	} else {
 		if overrides.Firmware != "" {

@@ -24,7 +24,7 @@ func ValidateVM(vm *VirtualMachine) error {
 }
 
 func ValidateVolumeAttachment(v *VirtualMachineAttachedVolume) error {
-	if v.Path == "" || !slices.Contains([]DeviceType{DeviceTypeDisk, DeviceTypeCdrom}, v.DeviceType) || !slices.Contains([]DeviceBus{DeviceBusVirtio, DeviceBusScsi, DeviceBusIde}, v.DeviceBus) {
+	if v.Path == "" || !slices.Contains([]DeviceType{DeviceTypeDisk, DeviceTypeCdrom}, v.DeviceType) || !slices.Contains([]DeviceBus{DeviceBusVirtio, DeviceBusScsi, DeviceBusIde, DeviceBusSata}, v.DeviceBus) {
 		return fmt.Errorf("%w: volume path, device type and bus are required", ErrInvalid)
 	}
 	return nil

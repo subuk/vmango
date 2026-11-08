@@ -150,6 +150,16 @@ type policyTestBackend struct {
 	resolutions               int
 	rejectCurrentCapabilities bool
 	capabilityReads           int
+	rejectAttachmentSet       bool
+	attachmentSets            int
+}
+
+func (r *policyTestBackend) ValidateDiskAttachments(vm *compute.VirtualMachine, disks []*compute.VirtualMachineAttachedVolume) error {
+	r.attachmentSets++
+	if r.rejectAttachmentSet {
+		return errors.New("full storage controller: complete attachment set exceeds capacity")
+	}
+	return nil
 }
 
 func (r *policyTestBackend) ResolveHardware(vm *compute.VirtualMachine, policy, binding json.RawMessage) error {
@@ -295,6 +305,44 @@ func TestOrdinaryDiskRequestsCannotUseGeneratedArtifactIdentity(t *testing.T) {
 	}
 	if backend.mutations != 0 || volumes.created != 0 {
 		t.Fatal("reserved identity rejection caused side effects")
+	}
+}
+
+func TestAttachmentCapacityFailurePrecedesProvisioning(t *testing.T) {
+	h, base, volumes, _ := cloudFixtureHandler(t, 4, nil)
+	backend := &policyTestBackend{cloudVMBackend: base, rejectAttachmentSet: true}
+	h.VMs.VirtualMachineRepository = backend
+	images := compute.NewImageService(&mutableImageCatalog{image: compute.Image{CloudID: "c", ID: "image", Name: "Image", Arch: compute.ArchAmd64, SourcePath: "/source", BackendPolicy: json.RawMessage(`{"storage":"bounded"}`), DataDisks: []compute.ImageDataDisk{{Name: "required", SizeBytes: 1 << 30}}}})
+	h.Manager = compute.NewVirtualMachineManager(h.VMs, h.Volumes, cloudEvents{}, nil, images)
+	h.Manager.Clouds = h.Clouds
+	h.Clouds.Manager = h.Manager
+	repo, err := filesystem.NewTaskRepository(filepath.Join(t.TempDir(), "tasks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer repo.Close()
+	service := tasks.New(repo, h, zerolog.Nop())
+	command := compute.NewCommand("machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: createSpec("capacity")})
+	prepared, err := h.Prepare(command)
+	if err == nil {
+		accepted, e := service.Submit(tasks.Identity{ID: "admin"}, "capacity-test", prepared)
+		if e != nil {
+			t.Fatal(e)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer func() { cancel(); service.Wait() }()
+		if e = service.Start(ctx, 1); e != nil {
+			t.Fatal(e)
+		}
+		result := awaitCloudTask(t, service, accepted.ID)
+		if result.State != tasks.Failed || len(result.Effects) != 0 || result.OutcomeUncertain {
+			t.Fatal(result)
+		}
+	} else if !strings.Contains(err.Error(), "capacity") {
+		t.Fatal(err)
+	}
+	if backend.attachmentSets == 0 || base.mutations != 0 || volumes.created != 0 {
+		t.Fatalf("capacity check missed or caused effects: checks=%d VM=%d volumes=%d", backend.attachmentSets, base.mutations, volumes.created)
 	}
 }
 

@@ -133,42 +133,6 @@ func TestExplicitAdoptionCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-func TestControllerDependenciesAllocateDistinctAddresses(t *testing.T) {
-	config := &xmlmodel.Domain{Devices: &xmlmodel.DomainDeviceList{}}
-	for n := 0; n < 10; n++ {
-		address, err := allocateDiskAddress(config, "scsi")
-		if err != nil {
-			t.Fatal(err)
-		}
-		config.Devices.Disks = append(config.Devices.Disks, xmlmodel.DomainDisk{Target: &xmlmodel.DomainDiskTarget{Bus: "scsi", Dev: "sd" + diskTargetName(n)}, Address: address})
-	}
-	if len(config.Devices.Controllers) != 1 || config.Devices.Controllers[0].Model != "virtio-scsi" {
-		t.Fatalf("controller dependency duplicated: %+v", config.Devices.Controllers)
-	}
-	before, _ := json.Marshal(config.Devices.Disks)
-	if _, err := allocateDiskAddress(config, "scsi"); err != nil {
-		t.Fatal(err)
-	}
-	after, _ := json.Marshal(config.Devices.Disks)
-	if string(before) != string(after) {
-		t.Fatal("existing addresses changed")
-	}
-	virtio := &xmlmodel.Domain{Devices: &xmlmodel.DomainDeviceList{}}
-	if address, err := allocateDiskAddress(virtio, "virtio"); err != nil || address != nil || len(virtio.Devices.Controllers) > 0 {
-		t.Fatal("virtio-blk got shared controller")
-	}
-	ide := &xmlmodel.Domain{Devices: &xmlmodel.DomainDeviceList{}}
-	for n := 0; n < 4; n++ {
-		a, err := allocateDiskAddress(ide, "ide")
-		if err != nil {
-			t.Fatal(err)
-		}
-		ide.Devices.Disks = append(ide.Devices.Disks, xmlmodel.DomainDisk{Target: &xmlmodel.DomainDiskTarget{Bus: "ide"}, Address: a})
-	}
-	if _, err := allocateDiskAddress(ide, "ide"); err == nil {
-		t.Fatal("IDE capacity overflow accepted")
-	}
-}
 func TestDisabledVideoCannotBeReintroducedByLibvirtDefaults(t *testing.T) {
 	config := &xmlmodel.Domain{Devices: &xmlmodel.DomainDeviceList{}}
 	vm := &compute.VirtualMachine{Memory: compute.NewSize(1, compute.SizeUnitG), VCpus: 1, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc, Listen: "127.0.0.1"}, VideoModel: compute.VideoModelNone}

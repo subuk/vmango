@@ -528,21 +528,82 @@ never converts or removes them. Use disposable copies for custom-format checks.
   from the saved template after catalog edits, missing-owned-file deletion and
   shared-template preservation. Task history contained the actual NVRAM paths.
   The run also passed the generic raw/qcow2 disk-cloning checks and cleanup.
-- macOS aarch64/HVF: an earlier run booted Ubuntu, wrote the guest variable and
-  passed VNC/serial and raw disk cloning, but then timed out in the unrelated
-  qemu-to-storage proxy during qcow2 disk inspection. The disposable VM was
-  removed; its remaining pool was cleaned through `storage:///session` after
-  UUID/path and existing-domain checks. A retry failed at pool definition
-  before creating a VM. The full final HVF firmware lifecycle remains unverified.
-  No daemon or existing guest was restarted.
-- Named qcow2 firmware runtime verification remains pending local daemon
-  recovery; qcow2 disk tests above are not firmware-format tests. Linux libvirt 8
-  cannot satisfy the qcow2 firmware version requirements.
+- macOS aarch64/HVF, libvirt 11.2 and QEMU 9.2.3: after the authorized
+  restart of only the stuck virtqemud process, the complete raw EFI lifecycle
+  passed (39 seconds). Existing guest PIDs/UUIDs remained unchanged. A separate
+  run with disposable named qcow2 CODE/template copies also passed (35 seconds),
+  including guest NVRAM persistence, private-file separation, restart, external
+  adoption, regeneration from the saved template, deletion and shared-input
+  preservation. Both runs used the verified Ubuntu Noble ARM64 image and
+  cleaned their own VMs/pools. Linux libvirt 8 cannot satisfy the qcow2 firmware
+  version requirements.
 - Full Go tests, generated API checks, 206 UI tests, five asset tests and the
   Hugo documentation build passed. The built-in browser provider was unavailable;
   no Chrome session or package build was used.
 
-After authorized local daemon recovery, rerun `ACCEPTANCE_FIRMWARE=efi` with the
-verified ARM64 image, then repeat with disposable named qcow2 CODE/template
-copies using the variables above. Firmware mode skips the unrelated storage
-cloning stress test; the ordinary suite continues to cover it.
+Firmware mode skips the unrelated storage cloning stress test; the ordinary
+suite continues to cover it.
+
+## Disk/controller topology matrix
+
+`ACCEPTANCE_DISK_BUS=virtio|scsi|ide|sata` selects ordinary disks.
+SCSI additionally requires `ACCEPTANCE_SCSI_MODEL` (default `virtio-scsi`).
+Config drive selection remains independent through
+`ACCEPTANCE_CONFIG_DRIVE_BUS`, `ACCEPTANCE_CONFIG_DRIVE_CONTROLLER`,
+`ACCEPTANCE_CONFIG_DRIVE_DEVICE=disk|cdrom` and
+`ACCEPTANCE_INITIALIZATION=nocloud|openstack`.
+
+Set `ACCEPTANCE_STORAGE_TOPOLOGY=1` for a focused real-hypervisor test. It
+boots the guest from the selected root disk, checks config-drive discovery,
+rejects active disk changes, powers off, attaches/detaches/reattaches a data
+disk, and verifies stable existing XML targets/addresses/controllers and reuse
+of the freed address. It then cold-starts and requires the guest to discover
+the new disk. The SATA case additionally fills the six-port controller and
+checks that overflow creates neither a volume nor a domain change. Each run
+owns its random VM/pool; cleanup never targets preexisting workloads.
+
+Example on an explicitly authorized Linux test host:
+
+```sh
+ACCEPTANCE_REMOTE=1 ACCEPTANCE_ARCH=x86_64 \
+ACCEPTANCE_URI=qemu+ssh://root@HOST/system \
+ACCEPTANCE_MACHINE_TYPE=q35 ACCEPTANCE_STORAGE_TOPOLOGY=1 \
+ACCEPTANCE_DISK_BUS=sata ACCEPTANCE_CONFIG_DRIVE_BUS=sata \
+ACCEPTANCE_CONFIG_DRIVE_DEVICE=cdrom \
+ACCEPTANCE_IMAGE_URL=URL ACCEPTANCE_IMAGE_SHA256=SHA256 \
+ACCEPTANCE_IMAGE_SIZE_BYTES=BYTES make acceptance
+```
+
+The initial plan and later capacity boundaries also have focused Go regressions:
+SATA six ports (five ordinary disks including root when config drive shares
+SATA), IDE four positions, LSI reserved ID 7, SAS/PVSCSI model-specific address
+spaces, separate and shared SCSI models, multiple existing controllers,
+exhausted PCI slots, unsupported observed models, no provisioning on preflight
+failure, and namespace forwarding of the complete attachment set.
+
+### Recorded storage verification, 2026-11-08
+
+Linux x86_64/KVM uses libvirt 8/QEMU 6.2 and the checksum-verified Alpine 3.24.3
+cloud image from the command earlier in this guide. Results are specific to
+these platform/image combinations, not universal guest-driver claims.
+
+| Ordinary disks | Independent config drive | Platform | Result |
+| --- | --- | --- | --- |
+| SATA/AHCI | SATA CD-ROM, NoCloud | Q35/KVM | Full lifecycle, topology/data discovery and six-port overflow with zero effects passed |
+| virtio-blk | virtio disk, NoCloud | Q35/KVM | Focused topology/data discovery passed |
+| virtio-scsi | virtio-scsi disk, OpenStack | Q35/KVM | Focused topology/data discovery passed |
+| IDE | IDE CD-ROM, NoCloud | i440fx/KVM | Focused topology/data discovery passed |
+| lsilogic | virtio-scsi CD-ROM, OpenStack | i440fx/KVM | Host QEMU lacks LSI53C895A; rejected before target VM/artifact creation |
+| lsisas1068 | lsisas1068 disk, NoCloud | Q35/KVM | Host QEMU lacks SAS1068; rejected before target VM/artifact creation |
+| vmpvscsi | virtio-scsi CD-ROM, NoCloud | Q35/KVM | Host QEMU lacks PVSCSI; rejected before target VM/artifact creation |
+
+On macOS ARM64/HVF, newer QEMU accepts LSI controller XML, but the installed
+EDK2 firmware did not expose that root disk and entered its shell; this is not
+a successful LSI guest lifecycle. Emulated SCSI positive guest coverage remains
+unverified on available platform/image combinations.
+
+Full Go tests, generated API checks, 207 UI tests, five asset checks and Hugo
+build passed. The built-in browser provider was unavailable, so rendered-page
+verification could not be performed; Chrome was not used. No remote package
+build or publication is included in these results. See [disk policy](../docs/DISKS.md)
+for the supported allocation subset and official device references.

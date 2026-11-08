@@ -11,7 +11,7 @@ type apiDisk struct {
 	VolumeID string `json:"volume_id" minLength:"1" doc:"Compound host/path volume identifier returned by cloud discovery."`
 	Alias    string `json:"alias,omitempty"`
 	Device   string `json:"device,omitempty" enum:"disk,cdrom" default:"disk"`
-	Bus      string `json:"bus,omitempty" enum:"virtio,scsi,ide"`
+	Bus      string `json:"bus,omitempty" enum:"virtio,scsi,ide,sata"`
 }
 
 type apiInterface struct {
@@ -41,6 +41,7 @@ type apiConfiguredKey struct {
 }
 
 type apiLibvirtMachineHardware struct {
+	Storage           *hardware.StorageObservation     `json:"storage,omitempty"`
 	Firmware          *hardware.FirmwareBinding        `json:"firmware,omitempty"`
 	CPU               *hardware.CPUObservation         `json:"cpu,omitempty"`
 	SimpleCPUTopology bool                             `json:"simple_cpu_topology"`
@@ -111,7 +112,7 @@ type apiVolumeDetail struct {
 func vmDTO(vm *compute.VirtualMachine) apiVM {
 	v := apiVM{Node: vm.NodeId, ID: vm.Id, Name: vm.Name, Arch: vm.Arch.String(), State: vm.State.String(), VCPUs: vm.VCpus, MemoryBytes: vm.Memory.Bytes(), Firmware: vm.Firmware, DiskController: vm.DiskController, GuestAgent: vm.GuestAgent, Autostart: vm.Autostart, Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), GraphicsListen: vm.Graphic.Listen, VideoModel: vm.VideoModel.String(), Disks: []apiDisk{}, Interfaces: []apiReadInterface{}, IPAddresses: vm.IpAddressList()}
 	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
-		v.LibvirtHardware = &apiLibvirtMachineHardware{Firmware: plan.Firmware, Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices, Applied: plan.Platform(), GuestSystem: plan.GuestSystem, CPU: plan.CPU, SimpleCPUTopology: plan.SimpleCPUTopology}
+		v.LibvirtHardware = &apiLibvirtMachineHardware{Storage: plan.Storage, Firmware: plan.Firmware, Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices, Applied: plan.Platform(), GuestSystem: plan.GuestSystem, CPU: plan.CPU, SimpleCPUTopology: plan.SimpleCPUTopology}
 	}
 	if len(vm.ObservedBackend) > 0 {
 		var observed hardware.ObservedHardware
@@ -183,8 +184,8 @@ func volumeDTO(v *compute.Volume) apiVolume {
 
 type apiImageDefaults struct {
 	Firmware       string `json:"firmware,omitempty" enum:"auto,bios,efi"`
-	DiskBus        string `json:"disk_bus,omitempty" enum:"virtio,scsi,ide"`
-	DiskController string `json:"disk_controller,omitempty" enum:"virtio-scsi"`
+	DiskBus        string `json:"disk_bus,omitempty" enum:"virtio,scsi,ide,sata"`
+	DiskController string `json:"disk_controller,omitempty" enum:"virtio-scsi,lsilogic,lsisas1068,vmpvscsi"`
 	NICModel       string `json:"nic_model,omitempty" enum:"virtio,e1000,rtl8139"`
 	Graphics       string `json:"graphics" enum:"none,vnc,spice"`
 	VideoModel     string `json:"video_model" enum:"none,cirrus,qxl,virtio"`

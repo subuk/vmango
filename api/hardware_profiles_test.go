@@ -15,7 +15,7 @@ import (
 
 func TestHardwareProfileAdministrationIsTypedAndCloudScoped(t *testing.T) {
 	cfg := apiTestConfig(t)
-	cfg.Clouds = []config.CloudConfig{{ID: "local", HardwareProfiles: []config.HardwareProfileConfig{{ID: "linux", DiskBus: "scsi"}}, Images: []config.ImageConfig{{ID: "image", HardwareProfile: "linux"}}}, {ID: "other", HardwareProfiles: []config.HardwareProfileConfig{{ID: "private-profile"}}}}
+	cfg.Clouds = []config.CloudConfig{{ID: "local", HardwareProfiles: []config.HardwareProfileConfig{{ID: "linux", Disks: hardware.Disks{Bus: "scsi", ControllerModel: "virtio-scsi"}}}, Images: []config.ImageConfig{{ID: "image", HardwareProfile: "linux"}}}, {ID: "other", HardwareProfiles: []config.HardwareProfileConfig{{ID: "private-profile"}}}}
 	snapshot := compute.AdministrationSnapshot{Clouds: []compute.AdministrationCloud{{ID: "local", BackendKind: "libvirt"}, {ID: "other", BackendKind: "libvirt"}, {ID: "external", BackendKind: "external"}}, Images: []compute.AdministrationImage{{ID: "image", CloudID: "local"}}}
 	h, err := newScopedTestAPI(cfg, zerolog.Nop(), nil, nil, nil, nil, nil, nil, nil, nil, testAuthService(t, cfg), newTestTaskService(t, &compute.CommandHandler{}), Services{Administration: compute.NewAdministrationService(snapshot, nil)})
 	if err != nil {

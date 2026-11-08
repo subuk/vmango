@@ -202,3 +202,9 @@ it("distinguishes Secure Boot support from initial key enrollment", () => {
     expect(screen.getByText("Required")).toBeTruthy();
     expect(screen.getByText("Not enrolled")).toBeTruthy();
 });
+
+it("keeps ordinary SATA and independent SCSI config-drive requirements visible", () => {
+    show(<HardwareProfileFields profile={{...profile, disk_bus: "sata", disk_controller: "", disks: {bus: "sata"}, config_drive: {enabled: true, format: "openstack", device_type: "cdrom", bus: "scsi", controller_model: "lsilogic"}}} />);
+    expect(screen.getByText("AHCI (platform mapping)")).toBeTruthy();
+    expect(screen.getByText("openstack · cdrom · scsi · lsilogic")).toBeTruthy();
+});

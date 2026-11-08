@@ -75,3 +75,9 @@ func (s *VirtualMachineService) BackendArtifactRefs(vm *VirtualMachine) []tasks.
 	}
 	return nil
 }
+
+// MachineAttachmentPlanner validates the complete initial device set before any
+// volume/config-drive artifacts, retaining backend-private bindings on the VM.
+type MachineAttachmentPlanner interface {
+	ValidateDiskAttachments(vm *VirtualMachine, disks []*VirtualMachineAttachedVolume) error
+}

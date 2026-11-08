@@ -1295,7 +1295,8 @@
             "enum": [
               "virtio",
               "scsi",
-              "ide"
+              "ide",
+              "sata"
             ],
             "type": "string"
           },
@@ -1338,13 +1339,17 @@
             "enum": [
               "virtio",
               "scsi",
-              "ide"
+              "ide",
+              "sata"
             ],
             "type": "string"
           },
           "disk_controller": {
             "enum": [
-              "virtio-scsi"
+              "virtio-scsi",
+              "lsilogic",
+              "lsisas1068",
+              "vmpvscsi"
             ],
             "type": "string"
           },
@@ -1482,6 +1487,9 @@
           },
           "simple_cpu_topology": {
             "type": "boolean"
+          },
+          "storage": {
+            "$ref": "#/components/schemas/StorageObservation"
           },
           "version": {
             "format": "int64",
@@ -2912,6 +2920,9 @@
           "bus": {
             "type": "string"
           },
+          "controller_model": {
+            "type": "string"
+          },
           "device_type": {
             "type": "string"
           },
@@ -3093,6 +3104,67 @@
         },
         "required": [
           "message"
+        ],
+        "type": "object"
+      },
+      "DiskAddress": {
+        "additionalProperties": false,
+        "properties": {
+          "bus": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "controller": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "function": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "slot": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "target": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          },
+          "unit": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "type",
+          "controller",
+          "bus",
+          "target",
+          "unit"
+        ],
+        "type": "object"
+      },
+      "Disks": {
+        "additionalProperties": false,
+        "properties": {
+          "bus": {
+            "type": "string"
+          },
+          "controller_model": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bus"
         ],
         "type": "object"
       },
@@ -3546,6 +3618,9 @@
           },
           "machine": {
             "type": "string"
+          },
+          "storage": {
+            "$ref": "#/components/schemas/StorageObservation"
           }
         },
         "required": [
@@ -3690,6 +3765,9 @@
           },
           "disk_controller": {
             "type": "string"
+          },
+          "disks": {
+            "$ref": "#/components/schemas/Disks"
           },
           "firmware": {
             "type": "string"
@@ -3932,6 +4010,84 @@
           "id",
           "name",
           "clone_mode"
+        ],
+        "type": "object"
+      },
+      "StorageController": {
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "model": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "index"
+        ],
+        "type": "object"
+      },
+      "StorageDisk": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/DiskAddress"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "bus": {
+            "type": "string"
+          },
+          "controller_model": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "device",
+          "bus"
+        ],
+        "type": "object"
+      },
+      "StorageObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "controllers": {
+            "items": {
+              "$ref": "#/components/schemas/StorageController"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "disks": {
+            "items": {
+              "$ref": "#/components/schemas/StorageDisk"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "controllers",
+          "disks"
         ],
         "type": "object"
       },

@@ -443,7 +443,9 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 			{Type: "tablet", Bus: "usb"},
 		}
 	}
-	if vm.DiskController != "" {
+	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
+		ensureStorageControllers(virDomainConfig, plan.Profile)
+	} else if vm.DiskController != "" {
 		virDomainConfig.Devices.Controllers = append(virDomainConfig.Devices.Controllers, libvirtxml.DomainController{Type: "scsi", Model: vm.DiskController})
 	}
 	virDomainConfig.Devices.Consoles = append(virDomainConfig.Devices.Consoles, libvirtxml.DomainConsole{})
@@ -537,9 +539,13 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 	applyDomainPolicy(virDomainConfig, vm, capsConfig, resourcesOnly)
 
 	if isNewVm {
+		plan, err := hardware.DecodePlan(vm.AppliedPolicy)
+		if err != nil {
+			return err
+		}
 		namer := NewDeviceNamer()
 		for _, attachedVolume := range vm.Volumes {
-			if err := repo.attachVolume(conn, virDomainConfig, attachedVolume, namer); err != nil {
+			if err := repo.attachVolume(conn, virDomainConfig, attachedVolume, namer, plan.Profile, true); err != nil {
 				return repositoryError(err, "cannot attach volume")
 			}
 		}
@@ -814,7 +820,7 @@ func (repo *VirtualMachineRepository) Start(id, nodeId string) error {
 	return repositoryError(domain.Create(), "virDomainCreate")
 }
 
-func (repo *VirtualMachineRepository) attachVolume(conn *libvirt.Connect, virDomainConfig *libvirtxml.Domain, attachedVolume *compute.VirtualMachineAttachedVolume, namer *DeviceNamer) error {
+func (repo *VirtualMachineRepository) attachVolume(conn *libvirt.Connect, virDomainConfig *libvirtxml.Domain, attachedVolume *compute.VirtualMachineAttachedVolume, namer *DeviceNamer, profile hardware.Profile, initial bool) error {
 	virVolumeConfig, err := getVolumeConfigByPath(conn, attachedVolume.Path)
 	if err != nil {
 		return repositoryError(err, "cannot get volume config")
@@ -825,7 +831,7 @@ func (repo *VirtualMachineRepository) attachVolume(conn *libvirt.Connect, virDom
 		virVolumeConfig.Type,
 		namer,
 	)
-	address, err := allocateDiskAddress(virDomainConfig, attachedVolume.DeviceBus.String())
+	address, err := allocateStorageAddress(virDomainConfig, storagePolicy(profile, attachedVolume.Alias), initial)
 	if err != nil {
 		return err
 	}
@@ -868,20 +874,25 @@ func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVo
 	if err != nil {
 		return err
 	}
-	if len(policy) > 0 {
-		existing := &compute.VirtualMachine{AppliedPolicy: policy}
-		for _, d := range virDomainConfig.Devices.Disks {
-			existing.Volumes = append(existing.Volumes, VirtualMachineAttachedVolumeFromDomainDiskConfig(d))
-		}
-		if err := repo.ResolveDiskAttachment(existing, attachedVolume); err != nil {
-			return err
-		}
+	plan, err := hardware.DecodePlan(policy)
+	if err != nil {
+		return err
+	}
+	if err = validateAdoptionControllers(virDomainConfig, plan); err != nil {
+		return err
+	}
+	existing := &compute.VirtualMachine{AppliedPolicy: policy, State: compute.StateStopped}
+	if err = repo.ResolveDiskAttachment(existing, attachedVolume); err != nil {
+		return err
 	}
 	namer := NewDeviceNamerFromDisks(virDomainConfig.Devices.Disks)
-	if err := repo.attachVolume(conn, virDomainConfig, attachedVolume, namer); err != nil {
+	if err := repo.attachVolume(conn, virDomainConfig, attachedVolume, namer, plan.Profile, false); err != nil {
 		return repositoryError(err, "cannot add volume xml config")
 	}
 	ensureDomainBootDisk(virDomainConfig)
+	if err = validateStorageNative(conn, virDomainConfig); err != nil {
+		return err
+	}
 
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {

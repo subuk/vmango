@@ -46,6 +46,9 @@ func (repo *VirtualMachineRepository) ResolveHardware(vm *compute.VirtualMachine
 			if err := validateCreationCapabilities(vm, p, c); err != nil {
 				return err
 			}
+			if err := validateStorageProfile(conn, p, c); err != nil {
+				return err
+			}
 			if err := validateGuestSystemCapabilities(conn, p, c); err != nil {
 				return err
 			}
@@ -114,7 +117,7 @@ func (repo *VirtualMachineRepository) ApplyHardware(vm *compute.VirtualMachine, 
 		vm.Firmware = ""
 	}
 	vm.DiskController = p.DiskController
-	if p.ConfigDrive.IsEnabled() && p.ConfigDrive.Bus == "scsi" {
+	if p.Disks == nil && p.ConfigDrive.IsEnabled() && p.ConfigDrive.Bus == "scsi" {
 		vm.DiskController = "virtio-scsi"
 	}
 	vm.GuestAgent = p.GuestAgentEnabled()
@@ -185,6 +188,9 @@ func (repo *VirtualMachineRepository) validateHardwareCapabilities(vm *compute.V
 		}
 	}
 	if creation {
+		if err = validateStorageProfile(conn, plan.Profile, capsXML); err != nil {
+			return err
+		}
 		if err = repo.validateCPUCapabilities(conn, plan.Profile, capsXML, vm.VCpus, vm.NodeId); err != nil {
 			return err
 		}
@@ -294,30 +300,15 @@ func (repo *VirtualMachineRepository) ValidateAppliedPolicy(vm *compute.VirtualM
 	return nil
 }
 func (repo *VirtualMachineRepository) ResolveDiskAttachment(vm *compute.VirtualMachine, disk *compute.VirtualMachineAttachedVolume) error {
+	if vm.State == compute.StateRunning {
+		return fmt.Errorf("%w: disk attachment changes require a stopped VM", compute.ErrConflict)
+	}
 	plan, err := hardware.DecodePlan(vm.AppliedPolicy)
 	if err != nil {
 		return err
 	}
 	if disk.Alias == "configdrive" && !disk.GeneratedArtifact {
 		return &compute.ValidationError{Field: "alias", Message: "The configdrive alias is reserved for VM-owned generated artifacts."}
-	}
-	if repo.pool != nil && vm.Id != "" {
-		config, e := repo.persistentHardwareConfiguration(vm.Id, vm.NodeId)
-		if e != nil && !errors.Is(e, vir.ERR_NO_DOMAIN) {
-			return e
-		}
-		if e == nil {
-			if e = validateAdoptionControllers(config, plan); e != nil {
-				return &compute.ValidationError{Field: "disk", Message: e.Error()}
-			}
-			selected := plan.Profile.DiskBus
-			if disk.Alias == "configdrive" {
-				selected = plan.Profile.ConfigDrive.Bus
-			}
-			if _, e = allocateDiskAddress(config, selected); e != nil {
-				return &compute.ValidationError{Field: "disk", Message: e.Error()}
-			}
-		}
 	}
 	bus := compute.NewDeviceBus(plan.Profile.DiskBus)
 	kind := compute.DeviceTypeDisk
@@ -336,22 +327,59 @@ func (repo *VirtualMachineRepository) ResolveDiskAttachment(vm *compute.VirtualM
 	}
 	disk.DeviceBus = bus
 	disk.DeviceType = kind
-	count := 0
-	for _, d := range vm.Volumes {
-		if d == disk || d.Path != "" && disk.Path != "" && d.Path == disk.Path {
+	var config *xmlmodel.Domain
+	if repo.pool != nil && vm.Id != "" {
+		config, err = repo.persistentHardwareConfiguration(vm.Id, vm.NodeId)
+		if err != nil && !errors.Is(err, vir.ERR_NO_DOMAIN) {
+			return err
+		}
+		if err == nil {
+			if vm.State != compute.StateStopped {
+				return fmt.Errorf("%w: disk attachment changes require a stopped VM", compute.ErrConflict)
+			}
+			if err = validateAdoptionControllers(config, plan); err != nil {
+				return &compute.ValidationError{Field: "disk", Message: err.Error()}
+			}
+			selected := storagePolicy(plan.Profile, disk.Alias)
+			address, e := allocateStorageAddress(config, selected, false)
+			if e != nil {
+				return &compute.ValidationError{Field: "disk", Message: e.Error()}
+			}
+			probe := storageProbeDisk(disk, NewDeviceNamerFromDisks(config.Devices.Disks))
+			probe.Address = address
+			config.Devices.Disks = append(config.Devices.Disks, *probe)
+			conn, e := repo.pool.Acquire(vm.NodeId)
+			if e != nil {
+				return e
+			}
+			defer repo.pool.Release(vm.NodeId)
+			if err := validateStorageNative(conn, config); err != nil {
+				return &compute.ValidationError{Field: "disk", Message: err.Error()}
+			}
+			return nil
+		}
+	}
+	config = &xmlmodel.Domain{Devices: &xmlmodel.DomainDeviceList{}}
+	ensureStorageControllers(config, plan.Profile)
+	namer := NewDeviceNamer()
+	for _, existing := range vm.Volumes {
+		if existing == disk || existing.Path != "" && existing.Path == disk.Path {
 			continue
 		}
-		if d.DeviceBus == bus {
-			count++
+		p := storagePolicy(plan.Profile, existing.Alias)
+		address, e := allocateStorageAddress(config, p, true)
+		if e != nil {
+			return e
 		}
+		copy := *existing
+		copy.DeviceBus = compute.NewDeviceBus(p.Bus)
+		copy.DeviceType = compute.DeviceTypeDisk
+		probe := storageProbeDisk(&copy, namer)
+		probe.Address = address
+		config.Devices.Disks = append(config.Devices.Disks, *probe)
 	}
-	if bus == compute.DeviceBusIde && count >= 4 {
-		return &compute.ValidationError{Field: "disk", Message: "IDE controller capacity is exhausted (four devices); no artifact was created."}
-	}
-	if bus == compute.DeviceBusScsi && count >= 16383 {
-		return &compute.ValidationError{Field: "disk", Message: "SCSI controller capacity is exhausted."}
-	}
-	return nil
+	_, err = allocateStorageAddress(config, storagePolicy(plan.Profile, disk.Alias), true)
+	return err
 }
 func (repo *VirtualMachineRepository) ValidateResourceChange(current, requested *compute.VirtualMachine) error {
 	if current.State != compute.StateStopped {

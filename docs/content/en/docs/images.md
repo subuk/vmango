@@ -244,7 +244,7 @@ libvirt storage pool. Register a catalog entry in
 ```hcl
 hardware_profile "linux-uefi" {
     firmware { type = "efi" }
-    disk_bus = "virtio"
+    disks { bus = "virtio" }
     nic_model = "virtio"
     guest_agent = true
     config_drive { format = "nocloud" }
@@ -305,8 +305,8 @@ The following settings belong to `hardware_profile`, not `image`:
 | Setting | Values | When omitted |
 | --- | --- | --- |
 | `firmware {}` | `type = "auto"`, `"bios"`, `"efi"`, or `profile = "id"` | Platform default selection |
-| `disk_bus` | `virtio`, `scsi`, `ide` | `virtio` |
-| `disk_controller` | `virtio-scsi` with SCSI | Resolved compatible controller |
+| `disks.bus` | `virtio`, `scsi`, `ide`, `sata` | `virtio` |
+| `disks.controller_model` | `virtio-scsi`, `lsilogic`, `lsisas1068`, `vmpvscsi`; SCSI only | Required for SCSI; forbidden otherwise |
 | `nic_model` | `virtio`, `e1000`, `rtl8139`, subject to backend support | `virtio` |
 | `guest_agent` | `true`, `false` | `true` |
 | `graphics` | `none`, `vnc`, `spice`, subject to backend support | `vnc` |
@@ -315,14 +315,15 @@ The following settings belong to `hardware_profile`, not `image`:
 | `config_drive.enabled` | `true`, `false` | `true` |
 | `config_drive.format` | `nocloud`, `openstack` | `nocloud` |
 | `config_drive.device_type` | `disk`, `cdrom`, where supported | `disk` |
-| `config_drive.bus` | Supported combination of device type and bus | `virtio` |
+| `config_drive.bus` | `virtio`, `scsi`, `ide`, `sata`, compatible with device type | `virtio` |
+| `config_drive.controller_model` | Same explicit SCSI models as ordinary disks | Required for SCSI; forbidden otherwise |
 
 `graphics="none"` requires no video model. New graphics-enabled VMs listen only
 on host loopback, and remote console traffic uses SSH. The listener address is
 not configurable. Existing VM listeners are preserved. Hugepages must already
 be available on the host; Vmango does not configure host page pools.
 
-The ordinary `disk_bus` policy covers root disks, required and user data disks,
+The ordinary `disks` policy covers root disks, required and user data disks,
 existing volumes and later attachments. Virtio block uses individual devices;
 virtio SCSI shares compatible controllers. Selecting virtio asserts that the
 image already has the guest drivers. Vmango checks host/backend support and
@@ -441,7 +442,7 @@ host's `image_pool` as described above.
 ```hcl
 hardware_profile "android-arm64" {
     firmware { type = "efi" }
-    disk_bus = "virtio"
+    disks { bus = "virtio" }
     nic_model = "virtio"
     graphics = "vnc"
     video_model = "virtio"
@@ -527,3 +528,17 @@ CODE/templates or adopted external NVRAM. Saved paths do not pin file contents.
 See the repository's [complete firmware guide](https://github.com/subuk/vmango/blob/master/docs/FIRMWARE.md)
 for two-host examples, format/version limits, administrator artifact contracts,
 Secure Boot validation and excluded reset/migration operations.
+
+## Disk buses and controllers
+
+A profile uses `disks { bus = "virtio" }` by default. Choose `scsi` with an
+explicit `controller_model` (`virtio-scsi`, `lsilogic`, `lsisas1068`, `vmpvscsi`),
+or a platform-compatible `ide`/`sata` bus. Config drive has an independent bus
+and, for SCSI, an explicit controller model. A SATA config CD-ROM shares the
+six AHCI ports with the root and data disks. Capacity is checked before creating
+volumes, and Vmango never adds another controller to extend a full controller.
+
+Disk attachment changes require a stopped VM and use its persisted applied
+profile. Catalog edits do not convert its hardware. See the detailed
+[configuration/XML mapping, capacity limits, migration and examples](https://github.com/subuk/vmango/blob/master/docs/DISKS.md)
+and [libvirt controller documentation](https://libvirt.org/formatdomain.html#controllers).

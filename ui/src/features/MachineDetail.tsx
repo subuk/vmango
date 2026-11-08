@@ -404,7 +404,8 @@ function Disks({ vm }: { vm: VM }) {
     const [remove, setRemove] = useState<string>();
     const queries = useQueryClient();
     // A visible list omits hidden disks; authorized detail reads retain their labels.
-    const disks = vm.disks.map((d) => ({
+    const disks = vm.disks.map((d, index) => ({
+        observed: vm.libvirt_observed?.storage?.disks?.[index],
         ...d,
         volume: volumes.data?.items.find((v) => v.id === d.volume_id),
     }));
@@ -462,7 +463,21 @@ function Disks({ vm }: { vm: VM }) {
                     {
                         id: "bus",
                         label: "Bus",
-                        value: (d) => d.bus || "virtio",
+                        value: (d) => d.observed?.bus || d.bus || "Unknown",
+                    },
+                    {
+                        id: "controller",
+                        label: "Controller / address",
+                        value: (d) => {
+                            const observed = d.observed;
+                            const address = observed?.address;
+                            if (!address) return observed?.controller_model || "Not reported";
+                            return address.type === "drive"
+                                ? `${observed?.controller_model || observed?.bus} ${address.controller} · ${address.bus}:${address.target}:${address.unit}`
+                                : address.type === "pci"
+                                  ? `PCI ${address.bus}:${address.slot || 0}.${address.function || 0}`
+                                  : address.type;
+                        },
                     },
                     {
                         id: "dependency",

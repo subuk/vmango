@@ -664,6 +664,15 @@ func (r *namespaceVMRepository) ResolveDiskAttachment(vm *VirtualMachine, disk *
 	}
 	return nil
 }
+func (r *namespaceVMRepository) ValidateDiskAttachments(vm *VirtualMachine, disks []*VirtualMachineAttachedVolume) error {
+	if err := r.host(vm.NodeId); err != nil {
+		return err
+	}
+	if planner, ok := r.VirtualMachineRepository.(MachineAttachmentPlanner); ok {
+		return planner.ValidateDiskAttachments(vm, disks)
+	}
+	return nil
+}
 func (r *namespaceVMRepository) ResolveInterfaceAttachment(vm *VirtualMachine, nic *VirtualMachineAttachedInterface) error {
 	if backend, ok := r.VirtualMachineRepository.(BackendMachineRepository); ok {
 		return backend.ResolveInterfaceAttachment(vm, nic)

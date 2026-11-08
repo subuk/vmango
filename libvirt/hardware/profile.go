@@ -13,16 +13,23 @@ import (
 const Version = 1
 const MigrationGuide = "https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md"
 
+type Disks struct {
+	Bus             string `json:"bus" hcl:"bus"`
+	ControllerModel string `json:"controller_model,omitempty" hcl:"controller_model"`
+}
+
 type ConfigDrive struct {
-	Enabled    *bool  `json:"enabled,omitempty"`
-	Format     string `json:"format"`
-	DeviceType string `json:"device_type"`
-	Bus        string `json:"bus"`
+	ControllerModel string `json:"controller_model,omitempty"`
+	Enabled         *bool  `json:"enabled,omitempty"`
+	Format          string `json:"format"`
+	DeviceType      string `json:"device_type"`
+	Bus             string `json:"bus"`
 }
 
 func (c ConfigDrive) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
 
 type Profile struct {
+	Disks          *Disks           `json:"disks,omitempty"`
 	FirmwarePolicy *Firmware        `json:"firmware_policy,omitempty"`
 	CPU            *CPU             `json:"cpu,omitempty"`
 	Placement      *NativePlacement `json:"placement,omitempty"`
@@ -75,6 +82,7 @@ type StateContract struct {
 	Snapshot bool   `json:"snapshot"`
 }
 type Plan struct {
+	Storage           *StorageObservation     `json:"storage,omitempty"`
 	Firmware          *FirmwareBinding        `json:"firmware,omitempty"`
 	CPU               *CPUObservation         `json:"cpu,omitempty"`
 	SimpleCPUTopology bool                    `json:"simple_cpu_topology,omitempty"`
@@ -127,20 +135,29 @@ func Normalize(p Profile) (Profile, error) {
 	if !slices.Contains([]string{"auto", "bios", "efi"}, p.Firmware) {
 		return fail("firmware")
 	}
-	switch p.DiskBus {
-	case "", "virtio-blk":
-		p.DiskBus = "virtio"
-	case "virtio-scsi":
-		p.DiskBus = "scsi"
-	}
-	if !slices.Contains([]string{"virtio", "scsi", "ide"}, p.DiskBus) {
-		return fail("disk_bus")
-	}
-	if p.DiskBus == "scsi" && p.DiskController == "" {
-		p.DiskController = "virtio-scsi"
-	}
-	if p.DiskController != "" && (p.DiskController != "virtio-scsi" || p.DiskBus != "scsi") {
-		return fail("disk_controller")
+	if p.Disks != nil {
+		disks, err := NormalizeDisks(*p.Disks)
+		if err != nil {
+			return p, fmt.Errorf("hardware profile %q: disks.%w", p.ID, err)
+		}
+		p.Disks = &disks
+		p.DiskBus, p.DiskController = disks.Bus, disks.ControllerModel
+	} else {
+		switch p.DiskBus {
+		case "", "virtio-blk":
+			p.DiskBus = "virtio"
+		case "virtio-scsi":
+			p.DiskBus = "scsi"
+		}
+		if !slices.Contains([]string{"virtio", "scsi", "ide"}, p.DiskBus) {
+			return fail("disk_bus")
+		}
+		if p.DiskBus == "scsi" && p.DiskController == "" {
+			p.DiskController = "virtio-scsi"
+		}
+		if p.DiskController != "" && (p.DiskController != "virtio-scsi" || p.DiskBus != "scsi") {
+			return fail("disk_controller")
+		}
 	}
 	if p.NICModel == "" {
 		p.NICModel = "virtio"
@@ -188,14 +205,25 @@ func Normalize(p Profile) (Profile, error) {
 	if p.ConfigDrive.Bus == "" {
 		p.ConfigDrive.Bus = "virtio"
 	}
-	switch p.ConfigDrive.Bus {
-	case "virtio-blk":
-		p.ConfigDrive.Bus = "virtio"
-	case "virtio-scsi":
-		p.ConfigDrive.Bus = "scsi"
-	}
-	if !slices.Contains([]string{"disk", "cdrom"}, p.ConfigDrive.DeviceType) || !slices.Contains([]string{"virtio", "scsi", "ide"}, p.ConfigDrive.Bus) || p.ConfigDrive.DeviceType == "cdrom" && p.ConfigDrive.Bus == "virtio" {
-		return fail("config_drive device_type/bus combination (virtio supports disks only)")
+	if p.Disks == nil {
+		switch p.ConfigDrive.Bus {
+		case "virtio-blk":
+			p.ConfigDrive.Bus = "virtio"
+		case "virtio-scsi":
+			p.ConfigDrive.Bus = "scsi"
+		}
+		if !slices.Contains([]string{"disk", "cdrom"}, p.ConfigDrive.DeviceType) || !slices.Contains([]string{"virtio", "scsi", "ide", "sata"}, p.ConfigDrive.Bus) || p.ConfigDrive.DeviceType == "cdrom" && p.ConfigDrive.Bus == "virtio" {
+			return fail("config_drive device_type/bus combination (virtio supports disks only)")
+		}
+	} else {
+		attachment, err := NormalizeDisks(Disks{Bus: p.ConfigDrive.Bus, ControllerModel: p.ConfigDrive.ControllerModel})
+		if err != nil {
+			return p, fmt.Errorf("hardware profile %q: config_drive.%w", p.ID, err)
+		}
+		p.ConfigDrive.Bus, p.ConfigDrive.ControllerModel = attachment.Bus, attachment.ControllerModel
+		if !slices.Contains([]string{"disk", "cdrom"}, p.ConfigDrive.DeviceType) || p.ConfigDrive.DeviceType == "cdrom" && p.ConfigDrive.Bus == "virtio" {
+			return fail("config_drive device_type/bus combination (virtio supports disks only)")
+		}
 	}
 	p, err := NormalizeGuestSystem(p)
 	if err != nil {
@@ -226,22 +254,26 @@ func Resolve(p Profile, emulator string) (Plan, error) {
 		return Plan{}, err
 	}
 	result := Plan{Version: Version, Profile: p, Emulator: emulator, Devices: []Device{}}
-	if p.DiskBus == "scsi" || p.ConfigDrive.IsEnabled() && p.ConfigDrive.Bus == "scsi" {
-		result.Devices = append(result.Devices, Device{ID: "scsi-0", Kind: Controller, Model: "virtio-scsi"})
-	}
-	if p.DiskBus == "ide" || p.ConfigDrive.IsEnabled() && p.ConfigDrive.Bus == "ide" {
-		result.Devices = append(result.Devices, Device{ID: "ide-0", Kind: Controller, Model: "ide"})
-	}
-	deps := func(bus string) []string {
-		if bus == "scsi" || bus == "ide" {
-			return []string{bus + "-0"}
+	if p.Disks != nil {
+		addStorageDependencies(&result)
+	} else {
+		if p.DiskBus == "scsi" || p.ConfigDrive.IsEnabled() && p.ConfigDrive.Bus == "scsi" {
+			result.Devices = append(result.Devices, Device{ID: "scsi-0", Kind: Controller, Model: "virtio-scsi"})
 		}
-		return nil
-	}
-	result.Devices = append(result.Devices, Device{ID: "ordinary-disks", Kind: DiskPolicy, Model: p.DiskBus, Dependencies: deps(p.DiskBus)})
-	if p.ConfigDrive.IsEnabled() {
-		result.Devices = append(result.Devices, Device{ID: "config-drive", Kind: ConfigDriveDevice, Model: p.ConfigDrive.DeviceType + "/" + p.ConfigDrive.Bus, Dependencies: deps(p.ConfigDrive.Bus), StateOwner: "vm"})
-		result.State = append(result.State, StateContract{DeviceID: "config-drive", Owner: "vm", Snapshot: true})
+		if p.DiskBus == "ide" || p.ConfigDrive.IsEnabled() && p.ConfigDrive.Bus == "ide" {
+			result.Devices = append(result.Devices, Device{ID: "ide-0", Kind: Controller, Model: "ide"})
+		}
+		deps := func(bus string) []string {
+			if bus == "scsi" || bus == "ide" {
+				return []string{bus + "-0"}
+			}
+			return nil
+		}
+		result.Devices = append(result.Devices, Device{ID: "ordinary-disks", Kind: DiskPolicy, Model: p.DiskBus, Dependencies: deps(p.DiskBus)})
+		if p.ConfigDrive.IsEnabled() {
+			result.Devices = append(result.Devices, Device{ID: "config-drive", Kind: ConfigDriveDevice, Model: p.ConfigDrive.DeviceType + "/" + p.ConfigDrive.Bus, Dependencies: deps(p.ConfigDrive.Bus), StateOwner: "vm"})
+			result.State = append(result.State, StateContract{DeviceID: "config-drive", Owner: "vm", Snapshot: true})
+		}
 	}
 	if p.GuestAgentEnabled() {
 		result.Devices = append(result.Devices, Device{ID: "virtio-serial-0", Kind: Controller, Model: "virtio-serial"})

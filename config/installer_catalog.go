@@ -6,7 +6,7 @@ const installerImageCatalog = `
     hardware_profile "linux-default" {
         name = "Linux AUTO"
         firmware { type = "auto" }
-        disk_bus = "virtio"
+        disks { bus = "virtio" }
         nic_model = "virtio"
         guest_agent = false
         config_drive { enabled = true format = "nocloud" device_type = "disk" bus = "virtio" }
@@ -14,7 +14,7 @@ const installerImageCatalog = `
     hardware_profile "linux-uefi" {
         name = "Linux EFI"
         firmware { type = "efi" }
-        disk_bus = "virtio"
+        disks { bus = "virtio" }
         nic_model = "virtio"
         guest_agent = false
         config_drive { enabled = true format = "nocloud" device_type = "disk" bus = "virtio" }

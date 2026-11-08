@@ -24,7 +24,18 @@ func (repo *VirtualMachineRepository) Capabilities(node string, arch compute.Arc
 	if err := caps.Unmarshal(xml); err != nil {
 		return compute.VirtualMachineCapabilities{}, repositoryError(err, "capabilities unavailable")
 	}
-	return imageCapabilities(caps), nil
+	result := imageCapabilities(caps)
+	if len(result.DiskControllers) > 0 {
+		result.DiskControllers = nil
+		disabled := false
+		for _, model := range hardware.SCSIModels {
+			profile, e := hardware.Normalize(hardware.Profile{ID: "capability-probe", Disks: &hardware.Disks{Bus: "scsi", ControllerModel: model}, ConfigDrive: hardware.ConfigDrive{Enabled: &disabled}})
+			if e == nil && validateStorageProfile(conn, profile, caps) == nil {
+				result.DiskControllers = append(result.DiskControllers, model)
+			}
+		}
+	}
+	return result, nil
 }
 
 func imageCapabilities(caps *libvirtxml.DomainCaps) compute.VirtualMachineCapabilities {

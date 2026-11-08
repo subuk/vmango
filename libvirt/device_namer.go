@@ -33,6 +33,9 @@ func NewDeviceNamerFromDisks(disks []libvirtxml.DomainDisk) *DeviceNamer {
 }
 
 func (n *DeviceNamer) Next(bus compute.DeviceBus) string {
+	if bus == compute.DeviceBusSata {
+		bus = compute.DeviceBusScsi
+	}
 	name := ""
 	switch bus {
 	case compute.DeviceBusIde:

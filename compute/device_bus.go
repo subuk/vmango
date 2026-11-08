@@ -7,6 +7,7 @@ const (
 	DeviceBusVirtio
 	DeviceBusIde
 	DeviceBusScsi
+	DeviceBusSata
 )
 
 func (DeviceBus DeviceBus) String() string {
@@ -17,6 +18,8 @@ func (DeviceBus DeviceBus) String() string {
 		return "virtio"
 	case DeviceBusIde:
 		return "ide"
+	case DeviceBusSata:
+		return "sata"
 	case DeviceBusScsi:
 		return "scsi"
 	}
@@ -30,6 +33,8 @@ func NewDeviceBus(input string) DeviceBus {
 		return DeviceBusVirtio
 	case "ide":
 		return DeviceBusIde
+	case "sata":
+		return DeviceBusSata
 	case "scsi":
 		return DeviceBusScsi
 	}

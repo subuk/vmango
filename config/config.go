@@ -422,7 +422,7 @@ func ParseBytes(content []byte) (*Config, error) {
 func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 	owners := map[string]string{
 		"guest_agent": "hardware_profile", "graphics": "hardware_profile", "video_model": "hardware_profile",
-		"firmware": "hardware_profile", "disk_bus": "hardware_profile", "disk_controller": "hardware_profile", "nic_model": "hardware_profile", "hugepages": "hardware_profile", "config_drive": "hardware_profile",
+		"firmware": "hardware_profile", "disks": "hardware_profile", "disk_bus": "hardware_profile", "disk_controller": "hardware_profile", "nic_model": "hardware_profile", "hugepages": "hardware_profile", "config_drive": "hardware_profile",
 		"machine": "hardware_profile", "acceleration": "machine",
 		"smbios": "hardware_profile", "clock": "hardware_profile", "timer": "hardware_profile",
 		"autostart":       "instance_type",
@@ -437,8 +437,11 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 			continue
 		}
 		key, _ := item.Keys[0].Token.Value().(string)
+		if owner == "hardware_profile" && (key == "disk_bus" || key == "disk_controller") {
+			return fmt.Errorf("hardware_profile.%s was replaced by disks { bus = ... controller_model = ... }; see %s", key, HardwareMigrationGuide)
+		}
 		if owner == "hardware_profile" {
-			allowed := map[string]bool{"name": true, "firmware": true, "disk_bus": true, "disk_controller": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "hugepages": true, "config_drive": true, "machine": true, "smbios": true, "clock": true, "timer": true, "cpu": true, "placement": true, "hyperv": true, "kvm": true}
+			allowed := map[string]bool{"name": true, "firmware": true, "disks": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "hugepages": true, "config_drive": true, "machine": true, "smbios": true, "clock": true, "timer": true, "cpu": true, "placement": true, "hyperv": true, "kvm": true}
 			if !allowed[key] {
 				return fmt.Errorf("hardware_profile: unsupported setting %s; see %s", key, HardwareMigrationGuide)
 			}
@@ -495,8 +498,27 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 				return fmt.Errorf("hardware_profile.machine must be one unnamed block")
 			}
 		}
-		if owner == "config_drive" && key != "enabled" && key != "format" && key != "device_type" && key != "bus" {
+		if owner == "config_drive" && key != "enabled" && key != "format" && key != "device_type" && key != "bus" && key != "controller_model" {
 			return fmt.Errorf("hardware_profile.config_drive: unsupported setting %s; see %s", key, HardwareMigrationGuide)
+		}
+		if owner == "disks" || owner == "config_drive" {
+			if owner == "disks" && key != "bus" && key != "controller_model" {
+				return fmt.Errorf("hardware_profile.disks: unsupported field %s", key)
+			}
+			if len(list.Filter(key).Items) > 1 {
+				return fmt.Errorf("hardware_profile.%s.%s may be declared only once", owner, key)
+			}
+			if _, block := item.Val.(*ast.ObjectType); block {
+				return fmt.Errorf("hardware_profile.%s.%s must be a scalar", owner, key)
+			}
+		}
+		if owner == "hardware_profile" && (key == "disks" || key == "config_drive") {
+			if len(list.Filter(key).Items) > 1 {
+				return fmt.Errorf("hardware_profile.%s may be declared only once", key)
+			}
+			if _, block := item.Val.(*ast.ObjectType); !block || len(item.Keys) != 1 {
+				return fmt.Errorf("hardware_profile.%s must be one unnamed block", key)
+			}
 		}
 		if key == "hardware_profile" {
 			_, block := item.Val.(*ast.ObjectType)
@@ -528,7 +550,7 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 				if err := validatePolicyOwners(object.List, owner+".storage_class"); err != nil {
 					return err
 				}
-			case "image", "cloud", "host", "instance_type", "hardware_profile", "config_drive", "machine":
+			case "image", "cloud", "host", "instance_type", "hardware_profile", "config_drive", "machine", "disks":
 				if err := validatePolicyOwners(object.List, key); err != nil {
 					if len(item.Keys) > 1 {
 						return fmt.Errorf("%s %v: %w", key, item.Keys[1].Token.Value(), err)

@@ -456,3 +456,33 @@ func TestNamespaceUnavailableVolumeInventoryPreventsCreation(t *testing.T) {
 		t.Fatal("failed inventory validation changed backend or assignments")
 	}
 }
+
+type scopedAttachmentPlanner struct {
+	*scopedTestVMs
+	calls int
+}
+
+func (r *scopedAttachmentPlanner) ValidateDiskAttachments(_ *VirtualMachine, disks []*VirtualMachineAttachedVolume) error {
+	r.calls++
+	if len(disks) != 2 {
+		return errors.New("incomplete attachment set")
+	}
+	return errors.New("test capacity exhausted")
+}
+func TestNamespaceForwardsCompleteAttachmentPreflight(t *testing.T) {
+	w, raw, _, _ := scopedFixture(t)
+	planner := &scopedAttachmentPlanner{scopedTestVMs: raw}
+	w.Clouds.VMs.VirtualMachineRepository = planner
+	_, scoped, _, err := w.Bind(WorkloadContext{Namespace: "a", Cloud: "cloud"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound := scoped.VirtualMachineRepository.(MachineAttachmentPlanner)
+	disks := []*VirtualMachineAttachedVolume{{Alias: "root"}, {Alias: "configdrive"}}
+	if err = bound.ValidateDiskAttachments(&VirtualMachine{NodeId: "node"}, disks); err == nil || err.Error() != "test capacity exhausted" || planner.calls != 1 {
+		t.Fatalf("preflight bypassed: calls=%d err=%v", planner.calls, err)
+	}
+	if err = bound.ValidateDiskAttachments(&VirtualMachine{NodeId: "outside"}, disks); err == nil || planner.calls != 1 {
+		t.Fatal("preflight escaped namespace host boundary", err)
+	}
+}

@@ -17,7 +17,7 @@ func TestImageConversion(t *testing.T) {
 hardware_profile "uefi" { firmware { type = "efi" } }
 image "legacy" { hardware_profile="uefi" path="/images/legacy" os_name = "Ubuntu" os_arch = "aarch64" protected = true }
 image "normal" { hardware_profile="default" path = "/images/shared" os_name = "Ubuntu" os_arch = "aarch64" }
-hardware_profile "custom" { guest_agent=false graphics="spice" video_model="qxl" disk_bus="scsi" disk_controller="virtio-scsi" config_drive {enabled=false} }
+hardware_profile "custom" { guest_agent=false graphics="spice" video_model="qxl" disks { bus="scsi" controller_model="virtio-scsi" } config_drive {enabled=false} }
 image "custom" { hardware_profile="custom" path = "/images/shared" name = "Custom Ubuntu" os_arch = "aarch64" minimum_memory_mib = 512 minimum_disk_gib = 10 }
 `
 	if err := os.WriteFile(path, []byte(withImages(text)+`volume "/dev/private" {hidden=true} volume "/images/shared" {protected=true} volume "/ordinary" {protected=true hidden=true}`), 0600); err != nil {

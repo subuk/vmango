@@ -66,8 +66,7 @@ After (keep existing cloud host, zone, network and storage declarations):
 ```hcl
 hardware_profile "linux-uefi" {
     firmware { type = "efi" }
-    disk_bus = "scsi"
-    disk_controller = "virtio-scsi"
+    disks { bus = "scsi" controller_model = "virtio-scsi" }
     hugepages = true
     config_drive {
         enabled = true
@@ -468,3 +467,14 @@ initially enrolled keys. Deprecated image-inline firmware remains warned and
 ignored. Supported persisted policy/commands keep their historical meaning.
 See [firmware profiles and NVRAM](FIRMWARE.md) for named profiles, host bindings,
 formats, ownership, missing-file regeneration and security evidence.
+
+## Ordinary disks and config-drive controllers
+
+Flat hardware-profile `disk_bus`/`disk_controller` fields now fail startup with
+an actionable migration error. Move them to `disks { bus = "scsi"
+controller_model = "virtio-scsi" }`. Use `virtio`, `scsi`, `ide` or `sata`;
+`virtio-blk` and `virtio-scsi` are not new bus aliases. SCSI config drive needs
+its own explicit `controller_model`. See [Disk policy and complete examples](DISKS.md).
+
+This configuration migration does not convert existing VM devices or alter
+supported saved plans. Adoption checks compatibility without rewriting hardware.

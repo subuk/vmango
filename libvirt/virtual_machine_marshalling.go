@@ -55,7 +55,9 @@ func DomainDiskConfigFromVirtualMachineAttachedVolume(volume *compute.VirtualMac
 
 func VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig libvirtxml.DomainDisk) *compute.VirtualMachineAttachedVolume {
 	volume := &compute.VirtualMachineAttachedVolume{}
-	volume.DeviceBus = compute.NewDeviceBus(diskConfig.Target.Bus)
+	if diskConfig.Target != nil {
+		volume.DeviceBus = compute.NewDeviceBus(diskConfig.Target.Bus)
+	}
 	if diskConfig.Alias != nil {
 		alias := diskConfig.Alias.Name
 		if strings.HasPrefix(alias, "ua-") {
@@ -116,7 +118,7 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	if err != nil {
 		return nil, err
 	}
-	vm.ObservedBackend, _ = json.Marshal(hardware.ObservedHardware{Firmware: observeFirmware(domainConfig), PlatformBinding: domainPlatform(domainConfig), GuestSystem: observeGuestSystem(domainConfig), CPU: observeCPU(domainConfig)})
+	vm.ObservedBackend, _ = json.Marshal(hardware.ObservedHardware{Storage: observeStorage(domainConfig), Firmware: observeFirmware(domainConfig), PlatformBinding: domainPlatform(domainConfig), GuestSystem: observeGuestSystem(domainConfig), CPU: observeCPU(domainConfig)})
 	vm.Metadata = metadata
 	vm.AppliedPolicy, err = readHardwareMetadata(domainConfig)
 	if err != nil {
