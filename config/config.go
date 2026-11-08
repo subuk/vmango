@@ -424,6 +424,7 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 		"guest_agent": "hardware_profile", "graphics": "hardware_profile", "video_model": "hardware_profile",
 		"firmware": "hardware_profile", "disk_bus": "hardware_profile", "disk_controller": "hardware_profile", "nic_model": "hardware_profile", "hugepages": "hardware_profile", "config_drive": "hardware_profile",
 		"machine": "hardware_profile", "acceleration": "machine",
+		"smbios": "hardware_profile", "clock": "hardware_profile", "timer": "hardware_profile",
 		"autostart":       "instance_type",
 		"clone_mode":      "cloud.storage_class",
 		"graphics_listen": "host", "uri": "host", "image_pool": "host",
@@ -437,9 +438,17 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 		}
 		key, _ := item.Keys[0].Token.Value().(string)
 		if owner == "hardware_profile" {
-			allowed := map[string]bool{"name": true, "firmware": true, "disk_bus": true, "disk_controller": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "hugepages": true, "config_drive": true, "machine": true}
+			allowed := map[string]bool{"name": true, "firmware": true, "disk_bus": true, "disk_controller": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "hugepages": true, "config_drive": true, "machine": true, "smbios": true, "clock": true, "timer": true}
 			if !allowed[key] {
 				return fmt.Errorf("hardware_profile: unsupported setting %s; see %s", key, HardwareMigrationGuide)
+			}
+		}
+		if owner == "hardware_profile" && (key == "smbios" || key == "clock" || key == "timer") {
+			if key != "timer" && len(list.Filter(key).Items) > 1 {
+				return fmt.Errorf("hardware_profile.%s may be declared only once", key)
+			}
+			if err := validateGuestSystemBlock(item, key); err != nil {
+				return err
 			}
 		}
 		if owner == "machine" {

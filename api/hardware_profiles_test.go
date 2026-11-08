@@ -149,11 +149,25 @@ func TestAppliedAndObservedPlatformProjectionIsTyped(t *testing.T) {
 	raw, _ := json.Marshal(plan)
 	observed, _ := json.Marshal(hardware.PlatformBinding{Machine: "pc-q35-9.2", DomainType: "kvm", Emulator: "/host/qemu"})
 	vm := vmDTO(&compute.VirtualMachine{AppliedPolicy: raw, ObservedBackend: observed, Memory: compute.NewSize(1, compute.SizeUnitG)})
-	if vm.LibvirtHardware == nil || vm.LibvirtHardware.Profile.Machine.Type != "q35" || vm.LibvirtHardware.Applied.Machine != "pc-q35-9.2" || vm.LibvirtHardware.Applied.Emulator != "/host/qemu" || vm.LibvirtObserved == nil || *vm.LibvirtObserved != vm.LibvirtHardware.Applied {
+	if vm.LibvirtHardware == nil || vm.LibvirtHardware.Profile.Machine.Type != "q35" || vm.LibvirtHardware.Applied.Machine != "pc-q35-9.2" || vm.LibvirtHardware.Applied.Emulator != "/host/qemu" || vm.LibvirtObserved == nil || vm.LibvirtObserved.PlatformBinding != vm.LibvirtHardware.Applied {
 		t.Fatalf("requested/applied/observed conflated: %+v", vm)
 	}
 	unmanaged := vmDTO(&compute.VirtualMachine{ObservedBackend: observed, Memory: compute.NewSize(1, compute.SizeUnitG)})
 	if unmanaged.LibvirtObserved == nil || unmanaged.LibvirtHardware != nil {
 		t.Fatal("unmanaged observation requires policy")
+	}
+}
+
+func TestGuestSystemProjectionsKeepRequestedAppliedAndObservedSeparate(t *testing.T) {
+	plan, err := hardware.Resolve(hardware.Profile{ID: "p", Clock: &hardware.Clock{Mode: "utc"}}, "/qemu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.GuestSystem = &hardware.GuestSystemObservation{Clock: &hardware.ObservedClock{Mode: "localtime"}}
+	raw, _ := json.Marshal(plan)
+	observed, _ := json.Marshal(hardware.ObservedHardware{GuestSystem: hardware.GuestSystemObservation{Clock: &hardware.ObservedClock{Mode: "variable", Basis: "localtime", Adjustment: "12", Timers: []hardware.ObservedTimer{{Name: "hpet"}}}}})
+	v := vmDTO(&compute.VirtualMachine{AppliedPolicy: raw, ObservedBackend: observed, Memory: compute.NewSize(1, compute.SizeUnitG)})
+	if v.LibvirtHardware.Profile.Clock.ModeExplicit || v.LibvirtHardware.Profile.Clock.Mode != "utc" || v.LibvirtHardware.GuestSystem.Clock.Mode != "localtime" || v.LibvirtObserved.GuestSystem.Clock.Mode != "variable" || v.LibvirtObserved.GuestSystem.Clock.Timers[0].Present != "" {
+		t.Fatalf("projection inferred or overwrote omitted constraints: %+v", v)
 	}
 }

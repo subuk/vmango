@@ -92,6 +92,23 @@ for Linux/KVM, macOS/HVF, software-emulated guests, joint capability validation,
 remote emulator paths and adoption diagnostics. Administration distinguishes
 requested policy, applied bindings and observed backend configuration.
 
+### Guest system information and hardware clock
+
+Profiles may also declare descriptive `smbios` blocks, `clock` mode (`utc`,
+`localtime`, or an explicit named `timezone`) and individual named `timer`
+blocks. New VMs retain UTC and backend timer defaults when settings are omitted.
+Localtime follows the hypervisor host; a named timezone retains its zone name.
+These settings do not configure the guest OS timezone or guarantee clock accuracy.
+
+[Guest system policy and platform support](https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md#guest-system-information-and-hardware-clock)
+describes the exact fields, strict validation and read-only backend capability
+checks. SMBIOS profiles never share a generated VM identity. ARM virtual timer
+policy requires verified ARM/KVM support; HVF is not equivalent. Adoption checks
+explicit constraints and preserves omitted settings, including existing options
+outside the configurable subset. Administration separates configured constraints,
+saved applied values and observed persistent XML; XML observation alone does not
+prove guest behavior. Existing compatible plans need no blanket re-adoption.
+
 ### Migrate existing connections
 
 Move the contents of each former top-level `libvirt "name"` block into

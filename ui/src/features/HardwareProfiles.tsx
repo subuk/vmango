@@ -33,6 +33,23 @@ export function HardwareProfileFields({
                         ? `${profile.machine.acceleration}${profile.machine.acceleration_explicit ? " (explicit)" : " (default for new VMs)"}`
                         : "Preserved legacy policy",
                 ],
+                [
+                    "Requested hardware clock",
+                    profile.clock
+                        ? `${profile.clock.mode}${profile.clock.timezone ? ` · ${profile.clock.timezone}` : ""}${profile.clock.mode_explicit ? " (explicit)" : " (default for new VMs; preserved on adoption)"}`
+                        : "Preserved legacy policy",
+                ],
+                ["SMBIOS constraints", describeSMBIOS(profile.smbios)],
+                [
+                    "Timer constraints",
+                    profile.timers
+                        ?.map(
+                            (t) =>
+                                `${t.name}: ${t.tickpolicy || (t.present === undefined ? "backend defaults" : t.present ? "present" : "absent")}`,
+                        )
+                        .join("; ") ||
+                        "Backend defaults / preserved on adoption",
+                ],
                 ["Firmware", profile.firmware],
                 ["Ordinary disk bus", profile.disk_bus],
                 [
@@ -187,6 +204,70 @@ export function PlatformBindingFields({
                 ["Machine type", binding.machine || "Unavailable"],
                 ["Acceleration backend", binding.domain_type || "Unavailable"],
                 ["Emulator on host", binding.emulator || "Unavailable"],
+            ]}
+        />
+    );
+}
+
+function describeSMBIOS(info?: components["schemas"]["SMBIOS"]) {
+    if (!info) return "Unspecified";
+    return (
+        Object.entries(info)
+            .flatMap(([block, values]) =>
+                Object.entries(values || {}).map(
+                    ([key, value]) => `${block}.${key}: ${value}`,
+                ),
+            )
+            .join("; ") || "No descriptive constraints"
+    );
+}
+
+export function GuestSystemFields({
+    system,
+}: {
+    system: components["schemas"]["GuestSystemObservation"];
+}) {
+    const clock = system.clock;
+    return (
+        <Fields
+            entries={[
+                ["SMBIOS presentation", system.smbios_mode],
+                ["SMBIOS information", describeSMBIOS(system.smbios)],
+                ["SMBIOS system UUID", system.system_uuid],
+                [
+                    "Hardware clock",
+                    clock
+                        ? [
+                              clock.mode,
+                              clock.timezone,
+                              clock.adjustment &&
+                                  `adjustment=${clock.adjustment}`,
+                              clock.basis && `basis=${clock.basis}`,
+                              clock.start && `start=${clock.start}`,
+                          ]
+                              .filter(Boolean)
+                              .join(" · ")
+                        : "Unspecified",
+                ],
+                [
+                    "Timers",
+                    clock?.timers
+                        ?.map((t) =>
+                            [
+                                t.name,
+                                t.tickpolicy,
+                                t.present && `present=${t.present}`,
+                                t.track && `track=${t.track}`,
+                                t.mode && `mode=${t.mode}`,
+                                t.frequency && `frequency=${t.frequency}`,
+                                t.catchup &&
+                                    `catchup=${t.catchup.threshold}/${t.catchup.slew}/${t.catchup.limit}`,
+                            ]
+                                .filter(Boolean)
+                                .join(" · "),
+                        )
+                        .join("; ") || "Unspecified",
+                ],
             ]}
         />
     );

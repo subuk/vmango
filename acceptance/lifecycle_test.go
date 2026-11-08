@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -323,6 +324,25 @@ api {
 }
 `, filepath.Join(root, "keys"), filepath.Join(root, "cloud-init-templates"), filepath.Join(root, "namespaces"), filepath.Join(root, "tasks"), address, filepath.Join(root, "jwt-key"), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
 
+	guestSystem := os.Getenv("ACCEPTANCE_GUEST_SYSTEM") == "1"
+	clockMode := os.Getenv("ACCEPTANCE_CLOCK_MODE")
+	if clockMode == "" {
+		clockMode = "timezone"
+	}
+	if clockMode != "utc" && clockMode != "localtime" && clockMode != "timezone" {
+		t.Fatal("ACCEPTANCE_CLOCK_MODE must be utc, localtime or timezone")
+	}
+	guestPolicy := ""
+	if guestSystem {
+		guestPolicy = fmt.Sprintf(`clock {mode=%q`, clockMode)
+		if clockMode == "timezone" {
+			guestPolicy += ` timezone="Europe/Berlin"`
+		}
+		guestPolicy += "}"
+		if arch == "x86_64" {
+			guestPolicy += ` smbios { bios {vendor="Vmango" version="1.0" date="01/02/2026" release="1.2"} system {manufacturer="Vmango" product="Acceptance Guest" version="1" sku="test" family="Cloud"} baseboard {manufacturer="Vmango" product="Acceptance Board" version="2"} } timer "rtc" {tickpolicy="catchup"} timer "pit" {tickpolicy="catchup"} timer "hpet" {present=false} timer "kvmclock" {present=true} timer "hypervclock" {present=true}`
+		}
+	}
 	machineAcceleration := os.Getenv("ACCEPTANCE_VIRT_TYPE")
 	if machineAcceleration == "" {
 		machineAcceleration = "hardware"
@@ -333,8 +353,8 @@ api {
 	}
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {
- hardware_profile "boot" { machine { type = %q acceleration = %q } firmware = %q disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" config_drive { format = %q device_type = %q bus = %q } }
- hardware_profile "no-init" { machine { type = %q acceleration = %q } firmware = %q config_drive { enabled = false } }
+ hardware_profile "boot" { %s machine { type = %q acceleration = %q } firmware = %q disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" config_drive { format = %q device_type = %q bus = %q } }
+ hardware_profile "no-init" { %s machine { type = %q acceleration = %q } firmware = %q config_drive { enabled = false } }
  image "boot" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "boot" protected = true minimum_memory_mib = 1024 minimum_disk_gib = 8 }
  image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "no-init" }
  zone "test" {}
@@ -354,7 +374,7 @@ cloud "acceptance" {
  storage_class "efficient" {pool=%q format="qcow2"}
  storage_class "raw" {pool=%q format="raw"} }
 }
-`, machineType, machineAcceleration, firmware, initialization, configDriveDevice, configDriveBus, machineType, machineAcceleration, firmware, base, arch, base, arch, uri, name, name, name, name, name)
+`, guestPolicy, machineType, machineAcceleration, firmware, initialization, configDriveDevice, configDriveBus, guestPolicy, machineType, machineAcceleration, firmware, base, arch, base, arch, uri, name, name, name, name, name)
 	if imageURL != "" {
 		if strings.Contains(imageURL, "alpinelinux.org/") {
 			configuration = strings.ReplaceAll(configuration, `os_name = "Ubuntu"`, `os_name = "Alpine Linux"`)
@@ -610,6 +630,17 @@ cloud "offline" {
 		serialDevice = "/dev/ttyAMA0"
 	}
 	userdata := fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, 'test \"$(hostname)\" = %s && echo %s > %s']\n", name, marker, serialDevice)
+	if guestSystem {
+		commands := ""
+		if arch == "x86_64" {
+			for _, field := range [][2]string{{"bios_vendor", "Vmango"}, {"bios_version", "1.0"}, {"bios_date", "01/02/2026"}, {"sys_vendor", "Vmango"}, {"product_name", "Acceptance Guest"}, {"product_version", "1"}, {"product_sku", "test"}, {"product_family", "Cloud"}, {"board_vendor", "Vmango"}, {"board_name", "Acceptance Board"}, {"board_version", "2"}} {
+				commands += fmt.Sprintf(`test "$(cat /sys/class/dmi/id/%s)" = "%s" && `, field[0], field[1])
+			}
+			commands += fmt.Sprintf(`echo VMANGO_DMI_UUID=$(cat /sys/class/dmi/id/product_uuid) > %s && `, serialDevice)
+		}
+		commands += fmt.Sprintf(`echo VMANGO_RTC=$(cat /sys/class/rtc/rtc0/date)T$(cat /sys/class/rtc/rtc0/time) > %s && echo VMANGO_CLOCKSOURCE=$(cat /sys/devices/system/clocksource/clocksource0/current_clocksource) > %s && `, serialDevice, serialDevice)
+		userdata = fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, '%stest \"$(hostname)\" = %s && echo %s > %s']\n", commands, name, marker, serialDevice)
+	}
 	// Check image constraints and the no-init alias through the same JSON API.
 	if os.Getenv("ACCEPTANCE_STORAGE_ONLY") == "1" {
 		testStorageCloning(t, root, name, "", apiRequest, apiCommand, mustVir, run)
@@ -698,6 +729,9 @@ cloud "offline" {
 	}
 	if err := afterPlatform.Unmarshal(changedXML); err != nil {
 		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(beforePlatform.SysInfo, afterPlatform.SysInfo) || !reflect.DeepEqual(beforePlatform.Clock, afterPlatform.Clock) {
+		t.Fatal("resource change replaced guest system settings")
 	}
 	if beforePlatform.Type != afterPlatform.Type || beforePlatform.OS.Type.Machine != afterPlatform.OS.Type.Machine || beforePlatform.Devices.Emulator != afterPlatform.Devices.Emulator {
 		t.Fatal("resource change replaced platform binding")
@@ -805,6 +839,11 @@ cloud "offline" {
 	var runtimeDomain libvirtxml.Domain
 	if err := runtimeDomain.Unmarshal(xml); err != nil {
 		t.Fatal(err)
+	}
+	if guestSystem {
+		if runtimeDomain.Clock == nil || runtimeDomain.Clock.Offset != clockMode || clockMode == "timezone" && runtimeDomain.Clock.TimeZone != "Europe/Berlin" {
+			t.Fatal("clock policy missing from XML")
+		}
 	}
 	if bootClass == "efficient" {
 		if runtimeDomain.Devices == nil || len(runtimeDomain.Devices.Disks) == 0 || runtimeDomain.Devices.Disks[0].Source == nil || runtimeDomain.Devices.Disks[0].Source.File == nil {
@@ -914,6 +953,15 @@ cloud "offline" {
 		}
 	}
 	console.Close()
+	if guestSystem {
+		if arch == "x86_64" && !strings.Contains(strings.ToLower(tail), "vmango_dmi_uuid="+strings.ToLower(domainUUID)) {
+			t.Fatal("guest SMBIOS UUID differs from domain UUID; see console.log")
+		}
+		if !strings.Contains(tail, "VMANGO_RTC=") || !strings.Contains(tail, "VMANGO_CLOCKSOURCE=") {
+			t.Fatal("guest clock observation missing")
+		}
+		t.Log("guest-visible SMBIOS values/UUID checked where configured; RTC and clocksource recorded in console.log")
+	}
 	t.Log("guest ran cloud-init userdata and confirmed its hostname")
 	// Test signed browser transports without browser refresh cookies or resource Bearer headers.
 	for _, kind := range []string{"serial", "vnc"} {
@@ -1114,6 +1162,15 @@ cloud "offline" {
 		t.Fatal("restart changed task history/resource references")
 	}
 	apiRequest("GET", volumeBase+"/"+disk.ID, nil, 200)
+	if guestSystem {
+		var afterRestart libvirtxml.Domain
+		if err := afterRestart.Unmarshal(mustVir("dumpxml", domainUUID, "--inactive")); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(runtimeDomain.SysInfo, afterRestart.SysInfo) || !reflect.DeepEqual(runtimeDomain.Clock, afterRestart.Clock) {
+			t.Fatal("restart changed guest system settings")
+		}
+	}
 	t.Log("process restart retained task history, backend references and compound volume navigation")
 	// Removing configuration retains authoritative assignments and immutable
 	// history. Administration must remain usable without the removed context.

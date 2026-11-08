@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import {
     AdoptMachine,
+    HardwareProfileFields,
+    GuestSystemFields,
     HardwareProfiles,
     type HardwareProfile,
 } from "./HardwareProfiles";
@@ -19,7 +21,12 @@ vi.mock("../app/Auth", () => ({ useMe: () => ({ id: "operator" }) }));
 const profile: HardwareProfile = {
     id: "linux-scsi",
     name: "Linux SCSI",
-    machine: {type: "q35", acceleration: "hardware", type_explicit: true, acceleration_explicit: false},
+    machine: {
+        type: "q35",
+        acceleration: "hardware",
+        type_explicit: true,
+        acceleration_explicit: false,
+    },
     firmware: "efi",
     disk_bus: "scsi",
     disk_controller: "virtio-scsi",
@@ -98,4 +105,45 @@ it("requires explicit profile choice before adopting and sends only the selected
         ),
     );
     expect(close).toHaveBeenCalledOnce();
+});
+
+it("distinguishes omitted clock constraints from observed settings", () => {
+    show(
+        <HardwareProfileFields
+            profile={{
+                ...profile,
+                clock: { mode: "utc", mode_explicit: false },
+                smbios: { system: { product: "Guest" } },
+                timers: [{ name: "hpet", present: false }],
+            }}
+        />,
+    );
+    expect(
+        screen.getByText("utc (default for new VMs; preserved on adoption)"),
+    ).toBeTruthy();
+    expect(screen.getByText("system.product: Guest")).toBeTruthy();
+    expect(screen.getByText("hpet: absent")).toBeTruthy();
+});
+it("shows observed clock and timer attributes without inferring missing settings", () => {
+    show(
+        <GuestSystemFields
+            system={{
+                clock: {
+                    mode: "variable",
+                    basis: "localtime",
+                    adjustment: "3600",
+                    timers: [
+                        { name: "hpet" },
+                        { name: "tsc", mode: "native", frequency: 12345 },
+                    ],
+                },
+            }}
+        />,
+    );
+    expect(
+        screen.getByText("variable · adjustment=3600 · basis=localtime"),
+    ).toBeTruthy();
+    expect(
+        screen.getByText("hpet; tsc · mode=native · frequency=12345"),
+    ).toBeTruthy();
 });

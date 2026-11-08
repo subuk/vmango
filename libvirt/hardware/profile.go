@@ -23,6 +23,9 @@ type ConfigDrive struct {
 func (c ConfigDrive) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
 
 type Profile struct {
+	SMBIOS         *SMBIOS     `json:"smbios,omitempty"`
+	Clock          *Clock      `json:"clock,omitempty"`
+	Timers         []Timer     `json:"timers,omitempty"`
 	Machine        *Machine    `json:"machine,omitempty"`
 	ID             string      `json:"id"`
 	Name           string      `json:"name"`
@@ -67,15 +70,16 @@ type StateContract struct {
 	Snapshot bool   `json:"snapshot"`
 }
 type Plan struct {
-	Version         int             `json:"version"`
-	Profile         Profile         `json:"profile"`
-	Devices         []Device        `json:"devices"`
-	State           []StateContract `json:"state,omitempty"`
-	CPUThreads      int             `json:"cpu_threads,omitempty"`
-	Machine         string          `json:"machine,omitempty"`
-	DomainType      string          `json:"domain_type,omitempty"`
-	HugepageSizeKiB uint64          `json:"hugepage_size_kib,omitempty"`
-	Emulator        string          `json:"emulator,omitempty"`
+	GuestSystem     *GuestSystemObservation `json:"guest_system,omitempty"`
+	Version         int                     `json:"version"`
+	Profile         Profile                 `json:"profile"`
+	Devices         []Device                `json:"devices"`
+	State           []StateContract         `json:"state,omitempty"`
+	CPUThreads      int                     `json:"cpu_threads,omitempty"`
+	Machine         string                  `json:"machine,omitempty"`
+	DomainType      string                  `json:"domain_type,omitempty"`
+	HugepageSizeKiB uint64                  `json:"hugepage_size_kib,omitempty"`
+	Emulator        string                  `json:"emulator,omitempty"`
 }
 type policyEnvelope struct {
 	Version int     `json:"version"`
@@ -177,7 +181,7 @@ func Normalize(p Profile) (Profile, error) {
 	if !slices.Contains([]string{"disk", "cdrom"}, p.ConfigDrive.DeviceType) || !slices.Contains([]string{"virtio", "scsi", "ide"}, p.ConfigDrive.Bus) || p.ConfigDrive.DeviceType == "cdrom" && p.ConfigDrive.Bus == "virtio" {
 		return fail("config_drive device_type/bus combination (virtio supports disks only)")
 	}
-	return p, nil
+	return NormalizeGuestSystem(p)
 }
 func Encode(p Profile) (json.RawMessage, error) {
 	p, err := Normalize(p)

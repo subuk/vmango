@@ -413,6 +413,9 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 	virDomainConfig.CPU = &libvirtxml.DomainCPU{}
 	virDomainConfig.CPU.Mode = "maximum"
 	virDomainConfig.Clock = &libvirtxml.DomainClock{Offset: "utc"}
+	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
+		applyGuestSystem(virDomainConfig, plan.Profile)
+	}
 	applyDomainPowerPolicy(virDomainConfig)
 	virDomainConfig.Devices = &libvirtxml.DomainDeviceList{Emulator: domCapsConfig.Path}
 	// ARM virt has no implicit PS/2 input. USB input works in both UEFI and

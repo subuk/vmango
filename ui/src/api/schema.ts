@@ -1489,6 +1489,7 @@ export interface components {
         ApiLibvirtMachineHardware: {
             applied: components["schemas"]["PlatformBinding"];
             devices: components["schemas"]["Device"][];
+            guest_system?: components["schemas"]["GuestSystemObservation"];
             profile: components["schemas"]["Profile"];
             /** Format: int64 */
             version: number;
@@ -1681,7 +1682,7 @@ export interface components {
             interfaces: components["schemas"]["ApiReadInterface"][];
             ip_addresses: string[];
             libvirt_hardware?: components["schemas"]["ApiLibvirtMachineHardware"];
-            libvirt_observed?: components["schemas"]["PlatformBinding"];
+            libvirt_observed?: components["schemas"]["ObservedHardware"];
             managed: boolean;
             /** Format: int64 */
             memory_bytes: number;
@@ -1722,7 +1723,7 @@ export interface components {
             interfaces: components["schemas"]["ApiReadInterface"][];
             ip_addresses: string[];
             libvirt_hardware?: components["schemas"]["ApiLibvirtMachineHardware"];
-            libvirt_observed?: components["schemas"]["PlatformBinding"];
+            libvirt_observed?: components["schemas"]["ObservedHardware"];
             managed: boolean;
             /** Format: int64 */
             memory_bytes: number;
@@ -1800,9 +1801,25 @@ export interface components {
             /** Format: int64 */
             size_bytes: number;
         };
+        BIOS: {
+            date?: string;
+            release?: string;
+            vendor?: string;
+            version?: string;
+        };
+        Baseboard: {
+            manufacturer?: string;
+            product?: string;
+            version?: string;
+        };
         CatalogEntry: {
             id: string;
             name: string;
+        };
+        Clock: {
+            mode: string;
+            mode_explicit: boolean;
+            timezone?: string;
         };
         CloudInitTemplateRef: {
             id: string;
@@ -1886,6 +1903,12 @@ export interface components {
             /** @description The value at the given location */
             value?: unknown;
         };
+        GuestSystemObservation: {
+            clock?: components["schemas"]["ObservedClock"];
+            smbios?: components["schemas"]["SMBIOS"];
+            smbios_mode?: string;
+            system_uuid?: string;
+        };
         HostCatalog: {
             networks: components["schemas"]["CatalogEntry"][];
             storage_classes: components["schemas"]["StorageClass"][];
@@ -1925,6 +1948,39 @@ export interface components {
             id: string;
             name: string;
         };
+        ObservedCatchUp: {
+            /** Format: int64 */
+            limit: number;
+            /** Format: int64 */
+            slew: number;
+            /** Format: int64 */
+            threshold: number;
+        };
+        ObservedClock: {
+            adjustment?: string;
+            basis?: string;
+            mode?: string;
+            /** Format: int64 */
+            start?: number;
+            timers?: components["schemas"]["ObservedTimer"][] | null;
+            timezone?: string;
+        };
+        ObservedHardware: {
+            domain_type: string;
+            emulator: string;
+            guest_system: components["schemas"]["GuestSystemObservation"];
+            machine: string;
+        };
+        ObservedTimer: {
+            catchup?: components["schemas"]["ObservedCatchUp"];
+            /** Format: int64 */
+            frequency?: number;
+            mode?: string;
+            name: string;
+            present?: string;
+            tickpolicy?: string;
+            track?: string;
+        };
         Page: {
             /** Format: int64 */
             active: number;
@@ -1945,6 +2001,7 @@ export interface components {
             machine: string;
         };
         Profile: {
+            clock?: components["schemas"]["Clock"];
             config_drive: components["schemas"]["ConfigDrive"];
             disk_bus: string;
             disk_controller?: string;
@@ -1956,6 +2013,8 @@ export interface components {
             machine?: components["schemas"]["Machine"];
             name: string;
             nic_model: string;
+            smbios?: components["schemas"]["SMBIOS"];
+            timers?: components["schemas"]["Timer"][] | null;
             video_model: string;
         };
         Release: {
@@ -1973,6 +2032,11 @@ export interface components {
             kind: string;
             read_only?: boolean;
             scope: string;
+        };
+        SMBIOS: {
+            baseboard?: components["schemas"]["Baseboard"];
+            bios?: components["schemas"]["BIOS"];
+            system?: components["schemas"]["SystemInfo"];
         };
         Stage: {
             error?: components["schemas"]["Diagnostic"];
@@ -1996,6 +2060,13 @@ export interface components {
             id: string;
             name: string;
         };
+        SystemInfo: {
+            family?: string;
+            manufacturer?: string;
+            product?: string;
+            sku?: string;
+            version?: string;
+        };
         Task: {
             blocks_resources: boolean;
             cloud_id?: string;
@@ -2017,6 +2088,11 @@ export interface components {
             started_at?: string;
             state: string;
             transitions: components["schemas"]["Transition"][] | null;
+        };
+        Timer: {
+            name: string;
+            present?: boolean;
+            tickpolicy?: string;
         };
         TokenMetadata: {
             /** Format: date-time */

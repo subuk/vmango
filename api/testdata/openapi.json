@@ -1450,6 +1450,9 @@
             },
             "type": "array"
           },
+          "guest_system": {
+            "$ref": "#/components/schemas/GuestSystemObservation"
+          },
           "profile": {
             "$ref": "#/components/schemas/Profile"
           },
@@ -2123,7 +2126,7 @@
             "$ref": "#/components/schemas/ApiLibvirtMachineHardware"
           },
           "libvirt_observed": {
-            "$ref": "#/components/schemas/PlatformBinding"
+            "$ref": "#/components/schemas/ObservedHardware"
           },
           "managed": {
             "type": "boolean"
@@ -2284,7 +2287,7 @@
             "$ref": "#/components/schemas/ApiLibvirtMachineHardware"
           },
           "libvirt_observed": {
-            "$ref": "#/components/schemas/PlatformBinding"
+            "$ref": "#/components/schemas/ObservedHardware"
           },
           "managed": {
             "type": "boolean"
@@ -2585,6 +2588,39 @@
         ],
         "type": "object"
       },
+      "BIOS": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "release": {
+            "type": "string"
+          },
+          "vendor": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Baseboard": {
+        "additionalProperties": false,
+        "properties": {
+          "manufacturer": {
+            "type": "string"
+          },
+          "product": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CatalogEntry": {
         "additionalProperties": false,
         "properties": {
@@ -2598,6 +2634,25 @@
         "required": [
           "id",
           "name"
+        ],
+        "type": "object"
+      },
+      "Clock": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "mode_explicit": {
+            "type": "boolean"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "mode_explicit"
         ],
         "type": "object"
       },
@@ -2905,6 +2960,24 @@
         },
         "type": "object"
       },
+      "GuestSystemObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "clock": {
+            "$ref": "#/components/schemas/ObservedClock"
+          },
+          "smbios": {
+            "$ref": "#/components/schemas/SMBIOS"
+          },
+          "smbios_mode": {
+            "type": "string"
+          },
+          "system_uuid": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "HostCatalog": {
         "additionalProperties": false,
         "properties": {
@@ -3056,6 +3129,120 @@
         ],
         "type": "object"
       },
+      "ObservedCatchUp": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "slew": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "threshold": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "threshold",
+          "slew",
+          "limit"
+        ],
+        "type": "object"
+      },
+      "ObservedClock": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustment": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "start": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timers": {
+            "items": {
+              "$ref": "#/components/schemas/ObservedTimer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ObservedHardware": {
+        "additionalProperties": false,
+        "properties": {
+          "domain_type": {
+            "type": "string"
+          },
+          "emulator": {
+            "type": "string"
+          },
+          "guest_system": {
+            "$ref": "#/components/schemas/GuestSystemObservation"
+          },
+          "machine": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "guest_system",
+          "machine",
+          "domain_type",
+          "emulator"
+        ],
+        "type": "object"
+      },
+      "ObservedTimer": {
+        "additionalProperties": false,
+        "properties": {
+          "catchup": {
+            "$ref": "#/components/schemas/ObservedCatchUp"
+          },
+          "frequency": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "present": {
+            "type": "string"
+          },
+          "tickpolicy": {
+            "type": "string"
+          },
+          "track": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "Page": {
         "additionalProperties": false,
         "properties": {
@@ -3123,6 +3310,9 @@
       "Profile": {
         "additionalProperties": false,
         "properties": {
+          "clock": {
+            "$ref": "#/components/schemas/Clock"
+          },
           "config_drive": {
             "$ref": "#/components/schemas/ConfigDrive"
           },
@@ -3155,6 +3345,18 @@
           },
           "nic_model": {
             "type": "string"
+          },
+          "smbios": {
+            "$ref": "#/components/schemas/SMBIOS"
+          },
+          "timers": {
+            "items": {
+              "$ref": "#/components/schemas/Timer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "video_model": {
             "type": "string"
@@ -3230,6 +3432,21 @@
           "scope",
           "id"
         ],
+        "type": "object"
+      },
+      "SMBIOS": {
+        "additionalProperties": false,
+        "properties": {
+          "baseboard": {
+            "$ref": "#/components/schemas/Baseboard"
+          },
+          "bios": {
+            "$ref": "#/components/schemas/BIOS"
+          },
+          "system": {
+            "$ref": "#/components/schemas/SystemInfo"
+          }
+        },
         "type": "object"
       },
       "Stage": {
@@ -3310,6 +3527,27 @@
           "name",
           "clone_mode"
         ],
+        "type": "object"
+      },
+      "SystemInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "family": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string"
+          },
+          "product": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "Task": {
@@ -3406,6 +3644,24 @@
           "effects",
           "outcome_uncertain",
           "blocks_resources"
+        ],
+        "type": "object"
+      },
+      "Timer": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "present": {
+            "type": "boolean"
+          },
+          "tickpolicy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },

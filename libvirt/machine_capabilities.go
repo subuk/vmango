@@ -144,7 +144,10 @@ func (repo *VirtualMachineRepository) validateAdoptionMachine(vm *compute.Virtua
 	if err = hardware.ValidateAdoptionMachine(plan.Profile.Machine, existing, requestedMachine, repo.settings[vm.NodeId].Emulator); err != nil {
 		return err
 	}
-	return validateProfileCapabilities(plan.Profile, imageCapabilities(actual))
+	if err := validateProfileCapabilities(plan.Profile, imageCapabilities(actual)); err != nil {
+		return err
+	}
+	return validateGuestSystemCapabilities(conn, plan.Profile, actual)
 }
 
 func validateCreationCapabilities(vm *compute.VirtualMachine, profile hardware.Profile, caps *xmlmodel.DomainCaps) error {

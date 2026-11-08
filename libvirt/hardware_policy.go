@@ -41,7 +41,12 @@ func (repo *VirtualMachineRepository) ResolveHardware(vm *compute.VirtualMachine
 	plan.CPUThreads = 1
 	if e == nil {
 		var caps *xmlmodel.DomainCaps
-		caps, e = resolveMachineCapabilities(p, vm.Arch.String(), plan.Emulator, &host, queryDomainCapabilities(conn), func(c *xmlmodel.DomainCaps) error { return validateCreationCapabilities(vm, p, c) })
+		caps, e = resolveMachineCapabilities(p, vm.Arch.String(), plan.Emulator, &host, queryDomainCapabilities(conn), func(c *xmlmodel.DomainCaps) error {
+			if err := validateCreationCapabilities(vm, p, c); err != nil {
+				return err
+			}
+			return validateGuestSystemCapabilities(conn, p, c)
+		})
 		if e == nil {
 			plan.Emulator, plan.Machine, plan.DomainType = caps.Path, caps.Machine, caps.Domain
 		}
@@ -64,6 +69,10 @@ func (repo *VirtualMachineRepository) ResolveHardware(vm *compute.VirtualMachine
 			return e
 		}
 	}
+	preview := &xmlmodel.Domain{UUID: vm.Id, OS: &xmlmodel.DomainOS{}}
+	applyGuestSystem(preview, p)
+	observed := observeGuestSystem(preview)
+	plan.GuestSystem = &observed
 	raw, err := json.Marshal(plan)
 	if err != nil {
 		return err
@@ -137,6 +146,11 @@ func (repo *VirtualMachineRepository) validateHardwareCapabilities(vm *compute.V
 	}
 	if creation && plan.Profile.Machine != nil {
 		if err = validateCreationCapabilities(vm, plan.Profile, capsXML); err != nil {
+			return err
+		}
+	}
+	if creation {
+		if err = validateGuestSystemCapabilities(conn, plan.Profile, capsXML); err != nil {
 			return err
 		}
 	}
@@ -337,6 +351,9 @@ func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine
 	if err != nil {
 		return nil, err
 	}
+	if err = validateGuestSystemAdoption(config, plan.Profile); err != nil {
+		return nil, err
+	}
 	if err = validateAdoptionControllers(config, plan); err != nil {
 		return nil, &compute.ValidationError{Field: "hardware_profile", Message: err.Error()}
 	}
@@ -360,6 +377,8 @@ func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine
 			return nil, err
 		}
 	}
+	observed := observeGuestSystem(config)
+	plan.GuestSystem = &observed
 	return json.Marshal(plan)
 }
 func validateAdoptionPolicy(vm *compute.VirtualMachine, plan hardware.Plan) error {
@@ -452,6 +471,15 @@ func (repo *VirtualMachineRepository) AdoptWithPolicy(id, node string, m *comput
 	}
 	if err = validateAdoptionBindings(&config, plan); err != nil {
 		return err
+	}
+	if plan.Profile.HasGuestSystemConstraints() {
+		caps, e := queryDomainCapabilities(conn)(plan.Emulator, vm.Arch.String(), plan.Machine, plan.DomainType)
+		if e != nil {
+			return e
+		}
+		if e = validateGuestSystemCapabilities(conn, plan.Profile, caps); e != nil {
+			return e
+		}
 	}
 	if err = writeSchedulerMetadata(&config, m); err != nil {
 		return err
@@ -560,6 +588,9 @@ func (repo *VirtualMachineRepository) ValidateAdoptionPolicy(vm *compute.Virtual
 	if err = validateAdoptionBindings(c, plan); err != nil {
 		return err
 	}
+	if err = repo.validateAdoptionMachine(vm, plan); err != nil {
+		return err
+	}
 	if plan.Profile.Hugepages {
 		size, e := adoptedHugepageSize(c)
 		if e != nil {
@@ -604,6 +635,9 @@ func validateProfileCapabilities(p hardware.Profile, caps compute.VirtualMachine
 }
 
 func validateAdoptionBindings(config *xmlmodel.Domain, plan hardware.Plan) error {
+	if err := validateGuestSystemAdoption(config, plan.Profile); err != nil {
+		return err
+	}
 	incompatible := func() error {
 		return &compute.ValidationError{Field: "hardware_profile", Message: "Existing platform bindings changed after adoption was accepted; inspect the VM and resubmit adoption."}
 	}

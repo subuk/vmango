@@ -325,3 +325,114 @@ References: [libvirt driver capabilities and canonical aliases](https://libvirt.
 [QEMU machine invocation](https://www.qemu.org/docs/master/system/qemu-manpage.html),
 [machine-version compatibility](https://www.qemu.org/docs/master/devel/migration/compatibility.html),
 [ARM virt platform](https://www.qemu.org/docs/master/system/arm/virt.html).
+
+## Guest system information and hardware clock
+
+A profile may constrain descriptive SMBIOS information, the guest hardware clock,
+and individual timers. These remain administrator-managed HCL settings; VM
+creation still selects an image and instance type. An example for a supported
+x86 Q35/KVM backend is:
+
+```hcl
+hardware_profile "identified-x86" {
+    machine { type = "q35" acceleration = "kvm" }
+    smbios {
+        bios { vendor = "Example" version = "1.0" date = "01/02/2026" release = "1.2" }
+        system { manufacturer = "Example" product = "Cloud VM" version = "1" sku = "general" family = "Cloud" }
+        baseboard { manufacturer = "Example" product = "Virtual Board" version = "1" }
+    }
+    clock { mode = "timezone" timezone = "Europe/Berlin" }
+    timer "rtc" { tickpolicy = "catchup" }
+    timer "pit" { tickpolicy = "discard" }
+    timer "hpet" { present = false }
+    timer "kvmclock" { present = true }
+}
+```
+
+Only the illustrated SMBIOS fields are configurable, with one block of each
+kind. Omitted fields remain unspecified. Empty strings, duplicate declarations,
+unknown fields, control characters and values over 255 bytes are rejected.
+BIOS dates use `mm/dd/yy` (year 19yy) or `mm/dd/yyyy` and must be real dates;
+release uses `major.minor`, each component from 0 through 255. Profiles do not
+configure serials, asset tags, chassis, OEM strings or independent UUIDs. New VMs
+with SMBIOS policy use `os/smbios mode="sysinfo"`, and the emitted system UUID
+matches that VM's domain UUID. No physical-host SMBIOS information is copied.
+Omitting the SMBIOS block retains the previous creation behavior.
+
+The hardware clock defaults to UTC, including when a profile supplies only
+timers. `clock { mode="utc" }` explicitly requires UTC; an omitted clock mode
+remains unconstrained for adoption. `localtime` follows the selected hypervisor
+host's timezone. `timezone` requires a named IANA zone and retains that name
+instead of freezing its current numeric offset. The name is validated against
+Go's timezone database; the QEMU host must also have its corresponding timezone
+data installed. A timezone argument is invalid with other modes. None of these
+settings changes the guest OS timezone, NTP or other guest software. Numeric
+offsets, fixed startup dates and reset/adjustment controls are not configurable.
+
+### Timer and platform support
+
+Unspecified timers and attributes retain backend defaults. No OS-specific preset
+is inferred. A timer may be declared only once, using these attributes:
+
+| Timer | Attributes | Platform envelope |
+| --- | --- | --- |
+| `rtc` | `tickpolicy="delay"` or `"catchup"` | x86 PC/Q35, KVM or QEMU |
+| `pit` | `tickpolicy="delay"`, `"discard"`, or verified `"catchup"` | x86 PC/Q35, KVM or QEMU; catchup needs the backend's KVM PIT capability |
+| `hpet` | `present=true/false` | x86 PC/Q35, KVM or QEMU |
+| `kvmclock` | `present=true/false` | x86 PC/Q35 with KVM |
+| `hypervclock` | `present=true/false` | x86 PC/Q35 with KVM |
+| `armvtimer` | `tickpolicy="delay"` or `"discard"` | ARM virt with KVM and the backend's `kvm-no-adjvtime` capability |
+
+SMBIOS is limited to x86 PC/Q35 under KVM/QEMU. Explicit clock modes are admitted
+for those platforms and ARM virt under KVM/HVF/QEMU. Other combinations fail as
+unverified. These envelopes do not by themselves establish support: each
+candidate must also pass libvirt's native QEMU command conversion for the exact
+architecture, canonical machine, acceleration and emulator. This invokes the
+backend's capability checks and command builder, including timer-specific flags;
+XML schema acceptance or an absent domain-capabilities enumeration is not enough.
+The returned command is never executed. No probe domain is defined or started,
+and no probe disk, network or config-drive is created. If conversion is
+unavailable or rejects the combination, that candidate is excluded with an
+unverified-requirement diagnostic before provisioning artifacts. Preflight repeats
+this verification against the accepted binding; it cannot change acceleration or
+drop a setting. A backend upgrade removing native conversion requires a new
+verified adapter, not a silent bypass.
+
+The implementation follows the [libvirt format contract](https://libvirt.org/formatdomain.html#time-keeping)
+and [QEMU timer validation](https://github.com/libvirt/libvirt/blob/master/src/qemu/qemu_validate.c).
+`armvtimer` requires libvirt 6.1 or later and compatible QEMU/kernel support;
+HVF is not ARM/KVM, and ARM virtual timers cannot be disabled here. Real results
+for the specific tested libvirt/QEMU versions are recorded in
+[acceptance/README.md](../acceptance/README.md); an ARM/KVM unit-test fixture is
+not a real-host verification. PIT catchup is accepted only when the native
+backend check verifies its capability, including on older vendor builds.
+
+`delay` delivers ticks at the normal rate and may leave the guest behind;
+`catchup` attempts to recover missed ticks; `discard` drops them. These policies
+do not guarantee wall-clock accuracy. TSC frequency/mode, RTC tracking, catchup
+tuning and a generic timer disable control are outside this interface.
+
+### Existing machines and durable policy
+
+Acceptance saves the explicit constraints and each candidate's plan. Creation
+records applied system/clock settings separately from the requested profile;
+adoption records the observed existing settings. Administration/API displays
+requested constraints, saved applied settings and current persistent XML
+observations separately. Observations do not establish guest-visible behavior or
+clock accuracy, and omitted XML timer attributes remain unspecified.
+
+Adoption checks only explicitly constrained fields and rejects mismatches or
+unverifiable values before changing metadata. In particular, a missing XML
+attribute does not prove a requested default. An omitted clock mode does not
+turn an existing localtime/variable clock into UTC. Adoption and unrelated
+mutations preserve the complete existing system/clock XML, including serials,
+identifiers, OEM entries, clock adjustments and timer settings that this feature
+cannot configure. Multiple existing baseboards are preserved, but a requested
+baseboard constraint cannot be matched ambiguously. There is no operation here
+to reconfigure these settings on an existing machine.
+
+Catalog edits, restarts and task-history pruning do not replace saved policy.
+Compatible older plans lacking the optional SMBIOS/clock/timer fields remain
+valid with their previous meaning; no blanket re-adoption or command-version
+change is introduced. Missing or unsupported management policy still requires
+explicit adoption under the foundation contract.

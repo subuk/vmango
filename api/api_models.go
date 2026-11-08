@@ -41,13 +41,14 @@ type apiConfiguredKey struct {
 }
 
 type apiLibvirtMachineHardware struct {
-	Applied hardware.PlatformBinding `json:"applied"`
-	Profile hardware.Profile         `json:"profile"`
-	Version int                      `json:"version"`
-	Devices []hardware.Device        `json:"devices" nullable:"false"`
+	GuestSystem *hardware.GuestSystemObservation `json:"guest_system,omitempty"`
+	Applied     hardware.PlatformBinding         `json:"applied"`
+	Profile     hardware.Profile                 `json:"profile"`
+	Version     int                              `json:"version"`
+	Devices     []hardware.Device                `json:"devices" nullable:"false"`
 }
 type apiVM struct {
-	LibvirtObserved    *hardware.PlatformBinding  `json:"libvirt_observed,omitempty"`
+	LibvirtObserved    *hardware.ObservedHardware `json:"libvirt_observed,omitempty"`
 	LibvirtHardware    *apiLibvirtMachineHardware `json:"libvirt_hardware,omitempty"`
 	AdoptionRequired   bool                       `json:"adoption_required,omitempty"`
 	NamespaceID        compute.NamespaceID        `json:"namespace_id,omitempty"`
@@ -108,10 +109,10 @@ type apiVolumeDetail struct {
 func vmDTO(vm *compute.VirtualMachine) apiVM {
 	v := apiVM{Node: vm.NodeId, ID: vm.Id, Name: vm.Name, Arch: vm.Arch.String(), State: vm.State.String(), VCPUs: vm.VCpus, MemoryBytes: vm.Memory.Bytes(), Firmware: vm.Firmware, DiskController: vm.DiskController, GuestAgent: vm.GuestAgent, Autostart: vm.Autostart, Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), GraphicsListen: vm.Graphic.Listen, VideoModel: vm.VideoModel.String(), Disks: []apiDisk{}, Interfaces: []apiReadInterface{}, IPAddresses: vm.IpAddressList()}
 	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
-		v.LibvirtHardware = &apiLibvirtMachineHardware{Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices, Applied: plan.Platform()}
+		v.LibvirtHardware = &apiLibvirtMachineHardware{Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices, Applied: plan.Platform(), GuestSystem: plan.GuestSystem}
 	}
 	if len(vm.ObservedBackend) > 0 {
-		var observed hardware.PlatformBinding
+		var observed hardware.ObservedHardware
 		if json.Unmarshal(vm.ObservedBackend, &observed) == nil {
 			v.LibvirtObserved = &observed
 		}

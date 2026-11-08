@@ -418,3 +418,42 @@ of four, with 24 configured vCPUs within the 48-CPU admission budget. An earlier
 negative-only run had an invalid capacity-rejection precondition and timed out;
 its owned resources were also verified cleaned. No package build/install result
 or rendered-browser verification is implied by these lifecycle tests.
+
+## Guest system and clock verification
+
+Set `ACCEPTANCE_GUEST_SYSTEM=1` to add explicit clock policy to the disposable
+profiles. `ACCEPTANCE_CLOCK_MODE` accepts `utc`, `localtime` or `timezone`
+(default: `timezone`, using `Europe/Berlin`). On x86_64 this also configures all
+supported descriptive SMBIOS fields, RTC/PIT catchup, HPET absent and KVM/Hyper-V
+clocks present; use an eligible Q35/KVM host. The guest must verify eleven SMBIOS
+text fields from DMI sysfs and print its SMBIOS UUID matching the domain UUID
+before the normal boot marker. BIOS release is checked in the configured XML;
+it is not asserted through guest sysfs. Both architectures record the guest RTC
+and current clocksource in `console.log`. Resource changes and process restart
+must preserve the system/clock XML. The normal isolated cleanup applies.
+
+On ARM/HVF the mode configures only the clock, not SMBIOS or x86 timers. This is
+not a test of ARM virtual timer control: `armvtimer` requires an eligible ARM/KVM
+host and verified backend support. No available ARM/KVM host was tested in the
+recorded run below. Unit tests for its capability gate are not guest evidence.
+
+### Recorded guest-system verification, 2026-11-08
+
+macOS ARM64, libvirt daemon 11.2.0, QEMU 9.2.3, `virt-9.2`/HVF and the cached
+Ubuntu 24.04 ARM64 image passed explicit localtime clock lifecycle in 43 seconds.
+The guest reported `arch_sys_counter` and an RTC reading; resource changes,
+process restart, deletion and cleanup passed. Artifacts:
+`result/vmango-acceptance-a086648b-0088-4c94-b9bd-4e6544bf82d8/`.
+
+The Linux Q35/KVM full lifecycle passed in 217 seconds with libvirt daemon
+8.0.0 and QEMU 6.2.0 on
+`lanst.net.krglv.com`, canonical `pc-q35-rhel8.6.0`, and the pinned Alpine 3.24.3
+x86_64 image. Guest DMI fields and UUID were verified; the guest reported
+`kvm-clock` with the explicit Europe/Berlin hardware-clock policy and configured
+timer combination. Artifacts:
+`result/vmango-acceptance-95dc0ad8-2569-4e0d-8386-ac9faf055e6a/`.
+A final explicit UTC/EFI HVF run also passed in 43 seconds after the adoption
+preflight refinement, under
+`result/vmango-acceptance-d7b437b2-ef59-4dd4-a00c-f64d69dfb03d/`.
+These are functional boot/preservation observations, not clock-accuracy
+measurements or claims about every machine, firmware or timer combination.

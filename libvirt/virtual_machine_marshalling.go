@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 
 	"libvirt.org/go/libvirt"
 	libvirtxml "libvirt.org/go/libvirtxml"
@@ -115,7 +116,7 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	if err != nil {
 		return nil, err
 	}
-	vm.ObservedBackend, _ = json.Marshal(domainPlatform(domainConfig))
+	vm.ObservedBackend, _ = json.Marshal(hardware.ObservedHardware{PlatformBinding: domainPlatform(domainConfig), GuestSystem: observeGuestSystem(domainConfig)})
 	vm.Metadata = metadata
 	vm.AppliedPolicy, err = readHardwareMetadata(domainConfig)
 	if err != nil {

@@ -1,6 +1,7 @@
 import {
     HardwareProfileFields,
     PlatformBindingFields,
+    GuestSystemFields,
 } from "./HardwareProfiles";
 import {
     diskDependencyLabel,
@@ -198,6 +199,16 @@ function Overview({ vm }: { vm: VM }) {
                             binding={vm.libvirt_hardware.applied}
                         />
                     </DetailSection>
+                    {vm.libvirt_hardware.guest_system && (
+                        <DetailSection
+                            title="Applied guest system settings"
+                            description="Saved at creation or adoption; omitted constraints preserve existing values."
+                        >
+                            <GuestSystemFields
+                                system={vm.libvirt_hardware.guest_system}
+                            />
+                        </DetailSection>
+                    )}
                     <Typography
                         variant="body2"
                         color="text.secondary"
@@ -215,6 +226,16 @@ function Overview({ vm }: { vm: VM }) {
                     description="Read from the backend domain XML; aliases in the requested policy may differ from these concrete values."
                 >
                     <PlatformBindingFields binding={vm.libvirt_observed} />
+                    {vm.libvirt_observed.guest_system && (
+                        <DetailSection
+                            title="Observed guest system settings"
+                            description="Persistent backend XML, not a measurement of guest clock accuracy or guest-visible firmware behavior."
+                        >
+                            <GuestSystemFields
+                                system={vm.libvirt_observed.guest_system}
+                            />
+                        </DetailSection>
+                    )}
                 </DetailSection>
             )}
             <Box className="detail-grid">

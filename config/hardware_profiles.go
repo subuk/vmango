@@ -12,6 +12,9 @@ import (
 const HardwareMigrationGuide = "https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md"
 
 type HardwareProfileConfig struct {
+	SMBIOS         *hardware.SMBIOS          `hcl:"smbios"`
+	Clock          HardwareClockConfig       `hcl:"clock"`
+	Timers         []hardware.Timer          `hcl:"timer"`
 	Machine        HardwareMachineConfig     `hcl:"machine"`
 	ID             string                    `hcl:",key"`
 	Name           string                    `hcl:"name"`
@@ -24,6 +27,20 @@ type HardwareProfileConfig struct {
 	GuestAgent     *bool                     `hcl:"guest_agent"`
 	Hugepages      bool                      `hcl:"hugepages"`
 	ConfigDrive    HardwareConfigDriveConfig `hcl:"config_drive"`
+}
+
+type HardwareClockConfig struct {
+	Mode     *string `hcl:"mode"`
+	Timezone string  `hcl:"timezone"`
+}
+
+func (c HardwareClockConfig) policy() *hardware.Clock {
+	p := &hardware.Clock{Mode: "utc", Timezone: c.Timezone}
+	if c.Mode != nil {
+		p.Mode = *c.Mode
+		p.ModeExplicit = true
+	}
+	return p
 }
 
 type HardwareMachineConfig struct {
@@ -61,7 +78,7 @@ func (c *Config) HardwareProfiles() (map[string]map[string]hardware.Profile, err
 			if _, exists := profiles[p.ID]; exists {
 				return nil, fmt.Errorf("cloud %s: duplicate hardware_profile %q", cloud.ID, p.ID)
 			}
-			policy, err := hardware.Normalize(hardware.Profile{Machine: p.Machine.policy(), ID: p.ID, Name: p.Name, Firmware: p.Firmware, DiskBus: p.DiskBus, DiskController: p.DiskController, NICModel: p.NICModel, Graphics: p.Graphics, VideoModel: p.VideoModel, GuestAgent: p.GuestAgent, Hugepages: p.Hugepages, ConfigDrive: hardware.ConfigDrive{Enabled: p.ConfigDrive.Enabled, Format: p.ConfigDrive.Format, DeviceType: p.ConfigDrive.DeviceType, Bus: p.ConfigDrive.Bus}})
+			policy, err := hardware.Normalize(hardware.Profile{SMBIOS: p.SMBIOS, Clock: p.Clock.policy(), Timers: p.Timers, Machine: p.Machine.policy(), ID: p.ID, Name: p.Name, Firmware: p.Firmware, DiskBus: p.DiskBus, DiskController: p.DiskController, NICModel: p.NICModel, Graphics: p.Graphics, VideoModel: p.VideoModel, GuestAgent: p.GuestAgent, Hugepages: p.Hugepages, ConfigDrive: hardware.ConfigDrive{Enabled: p.ConfigDrive.Enabled, Format: p.ConfigDrive.Format, DeviceType: p.ConfigDrive.DeviceType, Bus: p.ConfigDrive.Bus}})
 			if err != nil {
 				return nil, fmt.Errorf("cloud %s hardware_profile %s: %w; see %s", cloud.ID, p.ID, err, HardwareMigrationGuide)
 			}
