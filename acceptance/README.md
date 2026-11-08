@@ -496,3 +496,53 @@ These runs do not establish Windows guest behavior, Hyper-V automatic modes on
 libvirt >=11.9, other CPU architectures, performance or SMT isolation. Browser
 inspection was unavailable because the built-in browser provider was unavailable;
 no external Chrome session was used. No package builds were performed.
+
+## Firmware and NVRAM
+
+Set `ACCEPTANCE_FIRMWARE=efi` for a real guest-written UEFI variable, private
+NVRAM path separation, external adoption ownership, persistence through resource
+changes and service restart, missing-file regeneration after a catalog change,
+and missing-owned-file cleanup. All removal targets come from disposable test
+VMs; shared CODE/templates are only read and hashed.
+
+`ACCEPTANCE_FIRMWARE=secure` additionally asserts the guest SecureBoot variable
+is enabled. Use a signed guest trusted by the selected template (for example a
+checksum-verified Ubuntu cloud image); unsigned Alpine is unsuitable. Select a
+compatible Q35/KVM host explicitly. Report ordinary UEFI, Secure Boot, raw/qcow2,
+Linux/KVM and macOS/HVF separately. This mode does not claim every firmware build
+or certificate set works. See [firmware policy](../docs/FIRMWARE.md).
+
+To verify a named artifact pair, additionally set `ACCEPTANCE_FIRMWARE_LOADER`
+and `ACCEPTANCE_FIRMWARE_TEMPLATE` to absolute hypervisor paths and
+`ACCEPTANCE_FIRMWARE_FORMAT=raw` or `qcow2`. Both artifacts must already have
+that format. The suite treats them as shared inputs, checks they survive, and
+never converts or removes them. Use disposable copies for custom-format checks.
+
+### Recorded firmware verification, 2026-11-08
+
+- Linux x86_64/Q35/KVM, libvirt 8 and QEMU 6.2: the complete Secure Boot
+  lifecycle passed with raw CODE/template/private VARS and the verified Ubuntu
+  Noble 20261017 amd64 image. The guest reported SecureBoot=1, wrote a persistent
+  variable, and the suite verified private-file separation, resource/disk update
+  preservation, application restart, external adoption retention, regeneration
+  from the saved template after catalog edits, missing-owned-file deletion and
+  shared-template preservation. Task history contained the actual NVRAM paths.
+  The run also passed the generic raw/qcow2 disk-cloning checks and cleanup.
+- macOS aarch64/HVF: an earlier run booted Ubuntu, wrote the guest variable and
+  passed VNC/serial and raw disk cloning, but then timed out in the unrelated
+  qemu-to-storage proxy during qcow2 disk inspection. The disposable VM was
+  removed; its remaining pool was cleaned through `storage:///session` after
+  UUID/path and existing-domain checks. A retry failed at pool definition
+  before creating a VM. The full final HVF firmware lifecycle remains unverified.
+  No daemon or existing guest was restarted.
+- Named qcow2 firmware runtime verification remains pending local daemon
+  recovery; qcow2 disk tests above are not firmware-format tests. Linux libvirt 8
+  cannot satisfy the qcow2 firmware version requirements.
+- Full Go tests, generated API checks, 206 UI tests, five asset tests and the
+  Hugo documentation build passed. The built-in browser provider was unavailable;
+  no Chrome session or package build was used.
+
+After authorized local daemon recovery, rerun `ACCEPTANCE_FIRMWARE=efi` with the
+verified ARM64 image, then repeat with disposable named qcow2 CODE/template
+copies using the variables above. Firmware mode skips the unrelated storage
+cloning stress test; the ordinary suite continues to cover it.

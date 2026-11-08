@@ -195,3 +195,10 @@ it("shows native placement nodesets and extra observed hypervisor features", () 
     expect(screen.getByText("passthrough · evmcs: on")).toBeTruthy();
     expect(screen.getByText("hint-dedicated: on")).toBeTruthy();
 });
+
+it("distinguishes Secure Boot support from initial key enrollment", () => {
+    render(<HardwareProfileFields profile={{ ...profile, firmware_policy: { type: "efi", profile: "release-a", secure_boot: true, enrolled_keys: false } }} />);
+    expect(screen.getByText("efi · release-a")).toBeTruthy();
+    expect(screen.getByText("Required")).toBeTruthy();
+    expect(screen.getByText("Not enrolled")).toBeTruthy();
+});

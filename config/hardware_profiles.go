@@ -22,7 +22,7 @@ type HardwareProfileConfig struct {
 	Machine        HardwareMachineConfig     `hcl:"machine"`
 	ID             string                    `hcl:",key"`
 	Name           string                    `hcl:"name"`
-	Firmware       string                    `hcl:"firmware"`
+	Firmware       *hardware.Firmware        `hcl:"firmware"`
 	DiskBus        string                    `hcl:"disk_bus"`
 	DiskController string                    `hcl:"disk_controller"`
 	NICModel       string                    `hcl:"nic_model"`
@@ -74,6 +74,10 @@ type HardwareConfigDriveConfig struct {
 func (c *Config) HardwareProfiles() (map[string]map[string]hardware.Profile, error) {
 	result := map[string]map[string]hardware.Profile{}
 	for _, cloud := range c.Clouds {
+		firmwares, err := firmwareCatalog(cloud)
+		if err != nil {
+			return nil, err
+		}
 		profiles := map[string]hardware.Profile{}
 		for _, p := range cloud.HardwareProfiles {
 			if !compute.ValidCatalogID(p.ID) {
@@ -96,7 +100,11 @@ func (c *Config) HardwareProfiles() (map[string]map[string]hardware.Profile, err
 				placement = &copy
 				placement.ModeExplicit = placement.Mode != ""
 			}
-			policy, err := hardware.Normalize(hardware.Profile{CPU: cpu, Placement: placement, HyperV: p.HyperV, KVM: p.KVM, SMBIOS: p.SMBIOS, Clock: p.Clock.policy(), Timers: p.Timers, Machine: p.Machine.policy(), ID: p.ID, Name: p.Name, Firmware: p.Firmware, DiskBus: p.DiskBus, DiskController: p.DiskController, NICModel: p.NICModel, Graphics: p.Graphics, VideoModel: p.VideoModel, GuestAgent: p.GuestAgent, Hugepages: p.Hugepages, ConfigDrive: hardware.ConfigDrive{Enabled: p.ConfigDrive.Enabled, Format: p.ConfigDrive.Format, DeviceType: p.ConfigDrive.DeviceType, Bus: p.ConfigDrive.Bus}})
+			firmware, err := resolveFirmwareConfig(p.Firmware, firmwares)
+			if err != nil {
+				return nil, fmt.Errorf("hardware_profile %s: %w", p.ID, err)
+			}
+			policy, err := hardware.Normalize(hardware.Profile{CPU: cpu, Placement: placement, HyperV: p.HyperV, KVM: p.KVM, SMBIOS: p.SMBIOS, Clock: p.Clock.policy(), Timers: p.Timers, Machine: p.Machine.policy(), ID: p.ID, Name: p.Name, FirmwarePolicy: firmware, DiskBus: p.DiskBus, DiskController: p.DiskController, NICModel: p.NICModel, Graphics: p.Graphics, VideoModel: p.VideoModel, GuestAgent: p.GuestAgent, Hugepages: p.Hugepages, ConfigDrive: hardware.ConfigDrive{Enabled: p.ConfigDrive.Enabled, Format: p.ConfigDrive.Format, DeviceType: p.ConfigDrive.DeviceType, Bus: p.ConfigDrive.Bus}})
 			if err != nil {
 				return nil, fmt.Errorf("cloud %s hardware_profile %s: %w; see %s", cloud.ID, p.ID, err, HardwareMigrationGuide)
 			}

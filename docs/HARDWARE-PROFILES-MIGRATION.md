@@ -65,7 +65,7 @@ After (keep existing cloud host, zone, network and storage declarations):
 
 ```hcl
 hardware_profile "linux-uefi" {
-    firmware = "efi"
+    firmware { type = "efi" }
     disk_bus = "scsi"
     disk_controller = "virtio-scsi"
     hugepages = true
@@ -215,11 +215,11 @@ hardware_profile "linux-kvm" {
 }
 hardware_profile "arm-hvf" {
     machine { type = "virt" acceleration = "hvf" }
-    firmware = "efi"
+    firmware { type = "efi" }
 }
 hardware_profile "arm-emulated" {
     machine { type = "virt" acceleration = "qemu" }
-    firmware = "efi"
+    firmware { type = "efi" }
 }
 hardware_profile "pinned-platform" {
     machine { type = "pc-q35-9.2" acceleration = "kvm" }
@@ -457,3 +457,14 @@ topology and pins remain unchanged; only stopped simple-topology CPU resize or
 compatible RAM-only changes are supported. Consult the
 [CPU policy reference](content/en/docs/cpu-policies.md) for complete configuration,
 capability limits, native numad prerequisites and Hyper-V/timer dependencies.
+
+## Firmware block migration
+
+The flat hardware-profile syntax `firmware = "efi"` is rejected with migration
+instructions. Replace it with `firmware { type = "efi" }` (likewise `bios` or
+`auto`). An omitted or empty block is `auto`. New explicit EFI defaults to
+firmware without Secure Boot; request `secure_boot = true` for support and
+initially enrolled keys. Deprecated image-inline firmware remains warned and
+ignored. Supported persisted policy/commands keep their historical meaning.
+See [firmware profiles and NVRAM](FIRMWARE.md) for named profiles, host bindings,
+formats, ownership, missing-file regeneration and security evidence.

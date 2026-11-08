@@ -1496,6 +1496,7 @@ export interface components {
             applied: components["schemas"]["PlatformBinding"];
             cpu?: components["schemas"]["CPUObservation"];
             devices: components["schemas"]["Device"][];
+            firmware?: components["schemas"]["FirmwareBinding"];
             guest_system?: components["schemas"]["GuestSystemObservation"];
             profile: components["schemas"]["Profile"];
             simple_cpu_topology: boolean;
@@ -1949,6 +1950,33 @@ export interface components {
             /** @description The value at the given location */
             value?: unknown;
         };
+        Firmware: {
+            enrolled_keys?: boolean;
+            explicit?: boolean;
+            loader_format?: string;
+            nvram_format?: string;
+            profile?: string;
+            secure_boot?: boolean;
+            type: string;
+        };
+        FirmwareBinding: {
+            enrolled_keys?: boolean;
+            evidence?: string;
+            loader?: string;
+            loader_format?: string;
+            loader_type?: string;
+            namespace?: string;
+            nvram?: string;
+            nvram_format?: string;
+            nvram_template?: string;
+            owned: boolean;
+            owner_vm?: string;
+            readonly?: string;
+            secure?: string;
+            secure_boot?: boolean;
+            type: string;
+            unsupported?: string;
+        };
         GuestSystemObservation: {
             clock?: components["schemas"]["ObservedClock"];
             smbios?: components["schemas"]["SMBIOS"];
@@ -2038,6 +2066,7 @@ export interface components {
             domain_type: string;
             effective_cpu?: components["schemas"]["CPUObservation"];
             emulator: string;
+            firmware: components["schemas"]["FirmwareBinding"];
             guest_system: components["schemas"]["GuestSystemObservation"];
             machine: string;
         };
@@ -2082,6 +2111,7 @@ export interface components {
             disk_bus: string;
             disk_controller?: string;
             firmware: string;
+            firmware_policy?: components["schemas"]["Firmware"];
             graphics: string;
             guest_agent?: boolean;
             hugepages: boolean;

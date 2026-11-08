@@ -5,7 +5,7 @@ package config
 const installerImageCatalog = `
     hardware_profile "linux-default" {
         name = "Linux AUTO"
-        firmware = "auto"
+        firmware { type = "auto" }
         disk_bus = "virtio"
         nic_model = "virtio"
         guest_agent = false
@@ -13,7 +13,7 @@ const installerImageCatalog = `
     }
     hardware_profile "linux-uefi" {
         name = "Linux EFI"
-        firmware = "efi"
+        firmware { type = "efi" }
         disk_bus = "virtio"
         nic_model = "virtio"
         guest_agent = false

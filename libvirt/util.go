@@ -8,12 +8,14 @@ import (
 	"strconv"
 	"strings"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 
 	libvirt "libvirt.org/go/libvirt"
 	libvirtxml "libvirt.org/go/libvirtxml"
 )
 
 type NodeSettings struct {
+	FirmwareProfiles     []hardware.FirmwareHostBinding
 	CdSuffix             string
 	GraphicsListen       string
 	Emulator             string

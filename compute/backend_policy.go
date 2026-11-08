@@ -62,3 +62,16 @@ func (s *VirtualMachineService) ResolveInterfaceAttachment(vm *VirtualMachine, n
 	}
 	return nil
 }
+
+// BackendArtifactRepository exposes confirmed provider-owned state for durable
+// task effects without teaching the domain about firmware or storage mechanisms.
+type BackendArtifactRepository interface {
+	BackendArtifactRefs(vm *VirtualMachine) []tasks.ResourceRef
+}
+
+func (s *VirtualMachineService) BackendArtifactRefs(vm *VirtualMachine) []tasks.ResourceRef {
+	if backend, ok := s.VirtualMachineRepository.(BackendArtifactRepository); ok {
+		return backend.BackendArtifactRefs(vm)
+	}
+	return nil
+}

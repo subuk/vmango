@@ -48,7 +48,7 @@ and launch defaults. Lookup never falls back to another cloud.
 
 ```hcl
 cloud "local" {
-    hardware_profile "linux-uefi" { firmware = "efi" }
+    hardware_profile "linux-uefi" { firmware { type = "efi" } }
     image "ubuntu-local" {
         path = "/var/lib/libvirt/images/ubuntu-cloud.img"
         os_name = "Ubuntu"

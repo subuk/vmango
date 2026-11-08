@@ -53,6 +53,12 @@ func (repo *VirtualMachineRepository) ResolveHardware(vm *compute.VirtualMachine
 		})
 		if e == nil {
 			plan.Emulator, plan.Machine, plan.DomainType = caps.Path, caps.Machine, caps.Domain
+			plan.Firmware, e = repo.resolveFirmware(conn, p, b.FirmwareProfiles, caps, vm.NodeId)
+			if e == nil && plan.Firmware != nil && plan.Firmware.Type == "efi" {
+				plan.Firmware.Owned = true
+				plan.Firmware.OwnerVM = vm.Id
+				plan.Firmware.Namespace = string(vm.NamespaceID)
+			}
 		}
 
 	}
@@ -94,6 +100,14 @@ func (repo *VirtualMachineRepository) ApplyHardware(vm *compute.VirtualMachine, 
 		return err
 	}
 	p := plan.Profile
+	if plan.Firmware != nil && plan.Firmware.Owned && plan.Firmware.NVRAM == "" {
+		plan.Firmware.OwnerVM = vm.Id
+		plan.Firmware.Namespace = string(vm.NamespaceID)
+		raw, err = json.Marshal(plan)
+		if err != nil {
+			return err
+		}
+	}
 	vm.AppliedPolicy = append(json.RawMessage(nil), raw...)
 	vm.Firmware = p.Firmware
 	if vm.Firmware == "auto" {
@@ -153,6 +167,21 @@ func (repo *VirtualMachineRepository) validateHardwareCapabilities(vm *compute.V
 	if creation && plan.Profile.Machine != nil {
 		if err = validateCreationCapabilities(vm, plan.Profile, capsXML); err != nil {
 			return err
+		}
+	}
+	if creation && plan.Firmware != nil {
+		if err = validateFirmwareFiles(repo.pool.nodeUri[vm.NodeId], *plan.Firmware); err != nil {
+			return err
+		}
+		probe := firmwareProbe(capsXML)
+		applyDomainPowerPolicy(probe)
+		applyFirmware(probe, plan.Firmware)
+		raw, e := probe.Marshal()
+		if e != nil {
+			return e
+		}
+		if _, e = conn.DomainXMLToNative("qemu-argv", raw, 0); e != nil {
+			return fmt.Errorf("saved firmware binding is unavailable: %w", e)
 		}
 	}
 	if creation {
@@ -251,11 +280,14 @@ func (repo *VirtualMachineRepository) ValidateAppliedPolicy(vm *compute.VirtualM
 		return &compute.AdoptionRequiredError{Message: "VM requires adoption or re-adoption with an explicit compatible hardware profile; its applied policy is missing or unsupported."}
 	}
 	if len(vm.ObservedBackend) > 0 {
-		var observed hardware.PlatformBinding
+		var observed hardware.ObservedHardware
 		if err := json.Unmarshal(vm.ObservedBackend, &observed); err != nil {
 			return err
 		}
-		if err := hardware.ValidateSavedPlatform(plan.Platform(), observed); err != nil {
+		if err := firmwareDrift(plan.Firmware, observed.Firmware); err != nil {
+			return err
+		}
+		if err := hardware.ValidateSavedPlatform(plan.Platform(), observed.PlatformBinding); err != nil {
 			return &compute.AdoptionRequiredError{Message: "VM platform differs from its applied policy; inspect and explicitly re-adopt it: " + err.Error()}
 		}
 	}
@@ -397,6 +429,9 @@ func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine
 	if err != nil {
 		return nil, err
 	}
+	if err = repo.prepareFirmwareAdoption(vm, &plan, config); err != nil {
+		return nil, err
+	}
 	if err = validateCPUAdoption(config, plan.Profile); err != nil {
 		return nil, err
 	}
@@ -446,7 +481,7 @@ func validateAdoptionPolicy(vm *compute.VirtualMachine, plan hardware.Plan) erro
 	if p.Graphics != vm.Graphic.Type.String() || p.VideoModel != vm.VideoModel.String() {
 		return conflict("graphics/video")
 	}
-	if p.Firmware != "auto" && p.Firmware != vm.Firmware {
+	if p.FirmwarePolicy == nil && p.Firmware != "auto" && p.Firmware != vm.Firmware {
 		return conflict("firmware")
 	}
 	for _, nic := range vm.Interfaces {
@@ -689,6 +724,12 @@ func validateProfileCapabilities(p hardware.Profile, caps compute.VirtualMachine
 }
 
 func validateAdoptionBindings(config *xmlmodel.Domain, plan hardware.Plan) error {
+	if err := validateFirmwareAdoption(config, plan.Profile, plan.Firmware); err != nil {
+		return err
+	}
+	if err := firmwareDrift(plan.Firmware, observeFirmware(config)); err != nil {
+		return err
+	}
 	if err := validateCPUAdoption(config, plan.Profile); err != nil {
 		return err
 	}

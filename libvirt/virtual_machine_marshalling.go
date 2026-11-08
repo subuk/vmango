@@ -116,7 +116,7 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	if err != nil {
 		return nil, err
 	}
-	vm.ObservedBackend, _ = json.Marshal(hardware.ObservedHardware{PlatformBinding: domainPlatform(domainConfig), GuestSystem: observeGuestSystem(domainConfig), CPU: observeCPU(domainConfig)})
+	vm.ObservedBackend, _ = json.Marshal(hardware.ObservedHardware{Firmware: observeFirmware(domainConfig), PlatformBinding: domainPlatform(domainConfig), GuestSystem: observeGuestSystem(domainConfig), CPU: observeCPU(domainConfig)})
 	vm.Metadata = metadata
 	vm.AppliedPolicy, err = readHardwareMetadata(domainConfig)
 	if err != nil {
@@ -133,7 +133,7 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	}
 	vm.VCpus = int(domainConfig.VCPU.Value)
 	vm.Memory = ComputeSizeFromLibvirtSize(domainConfig.Memory.Unit, uint64(domainConfig.Memory.Value))
-	vm.Firmware = domainConfig.OS.Firmware
+	vm.Firmware = observeFirmware(domainConfig).Type
 
 	switch domainConfig.OS.Type.Arch {
 	default:

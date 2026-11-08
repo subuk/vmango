@@ -296,6 +296,11 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 			return err
 		}
 		failure.VMCreated = true
+		for _, artifact := range manager.vms.BackendArtifactRefs(vm) {
+			if err := effect(artifact, "allocated-for-vm"); err != nil {
+				return err
+			}
+		}
 		return effect(vmRef, "created")
 	}); err != nil {
 		return err

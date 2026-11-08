@@ -14,7 +14,7 @@ import (
 func TestImageConversion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.conf")
 	text := `
-hardware_profile "uefi" { firmware="efi" }
+hardware_profile "uefi" { firmware { type = "efi" } }
 image "legacy" { hardware_profile="uefi" path="/images/legacy" os_name = "Ubuntu" os_arch = "aarch64" protected = true }
 image "normal" { hardware_profile="default" path = "/images/shared" os_name = "Ubuntu" os_arch = "aarch64" }
 hardware_profile "custom" { guest_agent=false graphics="spice" video_model="qxl" disk_bus="scsi" disk_controller="virtio-scsi" config_drive {enabled=false} }

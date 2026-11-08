@@ -66,7 +66,7 @@ Keep `url`, `sha256` and `source_format`, and add `archive_format` and
 `archive_member` to select exactly one regular file:
 
 ```hcl
-hardware_profile "linux-uefi" { firmware = "efi" }
+hardware_profile "linux-uefi" { firmware { type = "efi" } }
 image "archived-linux" {
     hardware_profile = "linux-uefi"
     os_arch = "aarch64"
@@ -243,7 +243,7 @@ libvirt storage pool. Register a catalog entry in
 
 ```hcl
 hardware_profile "linux-uefi" {
-    firmware = "efi"
+    firmware { type = "efi" }
     disk_bus = "virtio"
     nic_model = "virtio"
     guest_agent = true
@@ -304,7 +304,7 @@ The following settings belong to `hardware_profile`, not `image`:
 
 | Setting | Values | When omitted |
 | --- | --- | --- |
-| `firmware` | `auto`, `bios`, `efi` | Existing backend firmware selection |
+| `firmware {}` | `type = "auto"`, `"bios"`, `"efi"`, or `profile = "id"` | Platform default selection |
 | `disk_bus` | `virtio`, `scsi`, `ide` | `virtio` |
 | `disk_controller` | `virtio-scsi` with SCSI | Resolved compatible controller |
 | `nic_model` | `virtio`, `e1000`, `rtl8139`, subject to backend support | `virtio` |
@@ -383,7 +383,7 @@ ID and put the former label in `path`:
 
 ```hcl
 cloud "local" {
-    hardware_profile "linux-uefi" { firmware = "efi" }
+    hardware_profile "linux-uefi" { firmware { type = "efi" } }
     image "ubuntu-local" {
         path = "/var/lib/libvirt/images/ubuntu-cloud.img"
         os_name = "Ubuntu"
@@ -440,7 +440,7 @@ host's `image_pool` as described above.
 
 ```hcl
 hardware_profile "android-arm64" {
-    firmware = "efi"
+    firmware { type = "efi" }
     disk_bus = "virtio"
     nic_model = "virtio"
     graphics = "vnc"
@@ -508,3 +508,22 @@ namespace; the new machine and its disks will belong to it.
 
 Once your hosts and images are set up, launching another machine is a single
 form and a click. Your infrastructure stays on your own hardware.
+
+## Firmware and private UEFI variables
+
+Use `firmware { type = "auto" }`, `"bios"`, or `"efi"` in the hardware profile.
+For EFI, `secure_boot = true` requests firmware support and initially enrolled
+keys; `enrolled_keys = false` requests an empty key template instead. Explicit
+EFI defaults to firmware without Secure Boot. Do not set security fields on
+`auto` or BIOS. Named cloud `firmware_profile` policies bind to versioned
+CODE/VARS paths under each host and are selected with `firmware { profile = "id" }`.
+
+Libvirt creates a private persistent file for each VM in its standard system or
+session NVRAM directory. Ordinary changes preserve it. A missing file is
+regenerated from the saved template, losing guest variable changes; keep old
+templates available. Deletion removes only positively owned files, never shared
+CODE/templates or adopted external NVRAM. Saved paths do not pin file contents.
+
+See the repository's [complete firmware guide](https://github.com/subuk/vmango/blob/master/docs/FIRMWARE.md)
+for two-host examples, format/version limits, administrator artifact contracts,
+Secure Boot validation and excluded reset/migration operations.

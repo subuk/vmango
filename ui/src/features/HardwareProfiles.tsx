@@ -85,7 +85,9 @@ export function HardwareProfileFields({
                         .join("; ") ||
                         "Backend defaults / preserved on adoption",
                 ],
-                ["Firmware", profile.firmware],
+                ["Firmware", profile.firmware_policy?.profile ? `${profile.firmware} · ${profile.firmware_policy.profile}` : profile.firmware],
+                ["Secure Boot support", profile.firmware_policy?.secure_boot === undefined ? "Unspecified / platform default" : profile.firmware_policy.secure_boot ? "Required" : "Firmware without Secure Boot"],
+                ["Initial enrolled keys", profile.firmware_policy?.secure_boot ? (profile.firmware_policy.enrolled_keys ? "Required" : "Not enrolled") : "Inapplicable"],
                 ["Ordinary disk bus", profile.disk_bus],
                 [
                     "Disk controller",
@@ -397,4 +399,17 @@ function describeHyperV(h: NonNullable<HardwareProfile["hyperv"]>) {
             `stimer: ${h.stimer.enabled ? `on (direct ${h.stimer.direct ? "on" : "off"})` : "off"}`,
         );
     return `custom · ${values.join("; ") || "all features disabled"}`;
+}
+
+export function FirmwareBindingFields({ binding }: { binding: components["schemas"]["FirmwareBinding"] }) {
+    return <Fields entries={[
+        ["Firmware type", binding.type],
+        ["CODE", binding.loader || "Platform default"],
+        ["CODE format", binding.loader_format || "Backend default"],
+        ["VARS template", binding.nvram_template || "None"],
+        ["Private NVRAM", binding.nvram || "None / not allocated"],
+        ["NVRAM format", binding.nvram_format || "None"],
+        ["NVRAM ownership", binding.owned ? "VM-owned" : "External / not claimed"],
+        ["Selection evidence", binding.evidence || "Persistent domain XML"],
+    ]} />;
 }

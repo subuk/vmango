@@ -100,6 +100,8 @@ func TestLifecycle(t *testing.T) {
 		t.Fatal("invalid ACCEPTANCE_CONFIG_DRIVE_DEVICE")
 	}
 	firmware := "auto"
+	firmwareTest := os.Getenv("ACCEPTANCE_FIRMWARE") != ""
+	firmwareSecure := os.Getenv("ACCEPTANCE_FIRMWARE") == "secure"
 	initialization := os.Getenv("ACCEPTANCE_INITIALIZATION")
 	if initialization == "" {
 		initialization = "nocloud"
@@ -113,6 +115,12 @@ func TestLifecycle(t *testing.T) {
 	}
 	if remote && arch == "aarch64" {
 		firmware = "efi"
+	}
+	if firmwareTest {
+		firmware = "efi"
+		if os.Getenv("ACCEPTANCE_FIRMWARE") != "efi" && !firmwareSecure {
+			t.Fatal("ACCEPTANCE_FIRMWARE must be efi or secure")
+		}
 	}
 	expectedType, bootTimeout, err := acceptanceRuntimeOptions(expectedType, os.Getenv("ACCEPTANCE_VIRT_TYPE"), os.Getenv("ACCEPTANCE_BOOT_TIMEOUT"))
 	if err != nil {
@@ -333,6 +341,10 @@ api {
 		t.Fatal("ACCEPTANCE_CLOCK_MODE must be utc, localtime or timezone")
 	}
 	guestPolicy := ""
+	firmwareBlock := fmt.Sprintf(`firmware {type=%q}`, firmware)
+	if firmwareSecure {
+		firmwareBlock = `firmware {type="efi" secure_boot=true enrolled_keys=true}`
+	}
 	if guestSystem {
 		guestPolicy = fmt.Sprintf(`clock {mode=%q`, clockMode)
 		if clockMode == "timezone" {
@@ -365,8 +377,8 @@ api {
 	}
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {
- hardware_profile "boot" { %s machine { type = %q acceleration = %q } firmware = %q disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" config_drive { format = %q device_type = %q bus = %q } }
- hardware_profile "no-init" { %s machine { type = %q acceleration = %q } firmware = %q config_drive { enabled = false } }
+ hardware_profile "boot" { %s machine { type = %q acceleration = %q } %s disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" config_drive { format = %q device_type = %q bus = %q } }
+ hardware_profile "no-init" { %s machine { type = %q acceleration = %q } %s config_drive { enabled = false } }
  image "boot" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "boot" protected = true minimum_memory_mib = 1024 minimum_disk_gib = 8 }
  image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "no-init" }
  zone "test" {}
@@ -387,7 +399,17 @@ cloud "acceptance" {
  storage_class "efficient" {pool=%q format="qcow2"}
  storage_class "raw" {pool=%q format="raw"} }
 }
-`, guestPolicy, machineType, machineAcceleration, firmware, initialization, configDriveDevice, configDriveBus, guestPolicy, machineType, machineAcceleration, firmware, base, arch, base, arch, uri, name, name, name, name, name)
+`, guestPolicy, machineType, machineAcceleration, firmwareBlock, initialization, configDriveDevice, configDriveBus, guestPolicy, machineType, machineAcceleration, firmwareBlock, base, arch, base, arch, uri, name, name, name, name, name)
+	if loader := os.Getenv("ACCEPTANCE_FIRMWARE_LOADER"); loader != "" {
+		template, format := os.Getenv("ACCEPTANCE_FIRMWARE_TEMPLATE"), os.Getenv("ACCEPTANCE_FIRMWARE_FORMAT")
+		if !firmwareTest || template == "" || (format != "raw" && format != "qcow2") {
+			t.Fatal("named firmware requires firmware mode, template and raw/qcow2 format")
+		}
+		configuration = strings.ReplaceAll(configuration, firmwareBlock, `firmware {profile="acceptance-firmware"}`)
+		firmwareBlock = `firmware {profile="acceptance-firmware"}`
+		configuration = strings.Replace(configuration, `cloud "acceptance" {`, fmt.Sprintf(`cloud "acceptance" { firmware_profile "acceptance-firmware" {type="efi" secure_boot=%t loader_format=%q nvram_format=%q}`, firmwareSecure, format, format), 1)
+		configuration = strings.Replace(configuration, `host "acceptance" {`, fmt.Sprintf(`host "acceptance" { firmware_profile "acceptance-firmware" {loader=%q nvram_template=%q}`, loader, template), 1)
+	}
 	if imageURL != "" {
 		if strings.Contains(imageURL, "alpinelinux.org/") {
 			configuration = strings.ReplaceAll(configuration, `os_name = "Ubuntu"`, `os_name = "Alpine Linux"`)
@@ -401,7 +423,7 @@ cloud "acceptance" {
 	// without sharing or inspecting another physical host.
 	configuration += fmt.Sprintf(`
 cloud "offline" {
- hardware_profile "offline" { firmware=%q config_drive { enabled=false } }
+ hardware_profile "offline" { firmware { type=%q } config_drive { enabled=false } }
  image "boot" { name="Offline definition" path=%q os_name="Independent OS" os_arch=%q hardware_profile="offline" }
  zone "offline-zone" {}
  instance_type "small" { cpu=2 memory_mib=2048 boot_disk_gib=8 }
@@ -661,6 +683,14 @@ cloud "offline" {
 		}
 		userdata = fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, '%stest \"$(hostname)\" = %s && echo %s > %s']\n", commands, name, marker, serialDevice)
 	}
+	nvramMarker := "VMANGO_NVRAM_" + uuid.NewString()
+	if firmwareTest {
+		commands := fmt.Sprintf(`test -d /sys/firmware/efi/efivars && printf "\007\000\000\000%s" > /sys/firmware/efi/efivars/VmangoAcceptance-7d4c685a-87ef-4d6b-a9f8-64a722eb88a1 && sync && `, nvramMarker)
+		if firmwareSecure {
+			commands += `test "$(od -An -tu1 -j4 -N1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c | tr -d " ")" = "1" && `
+		}
+		userdata = fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, '%stest \"$(hostname)\" = %s && echo %s > %s']\n", commands, name, marker, serialDevice)
+	}
 	// Check image constraints and the no-init alias through the same JSON API.
 	if os.Getenv("ACCEPTANCE_STORAGE_ONLY") == "1" {
 		testStorageCloning(t, root, name, "", apiRequest, apiCommand, mustVir, run)
@@ -750,6 +780,9 @@ cloud "offline" {
 	if err := afterPlatform.Unmarshal(changedXML); err != nil {
 		t.Fatal(err)
 	}
+	if !reflect.DeepEqual(beforePlatform.OS, afterPlatform.OS) {
+		t.Fatal("resource change rewrote firmware XML")
+	}
 	if !reflect.DeepEqual(beforePlatform.SysInfo, afterPlatform.SysInfo) || !reflect.DeepEqual(beforePlatform.Clock, afterPlatform.Clock) {
 		t.Fatal("resource change replaced guest system settings")
 	}
@@ -786,6 +819,9 @@ cloud "offline" {
 	}
 	// Simulate an unmanaged domain without changing any resources or claiming disks.
 	mustVir("metadata", domainUUID, "--config", "--uri", "https://vmango.org/xmlns/scheduler/1", "--remove")
+	if firmwareTest {
+		mustVir("metadata", domainUUID, "--config", "--uri", "https://vmango.org/xmlns/hardware/1", "--remove")
+	}
 	var observed struct {
 		Managed bool `json:"managed"`
 	}
@@ -799,6 +835,21 @@ cloud "offline" {
 		t.Fatal("adoption changed resource configuration")
 	}
 	apiCommand("DELETE", "/api/v1/clouds/acceptance/machines/"+domainUUID+"?delete_volumes=true", nil)
+	if firmwareTest {
+		if noInitDomain.OS == nil || noInitDomain.OS.NVRam == nil {
+			t.Fatal("no-init UEFI lacks private NVRAM")
+		}
+		external := noInitDomain.OS.NVRam.NVRam
+		if _, err := firmwareHostCommand(t, uri, "test", "-f", external); err != nil {
+			t.Fatal("adopted external NVRAM was deleted", err)
+		}
+		if external == noInitDomain.OS.NVRam.Template || external == noInitDomain.OS.Loader.Path {
+			t.Fatal("external file aliases shared firmware")
+		}
+		if _, err := firmwareHostCommand(t, uri, "rm", "--", external); err != nil {
+			t.Fatal(err)
+		}
+	}
 	domainUUID = ""
 	apiVMPath := ""
 	var userDataTemplate compute.CloudInitTemplate
@@ -991,6 +1042,16 @@ cloud "offline" {
 		}
 		t.Log("guest-visible SMBIOS values/UUID checked where configured; RTC and clocksource recorded in console.log")
 	}
+	var templateDigest [32]byte
+	if firmwareTest {
+		if runtimeDomain.OS == nil || runtimeDomain.OS.NVRam == nil || runtimeDomain.OS.Loader == nil {
+			t.Fatal("missing UEFI binding")
+		}
+		if runtimeDomain.OS.NVRam.NVRam == noInitDomain.OS.NVRam.NVRam {
+			t.Fatal("VMs share writable NVRAM")
+		}
+		templateDigest = sha256.Sum256(firmwareRead(t, uri, runtimeDomain.OS.NVRam.Template))
+	}
 	t.Log("guest ran cloud-init userdata and confirmed its hostname")
 	// Test signed browser transports without browser refresh cookies or resource Bearer headers.
 	for _, kind := range []string{"serial", "vnc"} {
@@ -1063,7 +1124,9 @@ cloud "offline" {
 	if bootClass == "efficient" && initialBaseDigest != baseDigest("boot-base-after.qcow2") {
 		t.Fatal("guest boot changed shared image contents")
 	}
-	testStorageCloning(t, root, name, apiVMPath, apiRequest, apiCommand, mustVir, run)
+	if !firmwareTest {
+		testStorageCloning(t, root, name, apiVMPath, apiRequest, apiCommand, mustVir, run)
+	}
 	// Exercise the remaining mutating routes only against this isolated VM/pool.
 	volumeBase := "/api/v1/clouds/acceptance/volumes"
 	var disk struct {
@@ -1351,7 +1414,58 @@ cloud "offline" {
 	apiRequest("GET", "/api/v1/keys/"+fp, nil, 200)
 	apiRequest("DELETE", "/api/v1/keys/"+fp, nil, 204)
 	selectedNamespace = "platform"
+	if firmwareTest {
+		n := runtimeDomain.OS.NVRam
+		if n.NVRam == "" || n.NVRam == n.Template || n.NVRam == runtimeDomain.OS.Loader.Path {
+			t.Fatal("invalid owned NVRAM path")
+		}
+		if !strings.Contains(string(firmwareRead(t, uri, n.NVRam)), nvramMarker) {
+			t.Fatal("guest variable did not persist through stop and process restart")
+		}
+		if sha256.Sum256(firmwareRead(t, uri, n.Template)) != templateDigest {
+			t.Fatal("guest changed shared VARS template")
+		}
+		stopApp()
+		write(config, strings.ReplaceAll(configuration, firmwareBlock, `firmware {type="auto"}`))
+		if _, err := firmwareHostCommand(t, uri, "rm", "--", n.NVRam); err != nil {
+			t.Fatal(err)
+		}
+		startApp()
+		apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "start"})
+		regenerated := firmwareRead(t, uri, n.NVRam)
+		if strings.Contains(string(regenerated), nvramMarker) {
+			t.Fatal("regeneration unexpectedly recovered lost guest variable")
+		}
+		var regeneratedDomain libvirtxml.Domain
+		if err := regeneratedDomain.Unmarshal(mustVir("dumpxml", domainUUID, "--inactive")); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(runtimeDomain.OS, regeneratedDomain.OS) {
+			t.Fatal("catalog edit or regeneration changed saved firmware binding")
+		}
+		apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "poweroff"})
+		stopApp()
+		write(config, configuration)
+		startApp()
+		// Missing owned files must not make deletion non-idempotent.
+		if _, err := firmwareHostCommand(t, uri, "rm", "--", n.NVRam); err != nil {
+			t.Fatal(err)
+		}
+		t.Log("private guest NVRAM persisted across lifecycle/restart, regenerated from saved template after catalog edit, and external adopted state was preserved")
+	}
 	apiCommand("DELETE", apiVMPath+"?delete_volumes=true", nil)
+	if firmwareTest {
+		n := runtimeDomain.OS.NVRam
+		if _, err := firmwareHostCommand(t, uri, "test", "-e", n.NVRam); err == nil {
+			t.Fatal("owned private NVRAM remains after deletion")
+		}
+		if sha256.Sum256(firmwareRead(t, uri, n.Template)) != templateDigest {
+			t.Fatal("cleanup modified shared template")
+		}
+		if _, err := firmwareHostCommand(t, uri, "test", "-f", runtimeDomain.OS.Loader.Path); err != nil {
+			t.Fatal("cleanup removed shared CODE")
+		}
+	}
 	if _, err := vir("dominfo", domainUUID); err == nil {
 		t.Fatal("VM still exists after HTTP delete")
 	}

@@ -233,9 +233,10 @@ func validateGuestSystemNative(p hardware.Profile, caps *x.DomainCaps, convert f
 		return &compute.ValidationError{Field: "hardware_profile", Message: err.Error()}
 	}
 	c := &x.Domain{Type: caps.Domain, Name: "vmango-capability-validation", UUID: "00000000-0000-4000-8000-000000000001", Memory: &x.DomainMemory{Value: 512, Unit: "MiB"}, VCPU: &x.DomainVCPU{Value: 1}, OS: &x.DomainOS{Type: &x.DomainOSType{Arch: caps.Arch, Machine: caps.Machine, Type: "hvm"}}, Devices: &x.DomainDeviceList{Emulator: caps.Path}, CPU: &x.DomainCPU{Mode: "maximum"}}
-	if p.Firmware != "" && p.Firmware != "auto" {
+	if p.FirmwarePolicy == nil && p.Firmware != "" && p.Firmware != "auto" {
 		c.OS.Firmware = p.Firmware
 	}
+	applyDomainPowerPolicy(c)
 	applyGuestSystem(c, p)
 	raw, err := c.Marshal()
 	if err != nil {

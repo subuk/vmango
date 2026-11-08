@@ -1471,6 +1471,9 @@
             },
             "type": "array"
           },
+          "firmware": {
+            "$ref": "#/components/schemas/FirmwareBinding"
+          },
           "guest_system": {
             "$ref": "#/components/schemas/GuestSystemObservation"
           },
@@ -3131,6 +3134,94 @@
         },
         "type": "object"
       },
+      "Firmware": {
+        "additionalProperties": false,
+        "properties": {
+          "enrolled_keys": {
+            "type": "boolean"
+          },
+          "explicit": {
+            "type": "boolean"
+          },
+          "loader_format": {
+            "type": "string"
+          },
+          "nvram_format": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "secure_boot": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "FirmwareBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "enrolled_keys": {
+            "type": "boolean"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "loader": {
+            "type": "string"
+          },
+          "loader_format": {
+            "type": "string"
+          },
+          "loader_type": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "nvram": {
+            "type": "string"
+          },
+          "nvram_format": {
+            "type": "string"
+          },
+          "nvram_template": {
+            "type": "string"
+          },
+          "owned": {
+            "type": "boolean"
+          },
+          "owner_vm": {
+            "type": "string"
+          },
+          "readonly": {
+            "type": "string"
+          },
+          "secure": {
+            "type": "string"
+          },
+          "secure_boot": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "unsupported": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "owned"
+        ],
+        "type": "object"
+      },
       "GuestSystemObservation": {
         "additionalProperties": false,
         "properties": {
@@ -3447,6 +3538,9 @@
           "emulator": {
             "type": "string"
           },
+          "firmware": {
+            "$ref": "#/components/schemas/FirmwareBinding"
+          },
           "guest_system": {
             "$ref": "#/components/schemas/GuestSystemObservation"
           },
@@ -3455,6 +3549,7 @@
           }
         },
         "required": [
+          "firmware",
           "cpu",
           "guest_system",
           "machine",
@@ -3598,6 +3693,9 @@
           },
           "firmware": {
             "type": "string"
+          },
+          "firmware_policy": {
+            "$ref": "#/components/schemas/Firmware"
           },
           "graphics": {
             "type": "string"

@@ -443,6 +443,17 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 				return fmt.Errorf("hardware_profile: unsupported setting %s; see %s", key, HardwareMigrationGuide)
 			}
 		}
+		if key == "firmware_profile" || key == "firmware" && owner != "image" {
+			if key == "firmware" && len(list.Filter(key).Items) > 1 {
+				return fmt.Errorf("hardware_profile.firmware may be declared only once")
+			}
+			if err := validateFirmwareBlock(item, owner); err != nil {
+				return err
+			}
+		}
+		if key == "secure_boot" || key == "enrolled_keys" || key == "loader_format" || key == "nvram_format" || key == "loader" || key == "nvram_template" {
+			return fmt.Errorf("%s belongs inside its firmware or firmware_profile block", key)
+		}
 		if key == "cpu_request" {
 			return fmt.Errorf("cpu_request was removed: remove this field; admission counts the full instance_type.cpu quantity (see %s)", HardwareMigrationGuide)
 		}

@@ -716,3 +716,13 @@ func (r *namespaceVMRepository) ValidateAdoptionPolicy(vm *VirtualMachine, polic
 	}
 	return ErrUnavailable
 }
+
+func (r *namespaceVMRepository) BackendArtifactRefs(vm *VirtualMachine) []tasks.ResourceRef {
+	if vm == nil || r.host(vm.NodeId) != nil || vm.NamespaceID != r.context.Namespace {
+		return nil
+	}
+	if backend, ok := r.VirtualMachineRepository.(BackendArtifactRepository); ok {
+		return backend.BackendArtifactRefs(vm)
+	}
+	return nil
+}

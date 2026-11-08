@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 )
 
 type CatalogEntryConfig struct {
@@ -28,6 +29,7 @@ type InstanceTypeConfig struct {
 	Hugepages        bool   `hcl:"hugepages"`
 }
 type CloudConfig struct {
+	FirmwareProfiles []FirmwareProfileConfig `hcl:"firmware_profile"`
 	HardwareProfiles []HardwareProfileConfig `hcl:"hardware_profile"`
 	ID               string                  `hcl:",key"`
 	Name             string                  `hcl:"name"`
@@ -39,23 +41,24 @@ type CloudConfig struct {
 	Hosts            []CloudHostConfig       `hcl:"host"`
 }
 type CloudHostConfig struct {
-	Node                   string                 `hcl:",key"`
-	Uri                    string                 `hcl:"uri"`
-	ImagePool              string                 `hcl:"image_pool"`
-	ConfigDriveSuffix      string                 `hcl:"config_drive_suffix"`
-	ConfigDrivePool        string                 `hcl:"config_drive_pool"`
-	ConfigDriveWriteFormat string                 `hcl:"config_drive_write_format"`
-	Emulator               string                 `hcl:"emulator"`
-	GraphicsListen         string                 `hcl:"graphics_listen"`
-	QcowPreallocMetadata   bool                   `hcl:"qcow_prealloc_metadata"`
-	Cache                  bool                   `hcl:"cache"`
-	Zone                   string                 `hcl:"zone"`
-	Labels                 map[string]string      `hcl:"labels"`
-	CPUOvercommit          *int                   `hcl:"cpu_overcommit"`
-	CPUReserve             int                    `hcl:"cpu_reserve"`
-	MemoryReserveMiB       int64                  `hcl:"memory_reserve_mib"`
-	Networks               []NetworkBindingConfig `hcl:"network"`
-	Storage                []StorageBindingConfig `hcl:"storage_class"`
+	FirmwareProfiles       []hardware.FirmwareHostBinding `hcl:"firmware_profile"`
+	Node                   string                         `hcl:",key"`
+	Uri                    string                         `hcl:"uri"`
+	ImagePool              string                         `hcl:"image_pool"`
+	ConfigDriveSuffix      string                         `hcl:"config_drive_suffix"`
+	ConfigDrivePool        string                         `hcl:"config_drive_pool"`
+	ConfigDriveWriteFormat string                         `hcl:"config_drive_write_format"`
+	Emulator               string                         `hcl:"emulator"`
+	GraphicsListen         string                         `hcl:"graphics_listen"`
+	QcowPreallocMetadata   bool                           `hcl:"qcow_prealloc_metadata"`
+	Cache                  bool                           `hcl:"cache"`
+	Zone                   string                         `hcl:"zone"`
+	Labels                 map[string]string              `hcl:"labels"`
+	CPUOvercommit          *int                           `hcl:"cpu_overcommit"`
+	CPUReserve             int                            `hcl:"cpu_reserve"`
+	MemoryReserveMiB       int64                          `hcl:"memory_reserve_mib"`
+	Networks               []NetworkBindingConfig         `hcl:"network"`
+	Storage                []StorageBindingConfig         `hcl:"storage_class"`
 }
 type NetworkBindingConfig struct {
 	Bridge  string `hcl:"bridge"`

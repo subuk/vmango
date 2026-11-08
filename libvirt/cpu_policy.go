@@ -341,9 +341,10 @@ func (repo *VirtualMachineRepository) validateCPUCapabilities(conn *vir.Connect,
 		}
 	}
 	c := &x.Domain{Type: caps.Domain, Name: "vmango-cpu-validation", UUID: "00000000-0000-4000-8000-000000000001", Memory: &x.DomainMemory{Value: 512, Unit: "MiB"}, VCPU: &x.DomainVCPU{Value: uint(vcpus)}, OS: &x.DomainOS{Type: &x.DomainOSType{Type: "hvm", Arch: caps.Arch, Machine: caps.Machine}}, Devices: &x.DomainDeviceList{Emulator: caps.Path}}
-	if p.Firmware != "" && p.Firmware != "auto" {
+	if p.FirmwarePolicy == nil && p.Firmware != "" && p.Firmware != "auto" {
 		c.OS.Firmware = p.Firmware
 	}
+	applyDomainPowerPolicy(c)
 	applyGuestSystem(c, p)
 	applyCPUPolicy(c, p)
 	c.CPU.Topology = &x.DomainCPUTopology{Sockets: 1, Cores: vcpus, Threads: 1}

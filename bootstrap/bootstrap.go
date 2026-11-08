@@ -115,6 +115,7 @@ func Web(configFilename string) error {
 		nodeScopes[c.Node] = "libvirt:" + hex.EncodeToString(scopeHash[:])
 		nodeOrder = append(nodeOrder, c.Node)
 		vmRepSettings[c.Node] = libvirt.NodeSettings{
+			FirmwareProfiles:     c.FirmwareProfiles,
 			CdSuffix:             c.ConfigDriveSuffix,
 			Emulator:             c.Emulator,
 			QcowPreallocMetadata: c.QcowPreallocMetadata,

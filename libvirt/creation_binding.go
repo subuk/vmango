@@ -7,11 +7,13 @@ import (
 	"net"
 	"net/url"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 )
 
 type creationBinding struct {
-	GraphicsListen string
-	Emulator       string
+	FirmwareProfiles []hardware.FirmwareHostBinding
+	GraphicsListen   string
+	Emulator         string
 }
 
 func (repo *VirtualMachineRepository) SnapshotCreationBinding(node string) (json.RawMessage, error) {
@@ -19,7 +21,7 @@ func (repo *VirtualMachineRepository) SnapshotCreationBinding(node string) (json
 	if !ok {
 		return nil, compute.ErrUnknownNode
 	}
-	return json.Marshal(creationBinding{GraphicsListen: "127.0.0.1", Emulator: settings.Emulator})
+	return json.Marshal(creationBinding{GraphicsListen: "127.0.0.1", Emulator: settings.Emulator, FirmwareProfiles: settings.FirmwareProfiles})
 }
 func (repo *VirtualMachineRepository) ApplyCreationBinding(vm *compute.VirtualMachine, raw json.RawMessage) error {
 	var binding creationBinding

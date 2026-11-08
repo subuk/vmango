@@ -430,6 +430,7 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
 		applyGuestSystem(virDomainConfig, plan.Profile)
 		applyCPUPolicy(virDomainConfig, plan.Profile)
+		applyFirmware(virDomainConfig, plan.Firmware)
 	}
 	applyDomainPowerPolicy(virDomainConfig)
 	virDomainConfig.Devices = &libvirtxml.DomainDeviceList{Emulator: domCapsConfig.Path}
@@ -496,6 +497,9 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 		return compute.ErrNotFound
 	}
 	if isNewVm {
+		if err := repo.ApplyHardware(vm, vm.AppliedPolicy); err != nil {
+			return err
+		}
 		newVirDomainConfig, err := repo.generateNewDomainConfig(conn, vm)
 		if err != nil {
 			return repositoryError(err, "cannot generate new domain config")
@@ -567,6 +571,11 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 	if err != nil {
 		return repositoryError(err, "cannot lookup domain after define")
 	}
+	if isNewVm {
+		if err = repo.recordFirmwareAllocation(virDomain, vm); err != nil {
+			return err
+		}
+	}
 	if vm.NamespaceID != "" {
 		namespace, label, err := domainWorkload(virDomain)
 		if err != nil {
@@ -624,7 +633,15 @@ func (repo *VirtualMachineRepository) Delete(id, nodeId string) (err error) {
 		}
 		effects = append(effects, confirmed(ref, "powered-off"))
 	}
-	if err := virDomain.UndefineFlags(libvirt.DOMAIN_UNDEFINE_NVRAM); err != nil {
+	plan, err := readHardwareMetadata(virDomainConfig)
+	if err != nil {
+		return err
+	}
+	decoded, err := hardware.DecodePlan(plan)
+	if err != nil {
+		return err
+	}
+	if err := virDomain.UndefineFlags(firmwareUndefineFlags(virDomainConfig, decoded)); err != nil {
 		return repositoryError(err, "cannot undefine domain")
 	}
 	return nil

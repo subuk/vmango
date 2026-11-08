@@ -23,6 +23,7 @@ type ConfigDrive struct {
 func (c ConfigDrive) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
 
 type Profile struct {
+	FirmwarePolicy *Firmware        `json:"firmware_policy,omitempty"`
 	CPU            *CPU             `json:"cpu,omitempty"`
 	Placement      *NativePlacement `json:"placement,omitempty"`
 	HyperV         *HyperV          `json:"hyperv,omitempty"`
@@ -74,6 +75,7 @@ type StateContract struct {
 	Snapshot bool   `json:"snapshot"`
 }
 type Plan struct {
+	Firmware          *FirmwareBinding        `json:"firmware,omitempty"`
 	CPU               *CPUObservation         `json:"cpu,omitempty"`
 	SimpleCPUTopology bool                    `json:"simple_cpu_topology,omitempty"`
 	GuestSystem       *GuestSystemObservation `json:"guest_system,omitempty"`
@@ -110,6 +112,14 @@ func Normalize(p Profile) (Profile, error) {
 	}
 	if p.Name == "" {
 		p.Name = p.ID
+	}
+	if p.FirmwarePolicy != nil {
+		f, err := NormalizeFirmware(*p.FirmwarePolicy, p.FirmwarePolicy.Profile != "")
+		if err != nil {
+			return p, err
+		}
+		p.FirmwarePolicy = &f
+		p.Firmware = f.Type
 	}
 	if p.Firmware == "" {
 		p.Firmware = "auto"

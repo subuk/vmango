@@ -551,9 +551,19 @@ func (h *CommandHandler) execute(ctx context.Context, command tasks.Command, pro
 				return err
 			}
 		}
+		machineBeforeDelete, err := h.VMs.Get(c.VM, c.Node)
+		if err != nil {
+			return err
+		}
+		artifacts := h.VMs.BackendArtifactRefs(machineBeforeDelete)
 		if err := stage("delete-machine", func() error {
 			if err := h.VMs.Delete(c.VM, c.Node); err != nil {
 				return err
+			}
+			for _, artifact := range artifacts {
+				if err := effect(artifact, "deleted"); err != nil {
+					return err
+				}
 			}
 			return effect(ref, "deleted")
 		}); err != nil {
