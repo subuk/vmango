@@ -1,4 +1,5 @@
 """Exercise the actual publication shell with a local GitHub CLI substitute."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -21,6 +22,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.script = textwrap.dedent(step.split('        run: |\n', 1)[1].split('\n  packages:', 1)[0])
         for suffix in ('linux-x64.tar.gz', 'windows-x64.zip', 'macos-arm64.tar.gz'):
             (self.root / ('vmango-0.12.2-' + suffix)).write_bytes(b'test artifact')
+        (self.root / 'vmango-0.12.2.tar.gz').write_bytes(b'test source archive')
         gh = self.root / 'gh'
         gh.write_text('#!' + sys.executable + '\n' + textwrap.dedent('''\
             import json
@@ -70,7 +72,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([call[:2] for call in calls[-2:]],
                          [['release', 'create'], ['release', 'edit']])
-        self.assertEqual(len((self.root / 'SHA256SUMS').read_text().splitlines()), 3)
+        checksums = (self.root / 'SHA256SUMS').read_text().splitlines()
+        self.assertEqual(len(checksums), 4)
+        source = self.root / 'vmango-0.12.2.tar.gz'
+        self.assertIn(hashlib.sha256(source.read_bytes()).hexdigest() + '  ' + source.name,
+                      checksums)
+        self.assertIn(source.name, calls[-2])
+        self.assertIn('SHA256SUMS', calls[-2])
 
     def test_prefix_match_is_not_an_existing_release_tag(self):
         self.env['TAG_REFS'] = '["refs/tags/v0.12.20", "refs/tags/v0.12.2-rc.1"]'
@@ -107,6 +115,21 @@ class ReleaseWorkflowTest(unittest.TestCase):
         result, calls = self.run_publication()
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(calls, [])
+
+    def test_missing_source_archive_stops_before_publication(self):
+        (self.root / 'vmango-0.12.2.tar.gz').unlink()
+        result, calls = self.run_publication()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls, [])
+
+    def test_prerelease_includes_source_archive(self):
+        self.env['VERSION'] = '0.12.2-rc.1'
+        for artifact in self.root.glob('vmango-0.12.2*'):
+            artifact.rename(artifact.with_name(artifact.name.replace('0.12.2', '0.12.2-rc.1')))
+        result, calls = self.run_publication()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('--prerelease', calls[-2])
+        self.assertIn('vmango-0.12.2-rc.1.tar.gz', calls[-2])
 
 
 if __name__ == '__main__':

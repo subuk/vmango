@@ -83,6 +83,28 @@ jobs:
           fi
           python3 scripts/release/package.py "$VERSION" "$TARGET" bin/vmango
           python3 scripts/release/smoke.py "dist/vmango-$VERSION-$TARGET.tar.gz"
+      - name: Build and verify source archive
+        if: runner.os == 'Linux'
+        env:
+          VERSION: ${{ inputs.version }}
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+        run: |
+          make UI_PREBUILT=1 VERSION="$VERSION" tarball
+          unpacked=$(mktemp -d)
+          trap 'rm -rf "$unpacked"' EXIT
+          tar -xzf "vmango-$VERSION.tar.gz" -C "$unpacked"
+          cd "$unpacked/vmango-$VERSION"
+          test "$(env -u VERSION make -s print-version)" = "$VERSION"
+          unset VERSION
+          make UI_PREBUILT=1
+          make UI_PREBUILT=1 test
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: source-archive
+          path: vmango-${{ inputs.version }}.tar.gz
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.target }}

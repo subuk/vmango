@@ -64,15 +64,28 @@ Published assets:
 vmango-VERSION-linux-x64.tar.gz
 vmango-VERSION-windows-x64.zip
 vmango-VERSION-macos-arm64.tar.gz
+vmango-VERSION.tar.gz
 SHA256SUMS
 ```
 
 Archives contain a top-level directory with the same name as the archive stem.
-They include `vmango` or `vmango.exe`, `vmango.quickstart.conf`,
+Binary archives include `vmango` or `vmango.exe`, `vmango.quickstart.conf`,
 `vmango.dist.conf`, `QUICKSTART.md` and license notices. Linux/macOS runtime
 libraries remain system prerequisites. Windows ships the installed Fedora
 MinGW DLL set and records the matching source RPM names in
 `RUNTIME-PACKAGES.txt`; preserve those notices when redistributing it.
+
+`vmango-VERSION.tar.gz` is the build-ready source archive. It includes Go sources
+and vendored modules, frontend sources and lockfile, generated `ui/dist` with
+its verified manifest and runtime licenses, and a `VERSION` file. Build it with
+`make UI_PREBUILT=1` and test with `make UI_PREBUILT=1 test`; Go, a C compiler,
+pkg-config, libvirt development libraries and Python 3 are required, but Node/npm
+and Go module downloads are not. ISO tests also need genisoimage or a compatible
+tool. The Linux build job extracts this archive outside the checkout and builds
+and tests it with Go module downloads disabled before uploading `source-archive`.
+The release includes it in `SHA256SUMS`, independently of COPR/PPA publication.
+GitHub's automatic **Source code** downloads are Git snapshots and do not include
+the generated frontend; use the explicitly attached source archive instead.
 
 The workflow does not overwrite an existing release or move a tag. If a failed
 publication leaves a draft, inspect it and either complete publication manually

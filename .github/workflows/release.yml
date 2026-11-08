@@ -84,6 +84,10 @@ jobs:
           pattern: binary-*
           merge-multiple: true
           path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: source-archive
+          path: dist
       - name: Create checksums and publish complete release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -95,9 +99,11 @@ jobs:
           test -f "vmango-$VERSION-linux-x64.tar.gz"
           test -f "vmango-$VERSION-windows-x64.zip"
           test -f "vmango-$VERSION-macos-arm64.tar.gz"
+          test -f "vmango-$VERSION.tar.gz"
           assets=("vmango-$VERSION-linux-x64.tar.gz"
                   "vmango-$VERSION-windows-x64.zip"
-                  "vmango-$VERSION-macos-arm64.tar.gz")
+                  "vmango-$VERSION-macos-arm64.tar.gz"
+                  "vmango-$VERSION.tar.gz")
           sha256sum "${assets[@]}" > SHA256SUMS
           # Recheck the tag immediately before publication; never move a tag.
           # An absent tag produces an empty list; API failures must remain failures.
