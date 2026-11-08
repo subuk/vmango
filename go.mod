@@ -4,9 +4,10 @@ go 1.26.0
 
 require (
 	dario.cat/mergo v1.0.2
-	github.com/akamensky/argparse v1.4.0
+	github.com/alecthomas/kong v1.16.1
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/danielgtaylor/huma/v2 v2.40.0
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
@@ -23,7 +24,6 @@ require (
 )
 
 require (
-	github.com/go-jose/go-jose/v4 v4.1.6 // indirect
 	github.com/mattn/go-colorable v0.1.16 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 )

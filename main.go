@@ -3,69 +3,85 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 	"subuk/vmango/bootstrap"
 	"subuk/vmango/util"
 
-	"github.com/akamensky/argparse"
+	"github.com/alecthomas/kong"
 )
 
-func main() {
-	parser := argparse.NewParser("vmango", "Vmango Virtual Machine Manager")
-	configFilename := parser.String("c", "config", &argparse.Options{
-		Default: util.GetenvDefault("VMANGO_CONFIG", "vmango.conf"),
-		Help:    "Configuration file path",
-	})
-	webCommand := parser.NewCommand("web", "Start web server")
-	installCommand := parser.NewCommand("install", "Review and prepare Linux libvirt hosts in a temporary web wizard")
-	richtBinary := installCommand.String("", "richt", &argparse.Options{Help: "Path to the compatible local Richt executable (otherwise PATH)"})
-	installState := installCommand.String("", "state-dir", &argparse.Options{Help: "Private installer recovery directory"})
-	installListen := installCommand.String("", "listen", &argparse.Options{Default: "127.0.0.1:0", Help: "Temporary loopback listener address"})
-	installParallelism := installCommand.Int("", "parallelism", &argparse.Options{Default: 3, Help: "Maximum parallel hosts (1..8)"})
-	genpwCommand := parser.NewCommand("genpw", "Generate password")
-	migrateCommand := parser.NewCommand("namespace-migrate", "Preview or apply an explicit namespace migration while the server is stopped")
-	mapping := migrateCommand.String("", "mapping", &argparse.Options{Required: true, Help: "Explicit migration mapping JSON file"})
-	apply := migrateCommand.Flag("", "apply", &argparse.Options{Help: "Apply the mapping after a durable backup; omitted means dry-run"})
-	backup := migrateCommand.String("", "backup", &argparse.Options{Help: "Absolute private backup directory, required for apply and reused to resume"})
-	recoveryCommand := parser.NewCommand("task-recover", "Inspect or recover task history while the server is stopped")
-	action := recoveryCommand.String("", "action", &argparse.Options{Default: "inspect", Help: "inspect, cancel or release"})
-	taskID := recoveryCommand.String("", "id", &argparse.Options{Help: "Task UUID; omit to inspect all history"})
-	operator := recoveryCommand.String("", "operator", &argparse.Options{Help: "Operator audit identity for cancel or release"})
-	reason := recoveryCommand.String("", "reason", &argparse.Options{Help: "Audited recovery reason; required for cancel or release"})
-	if err := parser.Parse(os.Args); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
-	}
-	switch {
-	case installCommand.Happened():
-		explicit := false
-		for _, arg := range os.Args[1:] {
-			if arg == "--config" || arg == "-c" || strings.HasPrefix(arg, "--config=") {
-				explicit = true
+type commandLine struct {
+	Config  string   `short:"c" default:"${config_default}" help:"Configuration file path (defaults to VMANGO_CONFIG or vmango.conf)."`
+	Web     struct{} `cmd:"" help:"Start web server."`
+	Install struct {
+		Richt       string `help:"Path to the compatible local Richt executable (otherwise PATH)."`
+		StateDir    string `help:"Private installer recovery directory."`
+		Listen      string `default:"127.0.0.1:0" help:"Temporary loopback listener address."`
+		Parallelism int    `default:"3" help:"Maximum parallel hosts (1..8)."`
+	} `cmd:"" help:"Review and prepare Linux libvirt hosts in a temporary web wizard. Requires an explicit --config path."`
+	Genpw            struct{} `cmd:"" help:"Generate password."`
+	NamespaceMigrate struct {
+		Mapping string `required:"" help:"Explicit migration mapping JSON file."`
+		Apply   bool   `help:"Apply the mapping after a durable backup; omitted means dry-run."`
+		Backup  string `help:"Absolute private backup directory, required for apply and reused to resume."`
+	} `cmd:"" help:"Preview or apply an explicit namespace migration while the server is stopped."`
+	TaskRecover struct {
+		Action   string `default:"inspect" enum:"inspect,cancel,release" help:"Recovery action: inspect, cancel or release."`
+		ID       string `name:"id" help:"Task UUID; omit to inspect all history."`
+		Operator string `help:"Operator audit identity for cancel or release."`
+		Reason   string `help:"Audited recovery reason; required for cancel or release."`
+	} `cmd:"" help:"Inspect or recover task history while the server is stopped."`
+}
+
+func (cli *commandLine) Validate(ctx *kong.Context) error {
+	if ctx.Command() == "install" {
+		for _, path := range ctx.Path {
+			if path.Flag != nil && path.Flag.Name == "config" && cli.Config != "" {
+				return nil
 			}
 		}
-		if !explicit || *configFilename == "" {
-			fmt.Fprintln(os.Stderr, "Install requires an explicit --config path.")
-			os.Exit(1)
-		}
-		if err := bootstrap.Install(*configFilename, *richtBinary, *installState, *installListen, *installParallelism, os.Stdout); err != nil {
+		return fmt.Errorf("install requires an explicit --config path")
+	}
+	return nil
+}
+
+func newCLIParser(cli *commandLine) (*kong.Kong, error) {
+	return kong.New(cli,
+		kong.Name("vmango"),
+		kong.Description("Vmango Virtual Machine Manager"),
+		kong.ShortUsageOnError(),
+		kong.Vars{"config_default": util.GetenvDefault("VMANGO_CONFIG", "vmango.conf")},
+	)
+}
+
+func main() {
+	var cli commandLine
+	parser, err := newCLIParser(&cli)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	ctx, err := parser.Parse(os.Args[1:])
+	parser.FatalIfErrorf(err)
+	switch ctx.Command() {
+	case "install":
+		if err := bootstrap.Install(cli.Config, cli.Install.Richt, cli.Install.StateDir, cli.Install.Listen, cli.Install.Parallelism, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Installer error: %s\n", err)
 			os.Exit(1)
 		}
-	case webCommand.Happened():
-		if err := bootstrap.Web(*configFilename); err != nil {
+	case "web":
+		if err := bootstrap.Web(cli.Config); err != nil {
 			fmt.Fprintf(os.Stderr, "Web server error: %s\n", err)
 			os.Exit(1)
 		}
-	case genpwCommand.Happened():
+	case "genpw":
 		bootstrap.GenPassword()
-	case migrateCommand.Happened():
-		if err := bootstrap.NamespaceMigrate(*configFilename, *mapping, *backup, *apply, os.Stdout); err != nil {
+	case "namespace-migrate":
+		if err := bootstrap.NamespaceMigrate(cli.Config, cli.NamespaceMigrate.Mapping, cli.NamespaceMigrate.Backup, cli.NamespaceMigrate.Apply, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Namespace migration error: %s\n", err)
 			os.Exit(1)
 		}
-	case recoveryCommand.Happened():
-		if err := bootstrap.NamespaceTaskRecovery(*configFilename, *action, *taskID, *operator, *reason, os.Stdout); err != nil {
+	case "task-recover":
+		if err := bootstrap.NamespaceTaskRecovery(cli.Config, cli.TaskRecover.Action, cli.TaskRecover.ID, cli.TaskRecover.Operator, cli.TaskRecover.Reason, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Task recovery error: %s\n", err)
 			os.Exit(1)
 		}
