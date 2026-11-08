@@ -84,6 +84,12 @@ type MachineResourceRepository interface {
 }
 
 func (s *VirtualMachineService) SaveResources(vm *VirtualMachine) error {
+	if vm == nil {
+		return ErrInvalid
+	}
+	if err := s.RequireManaged(vm.Id, vm.NodeId); err != nil {
+		return err
+	}
 	if repo, ok := s.VirtualMachineRepository.(MachineResourceRepository); ok {
 		return repo.SaveResources(vm)
 	}

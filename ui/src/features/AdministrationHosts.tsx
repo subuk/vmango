@@ -546,14 +546,6 @@ function HostDetail({
                                                     "Config drive suffix",
                                                     h.config_drive_suffix,
                                                 ],
-                                                [
-                                                    "Config drive format",
-                                                    h.config_drive_format,
-                                                ],
-                                                [
-                                                    "Graphics listener",
-                                                    h.graphics_listen,
-                                                ],
                                                 ["Cache", h.cache],
                                                 [
                                                     "QCOW metadata preallocation",

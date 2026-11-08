@@ -32,6 +32,7 @@ def package(version, target, binary, runtime=None):
             "docs/API.md": "API.md",
             "docs/TASKS.md": "TASKS.md",
             "docs/CLOUDS.md": "CLOUDS.md",
+            "docs/HARDWARE-PROFILES-MIGRATION.md": "HARDWARE-PROFILES-MIGRATION.md",
             "docs/NAMESPACES.md": "NAMESPACES.md",
             "docs/INSTALLER.md": "INSTALLER.md",
             "acceptance/README.md": "ACCEPTANCE.md",

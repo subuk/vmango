@@ -3,13 +3,14 @@ package api
 import (
 	"sort"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 )
 
 type apiDisk struct {
 	VolumeID string `json:"volume_id" minLength:"1" doc:"Compound host/path volume identifier returned by cloud discovery."`
 	Alias    string `json:"alias,omitempty"`
 	Device   string `json:"device,omitempty" enum:"disk,cdrom" default:"disk"`
-	Bus      string `json:"bus,omitempty" enum:"virtio,scsi,ide" default:"virtio"`
+	Bus      string `json:"bus,omitempty" enum:"virtio,scsi,ide"`
 }
 
 type apiInterface struct {
@@ -38,16 +39,23 @@ type apiConfiguredKey struct {
 	Comment     string `json:"comment"`
 }
 
+type apiLibvirtMachineHardware struct {
+	Profile hardware.Profile  `json:"profile"`
+	Version int               `json:"version"`
+	Devices []hardware.Device `json:"devices" nullable:"false"`
+}
 type apiVM struct {
-	NamespaceID        compute.NamespaceID `json:"namespace_id,omitempty"`
-	BackendName        string              `json:"backend_name,omitempty"`
-	Cloud              string              `json:"cloud"`
-	Zone               string              `json:"zone"`
-	InstanceType       string              `json:"instance_type"`
-	Image              string              `json:"image"`
-	Managed            bool                `json:"managed"`
-	CPURequest         int                 `json:"cpu_request"`
-	MemoryRequestBytes uint64              `json:"memory_request_bytes"`
+	LibvirtHardware    *apiLibvirtMachineHardware `json:"libvirt_hardware,omitempty"`
+	AdoptionRequired   bool                       `json:"adoption_required,omitempty"`
+	NamespaceID        compute.NamespaceID        `json:"namespace_id,omitempty"`
+	BackendName        string                     `json:"backend_name,omitempty"`
+	Cloud              string                     `json:"cloud"`
+	Zone               string                     `json:"zone"`
+	InstanceType       string                     `json:"instance_type"`
+	Image              string                     `json:"image"`
+	Managed            bool                       `json:"managed"`
+	CPURequest         int                        `json:"cpu_request"`
+	MemoryRequestBytes uint64                     `json:"memory_request_bytes"`
 
 	Node           string              `json:"node"`
 	ID             string              `json:"id"`
@@ -96,6 +104,9 @@ type apiVolumeDetail struct {
 
 func vmDTO(vm *compute.VirtualMachine) apiVM {
 	v := apiVM{Node: vm.NodeId, ID: vm.Id, Name: vm.Name, Arch: vm.Arch.String(), State: vm.State.String(), VCPUs: vm.VCpus, MemoryBytes: vm.Memory.Bytes(), Firmware: vm.Firmware, DiskController: vm.DiskController, GuestAgent: vm.GuestAgent, Autostart: vm.Autostart, Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), GraphicsListen: vm.Graphic.Listen, VideoModel: vm.VideoModel.String(), Disks: []apiDisk{}, Interfaces: []apiReadInterface{}, IPAddresses: vm.IpAddressList()}
+	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
+		v.LibvirtHardware = &apiLibvirtMachineHardware{Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices}
+	}
 	if vm.Cpupin != nil {
 		v.CPUPinning = &apiCPUPinning{Emulator: append([]uint{}, vm.Cpupin.Emulator...), VCPUs: []apiVCPUPin{}}
 		for id, cpus := range vm.Cpupin.Vcpus {
@@ -176,6 +187,12 @@ func (e *Environ) machineDTO(vm *compute.VirtualMachine) apiVM {
 		d.Name = vm.Label
 	}
 	d.Managed = e.clouds == nil || vm.Metadata != nil
+	if e.vms != nil {
+		if backend, ok := e.vms.VirtualMachineRepository.(compute.BackendMachineRepository); ok && backend.ValidateAppliedPolicy(vm) != nil {
+			d.Managed = false
+		}
+	}
+	d.AdoptionRequired = !d.Managed
 	if vm.Metadata != nil {
 		m := vm.Metadata
 		d.Cloud = m.Cloud

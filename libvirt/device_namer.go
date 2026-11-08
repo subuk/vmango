@@ -19,18 +19,16 @@ func NewDeviceNamer() *DeviceNamer {
 func NewDeviceNamerFromDisks(disks []libvirtxml.DomainDisk) *DeviceNamer {
 	namer := &DeviceNamer{state: map[compute.DeviceBus]int{}}
 	for _, disk := range disks {
-		if disk.Target != nil && disk.Target.Dev != "" {
-			devName := disk.Target.Dev
-			switch devName[0 : len(devName)-1] {
-			case "sd":
-				namer.state[compute.DeviceBusScsi] = int(devName[len(devName)-1]) - int('`')
-			case "hd":
-				namer.state[compute.DeviceBusIde] = int(devName[len(devName)-1]) - int('`')
-			case "vd":
-				namer.state[compute.DeviceBusVirtio] = int(devName[len(devName)-1]) - int('`')
+		if disk.Target == nil {
+			continue
+		}
+		for bus, prefix := range map[compute.DeviceBus]string{compute.DeviceBusScsi: "sd", compute.DeviceBusIde: "hd", compute.DeviceBusVirtio: "vd"} {
+			if index, ok := diskTargetIndex(disk.Target.Dev, prefix); ok && index+1 > namer.state[bus] {
+				namer.state[bus] = index + 1
 			}
 		}
 	}
+
 	return namer
 }
 
@@ -38,11 +36,11 @@ func (n *DeviceNamer) Next(bus compute.DeviceBus) string {
 	name := ""
 	switch bus {
 	case compute.DeviceBusIde:
-		name = "hd" + string(rune('a'+n.state[bus]))
+		name = "hd" + diskTargetName(n.state[bus])
 	case compute.DeviceBusScsi:
-		name = "sd" + string(rune('a'+n.state[bus]))
+		name = "sd" + diskTargetName(n.state[bus])
 	case compute.DeviceBusVirtio:
-		name = "vd" + string(rune('a'+n.state[bus]))
+		name = "vd" + diskTargetName(n.state[bus])
 	}
 	n.state[bus] += 1
 	return name

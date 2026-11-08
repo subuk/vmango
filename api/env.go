@@ -8,6 +8,7 @@ import (
 	"subuk/vmango/auth"
 	"subuk/vmango/compute"
 	"subuk/vmango/config"
+	"subuk/vmango/libvirt/hardware"
 	"subuk/vmango/tasks"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -19,6 +20,8 @@ import (
 var AppVersion string
 
 type Environ struct {
+	hardwareProfiles   map[string]map[string]hardware.Profile
+	imageProfiles      map[string]map[string]string
 	namespaces         *compute.NamespaceService
 	workloads          *compute.WorkloadService
 	administration     *compute.AdministrationService
@@ -72,6 +75,18 @@ func New(cfg *config.Config, logger zerolog.Logger,
 	}
 
 	env := &Environ{cfg: &cfg.API, logger: logger, router: mux.NewRouter(), networks: networks, keys: keys, volpools: volpools, nodes: nodes, volumes: volumes, vms: vms, vmanager: vmanager, images: images, auth: authentication, tasks: taskService}
+	profiles, err := cfg.HardwareProfiles()
+	env.hardwareProfiles = profiles
+	if err != nil {
+		return nil, err
+	}
+	env.imageProfiles = map[string]map[string]string{}
+	for _, cloud := range cfg.Clouds {
+		env.imageProfiles[cloud.ID] = map[string]string{}
+		for _, image := range cloud.Images {
+			env.imageProfiles[cloud.ID][image.ID] = image.HardwareProfile
+		}
+	}
 	if vmanager != nil {
 		env.clouds = vmanager.Clouds
 	}

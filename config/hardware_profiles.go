@@ -1,0 +1,99 @@
+package config
+
+import (
+	"fmt"
+	"strings"
+	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
+
+	"github.com/hashicorp/hcl/hcl/ast"
+)
+
+const HardwareMigrationGuide = "https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md"
+
+type HardwareProfileConfig struct {
+	ID             string                    `hcl:",key"`
+	Name           string                    `hcl:"name"`
+	Firmware       string                    `hcl:"firmware"`
+	DiskBus        string                    `hcl:"disk_bus"`
+	DiskController string                    `hcl:"disk_controller"`
+	NICModel       string                    `hcl:"nic_model"`
+	Graphics       string                    `hcl:"graphics"`
+	VideoModel     string                    `hcl:"video_model"`
+	GuestAgent     *bool                     `hcl:"guest_agent"`
+	Hugepages      bool                      `hcl:"hugepages"`
+	ConfigDrive    HardwareConfigDriveConfig `hcl:"config_drive"`
+}
+
+type HardwareConfigDriveConfig struct {
+	Enabled    *bool  `hcl:"enabled"`
+	Format     string `hcl:"format"`
+	DeviceType string `hcl:"device_type"`
+	Bus        string `hcl:"bus"`
+}
+
+// HardwareProfiles returns normalized libvirt policy, never common cloud entities.
+func (c *Config) HardwareProfiles() (map[string]map[string]hardware.Profile, error) {
+	result := map[string]map[string]hardware.Profile{}
+	for _, cloud := range c.Clouds {
+		profiles := map[string]hardware.Profile{}
+		for _, p := range cloud.HardwareProfiles {
+			if !compute.ValidCatalogID(p.ID) {
+				return nil, fmt.Errorf("cloud %s hardware_profile %q: use a stable catalog ID; see %s", cloud.ID, p.ID, HardwareMigrationGuide)
+			}
+			if _, exists := profiles[p.ID]; exists {
+				return nil, fmt.Errorf("cloud %s: duplicate hardware_profile %q", cloud.ID, p.ID)
+			}
+			policy, err := hardware.Normalize(hardware.Profile{ID: p.ID, Name: p.Name, Firmware: p.Firmware, DiskBus: p.DiskBus, DiskController: p.DiskController, NICModel: p.NICModel, Graphics: p.Graphics, VideoModel: p.VideoModel, GuestAgent: p.GuestAgent, Hugepages: p.Hugepages, ConfigDrive: hardware.ConfigDrive{Enabled: p.ConfigDrive.Enabled, Format: p.ConfigDrive.Format, DeviceType: p.ConfigDrive.DeviceType, Bus: p.ConfigDrive.Bus}})
+			if err != nil {
+				return nil, fmt.Errorf("cloud %s hardware_profile %s: %w; see %s", cloud.ID, p.ID, err, HardwareMigrationGuide)
+			}
+			profiles[p.ID] = policy
+		}
+		result[cloud.ID] = profiles
+	}
+	return result, nil
+}
+
+// Remove legacy attributes before decoding, so even invalid old values cannot
+// accidentally influence new policy. AST presence also detects false/empty values.
+func removeDeprecatedHardware(root *ast.ObjectList) []string {
+	warnings := []string{}
+	legacy := map[string]map[string]bool{
+		"image":         {"efi": true, "firmware": true, "disk_bus": true, "disk_controller": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "initialization": true},
+		"instance_type": {"hugepages": true, "autostart": true},
+		"host":          {"graphics_listen": true, "config_drive_write_format": true},
+	}
+	for _, item := range root.Items {
+		if len(item.Keys) < 2 || item.Keys[0].Token.Value() != "cloud" {
+			continue
+		}
+		cloud, ok := item.Val.(*ast.ObjectType)
+		if !ok {
+			continue
+		}
+		cloudID := fmt.Sprint(item.Keys[1].Token.Value())
+		for _, block := range cloud.List.Items {
+			if len(block.Keys) < 2 {
+				continue
+			}
+			owner := fmt.Sprint(block.Keys[0].Token.Value())
+			attrs, ok := block.Val.(*ast.ObjectType)
+			if !ok || legacy[owner] == nil {
+				continue
+			}
+			kept := []*ast.ObjectItem{}
+			for _, attribute := range attrs.List.Items {
+				key := fmt.Sprint(attribute.Keys[0].Token.Value())
+				if !legacy[owner][key] {
+					kept = append(kept, attribute)
+					continue
+				}
+				location := strings.Join([]string{"cloud", cloudID, owner, fmt.Sprint(block.Keys[1].Token.Value()), key}, ".")
+				warnings = append(warnings, fmt.Sprintf("line %d: %s is deprecated and ignored; see %s", attribute.Pos().Line, location, HardwareMigrationGuide))
+			}
+			attrs.List.Items = kept
+		}
+	}
+	return warnings
+}

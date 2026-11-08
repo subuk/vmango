@@ -8,7 +8,6 @@ import (
 	"strings"
 	"subuk/vmango/compute"
 
-	vir "libvirt.org/go/libvirt"
 	xmlmodel "libvirt.org/go/libvirtxml"
 )
 
@@ -103,43 +102,8 @@ func writeSchedulerMetadata(config *xmlmodel.Domain, metadata *compute.MachineMe
 	return nil
 }
 
-// Adopt records management identity and normalizes persistent power settings.
-// A running guest keeps its current hardware until its next full start.
+// Adopt requires an explicit profile through AdoptWithPolicy. The legacy entry
+// point cannot infer hardware policy or normalize an external guest.
 func (repo *VirtualMachineRepository) Adopt(id, node string, m *compute.MachineMetadata) error {
-	conn, err := repo.pool.Acquire(node)
-	if err != nil {
-		return err
-	}
-	defer repo.pool.Release(node)
-	domain, err := conn.LookupDomainByUUIDString(id)
-	if err != nil {
-		return repositoryError(err, "lookup adoption target")
-	}
-	defer domain.Free()
-	// Read the persistent secure XML so running device state and redacted
-	// credentials cannot replace the configuration for the next start.
-	description, err := domain.GetXMLDesc(vir.DOMAIN_XML_INACTIVE | vir.DOMAIN_XML_SECURE)
-	if err != nil {
-		return repositoryError(err, "read adoption configuration")
-	}
-	config := &xmlmodel.Domain{}
-	if err := config.Unmarshal(description); err != nil {
-		return repositoryError(err, "parse adoption configuration")
-	}
-	applyDomainPowerPolicy(config)
-	if err := writeSchedulerMetadata(config, m); err != nil {
-		return err
-	}
-	description, err = config.Marshal()
-	if err != nil {
-		return err
-	}
-	// Define metadata and power policy together; do not report a partially
-	// adopted machine if validation rejects the updated configuration.
-	defined, err := conn.DomainDefineXML(description)
-	if err != nil {
-		return repositoryError(err, "define adoption configuration")
-	}
-	defer defined.Free()
-	return nil
+	return fmt.Errorf("adoption requires an explicit compatible hardware profile; use AdoptWithPolicy")
 }

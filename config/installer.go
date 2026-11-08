@@ -211,7 +211,7 @@ func (d *InstallDocument) Prepare(edits InstallEdits) (*InstallCandidate, error)
 		}
 		hp := appendPath(cloudPath, []string{"host", host.Node})
 		if old == nil {
-			body := fmt.Sprintf("uri = %q\nzone = %q\nimage_pool = %q\nconfig_drive_pool = %q\ngraphics_listen = \"127.0.0.1\"\nnetwork %q { network = %q }\nstorage_class %q { pool = %q format = \"qcow2\" }\n", host.URI, host.Zone, host.Pool, host.Pool, host.NetworkID, host.Network, host.StorageClass, host.Pool)
+			body := fmt.Sprintf("uri = %q\nzone = %q\nimage_pool = %q\nconfig_drive_pool = %q\nnetwork %q { network = %q }\nstorage_class %q { pool = %q format = \"qcow2\" }\n", host.URI, host.Zone, host.Pool, host.Pool, host.NetworkID, host.Network, host.StorageClass, host.Pool)
 			data, err = installEnsureBlock(data, hp, body)
 		} else {
 			// Existing custom backend settings and resource bindings are never inferred

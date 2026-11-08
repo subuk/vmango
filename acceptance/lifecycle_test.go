@@ -84,6 +84,20 @@ func TestLifecycle(t *testing.T) {
 		t.Fatal("ACCEPTANCE_ADOPT_POWER requires an x86_64 guest")
 	}
 	expectedType := "kvm"
+	configDriveBus := os.Getenv("ACCEPTANCE_CONFIG_DRIVE_BUS")
+	if configDriveBus == "" {
+		configDriveBus = "virtio"
+	}
+	configDriveDevice := os.Getenv("ACCEPTANCE_CONFIG_DRIVE_DEVICE")
+	if configDriveDevice == "" {
+		configDriveDevice = "disk"
+	}
+	if configDriveBus != "virtio" && configDriveBus != "scsi" && configDriveBus != "ide" {
+		t.Fatal("invalid ACCEPTANCE_CONFIG_DRIVE_BUS")
+	}
+	if configDriveDevice != "disk" && configDriveDevice != "cdrom" {
+		t.Fatal("invalid ACCEPTANCE_CONFIG_DRIVE_DEVICE")
+	}
 	firmware := "auto"
 	initialization := os.Getenv("ACCEPTANCE_INITIALIZATION")
 	if initialization == "" {
@@ -311,12 +325,14 @@ api {
 
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {
- image "boot" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q protected = true disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" initialization = %q minimum_memory_mib = 1024 minimum_disk_gib = 8 }
- image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q firmware = %q initialization = "none" }
+ hardware_profile "boot" { firmware = %q disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" config_drive { format = %q device_type = %q bus = %q } }
+ hardware_profile "no-init" { firmware = %q config_drive { enabled = false } }
+ image "boot" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "boot" protected = true minimum_memory_mib = 1024 minimum_disk_gib = 8 }
+ image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "no-init" }
  zone "test" {}
  instance_type "small" { cpu=2 memory_mib=2048 boot_disk_gib=8 }
  instance_type "too-small" { cpu=2 memory_mib=512 boot_disk_gib=8 }
- instance_type "larger" { cpu=2 memory_mib=3072 boot_disk_gib=16 autostart=true }
+ instance_type "larger" { cpu=2 memory_mib=3072 boot_disk_gib=16 }
  network "lan" {}
  storage_class "standard" {}
  storage_class "efficient" { name="Space-efficient" description="Shares its source." clone_mode="overlay" }
@@ -326,12 +342,11 @@ cloud "acceptance" {
  config_drive_pool = %q
  image_pool = %q
  qcow_prealloc_metadata = false
- graphics_listen = "127.0.0.1"
  zone="test" labels={rack="test"} network "lan" { network="qemu-usernet" } storage_class "standard" {pool=%q format="qcow2"}
  storage_class "efficient" {pool=%q format="qcow2"}
  storage_class "raw" {pool=%q format="raw"} }
 }
-`, base, arch, firmware, initialization, base, arch, firmware, uri, name, name, name, name, name)
+`, firmware, initialization, configDriveDevice, configDriveBus, firmware, base, arch, base, arch, uri, name, name, name, name, name)
 	if imageURL != "" {
 		if strings.Contains(imageURL, "alpinelinux.org/") {
 			configuration = strings.ReplaceAll(configuration, `os_name = "Ubuntu"`, `os_name = "Alpine Linux"`)
@@ -345,14 +360,15 @@ cloud "acceptance" {
 	// without sharing or inspecting another physical host.
 	configuration += fmt.Sprintf(`
 cloud "offline" {
- image "boot" { name="Offline definition" path=%q os_name="Independent OS" os_arch=%q firmware=%q initialization="none" }
+ hardware_profile "offline" { firmware=%q config_drive { enabled=false } }
+ image "boot" { name="Offline definition" path=%q os_name="Independent OS" os_arch=%q hardware_profile="offline" }
  zone "offline-zone" {}
  instance_type "small" { cpu=2 memory_mib=2048 boot_disk_gib=8 }
  network "lan" {}
  storage_class "standard" {}
  host "offline" { uri=%q zone="offline-zone" network "lan" { network="qemu-usernet" } storage_class "standard" {pool="offline" format="qcow2"} }
 }
-`, filepath.Join(root, "offline-source.qcow2"), arch, firmware, "qemu+unix:///session?socket="+filepath.Join(root, "offline.sock"))
+`, firmware, filepath.Join(root, "offline-source.qcow2"), arch, "qemu+unix:///session?socket="+filepath.Join(root, "offline.sock"))
 	platformNamespace := `namespace "platform" { name="Platform" clouds=["acceptance", "offline"] }` + "\n"
 	configuration += "\n" + platformNamespace + `namespace "analytics" { name="Analytics" clouds=["acceptance"] }` + "\n"
 	write(config, configuration)
@@ -640,7 +656,13 @@ cloud "offline" {
 	if state := strings.TrimSpace(mustVir("domstate", lastCreatedVM)); state != "running" {
 		t.Fatalf("create-and-start did not start its VM: %s", state)
 	}
+	if !strings.Contains(mustVir("dominfo", lastCreatedVM), "enable") {
+		t.Fatal("successful create-and-start did not enable autostart")
+	}
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+lastCreatedVM+"/actions", map[string]string{"action": "poweroff"})
+	if !strings.Contains(mustVir("dominfo", lastCreatedVM), "disable") {
+		t.Fatal("successful poweroff did not disable autostart")
+	}
 	aliasBody["start"] = false
 	if imageURL != "" {
 		if _, err := vir("vol-info", base); err != nil {
@@ -662,8 +684,8 @@ cloud "offline" {
 
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/instance-type", map[string]any{"instance_type": "larger"})
 	changedXML := mustVir("dumpxml", domainUUID)
-	if !strings.Contains(mustVir("dominfo", domainUUID), "enable") || !strings.Contains(mustVir("domstate", domainUUID), "shut off") || !strings.Contains(changedXML, "org.qemu.guest_agent.0") || !strings.Contains(changedXML, "127.0.0.1") {
-		t.Fatal("type change did not apply autostart or preserve power/devices/listener")
+	if !strings.Contains(mustVir("dominfo", domainUUID), "disable") || !strings.Contains(mustVir("domstate", domainUUID), "shut off") || !strings.Contains(changedXML, "org.qemu.guest_agent.0") || !strings.Contains(changedXML, "127.0.0.1") {
+		t.Fatal("type change did not preserve disabled autostart, power, devices and listener")
 	}
 	if !strings.Contains(changedXML, "3145728") {
 		t.Fatal("instance type RAM change missing from domain XML")
@@ -690,7 +712,7 @@ cloud "offline" {
 		t.Fatal("unmanaged machine was inferred from its name")
 	}
 	apiRequest("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/actions", map[string]string{"action": "start"}, 409)
-	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/adopt", map[string]any{})
+	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/adopt", map[string]any{"hardware_profile": "no-init"})
 	if !strings.Contains(mustVir("dumpxml", domainUUID), "3145728") {
 		t.Fatal("adoption changed resource configuration")
 	}
@@ -783,40 +805,47 @@ cloud "offline" {
 	if !strings.Contains(xml, "virtio-scsi") || strings.Contains(xml, "org.qemu.guest_agent.0") || !strings.Contains(xml, "_config.iso") {
 		t.Fatal("image launch defaults did not reach domain XML")
 	}
+	foundConfigDrive := false
+	for _, disk := range runtimeDomain.Devices.Disks {
+		if disk.Alias != nil && disk.Alias.Name == "ua-configdrive" {
+			foundConfigDrive = true
+			if disk.Device != configDriveDevice || disk.Target == nil || disk.Target.Bus != configDriveBus || disk.Boot != nil {
+				t.Fatalf("config-drive attachment/boot policy mismatch: %+v", disk)
+			}
+		}
+	}
+	if !foundConfigDrive {
+		t.Fatal("config-drive attachment missing")
+	}
 	if adoptPower {
-		// Reproduce a legacy guest without ACPI/APIC using only this run's
-		// isolated VM. Adoption must repair it before the first guest boot.
-		legacy := &libvirtxml.Domain{}
-		if err := legacy.Unmarshal(xml); err != nil {
-			t.Fatal(err)
-		}
-		legacy.Features = nil
-		legacy.OnPoweroff, legacy.OnReboot, legacy.OnCrash = "restart", "restart", "restart"
-		legacyXML, err := legacy.Marshal()
-		if err != nil {
-			t.Fatal(err)
-		}
-		legacyPath := filepath.Join(root, "legacy-domain.xml")
-		write(legacyPath, legacyXML)
-		mustVir("define", legacyPath)
+		// Adoption records explicit compatible policy without rewriting hardware.
 		mustVir("metadata", domainUUID, "--config", "--uri", "https://vmango.org/xmlns/scheduler/1", "--remove")
-		apiCommand("POST", apiVMPath+"/adopt", map[string]any{})
-		xml = mustVir("dumpxml", domainUUID, "--inactive")
-		write(filepath.Join(root, "adopted-domain.xml"), xml)
-		adopted := &libvirtxml.Domain{}
-		if err := adopted.Unmarshal(xml); err != nil {
+		apiCommand("POST", apiVMPath+"/adopt", map[string]any{"hardware_profile": "boot"})
+		adoptedXML := mustVir("dumpxml", domainUUID, "--inactive")
+		write(filepath.Join(root, "adopted-domain.xml"), adoptedXML)
+		var before, after libvirtxml.Domain
+		if err := before.Unmarshal(xml); err != nil {
 			t.Fatal(err)
 		}
-		if adopted.Features == nil || adopted.Features.ACPI == nil || adopted.Features.APIC == nil || adopted.OnPoweroff != "destroy" || adopted.OnReboot != "restart" || adopted.OnCrash != "destroy" {
-			t.Fatal("adoption did not repair legacy power settings")
+		if err := after.Unmarshal(adoptedXML); err != nil {
+			t.Fatal(err)
 		}
-		t.Log("adoption repaired legacy ACPI/APIC and power lifecycle settings")
+		before.Metadata, after.Metadata = nil, nil
+		beforeXML, _ := before.Marshal()
+		afterXML, _ := after.Marshal()
+		if beforeXML != afterXML {
+			t.Fatal("adoption changed existing domain hardware or power configuration")
+		}
+		xml = adoptedXML
 	}
 	request(path, 200)
 	t.Log("created VM and cloud-init disk through HTTP; starting guest")
 	apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "start"})
 	if state := strings.TrimSpace(mustVir("domstate", domainUUID)); state != "running" {
 		t.Fatalf("expected running, got %s", state)
+	}
+	if !strings.Contains(mustVir("dominfo", domainUUID), "enable") {
+		t.Fatal("successful start did not enable autostart")
 	}
 	headers := http.Header{"Origin": {origin}, "Authorization": {"Bearer " + access}, "X-Vmango-Namespace": {selectedNamespace}}
 	u, _ := url.Parse(origin)
@@ -922,6 +951,9 @@ cloud "offline" {
 		if strings.TrimSpace(mustVir("domstate", domainUUID)) != "shut off" {
 			t.Fatal("adopted guest restarted after shutdown")
 		}
+		if !strings.Contains(mustVir("dominfo", domainUUID), "disable") {
+			t.Fatal("confirmed shutdown did not disable autostart")
+		}
 		t.Log("adopted guest shut down gracefully and stayed powered off")
 		apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "start"})
 	}
@@ -985,10 +1017,12 @@ cloud "offline" {
 	if err := json.Unmarshal(rawClone, &clone); err != nil {
 		t.Fatal(err)
 	}
+	apiRequest("POST", apiVMPath+"/disks/attach", map[string]any{"volume_id": disk.ID, "bus": "virtio"}, 422)
 	apiCommand("POST", apiVMPath+"/disks/attach", map[string]any{"volume_id": disk.ID})
 	var machineDetail struct {
 		Disks []struct {
-			ID string `json:"volume_id"`
+			ID  string `json:"volume_id"`
+			Bus string `json:"bus"`
 		} `json:"disks"`
 		Catalog *struct {
 			Networks       []compute.CatalogEntry `json:"networks"`
@@ -1005,6 +1039,9 @@ cloud "offline" {
 	for _, d := range machineDetail.Disks {
 		if d.ID == disk.ID {
 			attached = true
+			if d.Bus != "scsi" {
+				t.Fatalf("later disk ignored applied SCSI policy: %s", d.Bus)
+			}
 		}
 	}
 	if !attached {

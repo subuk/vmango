@@ -6,21 +6,20 @@ import (
 	libvirtxml "libvirt.org/go/libvirtxml"
 	"net"
 	"net/url"
-	"strings"
 	"subuk/vmango/compute"
 )
 
-type creationBinding struct{ GraphicsListen string }
+type creationBinding struct {
+	GraphicsListen string
+	Emulator       string
+}
 
 func (repo *VirtualMachineRepository) SnapshotCreationBinding(node string) (json.RawMessage, error) {
 	settings, ok := repo.settings[node]
 	if !ok {
 		return nil, compute.ErrUnknownNode
 	}
-	if err := ValidateGraphicsListen(settings.GraphicsListen); err != nil {
-		return nil, err
-	}
-	return json.Marshal(creationBinding{GraphicsListen: settings.GraphicsListen})
+	return json.Marshal(creationBinding{GraphicsListen: "127.0.0.1", Emulator: settings.Emulator})
 }
 func (repo *VirtualMachineRepository) ApplyCreationBinding(vm *compute.VirtualMachine, raw json.RawMessage) error {
 	var binding creationBinding
@@ -30,12 +29,11 @@ func (repo *VirtualMachineRepository) ApplyCreationBinding(vm *compute.VirtualMa
 	if err := json.Unmarshal(raw, &binding); err != nil {
 		return err
 	}
-	if err := ValidateGraphicsListen(binding.GraphicsListen); err != nil {
-		return err
-	}
+	vm.Graphic.Listen = ""
 	if vm.Graphic.Type != compute.GraphicTypeNone {
-		vm.Graphic.Listen = binding.GraphicsListen
+		vm.Graphic.Listen = "127.0.0.1"
 	}
+	vm.Graphic.BindingResolved = true
 	return nil
 }
 
@@ -48,33 +46,20 @@ func ValidateGraphicsListen(address string) error {
 	return nil
 }
 
-// Wildcards refer to the hypervisor's loopback for local/SSH connections.
-// A non-SSH remote connection needs the hypervisor's externally reachable host.
+// Existing listeners are preserved. A wildcard is dialed through host loopback;
+// every remote transport reaches that address through SSH, never direct VNC.
 func graphicsDialHost(listen string, uri *url.URL) (string, error) {
 	if err := ValidateGraphicsListen(listen); err != nil {
 		return "", err
 	}
 	ip := net.ParseIP(listen)
-	ssh := strings.Contains(uri.Scheme, "ssh")
 	if listen == "" || ip.IsUnspecified() {
-		if !ssh && uri.Hostname() != "" {
-			return uri.Hostname(), nil
-		}
 		if ip != nil && ip.To4() == nil {
 			return "::1", nil
 		}
 		return "127.0.0.1", nil
 	}
-	if !ssh && uri.Hostname() != "" && ip.IsLoopback() {
-		return "", fmt.Errorf("remote loopback graphics listener requires an SSH connection")
-	}
 	return listen, nil
-}
-
-// host is a validated IP literal; neither host nor port contains shell syntax.
-func graphicsForwardCommand(host, port string) string {
-	target := net.JoinHostPort(host, port)
-	return "if (command -v socat) >/dev/null 2>&1; then socat - TCP:" + target + "; else nc " + host + " " + port + "; fi"
 }
 
 func graphicsListenerAddress(legacy string, listeners []libvirtxml.DomainGraphicListener) string {

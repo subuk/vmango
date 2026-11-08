@@ -34,7 +34,8 @@ cloud_init_templates_dir=%q
 tasks { directory=%q }
 namespace "alpha" { clouds=["local"] }
 cloud "local" {
- image "linux" { path="/unused.img" os_arch="x86_64" }
+ hardware_profile "default" {}
+ image "linux" { hardware_profile="default" path="/unused.img" os_arch="x86_64" }
  zone "z" {}
  instance_type "small" { cpu=1 memory_mib=256 boot_disk_gib=1 }
  network "lan" {}

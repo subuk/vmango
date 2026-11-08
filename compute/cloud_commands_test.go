@@ -274,7 +274,7 @@ func TestTypeChangeStaysOnHostAndPreservesDisks(t *testing.T) {
 			result := awaitCloudTask(t, s, task.ID)
 			v, _ := backend.Get("v", "a")
 			if sufficient {
-				if !v.Autostart || !v.GuestAgent || v.Graphic.Listen != "127.0.0.9" || v.Graphic.Type != compute.GraphicTypeVnc || v.VideoModel != compute.VideoModelQxl || v.State != compute.StateStopped || result.State != tasks.Succeeded || v.VCpus != 2 || v.Metadata.CPURequest != 2 || v.Volumes[0].Path != "/existing" {
+				if v.Autostart || !v.GuestAgent || v.Graphic.Listen != "127.0.0.9" || v.Graphic.Type != compute.GraphicTypeVnc || v.VideoModel != compute.VideoModelQxl || v.State != compute.StateStopped || result.State != tasks.Succeeded || v.VCpus != 2 || v.Metadata.CPURequest != 2 || v.Volumes[0].Path != "/existing" {
 					t.Fatalf("incorrect change: %+v %+v", result, v)
 				}
 			} else if result.State != tasks.Failed || backend.mutations != 0 || v.VCpus != 1 {
@@ -446,7 +446,7 @@ func TestCloudCreatePinsPolicyAndSelectedHostBinding(t *testing.T) {
 	if err != nil || result.State != tasks.Succeeded {
 		t.Fatalf("creation failed: %+v %v", result, err)
 	}
-	if !vm.Autostart || vm.GuestAgent || vm.Graphic.Type != compute.GraphicTypeSpice || vm.VideoModel != compute.VideoModelQxl || vm.Graphic.Listen != "127.0.0.2" {
+	if vm.Autostart || vm.GuestAgent || vm.Graphic.Type != compute.GraphicTypeSpice || vm.VideoModel != compute.VideoModelQxl || vm.Graphic.Listen != "127.0.0.2" {
 		t.Fatalf("accepted policy changed: %+v", vm)
 	}
 }
@@ -528,7 +528,7 @@ func TestCloudCreatePinsImageDisksAcrossRestart(t *testing.T) {
 	}
 }
 
-func TestTypeChangePinsAutostartAndDoesNotRewriteOnCatalogEdit(t *testing.T) {
+func TestTypeChangePreservesAutostartAcrossCatalogEdit(t *testing.T) {
 	s, backend, _, cloud := cloudFixture(t, 4)
 	backend.machines["a/v"] = compute.VirtualMachine{Id: "v", Name: "v", NodeId: "a", Arch: compute.ArchAmd64, State: compute.StateStopped, VCpus: 1, Memory: compute.NewSize(1, compute.SizeUnitG), Metadata: &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 1, MemoryRequestBytes: 1 << 30}, Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeNone}, VideoModel: compute.VideoModelNone}
 	task := submitCloud(t, s, "accepted-type-policy", "machine.change-type", compute.InfrastructureCommand{CloudID: "c", Node: "a", VM: "v", InstanceType: "small"})
@@ -542,7 +542,7 @@ func TestTypeChangePinsAutostartAndDoesNotRewriteOnCatalogEdit(t *testing.T) {
 		t.Fatal(result)
 	}
 	after, _ := backend.Get("v", "a")
-	if !after.Autostart || after.State != compute.StateStopped {
+	if after.Autostart || after.State != compute.StateStopped {
 		t.Fatalf("type policy not pinned or changed power: %+v", after)
 	}
 }
@@ -559,7 +559,7 @@ func (r *cloudVMBackend) Start(id, node string) error {
 	return nil
 }
 
-func TestCreateStartIsIndependentOfAutostart(t *testing.T) {
+func TestCreateStartSynchronizesAutostart(t *testing.T) {
 	s, backend, _, cloud := cloudFixture(t, 4)
 	cloud.InstanceTypes[0].Autostart = false
 	spec := createSpec("start-once")
@@ -571,8 +571,8 @@ func TestCreateStartIsIndependentOfAutostart(t *testing.T) {
 		t.Fatal(result)
 	}
 	vm, _ := backend.Get(taskMachineID(t, result), "a")
-	if vm.Autostart || vm.State != compute.StateRunning || backend.starts != 1 {
-		t.Fatalf("one-time start replaced persistent policy: %+v", vm)
+	if !vm.Autostart || vm.State != compute.StateRunning || backend.starts != 1 {
+		t.Fatalf("successful initial start did not synchronize autostart: %+v", vm)
 	}
 }
 
@@ -629,4 +629,13 @@ func TestCloudCreationNamesAreHostLocal(t *testing.T) {
 	if rejected.State != tasks.Failed || rejected.OutcomeUncertain || volumes.created != 1 {
 		t.Fatalf("host-local collision provisioned resources: %+v", rejected)
 	}
+}
+
+func (r *cloudVMBackend) SetAutostart(id, node string, enabled bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	vm := r.machines[node+"/"+id]
+	vm.Autostart = enabled
+	r.machines[node+"/"+id] = vm
+	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 	"subuk/vmango/tasks"
 )
 
@@ -116,7 +117,13 @@ func (b *AdministrationObservations) ImageAvailability(ctx context.Context, clou
 		}
 		entry.Observation = "observed"
 		entry.Compatibility = "unsupported"
-		if i.Compatible(caps) {
+		compatible := i.Compatible(caps)
+		if len(i.BackendPolicy) > 0 {
+			policy, e := hardware.DecodePolicy(i.BackendPolicy)
+			compatible = e == nil && i.Arch == caps.Arch && validateProfileCapabilities(policy, caps) == nil
+		}
+
+		if compatible {
 			entry.Compatibility = "supported"
 		}
 		if b.Volumes == nil {

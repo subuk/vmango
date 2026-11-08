@@ -249,6 +249,9 @@ func (h *CommandHandler) validateWorkloadCommand(kind string, c *InfrastructureC
 	return nil
 }
 func (h *CommandHandler) Execute(ctx context.Context, command tasks.Command, p *tasks.Execution) error {
+	if err := h.CheckCommandCompatibility(command); err != nil {
+		return err
+	}
 	if err := h.ValidateContext(command); err != nil {
 		return err
 	}

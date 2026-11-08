@@ -92,7 +92,7 @@ func (s *CloudService) Offers(c Cloud) ([]CloudOffer, error) {
 			if err != nil {
 				return nil, err
 			}
-			if !image.Compatible(caps) {
+			if image.Arch != caps.Arch || (len(image.BackendPolicy) == 0 && !image.Compatible(caps)) {
 				continue
 			}
 			minimumDisk := image.MinimumDiskBytes
@@ -132,7 +132,22 @@ func (s *CloudService) Offers(c Cloud) ([]CloudOffer, error) {
 						if b.Model != "" && image.Defaults.NICModel != "" && b.Model != image.Defaults.NICModel {
 							continue
 						}
-						if err := s.VMs.ValidateNetwork(h.Node, &VirtualMachineAttachedInterface{NetworkName: b.Network, Bridge: b.Bridge, Model: b.Model, AccessVlan: b.VLAN}); err != nil {
+						nic := &VirtualMachineAttachedInterface{NetworkName: b.Network, Bridge: b.Bridge, Model: b.Model, AccessVlan: b.VLAN}
+						if len(image.BackendPolicy) != 0 {
+							backend, ok := s.VMs.VirtualMachineRepository.(BackendMachineRepository)
+							if !ok {
+								continue
+							}
+							binding, err := s.VMs.SnapshotCreationBinding(h.Node)
+							if err != nil {
+								continue
+							}
+							vm := &VirtualMachine{NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Interfaces: []*VirtualMachineAttachedInterface{nic}, Config: &VirtualMachineConfig{}}
+							if err := backend.ResolveHardware(vm, image.BackendPolicy, binding); err != nil {
+								continue
+							}
+						}
+						if err := s.VMs.ValidateNetwork(h.Node, nic); err != nil {
 							continue
 						}
 						offer.Networks = append(offer.Networks, n.ID)
@@ -311,6 +326,9 @@ func (s *CloudService) ValidateCreate(c Cloud, spec MachineCreateSpec) error {
 		seen[d.Name] = true
 	}
 	for _, d := range spec.Disks {
+		if d.Name == "configdrive" {
+			return invalid("new_disks", "The configdrive name is reserved for the generated configuration artifact.")
+		}
 		if !resourceName.MatchString(d.Name) || seen[d.Name] || !hasStorageClass(c.StorageClasses, d.StorageClass) || d.SizeBytes == 0 {
 			return invalid("new_disks", "Invalid additional disk, duplicate name or name reserved by the image.")
 		}
@@ -393,9 +411,7 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 			if i.Node.CpuArch != image.Arch {
 				return InfrastructureCommand{}, fmt.Errorf("image architecture is incompatible")
 			}
-			if t.Hugepages && !i.Node.Has2mPages() && !i.Node.Has1gPages() {
-				return InfrastructureCommand{}, fmt.Errorf("hugepages unavailable")
-			}
+
 			storage, ok := h.Storage[spec.StorageClass]
 			if !ok {
 				return InfrastructureCommand{}, fmt.Errorf("storage class is not bound on host")
@@ -407,7 +423,7 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 			if network.Model != "" && image.Defaults.NICModel != "" && network.Model != image.Defaults.NICModel {
 				return InfrastructureCommand{}, fmt.Errorf("network model conflicts with image requirements")
 			}
-			vm := &VirtualMachine{Id: uuid.NewString(), Name: spec.Name, NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Hugepages: t.Hugepages, Autostart: t.Autostart, Config: &VirtualMachineConfig{Hostname: spec.Name, Userdata: []byte(spec.UserData)}, Interfaces: []*VirtualMachineAttachedInterface{{NetworkName: network.Network, LogicalNetwork: spec.Network, Bridge: network.Bridge, Model: network.Model, AccessVlan: network.VLAN}}, Metadata: &MachineMetadata{Cloud: c.ID, Zone: h.Zone, InstanceType: t.ID, Image: image.ID, CPURequest: t.CPURequest, MemoryRequestBytes: t.MemoryBytes, MinimumMemoryBytes: image.MinimumMemoryBytes}}
+			vm := &VirtualMachine{Id: uuid.NewString(), Name: spec.Name, NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Config: &VirtualMachineConfig{Hostname: spec.Name, Userdata: []byte(spec.UserData)}, Interfaces: []*VirtualMachineAttachedInterface{{NetworkName: network.Network, LogicalNetwork: spec.Network, Bridge: network.Bridge, Model: network.Model, AccessVlan: network.VLAN}}, Metadata: &MachineMetadata{Cloud: c.ID, Zone: h.Zone, InstanceType: t.ID, Image: image.ID, CPURequest: t.CPURequest, MemoryRequestBytes: t.MemoryBytes, MinimumMemoryBytes: image.MinimumMemoryBytes}}
 			if spec.Hostname != "" {
 				vm.Config.Hostname = spec.Hostname
 			}
@@ -422,7 +438,7 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 				if err = addStorage(required, storage.Pool, d.SizeBytes); err != nil {
 					return InfrastructureCommand{}, err
 				}
-				newDisks = append(newDisks, VirtualMachineManagerCreatedVolumeParams{Cloud: c.ID, StorageClass: spec.StorageClass, Name: vm.Name + "_" + d.Name, Pool: storage.Pool, Format: storage.Format, Size: NewSize(d.SizeBytes, SizeUnitB), DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio, Alias: d.Name, ImageDisk: true})
+				newDisks = append(newDisks, VirtualMachineManagerCreatedVolumeParams{Cloud: c.ID, StorageClass: spec.StorageClass, Name: vm.Name + "_" + d.Name, Pool: storage.Pool, Format: storage.Format, Size: NewSize(d.SizeBytes, SizeUnitB), DeviceType: DeviceTypeDisk, DeviceBus: ordinaryBus(image), Alias: d.Name, ImageDisk: true})
 			}
 			for _, d := range spec.Disks {
 				for _, requiredDisk := range image.DataDisks {
@@ -437,13 +453,13 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 				if err = addStorage(required, b.Pool, d.SizeBytes); err != nil {
 					return InfrastructureCommand{}, err
 				}
-				newDisks = append(newDisks, VirtualMachineManagerCreatedVolumeParams{Cloud: c.ID, StorageClass: d.StorageClass, Name: vm.Name + "_" + d.Name, Pool: b.Pool, Format: b.Format, Size: NewSize(d.SizeBytes, SizeUnitB), DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio, Alias: d.Name})
+				newDisks = append(newDisks, VirtualMachineManagerCreatedVolumeParams{Cloud: c.ID, StorageClass: d.StorageClass, Name: vm.Name + "_" + d.Name, Pool: b.Pool, Format: b.Format, Size: NewSize(d.SizeBytes, SizeUnitB), DeviceType: DeviceTypeDisk, DeviceBus: ordinaryBus(image), Alias: d.Name})
 			}
 			for _, d := range spec.ExistingDisks {
 				if err = s.Volumes.ValidateAttachable(d.Path, h.Node, images.ForCloud(c.ID)); err != nil {
 					return InfrastructureCommand{}, err
 				}
-				vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{Path: d.Path, DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio})
+				vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{Path: d.Path, DeviceType: DeviceTypeDisk, DeviceBus: ordinaryBus(image)})
 			}
 			if image.Managed() {
 				b, err := images.imageBinding(h.Node, image)
@@ -467,7 +483,7 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 					}
 				}
 			}
-			if image.Defaults.Initialization != "none" {
+			if len(image.BackendPolicy) == 0 && image.Defaults.Initialization != "none" {
 				if err = addStorage(required, s.Manager.settings[h.Node].CdPool, 8<<20); err != nil {
 					return InfrastructureCommand{}, err
 				}
@@ -478,10 +494,26 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 			manager := s.Manager.withImages(images)
 			if len(bindings) != 0 {
 				manager.creationBindings = bindings[0]
+				if len(bindings) > 1 {
+					manager.appliedPolicies = bindings[1]
+					if len(image.BackendPolicy) != 0 {
+						if _, ok := manager.appliedPolicies[h.Node]; !ok {
+							return InfrastructureCommand{}, fmt.Errorf("host has no accepted backend plan")
+						}
+					}
+				}
 			}
 			prepared, clones, err := manager.PrepareCreation(vm, clones, newDisks, ImageDefaults{})
 			if err != nil {
 				return InfrastructureCommand{}, err
+			}
+			if len(image.BackendPolicy) != 0 && prepared.Config != nil {
+				if err := addStorage(required, manager.settings[h.Node].CdPool, 8<<20); err != nil {
+					return InfrastructureCommand{}, err
+				}
+				if err := storageFits(i, required); err != nil {
+					return InfrastructureCommand{}, err
+				}
 			}
 			for key, value := range spec.Placement.Preferred {
 				if h.Labels[key] == value {
@@ -502,4 +534,11 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 		return InfrastructureCommand{}, invalid("placement", "No suitable host: "+strings.Join(reasons, "; "))
 	}
 	return commands[host.Node], nil
+}
+
+func ordinaryBus(image Image) DeviceBus {
+	if len(image.BackendPolicy) != 0 {
+		return DeviceBusUnknown
+	}
+	return DeviceBusVirtio
 }

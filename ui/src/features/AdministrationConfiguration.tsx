@@ -1,3 +1,4 @@
+import { HardwareProfiles } from "./HardwareProfiles";
 import { useMe } from "../app/Auth";
 import { Box, Button, Stack } from "@mui/material";
 import {
@@ -228,6 +229,12 @@ export function CloudConfiguration({
                                 ))}
                             </Stack>
                         </DetailSection>
+                        {c.backend_kind === "libvirt" && (
+                            <HardwareProfiles
+                                cloud={c.id}
+                                snapshot={snapshot}
+                            />
+                        )}
                         <Catalog title="Zones" rows={c.zones} />
                         <DetailSection title="Instance types">
                             <ResourceTable
@@ -264,24 +271,6 @@ export function CloudConfiguration({
                                         label: "Boot disk",
                                         value: (t) => t.boot_disk_bytes,
                                         render: (t) => bytes(t.boot_disk_bytes),
-                                    },
-                                    {
-                                        id: "hugepages",
-                                        label: "Hugepages",
-                                        defaultHidden: true,
-                                        value: (t) =>
-                                            t.hugepages
-                                                ? "Enabled"
-                                                : "Disabled",
-                                    },
-                                    {
-                                        id: "autostart",
-                                        label: "Autostart",
-                                        defaultHidden: true,
-                                        value: (t) =>
-                                            t.autostart
-                                                ? "Enabled"
-                                                : "Disabled",
                                     },
                                 ]}
                             />

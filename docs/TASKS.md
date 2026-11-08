@@ -97,15 +97,17 @@ failed backend call may also have had effects that could not be confirmed.
 
 ## Restart and resource locks
 
-Before workers start, every stale running task is durably marked interrupted.
+For supported command formats, before workers start every stale running task is
+durably marked interrupted. The incompatible hardware-profile upgrade follows
+the explicit failure rule below.
 Its stage history and known effects remain intact. The recorded finish time is
 the time interruption was detected, not an invented crash time. A stage left
 running has unknown outcome. No backend error is invented for process death.
 Queued tasks that never started remain eligible to run from their saved command
-snapshot, including resolved image defaults, key values and config-drive settings.
-Queued VM updates persist the requested patch and apply it to a fresh backend
-read at execution. Omitted fields retain their current values; a missing VM
-fails the update before any write instead of being recreated from an old snapshot.
+snapshot, including accepted backend policy, key values and config-drive settings.
+Queued resource changes apply the accepted resource request to a fresh backend
+read at execution, preserving existing applied policy. A missing VM fails before
+any write instead of being recreated from an old snapshot.
 Creation rechecks VM absence, existing disk eligibility and destination availability
 before its first backend mutation, retaining the accepted creation settings.
 
@@ -213,3 +215,18 @@ explicit attempt reuses only verified backend identity or fails with instruction
 to inspect leftovers. Cleanup is limited to staging created by the current
 operation and refuses attached storage. Retained old revisions have no automatic
 eviction or deletion policy.
+
+## Hardware-profile command-format upgrade
+
+The hardware-profile release introduces an incompatible command version. Unfinished
+commands accepted before that boundary fail without execution or payload translation.
+Terminal history, effects and uncertainty/resource fences remain intact. Inspect
+resources and migrate configuration before explicitly submitting replacement work.
+Failure does not imply rollback.
+
+Supported tasks retain accepted profile settings and candidate-host bindings across
+ordinary restarts. A single preparation stage collects fresh inventory and schedules
+placement, then durably stores the selected host/final backend plan before provisioning.
+There is no inventory snapshot store or automatic retry. Applied hardware policy is
+stored with the VM independently of task-history retention. See
+[release migration](HARDWARE-PROFILES-MIGRATION.md).

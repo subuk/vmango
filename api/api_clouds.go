@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/danielgtaylor/huma/v2"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 )
 
 type apiCloudImage struct {
@@ -64,6 +65,14 @@ type apiCloudMachineInput struct {
 	Cloud string `path:"cloud"`
 	VM    string `path:"vm"`
 }
+type apiAdoptInput struct {
+	SubmissionInput
+	Cloud string `path:"cloud"`
+	VM    string `path:"vm"`
+	Body  struct {
+		HardwareProfile string `json:"hardware_profile,omitempty" minLength:"1" doc:"Libvirt clouds require a compatible named hardware profile."`
+	}
+}
 type apiChangeTypeInput struct {
 	SubmissionInput
 	Cloud string `path:"cloud"`
@@ -118,6 +127,13 @@ func (e *Environ) cloudDTO(c compute.Cloud) (apiCloud, error) {
 		i, err := e.images.ForCloud(c.ID).Get(id)
 		if err != nil {
 			return d, err
+		}
+		if p, err := hardware.DecodePolicy(i.BackendPolicy); err == nil {
+			initialization := p.ConfigDrive.Format
+			if !p.ConfigDrive.IsEnabled() {
+				initialization = "none"
+			}
+			i.Defaults = compute.ImageDefaults{Firmware: p.Firmware, DiskBus: compute.NewDeviceBus(p.DiskBus), DiskController: p.DiskController, NICModel: p.NICModel, Graphics: p.Graphics, VideoModel: p.VideoModel, GuestAgent: p.GuestAgent, Initialization: initialization}
 		}
 		bus := ""
 		if i.Defaults.DiskBus != compute.DeviceBusUnknown {
@@ -223,8 +239,8 @@ func (e *Environ) registerClouds(api huma.API) {
 		}
 		return e.submitTask(ctx, in.IdempotencyKey, "volume.create", compute.InfrastructureCommand{CloudID: in.Cloud, VolumeSpec: &in.Body})
 	})
-	registerAPI(api, "POST", "/clouds/{cloud}/machines/{vm}/adopt", "adopt-machine", "Explicitly adopt a machine without claiming its existing disks", func(ctx context.Context, in *apiCloudMachineInput) (*apiAccepted, error) {
-		return e.submitTask(ctx, in.IdempotencyKey, "machine.adopt", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM})
+	registerAPI(api, "POST", "/clouds/{cloud}/machines/{vm}/adopt", "adopt-machine", "Explicitly adopt a machine with a compatible hardware profile without changing its hardware", func(ctx context.Context, in *apiAdoptInput) (*apiAccepted, error) {
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.adopt", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, AdoptionPolicyRef: in.Body.HardwareProfile})
 	})
 	registerAPI(api, "POST", "/clouds/{cloud}/machines/{vm}/instance-type", "change-instance-type", "Change a stopped machine's instance type on its current host", func(ctx context.Context, in *apiChangeTypeInput) (*apiAccepted, error) {
 		return e.submitTask(ctx, in.IdempotencyKey, "machine.change-type", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, InstanceType: in.Body.InstanceType})

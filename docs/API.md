@@ -158,13 +158,12 @@ deleted, protected volumes cannot be resized, and resizing cannot shrink a disk.
 `poweroff` is a **hard power-off**, not graceful shutdown. Configuration changes
 are persistent and may require stopping and starting a VM.
 
-Machine policy has no PATCH endpoint. Images own `guest_agent`, `graphics` and
-`video_model`; instance types own `autostart`, CPU, RAM and hugepages. The private
-cloud host owns `graphics_listen`. Creation accepts catalog references,
-not per-machine policy overrides. The explicit instance-type command applies its
-autostart policy without starting or stopping the VM and preserves applied guest
-devices, graphics listener and disk sizes. `start` on creation is a separate
-one-time action. Attachment changes have dedicated routes. Unknown fields and invalid requests are rejected
+Machine policy has no PATCH endpoint. Libvirt images select named hardware profiles
+for guest devices, hugepages and config drives. Instance types own resource quantities.
+Creation accepts catalog references without hardware overrides. Type changes preserve
+applied policy, autostart, graphics listeners and existing disk sizes. A successful
+user start (including creation with `start=true`) enables autostart; a confirmed user
+stop disables it. Attachment changes have dedicated routes. Unknown fields and invalid requests are rejected
 before acceptance with field errors where available. Dynamic backend conditions
 are rechecked during execution where appropriate and can fail an accepted task.
 
@@ -296,7 +295,7 @@ require administrative host or image requests.
 Creation uses the same domain manager as the UI for image requirements, resource
 admission, image preparation, config drives and event hooks. There is no `defaults`
 input or `defaults.initialization` override. To offer a machine without cloud-init,
-an administrator defines an image entry with `initialization = "none"`; the user
+an administrator selects a profile with `config_drive { enabled=false }`; the user
 selects that image ID. User-data is literal text for images with guest initialization;
 optional `keys` contains fingerprints returned by `/api/v1/keys`.
 
@@ -325,8 +324,8 @@ Example `vm.json` (replace the image, instance type, zone, storage class and net
 
 The response is 202 Accepted with a task and `status_url`. Poll that authenticated
 URL to confirm completion; acceptance alone does not mean the VM exists or has
-started. `start` requests a one-time start after provisioning, independently of
-the instance type's `autostart` policy.
+started. `start=true` requests a start after provisioning and enables autostart
+only after that start succeeds.
 
 See [configured clouds](CLOUDS.md) for placement, local disk ownership, adoption
 and API migration rules. Binary archives include this reference as `API.md`,
@@ -452,3 +451,15 @@ specific codes. Resource-guard 401 responses include
 permits one coordinated refresh and mutation replay. Never refresh automatically
 on 403, replay an uncertain mutation with a new idempotency key, or treat a 503 auth-store error
 as revoked credentials. Refresh/bootstrap 401 requires login.
+
+## Libvirt hardware policy and adoption
+
+Every configured libvirt image references an explicit hardware profile. Administration
+exposes typed profiles at `/api/v1/administration/clouds/{cloud}/hardware-profiles`.
+VM responses include effective libvirt hardware and `adoption_required`. Adoption and
+re-adoption use `POST /api/v1/clouds/{cloud}/machines/{vm}/adopt` with
+`{"hardware_profile":"linux-uefi"}` and the normal idempotency key. Compatibility is
+validated without converting hardware or inferring policy. Ordinary mutations are
+rejected until valid management identity and applied policy exist.
+
+See [release migration and task version boundary](HARDWARE-PROFILES-MIGRATION.md).

@@ -11,6 +11,7 @@ import (
 
 func TestAcceptedAdministrationProjectionSafeAndComplete(t *testing.T) {
 	text := strings.Replace(cloudConfig, `path="/source" os_arch="x86_64"`, `url="https://images.example:8443/private-signed-path?token=secret-query" sha256="`+strings.Repeat("a", 64)+`" source_format="qcow2" source_size_bytes=0 os_arch="x86_64" guest_agent=false protected=true hidden=false minimum_memory_mib=128 minimum_disk_gib=2 data_disk "userdata" { size_gib=16 } data_disk "cache" { size_gib=2 }`, 1)
+	text = strings.Replace(text, `hardware_profile "default" {}`, `hardware_profile "default" {guest_agent=false}`, 1)
 	cfg, err := parseCloudTest(t, text)
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +47,7 @@ func TestAcceptedAdministrationProjectionSafeAndComplete(t *testing.T) {
 		t.Fatal("domain display defaults lost", image.Defaults)
 	}
 	h := snapshot.Hosts[0]
-	if h.MemoryReserveBytes != 512<<20 || h.CPUOvercommit != 4 || h.ConfigDriveFormat != "nocloud" || h.Emulator.State != "unresolved" || h.Networks[0].Backend != "default" || h.Storage[0].Format != "qcow2" {
+	if h.MemoryReserveBytes != 512<<20 || h.CPUOvercommit != 4 || h.ConfigDriveFormat != "profile-owned" || h.Emulator.State != "unresolved" || h.Networks[0].Backend != "default" || h.Storage[0].Format != "qcow2" {
 		t.Fatal(h)
 	}
 	raw, _ := json.Marshal(snapshot)
@@ -57,7 +58,7 @@ func TestAcceptedAdministrationProjectionSafeAndComplete(t *testing.T) {
 	}
 	cfg.Clouds[0].Name = "edited file"
 	cfg.Clouds[0].Hosts[0].Labels["rack"] = "edited"
-	*cfg.Clouds[0].Images[0].GuestAgent = true
+	*cfg.Clouds[0].HardwareProfiles[0].GuestAgent = true
 	cfg.Clouds[0].Images[0].DataDisks[0].SizeGiB = 1
 	snapshot.Images[0].DataDisks[0].SizeBytes = 1
 	c, _ := service.Cloud("test")

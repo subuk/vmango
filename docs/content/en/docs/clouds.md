@@ -11,7 +11,7 @@ class. The scheduler assigns a host, shown read-only in the machine details.
 
 ## Configure a cloud
 
-Keep the `image` definitions from the shipped configuration, or define images
+Keep the `hardware_profile` and `image` definitions from the shipped configuration, or define images
 using the [image guide](/docs/images/). Define each host's connection and backend
 settings directly in its cloud. The example assumes an active libvirt network
 named `default` and a writable pool named `default`; Vmango does not create them.
@@ -19,7 +19,7 @@ named `default` and a writable pool named `default`; Vmango does not create them
 ```hcl
 cloud "local" {
     name = "Local cloud"
-    # Keep the nested image definitions from vmango.quickstart.conf here.
+    # Keep the nested hardware profiles and image definitions from vmango.quickstart.conf here.
 
     zone "local" { name = "Local zone" }
     network "lan" { name = "Private LAN" }
@@ -62,11 +62,15 @@ several hosts can share the same AZ. Use architecture-appropriate image IDs;
 unsupported combinations are rejected.
 
 Connection settings `uri`, `image_pool`, `config_drive_pool`,
-`config_drive_suffix`, `config_drive_write_format`, `emulator`, `graphics_listen`,
-`qcow_prealloc_metadata` and `cache` all belong directly in `cloud.host`.
-`image_pool` and `config_drive_pool` default to `default`,
-`config_drive_suffix` to `_config.iso` and `config_drive_write_format` to
-`nocloud`. `graphics_listen` defaults to the backend's listener setting.
+`config_drive_suffix`, `emulator`, `qcow_prealloc_metadata` and `cache` belong
+in `cloud.host`. Pools default to `default`; the config-drive suffix defaults
+to `_config.iso`. Hardware profiles own config-drive format and attachment.
+New graphics listeners are derived and loopback-only. Legacy
+`config_drive_write_format` and `graphics_listen` warn and are ignored.
+
+Every image references a named `hardware_profile` in its cloud. See the
+[release migration guide](https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md) for before/after examples,
+existing VM adoption and the incompatible task-format boundary.
 
 ### Migrate existing connections
 
@@ -171,25 +175,27 @@ NIC model and VLAN are selected by the administrator's host network binding;
 interface responses retain `model` and `vlan` for diagnostics.
 Custom network creation remains outside this workflow.
 
-Unmanaged VMs are visible and counted, but read-only until explicit adoption.
-Adoption does not change resources, power state, disks or placement, and does not
-claim ownership of pre-existing disks. Deleting an adopted VM preserves unowned
-disks. Preserve the private volume ownership metadata alongside task history.
+Unmanaged VMs remain observable and counted. Ordinary mutations require adoption
+with an explicitly selected compatible hardware profile. Older managed VMs without
+applied policy require re-adoption. Adoption records policy without converting
+hardware, changing listeners or claiming pre-existing disks. Deleting an adopted
+VM preserves unowned disks.
 
-An explicit instance type change requires a stopped managed VM, stays on its
-current host, applies the selected type's `autostart` policy and preserves all
-disk sizes, applied guest devices and graphics listener bindings. If that host lacks resources, the task
-fails; there is no automatic migration, stop or restart. Catalog edits never
-silently resize or reconfigure existing machines or disks.
+Instance-type changes require a stopped managed VM on its current host. They
+preserve disk sizes, hardware policy, hugepages, CPU pinning and autostart;
+incompatible resources fail. Profile edits never reconfigure existing VMs or
+accepted tasks. Ordinary disks attached later follow the VM's persisted policy.
 
-Set `autostart` in `instance_type` blocks (default `false`). Image settings
-`guest_agent`, `graphics` and `video_model` control guest integration and devices;
-their defaults are `true`, `vnc` and `none`. The cloud's private `host` block
-sets `graphics_listen` as an IP address, with omission preserving the backend
-default. Creation's `start` flag is a separate one-time action. Adoption preserves
-existing policy and devices, and accepted tasks snapshot policy and private host
-bindings. None of these five settings accepts per-machine overrides; the machine
-PATCH endpoint is removed and effective values remain read-only.
+Successful user starts, including creation with `start=true`, enable autostart.
+Confirmed user stops disable it; graceful shutdown waits up to 120 seconds.
+Failed/unconfirmed operations, reboot and guest-initiated shutdown leave it unchanged.
+Autostart synchronization failures preserve the successful power operation in task effects.
+
+Profiles own guest-agent, graphics/video and config-drive policy. New graphics
+enabled VMs listen only on host loopback. Remote console connections use SSH;
+non-SSH libvirt transports try SSH port 22 on the host. Failed SSH only makes the
+console unavailable; management remains available without direct VNC fallback.
+Existing VM listeners remain unchanged. Effective settings are read-only diagnostics.
 
 ## System disks and boot order
 

@@ -1,17 +1,21 @@
 package compute
 
-import "fmt"
-
 func (s *VirtualMachineService) RequireManaged(id, node string) error {
-	if !s.CloudMode {
+	_, policyBackend := s.VirtualMachineRepository.(BackendMachineRepository)
+	if !s.CloudMode && !policyBackend {
 		return nil
 	}
 	vm, err := s.Get(id, node)
 	if err != nil {
 		return err
 	}
-	if vm.Metadata == nil {
-		return fmt.Errorf("%w: machine is read-only until explicitly adopted", ErrConflict)
+	if backend, ok := s.VirtualMachineRepository.(BackendMachineRepository); ok {
+		if err := backend.ValidateAppliedPolicy(vm); err != nil {
+			return &AdoptionRequiredError{Message: err.Error()}
+		}
+	}
+	if s.CloudMode && vm.Metadata == nil {
+		return &AdoptionRequiredError{Message: "Machine is read-only until explicitly adopted with a compatible policy."}
 	}
 	return nil
 }

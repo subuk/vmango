@@ -29,14 +29,15 @@ type InstanceTypeConfig struct {
 	Hugepages        bool   `hcl:"hugepages"`
 }
 type CloudConfig struct {
-	ID             string               `hcl:",key"`
-	Name           string               `hcl:"name"`
-	Images         []ImageConfig        `hcl:"image"`
-	Zones          []CatalogEntryConfig `hcl:"zone"`
-	InstanceTypes  []InstanceTypeConfig `hcl:"instance_type"`
-	Networks       []CatalogEntryConfig `hcl:"network"`
-	StorageClasses []StorageClassConfig `hcl:"storage_class"`
-	Hosts          []CloudHostConfig    `hcl:"host"`
+	HardwareProfiles []HardwareProfileConfig `hcl:"hardware_profile"`
+	ID               string                  `hcl:",key"`
+	Name             string                  `hcl:"name"`
+	Images           []ImageConfig           `hcl:"image"`
+	Zones            []CatalogEntryConfig    `hcl:"zone"`
+	InstanceTypes    []InstanceTypeConfig    `hcl:"instance_type"`
+	Networks         []CatalogEntryConfig    `hcl:"network"`
+	StorageClasses   []StorageClassConfig    `hcl:"storage_class"`
+	Hosts            []CloudHostConfig       `hcl:"host"`
 }
 type CloudHostConfig struct {
 	Node                   string                 `hcl:",key"`
@@ -134,7 +135,7 @@ func (cfg *Config) CloudDefinitions() ([]compute.Cloud, error) {
 			if t.CPURequest != nil {
 				cpuRequest = *t.CPURequest
 			}
-			c.InstanceTypes = append(c.InstanceTypes, compute.InstanceType{ID: t.ID, Name: displayName(t.ID, t.Name), VCPUs: t.CPU, CPURequest: cpuRequest, MemoryBytes: memory, MemoryRequestBytes: request, BootDiskBytes: disk, Hugepages: t.Hugepages, Autostart: t.Autostart})
+			c.InstanceTypes = append(c.InstanceTypes, compute.InstanceType{ID: t.ID, Name: displayName(t.ID, t.Name), VCPUs: t.CPU, CPURequest: cpuRequest, MemoryBytes: memory, MemoryRequestBytes: request, BootDiskBytes: disk})
 		}
 		for _, h := range entry.Hosts {
 			if h.Uri == "" {

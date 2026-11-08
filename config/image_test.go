@@ -7,15 +7,18 @@ import (
 	"reflect"
 	"strings"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 	"testing"
 )
 
 func TestImageConversion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.conf")
 	text := `
-image "legacy" { path="/images/legacy" os_name = "Ubuntu" os_arch = "aarch64" efi = true protected = true }
-image "normal" { path = "/images/shared" os_name = "Ubuntu" os_arch = "aarch64" }
-image "custom" { path = "/images/shared" name = "Custom Ubuntu" os_arch = "aarch64" guest_agent = false graphics = "spice" video_model = "qxl" initialization = "none" disk_bus = "scsi" disk_controller = "virtio-scsi" minimum_memory_mib = 512 minimum_disk_gib = 10 }
+hardware_profile "uefi" { firmware="efi" }
+image "legacy" { hardware_profile="uefi" path="/images/legacy" os_name = "Ubuntu" os_arch = "aarch64" protected = true }
+image "normal" { hardware_profile="default" path = "/images/shared" os_name = "Ubuntu" os_arch = "aarch64" }
+hardware_profile "custom" { guest_agent=false graphics="spice" video_model="qxl" disk_bus="scsi" disk_controller="virtio-scsi" config_drive {enabled=false} }
+image "custom" { hardware_profile="custom" path = "/images/shared" name = "Custom Ubuntu" os_arch = "aarch64" minimum_memory_mib = 512 minimum_disk_gib = 10 }
 `
 	if err := os.WriteFile(path, []byte(withImages(text)+`volume "/dev/private" {hidden=true} volume "/images/shared" {protected=true} volume "/ordinary" {protected=true hidden=true}`), 0600); err != nil {
 		t.Fatal(err)
@@ -31,19 +34,26 @@ image "custom" { path = "/images/shared" name = "Custom Ubuntu" os_arch = "aarch
 	if len(images) != 3 {
 		t.Fatalf("images = %+v", images)
 	}
-	if images[0].ID != "legacy" || images[0].CloudID != "test" || images[0].Defaults.Firmware != "efi" {
+	profiles := make([]hardware.Profile, len(images))
+	for n, image := range images {
+		profiles[n], err = hardware.DecodePolicy(image.BackendPolicy)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if images[0].ID != "legacy" || images[0].CloudID != "test" || profiles[0].Firmware != "efi" {
 		t.Fatalf("legacy = %+v", images[0])
 	}
 	if images[1].SourcePath != images[2].SourcePath || images[1].ID == images[2].ID {
 		t.Fatal("source and identity were conflated")
 	}
-	if images[1].Defaults.GuestAgent != nil || images[2].Defaults.GuestAgent == nil || *images[2].Defaults.GuestAgent {
+	if profiles[1].GuestAgent == nil || !*profiles[1].GuestAgent || profiles[2].GuestAgent == nil || *profiles[2].GuestAgent {
 		t.Fatal("omitted and false were conflated")
 	}
-	if images[2].Defaults.Graphics != "spice" || images[2].Defaults.VideoModel != "qxl" {
+	if profiles[2].Graphics != "spice" || profiles[2].VideoModel != "qxl" {
 		t.Fatal("image display policy lost")
 	}
-	if images[2].Defaults.Initialization != "none" || images[2].Defaults.DiskBus != compute.DeviceBusScsi || images[2].MinimumMemoryBytes != 512<<20 || images[2].MinimumDiskBytes != 10<<30 {
+	if profiles[2].ConfigDrive.IsEnabled() || profiles[2].DiskBus != "scsi" || images[2].MinimumMemoryBytes != 512<<20 || images[2].MinimumDiskBytes != 10<<30 {
 		t.Fatalf("custom = %+v", images[2])
 	}
 	if !policies["/dev/private"].Hidden || !policies[compute.VolumePolicyKey("a", "/images/legacy")].Protected || !policies["/images/shared"].Protected || !policies["/ordinary"].Hidden || !policies["/ordinary"].Protected {
@@ -52,10 +62,10 @@ image "custom" { path = "/images/shared" name = "Custom Ubuntu" os_arch = "aarch
 }
 
 func TestInvalidImageConfiguration(t *testing.T) {
-	for _, options := range []string{`graphics = "bad"`, `video_model = "bad"`, `graphics = "none" video_model = "qxl"`, `disk_bus = "banana"`, `initialization = "invalid"`, `efi = true firmware = "bios"`, `disk_controller = "virtio-scsi"`, `minimum_disk_gib = 18446744073709551615`} {
+	for _, options := range []string{`minimum_disk_gib = 18446744073709551615`, `minimum_memory_mib = -1`} {
 		t.Run(options, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "test.conf")
-			os.WriteFile(path, []byte(withImages(`image "test" { path = "/base" os_arch = "x86_64" `+options+` }`)), 0600)
+			os.WriteFile(path, []byte(withImages(`image "test" { hardware_profile="default" path = "/base" os_arch = "x86_64" `+options+` }`)), 0600)
 			if _, err := Parse(path); err == nil {
 				t.Fatal("invalid config accepted")
 			}
@@ -64,7 +74,7 @@ func TestInvalidImageConfiguration(t *testing.T) {
 }
 
 func TestImageDataDisksPreserveDeclarationOrder(t *testing.T) {
-	cfg, err := parseCloudTest(t, withImages(`image "android" {
+	cfg, err := parseCloudTest(t, withImages(`image "android" { hardware_profile="default"
 		path = "/images/android.qcow2"
 		os_arch = "aarch64"
 		data_disk "userdata" { size_gib = 16 }
@@ -97,7 +107,7 @@ func TestInvalidImageDataDiskConfiguration(t *testing.T) {
 		"total overflow":   `data_disk "one" { size_gib = 17179869183 } data_disk "two" { size_gib = 1 }`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := parseCloudTest(t, withImages(`image "android" { path = "/images/android.qcow2" os_arch = "aarch64" `+disks+` }`)); err == nil {
+			if _, err := parseCloudTest(t, withImages(`image "android" { hardware_profile="default" path = "/images/android.qcow2" os_arch = "aarch64" `+disks+` }`)); err == nil {
 				t.Fatal("invalid image data disks accepted")
 			}
 		})
@@ -106,7 +116,7 @@ func TestInvalidImageDataDiskConfiguration(t *testing.T) {
 
 func TestManagedSourceConfiguration(t *testing.T) {
 	hash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	base := `image "managed" { os_arch="aarch64" url="https://example.org/image" sha256="` + hash + `" source_format="qcow2" source_size_bytes=4096 }`
+	base := `image "managed" { hardware_profile="default" os_arch="aarch64" url="https://example.org/image" sha256="` + hash + `" source_format="qcow2" source_size_bytes=4096 }`
 	path := filepath.Join(t.TempDir(), "config.conf")
 	hostConfig := withImages(base)
 	hostConfig = strings.Replace(hostConfig, `uri="qemu+ssh://b/system"`, `uri="qemu+ssh://b/system" image_pool="cloud"`, 1)
@@ -133,7 +143,7 @@ func TestManagedSourceConfiguration(t *testing.T) {
 		`url="https://example.org/image" sha256="` + hash + `" source_format="xz"`,
 		`source_size_bytes=4096`,
 	} {
-		os.WriteFile(path, []byte(withImages(`image "invalid" { os_arch="x86_64" `+invalid+` }`)), 0600)
+		os.WriteFile(path, []byte(withImages(`image "invalid" { hardware_profile="default" os_arch="x86_64" `+invalid+` }`)), 0600)
 		if _, err := Parse(path); err == nil {
 			t.Fatal("invalid source accepted", invalid)
 		}
@@ -143,7 +153,7 @@ func TestManagedSourceConfiguration(t *testing.T) {
 func TestArchiveImageConfiguration(t *testing.T) {
 	hash := strings.Repeat("a", 64)
 	for _, format := range []string{"zip", "tar", "tar.gz"} {
-		cfg, err := parseCloudTest(t, withImages(`image "archive" {
+		cfg, err := parseCloudTest(t, withImages(`image "archive" { hardware_profile="default"
             os_arch="aarch64" url="https://example.org/image" sha256="`+hash+`"
             source_format="qcow2" source_size_bytes=4096
             archive_format="`+format+`" archive_member="bundle/disk.qcow2" extracted_size_bytes=8192
@@ -179,12 +189,12 @@ func TestArchiveImageConfiguration(t *testing.T) {
 		`archive_format="zip" archive_member="disk.qcow2" extracted_size_bytes=18446744073709551615`,
 		`extracted_size_bytes=8192`,
 	} {
-		if _, err := parseCloudTest(t, withImages(`image "invalid" { `+base+options+` }`)); err == nil {
+		if _, err := parseCloudTest(t, withImages(`image "invalid" { hardware_profile="default" `+base+options+` }`)); err == nil {
 			t.Fatalf("invalid archive settings accepted: %s", options)
 		}
 	}
 	for _, options := range []string{`archive_format="zip"`, `archive_member="disk.qcow2"`, `extracted_size_bytes=8192`} {
-		if _, err := parseCloudTest(t, withImages(`image "invalid" { path="/source" os_arch="aarch64" `+options+` }`)); err == nil {
+		if _, err := parseCloudTest(t, withImages(`image "invalid" { hardware_profile="default" path="/source" os_arch="aarch64" `+options+` }`)); err == nil {
 			t.Fatalf("archive settings accepted for local image: %s", options)
 		}
 	}
@@ -192,8 +202,8 @@ func TestArchiveImageConfiguration(t *testing.T) {
 
 func TestSharedArchiveMembersRemainIndependent(t *testing.T) {
 	hash := strings.Repeat("b", 64)
-	first := `image "first" { os_arch="aarch64" url="https://example.org/archive" sha256="` + hash + `" source_format="qcow2" source_size_bytes=4096 archive_format="zip" archive_member="first.qcow2" extracted_size_bytes=8192 }`
-	second := `image "second" { os_arch="aarch64" url="https://example.org/archive" sha256="` + hash + `" source_format="raw" source_size_bytes=4096 archive_format="zip" archive_member="second.raw" extracted_size_bytes=16384 }`
+	first := `image "first" { hardware_profile="default" os_arch="aarch64" url="https://example.org/archive" sha256="` + hash + `" source_format="qcow2" source_size_bytes=4096 archive_format="zip" archive_member="first.qcow2" extracted_size_bytes=8192 }`
+	second := `image "second" { hardware_profile="default" os_arch="aarch64" url="https://example.org/archive" sha256="` + hash + `" source_format="raw" source_size_bytes=4096 archive_format="zip" archive_member="second.raw" extracted_size_bytes=16384 }`
 	if _, err := parseCloudTest(t, withImages(first+second)); err != nil {
 		t.Fatalf("different members of one archive conflict: %v", err)
 	}
@@ -255,7 +265,11 @@ func TestShippedManagedCatalogMatchesVerifiedProvenance(t *testing.T) {
 	}
 	families := map[string]map[compute.Arch]bool{}
 	for _, i := range images {
-		if !i.Managed() || i.SourcePath != "" || i.Download.Format != compute.VolumeFormatQcow2 || i.Defaults.Initialization != "nocloud" {
+		profile, err := hardware.DecodePolicy(i.BackendPolicy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !i.Managed() || i.SourcePath != "" || i.Download.Format != compute.VolumeFormatQcow2 || profile.ConfigDrive.Format != "nocloud" {
 			t.Fatalf("incomplete shipped definition: %+v", i)
 		}
 		found := false
@@ -288,7 +302,7 @@ func TestShippedManagedCatalogMatchesVerifiedProvenance(t *testing.T) {
 func TestConflictingSharedArtifactDefinitions(t *testing.T) {
 	hash := strings.Repeat("a", 64)
 	for _, other := range []string{`source_format="raw" source_size_bytes=4096`, `source_format="qcow2" source_size_bytes=8192`} {
-		text := `image "first" { os_arch="x86_64" url="https://example.org/one" sha256="` + hash + `" source_format="qcow2" source_size_bytes=4096 } image "second" { os_arch="x86_64" url="https://example.org/two" sha256="` + hash + `" ` + other + ` }`
+		text := `image "first" { hardware_profile="default" os_arch="x86_64" url="https://example.org/one" sha256="` + hash + `" source_format="qcow2" source_size_bytes=4096 } image "second" { hardware_profile="default" os_arch="x86_64" url="https://example.org/two" sha256="` + hash + `" ` + other + ` }`
 		path := filepath.Join(t.TempDir(), "conflict.conf")
 		os.WriteFile(path, []byte(withImages(text)), 0600)
 		if _, err := Parse(path); err == nil {
@@ -302,18 +316,14 @@ func TestPrivateGraphicsListenerValidation(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "listener.conf")
 		os.WriteFile(path, []byte(strings.Replace(cloudConfig, `uri="qemu:///session"`, `uri="qemu:///session" graphics_listen="`+address+`"`, 1)), 0600)
 		cfg, err := Parse(path)
-		valid := address != "not-an-ip" && address != "127.0.0.1:5900"
-		if valid && (err != nil || cfg.Hosts()[0].GraphicsListen != address) {
-			t.Fatalf("valid binding %q: %v", address, err)
-		}
-		if !valid && err == nil {
-			t.Fatalf("invalid binding %q accepted", address)
+		if err != nil || cfg.Hosts()[0].GraphicsListen != "" || len(cfg.MigrationWarnings) != 1 {
+			t.Fatalf("legacy binding %q must be ignored with warning: %v", address, err)
 		}
 	}
 }
 
 func withImages(definitions string) string {
-	return strings.Replace(cloudConfig, `image "linux" { path="/source" os_arch="x86_64" }`, definitions, 1)
+	return strings.Replace(cloudConfig, `image "linux" { hardware_profile="default" path="/source" os_arch="x86_64" }`, definitions, 1)
 }
 
 func TestCloudImagesAndPoliciesRemainIndependent(t *testing.T) {
@@ -334,13 +344,13 @@ func TestCloudImagesAndPoliciesRemainIndependent(t *testing.T) {
 	if !policies[compute.VolumePolicyKey("a", "/source")].Hidden || policies[compute.VolumePolicyKey("other-a", "/source")].Hidden || policies["/source"].Protected {
 		t.Fatal("image policies escaped their cloud", policies)
 	}
-	if _, err := parseCloudTest(t, strings.Replace(cloudConfig, `image "linux" { path="/source" os_arch="x86_64" }`, `image "linux" { path="/one" os_arch="x86_64" } image "linux" { path="/two" os_arch="x86_64" }`, 1)); err == nil {
+	if _, err := parseCloudTest(t, strings.Replace(cloudConfig, `image "linux" { hardware_profile="default" path="/source" os_arch="x86_64" }`, `image "linux" { hardware_profile="default" path="/one" os_arch="x86_64" } image "linux" { hardware_profile="default" path="/two" os_arch="x86_64" }`, 1)); err == nil {
 		t.Fatal("duplicate cloud image accepted")
 	}
 }
 
 func TestRemovedImageSyntaxHasMigrationGuidance(t *testing.T) {
-	for _, old := range []string{`image "/old/path" { os_arch="x86_64" }`, `image "/policy-only" { protected=true }`, strings.Replace(cloudConfig, `image "linux" { path="/source" os_arch="x86_64" }`, `images=[]`, 1)} {
+	for _, old := range []string{`image "/old/path" { hardware_profile="default" os_arch="x86_64" }`, `image "/policy-only" { hardware_profile="default" protected=true }`, strings.Replace(cloudConfig, `image "linux" { hardware_profile="default" path="/source" os_arch="x86_64" }`, `images=[]`, 1)} {
 		_, err := parseCloudTest(t, old)
 		if err == nil || !strings.Contains(err.Error(), "removed") || !strings.Contains(err.Error(), "docs/CLOUDS.md") {
 			t.Fatalf("missing migration guidance: %v", err)

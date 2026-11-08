@@ -478,3 +478,55 @@ func TestUncertainExecutionGroupFencesAlreadyQueuedCapacityWork(t *testing.T) {
 		t.Fatal("explicit release did not unblock capacity group")
 	}
 }
+
+type failPlanRepository struct{ tasks.Repository }
+
+func (r failPlanRepository) Update(fn func(*tasks.Store) error) error {
+	return r.Repository.Update(func(store *tasks.Store) error {
+		if err := fn(store); err != nil {
+			return err
+		}
+		for _, rec := range store.Records {
+			if strings.Contains(string(rec.Payload), `"selected_host"`) {
+				return errors.New("plan storage full")
+			}
+		}
+		return nil
+	})
+}
+func TestFinalPlanWriteFailurePreventsProvisioning(t *testing.T) {
+	repo, _ := repository(t)
+	var mutations atomic.Int32
+	attempted := make(chan struct{})
+	service := tasks.New(failPlanRepository{repo}, handler{run: func(_ context.Context, c tasks.Command, e *tasks.Execution) error {
+		defer close(attempted)
+		c.Payload = json.RawMessage(`{"selected_host":"host-a"}`)
+		c.Resources = append(c.Resources, tasks.ResourceRef{Kind: "volume", Scope: "host-a", ID: "root"})
+		if err := e.AcceptPlan(c); err != nil {
+			return err
+		}
+		mutations.Add(1)
+		return nil
+	}}, zerolog.Nop())
+	accepted, err := service.Submit(identity, "plan-write-failure", command("vm"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start(t, service)
+	select {
+	case <-attempted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("executor did not attempt plan")
+	}
+	if mutations.Load() != 0 {
+		t.Fatal("provisioning ran without durable plan")
+	}
+	store, err := repo.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := store.Records[accepted.ID]
+	if rec.Task.State != tasks.Running || !rec.Task.BlocksResources || strings.Contains(string(rec.Payload), "selected_host") || len(rec.Locks) != 1 {
+		t.Fatal("partial plan/lock commit or lost execution fence", rec)
+	}
+}

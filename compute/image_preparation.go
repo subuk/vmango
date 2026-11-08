@@ -1,6 +1,8 @@
 package compute
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -40,7 +42,11 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		copyIface := *iface
 		vm.Interfaces = append(vm.Interfaces, &copyIface)
 	}
-	vm.Volumes = slices.Clone(input.Volumes)
+	vm.Volumes = nil
+	for _, disk := range input.Volumes {
+		copyDisk := *disk
+		vm.Volumes = append(vm.Volumes, &copyDisk)
+	}
 	if input.Config != nil {
 		config := *input.Config
 		vm.Config = &config
@@ -71,6 +77,7 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 			}
 		}
 	}
+	var backendPolicy json.RawMessage
 	hasImages := false
 	nicOverride := overrides.NICModel
 	needsNICDefault := false
@@ -131,6 +138,12 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		if e != nil {
 			return nil, nil, e
 		}
+		if len(i.BackendPolicy) != 0 {
+			if len(backendPolicy) != 0 && !bytes.Equal(backendPolicy, i.BackendPolicy) {
+				return nil, nil, fmt.Errorf("images select conflicting backend policies")
+			}
+			backendPolicy = i.BackendPolicy
+		}
 		if vm.Arch == ArchUnknown {
 			vm.Arch = i.Arch
 		}
@@ -185,13 +198,13 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		if p.DeviceType != DeviceTypeDisk {
 			return nil, nil, fmt.Errorf("an image must be cloned as a disk")
 		}
-		if p.DeviceBus == DeviceBusUnknown {
+		if p.DeviceBus == DeviceBusUnknown && len(i.BackendPolicy) == 0 {
 			p.DeviceBus = i.Defaults.BootDiskBus()
 		}
 		if overrides.DiskBus != DeviceBusUnknown {
 			p.DeviceBus = overrides.DiskBus
 		}
-		if p.DeviceBus == DeviceBusUnknown {
+		if p.DeviceBus == DeviceBusUnknown && len(i.BackendPolicy) == 0 {
 			p.DeviceBus = DeviceBusVirtio
 		}
 		memory, e := sizeBytes(vm.Memory)
@@ -273,52 +286,114 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 			return nil, nil, fmt.Errorf("image creation requires an image identifier for each clone")
 		}
 	}
-	if overrides.Firmware != "" {
-		common.Firmware = overrides.Firmware
-	}
-	if overrides.DiskController != "" {
-		common.DiskController = overrides.DiskController
-	}
-	if overrides.NICModel != "" {
-		common.NICModel = overrides.NICModel
-	}
-	if overrides.Initialization != "" {
-		common.Initialization = overrides.Initialization
-	}
-	if overrides.GuestAgent != nil {
-		common.GuestAgent = overrides.GuestAgent
-	}
-	if common.Firmware != "" {
-		vm.Firmware = common.Firmware
-	}
-	if vm.Firmware == "auto" {
-		vm.Firmware = ""
-	}
-	vm.Graphic.Type, vm.VideoModel = common.Display()
-	vm.DiskController = common.DiskController
-	vm.GuestAgent = common.GuestAgentEnabled()
-	for _, iface := range vm.Interfaces {
-		if iface.Model == "" {
-			iface.Model = common.NICModel
+	if len(backendPolicy) != 0 {
+		if overrides != (ImageDefaults{}) {
+			return nil, nil, fmt.Errorf("backend policy does not allow per-image hardware overrides")
 		}
-		if iface.Model == "" {
-			iface.Model = "virtio"
+		backend, ok := m.vms.VirtualMachineRepository.(BackendMachineRepository)
+		if !ok {
+			return nil, nil, ErrUnavailable
 		}
-	}
-	initialization := common.Initialization
-	if initialization == "" {
-		initialization = m.settings[vm.NodeId].CdFormat.String()
-	}
-	if initialization == "none" {
-		vm.Config = nil
+		applied := vm.AppliedPolicy
+		if accepted, ok := m.appliedPolicies[vm.NodeId]; ok {
+			applied = accepted
+		}
+		if len(applied) != 0 {
+			if err := backend.ApplyHardware(vm, applied); err != nil {
+				return nil, nil, err
+			}
+		} else {
+			binding, pinned := m.creationBindings[vm.NodeId]
+			if !pinned {
+				binding, err = m.vms.SnapshotCreationBinding(vm.NodeId)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+			if err := backend.ResolveHardware(vm, backendPolicy, binding); err != nil {
+				return nil, nil, err
+			}
+		}
+		// Validate the complete attachment set before producing artifacts. Each
+		// planned attachment participates in the next capacity/dependency check.
+		topology := *vm
+		topology.Volumes = nil
+		for _, disk := range vm.Volumes {
+			if err := backend.ResolveDiskAttachment(&topology, disk); err != nil {
+				return nil, nil, err
+			}
+			topology.Volumes = append(topology.Volumes, disk)
+		}
+		for n := range clones {
+			disk := &VirtualMachineAttachedVolume{Alias: clones[n].Alias, DeviceType: clones[n].DeviceType, DeviceBus: clones[n].DeviceBus}
+			if err := backend.ResolveDiskAttachment(&topology, disk); err != nil {
+				return nil, nil, err
+			}
+			clones[n].DeviceBus = disk.DeviceBus
+			topology.Volumes = append(topology.Volumes, disk)
+		}
+		for n := range newVolumes {
+			disk := &VirtualMachineAttachedVolume{Alias: newVolumes[n].Alias, DeviceType: newVolumes[n].DeviceType, DeviceBus: newVolumes[n].DeviceBus}
+			if err := backend.ResolveDiskAttachment(&topology, disk); err != nil {
+				return nil, nil, err
+			}
+			newVolumes[n].DeviceBus = disk.DeviceBus
+			topology.Volumes = append(topology.Volumes, disk)
+		}
+		if vm.Config != nil && vm.ConfigDriveAttachment != nil {
+			if err := backend.ResolveDiskAttachment(&topology, vm.ConfigDriveAttachment); err != nil {
+				return nil, nil, err
+			}
+		}
 	} else {
-		if configdrive.NewFormat(initialization) == configdrive.FormatUnknown {
-			return nil, nil, fmt.Errorf("unsupported initialization mode %q", initialization)
+		if overrides.Firmware != "" {
+			common.Firmware = overrides.Firmware
 		}
-		if vm.Config == nil {
-			vm.Config = &VirtualMachineConfig{Hostname: vm.Name}
+		if overrides.DiskController != "" {
+			common.DiskController = overrides.DiskController
 		}
-		vm.Config.Initialization = initialization
+		if overrides.NICModel != "" {
+			common.NICModel = overrides.NICModel
+		}
+		if overrides.Initialization != "" {
+			common.Initialization = overrides.Initialization
+		}
+		if overrides.GuestAgent != nil {
+			common.GuestAgent = overrides.GuestAgent
+		}
+		if common.Firmware != "" {
+			vm.Firmware = common.Firmware
+		}
+		if vm.Firmware == "auto" {
+			vm.Firmware = ""
+		}
+		vm.Graphic.Type, vm.VideoModel = common.Display()
+		vm.DiskController = common.DiskController
+		vm.GuestAgent = common.GuestAgentEnabled()
+		for _, iface := range vm.Interfaces {
+			if iface.Model == "" {
+				iface.Model = common.NICModel
+			}
+			if iface.Model == "" {
+				iface.Model = "virtio"
+			}
+		}
+		initialization := common.Initialization
+		if initialization == "" {
+			initialization = m.settings[vm.NodeId].CdFormat.String()
+		}
+		if initialization == "none" {
+			vm.Config = nil
+		} else {
+			if configdrive.NewFormat(initialization) == configdrive.FormatUnknown {
+				return nil, nil, fmt.Errorf("unsupported initialization mode %q", initialization)
+			}
+			if vm.Config == nil {
+				vm.Config = &VirtualMachineConfig{Hostname: vm.Name}
+			}
+			vm.Config.Initialization = initialization
+		}
+
 	}
 	if !resourceName.MatchString(vm.Name) {
 		return nil, nil, fmt.Errorf("invalid VM name")
@@ -334,29 +409,37 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 	if e := m.vms.ValidateNew(vm); e != nil {
 		return nil, nil, e
 	}
-	caps, e := m.vms.Capabilities(vm.NodeId, vm.Arch)
-	if e != nil {
-		return nil, nil, e
-	}
-	if caps.Arch != vm.Arch {
-		return nil, nil, fmt.Errorf("target node does not support image architecture")
-	}
-	if vm.VCpus < 1 || (caps.MaxVCPUs > 0 && uint(vm.VCpus) > caps.MaxVCPUs) {
-		return nil, nil, fmt.Errorf("unsupported vCPU count")
-	}
-	if vm.Firmware != "" && !slices.Contains(caps.Firmwares, vm.Firmware) {
-		return nil, nil, fmt.Errorf("firmware %q is unsupported on this node", vm.Firmware)
-	}
-	if vm.DiskController != "" && !slices.Contains(caps.DiskControllers, vm.DiskController) {
-		return nil, nil, fmt.Errorf("unsupported disk controller")
-	}
-	if !slices.Contains(caps.Graphics, vm.Graphic.Type) || !slices.Contains(caps.VideoModels, vm.VideoModel) {
-		return nil, nil, fmt.Errorf("graphics or video model is unsupported on this node")
+	// Backend plans validate hardware through their pinned bindings in
+	// ValidateNew. Querying generic current-host defaults here would replace
+	// an accepted emulator/machine choice after a configuration edit.
+	legacyHardware := len(backendPolicy) == 0
+	var caps VirtualMachineCapabilities
+	if legacyHardware {
+		var e error
+		caps, e = m.vms.Capabilities(vm.NodeId, vm.Arch)
+		if e != nil {
+			return nil, nil, e
+		}
+		if caps.Arch != vm.Arch {
+			return nil, nil, fmt.Errorf("target node does not support image architecture")
+		}
+		if vm.VCpus < 1 || (caps.MaxVCPUs > 0 && uint(vm.VCpus) > caps.MaxVCPUs) {
+			return nil, nil, fmt.Errorf("unsupported vCPU count")
+		}
+		if vm.Firmware != "" && !slices.Contains(caps.Firmwares, vm.Firmware) {
+			return nil, nil, fmt.Errorf("firmware %q is unsupported on this node", vm.Firmware)
+		}
+		if vm.DiskController != "" && !slices.Contains(caps.DiskControllers, vm.DiskController) {
+			return nil, nil, fmt.Errorf("unsupported disk controller")
+		}
+		if !slices.Contains(caps.Graphics, vm.Graphic.Type) || !slices.Contains(caps.VideoModels, vm.VideoModel) {
+			return nil, nil, fmt.Errorf("graphics or video model is unsupported on this node")
+		}
 	}
 	hasScsi := false
 	destinations := map[string]bool{}
 	validateDisk := func(pool, name string, bus DeviceBus, size Size) error {
-		if !slices.Contains(caps.DiskBuses, bus) {
+		if legacyHardware && !slices.Contains(caps.DiskBuses, bus) {
 			return fmt.Errorf("disk bus %q is unsupported on this node", bus)
 		}
 		hasScsi = hasScsi || bus == DeviceBusScsi
@@ -385,19 +468,19 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		}
 	}
 	for _, p := range vm.Volumes {
-		if !slices.Contains(caps.DiskBuses, p.DeviceBus) {
+		if legacyHardware && !slices.Contains(caps.DiskBuses, p.DeviceBus) {
 			return nil, nil, fmt.Errorf("unsupported attached disk bus")
 		}
 		hasScsi = hasScsi || p.DeviceBus == DeviceBusScsi
 	}
-	if vm.DiskController != "" && !hasScsi {
+	if vm.DiskController != "" && !hasScsi && len(vm.AppliedPolicy) == 0 {
 		return nil, nil, fmt.Errorf("disk controller requires a SCSI disk")
 	}
 	for _, iface := range vm.Interfaces {
-		if !slices.Contains(caps.NICModels, iface.Model) {
+		if legacyHardware && !slices.Contains(caps.NICModels, iface.Model) {
 			return nil, nil, fmt.Errorf("NIC model %q is unsupported on this node", iface.Model)
 		}
-		if models, restricted := caps.NetworkModels[iface.NetworkName]; restricted && !slices.Contains(models, iface.Model) {
+		if models, restricted := caps.NetworkModels[iface.NetworkName]; legacyHardware && restricted && !slices.Contains(models, iface.Model) {
 			return nil, nil, fmt.Errorf("NIC model is unsupported for the selected network")
 		}
 	}
@@ -418,8 +501,12 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		if destinations[settings.CdPool+"\x00"+name] {
 			return nil, nil, fmt.Errorf("config drive conflicts with a requested disk")
 		}
-		if !slices.Contains(caps.DiskBuses, DeviceBusVirtio) {
-			return nil, nil, fmt.Errorf("node cannot attach a virtio config drive")
+		bus := DeviceBusVirtio
+		if vm.ConfigDriveAttachment != nil {
+			bus = vm.ConfigDriveAttachment.DeviceBus
+		}
+		if legacyHardware && !slices.Contains(caps.DiskBuses, bus) {
+			return nil, nil, fmt.Errorf("node cannot attach the configured config drive")
 		}
 		if e := m.volumes.ValidateCreate(VolumeCreateParams{NodeId: vm.NodeId, Pool: settings.CdPool, Name: name, Format: VolumeFormatIso}); e != nil {
 			return nil, nil, e

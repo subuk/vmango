@@ -31,8 +31,8 @@ type InstanceType struct {
 	MemoryBytes        uint64 `json:"memory_bytes"`
 	MemoryRequestBytes uint64 `json:"memory_request_bytes"`
 	BootDiskBytes      uint64 `json:"boot_disk_bytes"`
-	Hugepages          bool   `json:"hugepages"`
-	Autostart          bool   `json:"autostart"`
+	Hugepages          bool   `json:"-"`
+	Autostart          bool   `json:"-"`
 }
 type NetworkBinding struct {
 	Bridge  bool

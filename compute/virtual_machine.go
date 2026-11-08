@@ -1,5 +1,7 @@
 package compute
 
+import "encoding/json"
+
 type VirtualMachineConsoleStream interface {
 	Read(buf []byte) (int, error)
 	Write(buf []byte) (int, error)
@@ -51,27 +53,29 @@ func (g VirtualMachineGraphic) Vnc() bool {
 }
 
 type VirtualMachine struct {
-	NamespaceID    NamespaceID
-	Label          string
-	Metadata       *MachineMetadata
-	Id             string
-	Name           string
-	Firmware       string
-	DiskController string
-	NodeId         string
-	VCpus          int
-	Arch           Arch
-	State          VirtualMachineState
-	Memory         Size
-	Interfaces     []*VirtualMachineAttachedInterface
-	Volumes        []*VirtualMachineAttachedVolume
-	Config         *VirtualMachineConfig
-	Cpupin         *VirtualMachineCpuPin
-	GuestAgent     bool
-	Autostart      bool
-	Graphic        VirtualMachineGraphic
-	VideoModel     VideoModel
-	Hugepages      bool
+	AppliedPolicy         json.RawMessage               `json:",omitempty"`
+	ConfigDriveAttachment *VirtualMachineAttachedVolume `json:",omitempty"`
+	NamespaceID           NamespaceID
+	Label                 string
+	Metadata              *MachineMetadata
+	Id                    string
+	Name                  string
+	Firmware              string
+	DiskController        string
+	NodeId                string
+	VCpus                 int
+	Arch                  Arch
+	State                 VirtualMachineState
+	Memory                Size
+	Interfaces            []*VirtualMachineAttachedInterface
+	Volumes               []*VirtualMachineAttachedVolume
+	Config                *VirtualMachineConfig
+	Cpupin                *VirtualMachineCpuPin
+	GuestAgent            bool
+	Autostart             bool
+	Graphic               VirtualMachineGraphic
+	VideoModel            VideoModel
+	Hugepages             bool
 }
 
 func (vm *VirtualMachine) AttachmentInfo(path string) *VirtualMachineAttachedVolume {
@@ -96,10 +100,12 @@ func (vm *VirtualMachine) IsRunning() bool {
 }
 
 type VirtualMachineAttachedVolume struct {
-	Path       string
-	Alias      string
-	DeviceType DeviceType
-	DeviceBus  DeviceBus
+	// GeneratedArtifact is set only while attaching a backend-planned, VM-owned artifact.
+	GeneratedArtifact bool `json:"-"`
+	Path              string
+	Alias             string
+	DeviceType        DeviceType
+	DeviceBus         DeviceBus
 }
 
 type VirtualMachineAttachedInterface struct {

@@ -3,14 +3,13 @@ package libvirt
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/url"
-	"os/exec"
 	"strconv"
 	"strings"
 	"subuk/vmango/compute"
 	"subuk/vmango/configdrive"
+	"subuk/vmango/libvirt/hardware"
 	"subuk/vmango/tasks"
 	"sync"
 	"time"
@@ -26,11 +25,12 @@ const ConfigDriveMaxSize = 5 * 1024 * 1024
 const VirtualMachineSockets = 1
 
 type VirtualMachineRepository struct {
-	pool          *ConnectionPool
-	logger        zerolog.Logger
-	settings      map[string]NodeSettings
-	configCache   map[string]*compute.VirtualMachineConfig
-	configCacheMu *sync.Mutex
+	hardwareProfiles map[string]map[string]hardware.Profile
+	pool             *ConnectionPool
+	logger           zerolog.Logger
+	settings         map[string]NodeSettings
+	configCache      map[string]*compute.VirtualMachineConfig
+	configCacheMu    *sync.Mutex
 }
 
 func NewVirtualMachineRepository(pool *ConnectionPool, settings map[string]NodeSettings, logger zerolog.Logger) *VirtualMachineRepository {
@@ -69,6 +69,12 @@ func (repo *VirtualMachineRepository) parseConfigDrive(conn *libvirt.Connect, vo
 	}
 	config := &compute.VirtualMachineConfig{
 		Hostname: data.Hostname(),
+	}
+	switch data.(type) {
+	case *configdrive.NoCloud:
+		config.Initialization = "nocloud"
+	case *configdrive.Openstack:
+		config.Initialization = "openstack"
 	}
 	for _, rawKey := range data.PublicKeys() {
 		pubkey, comment, options, _, err := ssh.ParseAuthorizedKey([]byte(rawKey))
@@ -149,7 +155,7 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId s
 	}
 
 	for _, volume := range vm.Volumes {
-		if !strings.HasSuffix(volume.Path, settings.CdSuffix) {
+		if volume.Alias != "configdrive" && !strings.HasSuffix(volume.Path, settings.CdSuffix) {
 			continue
 		}
 		repo.configCacheMu.Lock()
@@ -300,29 +306,6 @@ func (repo *VirtualMachineRepository) GetConsoleStream(id, nodeId string, force 
 	return &virStreamReadWriteCloser{stream}, nil
 }
 
-type cmdIoWrapper struct {
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
-	cmd    *exec.Cmd
-}
-
-func (w *cmdIoWrapper) Read(p []byte) (int, error) {
-	return w.stdout.Read(p)
-}
-
-func (w *cmdIoWrapper) Write(p []byte) (int, error) {
-	return w.stdin.Write(p)
-}
-
-func (w *cmdIoWrapper) Close() error {
-	w.stdin.Close()
-	if w.cmd != nil {
-		w.cmd.Process.Kill()
-	}
-	return w.stdout.Close()
-
-}
-
 func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compute.VirtualMachineGraphicStream, error) {
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
@@ -333,6 +316,9 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compu
 	connUriRaw, err := conn.GetURI()
 	if err != nil {
 		return nil, repositoryError(err, "cannot get connection hostname")
+	}
+	if configured := repo.pool.nodeUri[nodeId]; configured != "" {
+		connUriRaw = configured
 	}
 	connUri, err := url.Parse(connUriRaw)
 	if err != nil {
@@ -373,32 +359,10 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compu
 	if err != nil {
 		return nil, err
 	}
-	if strings.Contains(connUri.Scheme, "ssh") {
-		cmd := exec.Command("ssh", graphicsSSHArguments(connUri, consoleHost, graphicPort)...)
-		repo.logger.Debug().Strs("args", cmd.Args).Msg("executing ssh forwarding command")
-
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			return nil, repositoryError(err, "cannot initialize cmd stdout")
-		}
-		cmd.Stderr = io.Discard
-		stdin, err := cmd.StdinPipe()
-		if err != nil {
-			return nil, repositoryError(err, "cannot initialize cmd stdin")
-		}
-		if err := cmd.Start(); err != nil {
-			return nil, repositoryError(err, "cannot start ssh forwarding command")
-		}
-		repo.logger.Debug().Msg("ssh started successfully")
-		go func(cmd *exec.Cmd) {
-			if err := cmd.Wait(); err != nil {
-				repo.logger.Warn().Msg("graphics forwarding command failed")
-				return
-			}
-			repo.logger.Debug().Msg("graphics command finished successfully")
-		}(cmd)
-		return &cmdIoWrapper{stdin: stdin, stdout: stdout, cmd: cmd}, nil
+	if connUri.Hostname() != "" {
+		return openGraphicsTunnel(connUri, consoleHost, graphicPort)
 	}
+
 	addr := net.JoinHostPort(consoleHost, strconv.Itoa(graphicPort))
 	repo.logger.Debug().Str("addr", addr).Msg("connecting directly to console")
 	return net.DialTimeout("tcp", addr, 10*time.Second)
@@ -406,7 +370,16 @@ func (repo *VirtualMachineRepository) GetGraphicStream(id, nodeId string) (compu
 
 func (repo *VirtualMachineRepository) generateNewDomainConfig(conn *libvirt.Connect, vm *compute.VirtualMachine) (*libvirtxml.Domain, error) {
 	settings := repo.settings[vm.NodeId]
-	domCapsXml, err := conn.GetDomainCapabilities(settings.Emulator, vm.Arch.String(), "", "", 0)
+	machine, domainType := "", ""
+	if len(vm.AppliedPolicy) > 0 {
+		plan, err := hardware.DecodePlan(vm.AppliedPolicy)
+		if err != nil {
+			return nil, err
+		}
+		settings.Emulator = plan.Emulator
+		machine, domainType = plan.Machine, plan.DomainType
+	}
+	domCapsXml, err := conn.GetDomainCapabilities(settings.Emulator, vm.Arch.String(), machine, domainType, 0)
 	if err != nil {
 		return nil, repositoryError(err, "cannot fetch domain capabilities")
 	}
@@ -465,6 +438,9 @@ func (repo *VirtualMachineRepository) SaveResources(vm *compute.VirtualMachine) 
 }
 
 func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resourcesOnly bool) (err error) {
+	if err := repo.ValidateAppliedPolicy(vm); err != nil {
+		return err
+	}
 	ref := compute.VMRef(vm.NodeId, vm.Id)
 	var effects []tasks.Effect
 	defer func() { err = mutationError(err, "domain.save", ref, effects) }()
@@ -519,6 +495,11 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 		}
 	}
 
+	if resourcesOnly {
+		if err := validateResourceTopology(virDomainConfig, vm.VCpus); err != nil {
+			return err
+		}
+	}
 	applyDomainPolicy(virDomainConfig, vm, capsConfig, resourcesOnly)
 
 	if isNewVm {
@@ -534,6 +515,9 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 			}
 		}
 		ensureDomainBootDisk(virDomainConfig)
+	}
+	if err := writeHardwareMetadata(virDomainConfig, vm.AppliedPolicy); err != nil {
+		return err
 	}
 	if err := writeSchedulerMetadata(virDomainConfig, vm.Metadata); err != nil {
 		return err
@@ -566,7 +550,7 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 	if err != nil {
 		return repositoryError(err, "cannot get domain autostart state")
 	}
-	if vm.Autostart != virDomainAutostart {
+	if !resourcesOnly && vm.Autostart != virDomainAutostart {
 		if err := virDomain.SetAutostart(vm.Autostart); err != nil {
 			return repositoryError(err, "cannot set domain autostart state")
 		}
@@ -575,6 +559,9 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 }
 
 func (repo *VirtualMachineRepository) Delete(id, nodeId string) (err error) {
+	if err := repo.requireManagedHardware(id, nodeId); err != nil {
+		return err
+	}
 	ref := compute.VMRef(nodeId, id)
 	var effects []tasks.Effect
 	defer func() { err = mutationError(err, "domain.delete", ref, effects) }()
@@ -690,6 +677,9 @@ func (repo *VirtualMachineRepository) Get(id, nodeId string) (*compute.VirtualMa
 }
 
 func (repo *VirtualMachineRepository) Poweroff(id, nodeId string) error {
+	if err := repo.requireManagedHardware(id, nodeId); err != nil {
+		return err
+	}
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return repositoryError(err, "cannot acquire connection")
@@ -704,6 +694,9 @@ func (repo *VirtualMachineRepository) Poweroff(id, nodeId string) error {
 }
 
 func (repo *VirtualMachineRepository) Reboot(id, nodeId string) error {
+	if err := repo.requireManagedHardware(id, nodeId); err != nil {
+		return err
+	}
 	if err := ensureEventLoop(); err != nil {
 		return repositoryError(err, "initialize reboot observation")
 	}
@@ -742,7 +735,10 @@ func waitForReboot(observed <-chan struct{}) error {
 }
 
 func waitForMachineEvent(observed <-chan struct{}, action, event string) error {
-	const timeout = 10 * time.Second
+	timeout := 10 * time.Second
+	if action == "shutdown" {
+		timeout = 120 * time.Second
+	}
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
@@ -754,6 +750,9 @@ func waitForMachineEvent(observed <-chan struct{}, action, event string) error {
 }
 
 func (repo *VirtualMachineRepository) Start(id, nodeId string) error {
+	if err := repo.requireManagedHardware(id, nodeId); err != nil {
+		return err
+	}
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return repositoryError(err, "cannot acquire connection")
@@ -764,6 +763,7 @@ func (repo *VirtualMachineRepository) Start(id, nodeId string) error {
 	if err != nil {
 		return repositoryError(err, "domain lookup failed")
 	}
+	defer domain.Free()
 	return repositoryError(domain.Create(), "virDomainCreate")
 }
 
@@ -778,11 +778,19 @@ func (repo *VirtualMachineRepository) attachVolume(conn *libvirt.Connect, virDom
 		virVolumeConfig.Type,
 		namer,
 	)
+	address, err := allocateDiskAddress(virDomainConfig, attachedVolume.DeviceBus.String())
+	if err != nil {
+		return err
+	}
+	diskConfig.Address = address
 	virDomainConfig.Devices.Disks = append(virDomainConfig.Devices.Disks, *diskConfig)
 	return nil
 }
 
 func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVolume *compute.VirtualMachineAttachedVolume) error {
+	if err := repo.requireManagedHardware(id, nodeId); err != nil {
+		return err
+	}
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return repositoryError(err, "cannot acquire connection")
@@ -809,6 +817,19 @@ func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVo
 	if err := virDomainConfig.Unmarshal(virDomainXml); err != nil {
 		return repositoryError(err, "cannot parse domain xml")
 	}
+	policy, err := readHardwareMetadata(virDomainConfig)
+	if err != nil {
+		return err
+	}
+	if len(policy) > 0 {
+		existing := &compute.VirtualMachine{AppliedPolicy: policy}
+		for _, d := range virDomainConfig.Devices.Disks {
+			existing.Volumes = append(existing.Volumes, VirtualMachineAttachedVolumeFromDomainDiskConfig(d))
+		}
+		if err := repo.ResolveDiskAttachment(existing, attachedVolume); err != nil {
+			return err
+		}
+	}
 	namer := NewDeviceNamerFromDisks(virDomainConfig.Devices.Disks)
 	if err := repo.attachVolume(conn, virDomainConfig, attachedVolume, namer); err != nil {
 		return repositoryError(err, "cannot add volume xml config")
@@ -826,6 +847,9 @@ func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVo
 }
 
 func (repo *VirtualMachineRepository) DetachVolume(id, nodeId, needlePath string) error {
+	if err := repo.requireManagedHardware(id, nodeId); err != nil {
+		return err
+	}
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return repositoryError(err, "cannot acquire connection")
@@ -880,6 +904,20 @@ func (repo *VirtualMachineRepository) DetachVolume(id, nodeId, needlePath string
 }
 
 func (repo *VirtualMachineRepository) AttachInterface(id, nodeId string, attachedIface *compute.VirtualMachineAttachedInterface) error {
+	vm, err := repo.Get(id, nodeId)
+	if err != nil {
+		return err
+	}
+	if err = repo.ValidateAppliedPolicy(vm); err != nil {
+		return err
+	}
+	if err = repo.ResolveInterfaceAttachment(vm, attachedIface); err != nil {
+		return err
+	}
+	if err = repo.ValidateNetwork(nodeId, attachedIface); err != nil {
+		return err
+	}
+
 	conn, err := repo.pool.Acquire(nodeId)
 	if err != nil {
 		return repositoryError(err, "cannot acquire connection")
@@ -1056,6 +1094,9 @@ func (repo *VirtualMachineRepository) detachInterfaceQemuArgs(id, nodeId, needle
 }
 
 func (repo *VirtualMachineRepository) DetachInterface(id, nodeId, needleMac string) error {
+	if err := repo.requireManagedHardware(id, nodeId); err != nil {
+		return err
+	}
 	if err := repo.detachInterfaceLibvirt(id, nodeId, needleMac); err != nil {
 		if err == compute.ErrInterfaceNotFound {
 			return repo.detachInterfaceQemuArgs(id, nodeId, needleMac)
@@ -1065,6 +1106,9 @@ func (repo *VirtualMachineRepository) DetachInterface(id, nodeId, needleMac stri
 }
 
 func (repo *VirtualMachineRepository) Shutdown(id, nodeId string) error {
+	if err := repo.requireManagedHardware(id, nodeId); err != nil {
+		return err
+	}
 	if err := ensureEventLoop(); err != nil {
 		return repositoryError(err, "initialize shutdown observation")
 	}

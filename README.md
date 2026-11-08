@@ -330,3 +330,6 @@ See [frontend development](docs/UI-MIGRATION.md#development) for the Vite proxy,
 OpenAPI generation and source-archive validation workflow.
 
 Configured clouds, instance types, placement and local disk rules are documented in [docs/CLOUDS.md](docs/CLOUDS.md).
+Read [hardware-profile release migration](docs/HARDWARE-PROFILES-MIGRATION.md)
+before upgrading: every libvirt image needs a named profile, existing VMs need
+explicit adoption/re-adoption, and unfinished pre-upgrade commands fail without execution.

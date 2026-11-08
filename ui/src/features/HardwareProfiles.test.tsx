@@ -1,0 +1,98 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router";
+import {
+    AdoptMachine,
+    HardwareProfiles,
+    type HardwareProfile,
+} from "./HardwareProfiles";
+import type { VM } from "../api/hooks";
+
+const mocks = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock("../api/client", async (original) => ({
+    ...(await original<typeof import("../api/client")>()),
+    request: mocks.request,
+}));
+vi.mock("../app/Auth", () => ({ useMe: () => ({ id: "operator" }) }));
+const profile: HardwareProfile = {
+    id: "linux-scsi",
+    name: "Linux SCSI",
+    firmware: "efi",
+    disk_bus: "scsi",
+    disk_controller: "virtio-scsi",
+    nic_model: "virtio",
+    graphics: "vnc",
+    video_model: "none",
+    guest_agent: true,
+    hugepages: false,
+    config_drive: {
+        enabled: true,
+        format: "nocloud",
+        device_type: "disk",
+        bus: "virtio",
+    },
+};
+function show(element: React.ReactNode) {
+    mocks.request.mockImplementation(async (path: string, method: string) => {
+        if (method === "POST") return { id: "accepted" };
+        if (path.endsWith("/configuration")) return { snapshot_id: "snapshot" };
+        if (path.endsWith("/hardware-profiles")) return [profile];
+        throw new Error(path);
+    });
+    render(
+        <QueryClientProvider
+            client={
+                new QueryClient({
+                    defaultOptions: { queries: { retry: false } },
+                })
+            }
+        >
+            <MemoryRouter>{element}</MemoryRouter>
+        </QueryClientProvider>,
+    );
+}
+afterEach(() => {
+    cleanup();
+    mocks.request.mockReset();
+});
+it("shows ordinary disk and config-drive policies separately without editable listener settings", async () => {
+    show(<HardwareProfiles cloud="local" />);
+    expect(await screen.findByText("Linux SCSI")).toBeTruthy();
+    expect(screen.getByText("Ordinary disk bus")).toBeTruthy();
+    expect(screen.getByText("nocloud · disk · virtio")).toBeTruthy();
+    expect(screen.queryByRole("textbox")).toBeNull();
+});
+it("requires explicit profile choice before adopting and sends only the selected reference", async () => {
+    const close = vi.fn();
+    show(
+        <AdoptMachine
+            vm={{ id: "vm", name: "Existing VM", cloud: "local" } as VM}
+            onClose={close}
+        />,
+    );
+    const button = screen.getByRole("button", {
+        name: "Adopt machine",
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    await userEvent.click(
+        await screen.findByRole("combobox", { name: /Hardware profile/ }),
+    );
+    await userEvent.click(
+        screen.getByRole("option", { name: "Linux SCSI (linux-scsi)" }),
+    );
+    expect(button.disabled).toBe(false);
+    expect(screen.getByText(/preserves existing hardware/)).toBeTruthy();
+    await userEvent.click(button);
+    await waitFor(() =>
+        expect(mocks.request).toHaveBeenCalledWith(
+            "/api/v1/clouds/local/machines/vm/adopt",
+            "POST",
+            { hardware_profile: "linux-scsi" },
+            undefined,
+            expect.anything(),
+        ),
+    );
+    expect(close).toHaveBeenCalledOnce();
+});

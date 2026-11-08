@@ -6,6 +6,9 @@ and bindings. Users select catalog entries; the scheduler chooses a host. Vmango
 currently implements only libvirt. Placement intent and capability discovery are
 independent of libvirt so future provider adapters can implement supported features.
 
+See the [hardware-profile migration guide](https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md) before upgrading.
+Every libvirt image must select an explicit named hardware profile.
+
 See the complete `cloud` example in `vmango.dist.conf`. Each nested `host` owns
 its libvirt connection (`uri`) and backend settings, alongside its zone, reserves,
 network and storage bindings. Host names and URIs must be globally unique across
@@ -45,11 +48,12 @@ and launch defaults. Lookup never falls back to another cloud.
 
 ```hcl
 cloud "local" {
+    hardware_profile "linux-uefi" { firmware = "efi" }
     image "ubuntu-local" {
         path = "/var/lib/libvirt/images/ubuntu-cloud.img"
         os_name = "Ubuntu"
         os_arch = "x86_64"
-        firmware = "efi"
+        hardware_profile = "linux-uefi"
         protected = true
     }
     # Keep zones, types, networks, storage classes and host bindings here.
@@ -66,18 +70,17 @@ paths in unrelated clouds do not share image policy or attachment exclusions.
 `hidden`/`protected` describe source-volume policy, not catalog visibility.
 
 Restart to activate the new file. Preserve the task directory and its sibling
-`-images` and `-volumes` metadata stores. Accepted pre-migration tasks retain
-pinned image sources/defaults, backend bindings, artifact identity, history,
-ownership and locks; editing today's catalog does not retarget queued work.
-A legacy task without safely established accepted cloud context fails before
-mutation with a resubmission message while retaining its history and safety state.
+`-images` and `-volumes` metadata stores. Unfinished tasks accepted before the hardware-profile command-format boundary fail
+without execution. Terminal history, recorded effects and uncertainty locks remain
+intact. New-format tasks retain their accepted policy through ordinary restarts;
+see the hardware-profile migration guide before resubmitting old work.
 
 ## Host configuration migration
 
 Move every setting from each top-level `libvirt "name"` block into the matching
 `cloud { host "name" { ... } }` block and remove the old block. This includes
 `uri`, `image_pool`, `config_drive_pool`, `config_drive_suffix`,
-`config_drive_write_format`, `emulator`, `graphics_listen`,
+`emulator`,
 `qcow_prealloc_metadata` and `cache`. These settings are direct host attributes;
 there is no nested `libvirt` block. Preserve host names, exact URIs and pool
 settings to retain resource identities, task scopes and image ownership.
@@ -104,10 +107,10 @@ host "local" {
 }
 ```
 
-Omitted `image_pool` and `config_drive_pool` default to `default`,
-`config_drive_suffix` to `_config.iso` and `config_drive_write_format` to
-`nocloud`. An omitted `graphics_listen` preserves the backend's default listener;
-`cache` and `qcow_prealloc_metadata` default to `false`.
+Omitted `image_pool` and `config_drive_pool` default to `default`, and
+`config_drive_suffix` to `_config.iso`. `cache` and `qcow_prealloc_metadata`
+default to `false`. Legacy `config_drive_write_format` and `graphics_listen`
+warn and are ignored: format belongs to the profile, and listeners are derived.
 
 ## Catalog and placement
 
@@ -116,12 +119,13 @@ requests (`cpu_request`, defaulting to `cpu`), guest RAM (`memory_mib`) and the 
 of a newly provisioned boot disk (`boot_disk_gib`). CPU requests must be positive
 and no greater than the vCPU count; they do not configure CPU quotas, shares or
 runtime guarantees. Memory requests default to the limit and must equal it;
-memory overselling and automatic ballooning are unsupported. Images own boot
-requirements and device defaults (`guest_agent`, `graphics`, `video_model`).
-Images default to guest agent enabled, VNC and no video device. Types own
-`autostart`, which defaults to `false`. The create request's `start` flag requests
-a one-time start and does not override autostart. A type too small for the image is rejected,
-including when the image's actual virtual disk capacity exceeds the boot disk.
+memory overselling and automatic ballooning are unsupported. Images own artifact sources and minimum resource requirements, and select a named
+libvirt hardware profile. Profiles own guest devices, hugepages and config-drive
+policy. Defaults include guest agent enabled, VNC, no video device and NoCloud on
+a virtio disk. Instance types do not select or override hardware profiles.
+A type too small for the image is rejected, including when actual source virtual
+capacity exceeds the boot disk. Successful user starts, including `start=true`
+on creation, enable autostart; confirmed user stops disable it.
 
 Host CPU and RAM reserves reduce allocatable budgets. Every create inventories
 hosts in the cloud, including inactive and unmanaged domains. A host with any
@@ -193,35 +197,31 @@ explicitly requested, and always preserves unowned disks.
 
 ## Existing machines and instance type changes
 
-Unmanaged machines are visible and count toward admission but are read-only.
-Interactive consoles and other mutating commands require adoption.
-Explicit adoption records management identity without changing resources, power
-state, disk sizes, guest initialization or placement. It does not claim existing
-disks. It normalizes the persistent power policy to poweroff/crash = destroy and
-reboot = restart, and enables missing ACPI/APIC features for x86 HVM guests.
-Existing platform features and device settings are preserved. For running
-machines, these settings take effect after a full shutdown and start; a guest
-reboot does not reload the virtual hardware. Adoption is a durable asynchronous
-command, including for running machines.
+Unmanaged machines remain visible and count toward admission. Ordinary mutations
+require explicit adoption with a compatible named hardware profile; previously
+managed machines without persisted applied policy require re-adoption. Adoption
+validates existing hardware and records policy without rewriting hardware, disk
+addresses, power state or graphics listeners. It never infers a profile from XML
+or claims existing disks. Incompatible configurations require explicit resolution.
 
 Change instance type only while a managed VM is stopped. Admission replaces its
-old requests with the proposed requests on its current host. If that host has
-insufficient resources, the command fails even if another host has capacity.
-There is no automatic stop, migration or restart. Existing disk sizes stay intact;
-growth is a separate explicit operation. Current image defaults are not reapplied. The selected type's autostart policy
-is applied while the current guest/device settings and graphics listener remain
-unchanged. Adoption also preserves these device settings. Configuration edits affect
-future explicit operations; accepted tasks retain their policy and backend
-binding snapshots.
+old requests on the current host; insufficient resources fail the command. There
+is no automatic stop, migration or restart. Disk sizes, applied guest policy,
+hugepages, explicit pinning and autostart are preserved. Later disk operations use
+the persisted ordinary-disk policy, independent of catalog edits or task retention.
 
-Configure `graphics_listen` only inside the cloud's private `host` block.
-Omission preserves libvirt's listener default. Explicit values must be IP
-addresses (IPv4 or IPv6), not hostnames or host:port strings. The backend resolves
-the selected host's binding before writing its XML. Console forwarding uses the
-observed listener; wildcard addresses use loopback through SSH or the remote
-connection host for direct connections. Remote loopback listeners require SSH.
-Remote console access through Vmango requires HTTPS. These policy settings have
-no per-machine write API; effective values remain read-only diagnostics.
+New graphics-enabled VMs have an explicit loopback-only listener; graphics-disabled
+VMs have none. Local consoles connect locally; remote consoles use non-interactive,
+host-key-verified SSH. SSH libvirt URIs retain applicable SSH settings. Other remote
+transports try the connection hostname on SSH port 22, never the libvirt API port.
+Console SSH failure does not affect creation or ordinary management, and never
+falls back to direct remote VNC. Existing listeners are preserved. Remote browser
+console access through Vmango requires HTTPS.
+
+Autostart follows confirmed user power operations. Graceful shutdown waits up to
+120 seconds; an unconfirmed result leaves autostart unchanged. Reboot, guest shutdown
+and type changes do not synchronize it. A synchronization failure after successful
+power is reported separately with the successful operation retained in task effects.
 
 ## API migration
 

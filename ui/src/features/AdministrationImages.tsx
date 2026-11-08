@@ -1,3 +1,4 @@
+import { ImageHardwareProfile } from "./HardwareProfiles";
 import {
     Box,
     Button,
@@ -521,26 +522,13 @@ export function ImageDetail({
                                 ]}
                             />
                         </DetailSection>
-                        <DetailSection title="Configured guest defaults">
-                            <Fields
-                                entries={[
-                                    ["Firmware", i.defaults.firmware],
-                                    ["Disk bus", i.defaults.disk_bus],
-                                    [
-                                        "Disk controller",
-                                        i.defaults.disk_controller,
-                                    ],
-                                    ["NIC model", i.defaults.nic_model],
-                                    ["Graphics", i.defaults.graphics],
-                                    ["Video model", i.defaults.video_model],
-                                    ["Guest agent", i.defaults.guest_agent],
-                                    [
-                                        "Initialization",
-                                        i.defaults.initialization,
-                                    ],
-                                ]}
+                        {cloud.backend_kind === "libvirt" && (
+                            <ImageHardwareProfile
+                                cloud={cloud.id}
+                                image={i.id}
+                                snapshot={snapshot}
                             />
-                        </DetailSection>
+                        )}
                         {!!i.data_disks?.length && (
                             <DetailSection title="Required image disks">
                                 <Typography sx={{ mb: 2 }}>

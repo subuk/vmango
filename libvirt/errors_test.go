@@ -114,7 +114,7 @@ func TestLibvirtCauseSurvivesServiceProvisioningAndDurableTaskHistory(t *testing
 	}
 }
 
-func TestSuccessfulStartDoesNotRequireRunningStateReadback(t *testing.T) {
+func TestUnconfirmedStartLeavesAutostartUnchanged(t *testing.T) {
 	repo, err := filesystem.NewTaskRepository(filepath.Join(t.TempDir(), "tasks"))
 	if err != nil {
 		t.Fatal(err)
@@ -145,7 +145,7 @@ func TestSuccessfulStartDoesNotRequireRunningStateReadback(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if task.State != tasks.Succeeded || len(task.Stages) == 0 || task.Stages[len(task.Stages)-1].Name != "start-vm" {
-		t.Fatalf("Start return should be sufficient: %+v", task)
+	if task.State != tasks.Failed || task.Error == nil || !strings.Contains(task.Error.Message, "read after Start") || backend.vm.Autostart {
+		t.Fatalf("unconfirmed start must leave autostart unchanged: %+v", task)
 	}
 }

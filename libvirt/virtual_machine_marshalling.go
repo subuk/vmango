@@ -115,6 +115,10 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 		return nil, err
 	}
 	vm.Metadata = metadata
+	vm.AppliedPolicy, err = readHardwareMetadata(domainConfig)
+	if err != nil {
+		return nil, err
+	}
 	vm.Id = domainConfig.UUID
 	vm.Name = domainConfig.Name
 	vm.NamespaceID, vm.Label, err = readWorkloadMetadata(domainConfig)
@@ -158,10 +162,16 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 		vm.State = compute.StateStopped
 	}
 
+	if domainConfig.VCPU.CPUSet != "" {
+		vm.Cpupin = &compute.VirtualMachineCpuPin{Vcpus: map[uint][]uint{}, Emulator: []uint{}}
+		cpus := ParseCpuAffinity(domainConfig.VCPU.CPUSet)
+		for n := uint(0); n < domainConfig.VCPU.Value; n++ {
+			vm.Cpupin.Vcpus[n] = append([]uint(nil), cpus...)
+		}
+	}
 	if domainConfig.CPUTune != nil {
-		vm.Cpupin = &compute.VirtualMachineCpuPin{
-			Vcpus:    map[uint][]uint{},
-			Emulator: []uint{},
+		if vm.Cpupin == nil {
+			vm.Cpupin = &compute.VirtualMachineCpuPin{Vcpus: map[uint][]uint{}, Emulator: []uint{}}
 		}
 		for _, vcpupin := range domainConfig.CPUTune.VCPUPin {
 			vm.Cpupin.Vcpus[vcpupin.VCPU] = ParseCpuAffinity(vcpupin.CPUSet)

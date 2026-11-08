@@ -66,7 +66,9 @@ Keep `url`, `sha256` and `source_format`, and add `archive_format` and
 `archive_member` to select exactly one regular file:
 
 ```hcl
+hardware_profile "linux-uefi" { firmware = "efi" }
 image "archived-linux" {
+    hardware_profile = "linux-uefi"
     os_arch = "aarch64"
     url = "https://images.example.org/linux.tar.gz"
     sha256 = "REPLACE_WITH_ARCHIVE_SHA256"
@@ -240,17 +242,20 @@ libvirt storage pool. Register a catalog entry in
 [vmango.conf](https://github.com/subuk/vmango/blob/master/vmango.dist.conf):
 
 ```hcl
+hardware_profile "linux-uefi" {
+    firmware = "efi"
+    disk_bus = "virtio"
+    nic_model = "virtio"
+    guest_agent = true
+    config_drive { format = "nocloud" }
+}
 image "ubuntu-server" {
     path = "/var/lib/libvirt/images/ubuntu-cloud.img"
     name = "Ubuntu server"
     os_name = "Ubuntu"
     os_version = "24.04"
     os_arch = "x86_64"
-    firmware = "efi"
-    disk_bus = "virtio"
-    nic_model = "virtio"
-    guest_agent = true
-    initialization = "nocloud"
+    hardware_profile = "linux-uefi"
     minimum_memory_mib = 1024
     minimum_disk_gib = 8
     protected = true
@@ -262,7 +267,7 @@ is the display name (it defaults to the identifier). `os_arch` must be
 `x86_64` or `aarch64`. For path-based entries, the selector shows images matching the selected
 architecture whose source volume is visible, available and not attached to a VM.
 
-The catalog is shared across all nodes. Vmango resolves `path` on the selected
+The catalog is shared across all hosts in its owning cloud. Vmango resolves `path` on the selected
 node and reads that volume's actual capacity and format. A volume on another
 node cannot satisfy a missing source. The same path on several nodes intentionally
 receives the same settings; administrators must ensure its contents match the
@@ -271,64 +276,76 @@ image description. Path-based entries require an administrator-provisioned sourc
 Several entries can reference the same disk with different defaults:
 
 ```hcl
+hardware_profile "linux-no-provisioning" {
+    guest_agent = false
+    config_drive { enabled = false }
+}
 image "ubuntu-unmanaged" {
     path = "/var/lib/libvirt/images/ubuntu-cloud.img"
     name = "Ubuntu without provisioning"
     os_name = "Ubuntu"
     os_arch = "x86_64"
-    guest_agent = false
-    initialization = "none"
+    hardware_profile = "linux-no-provisioning"
 }
 ```
 
 Selecting this identifier disables the guest agent channel and omits the config
 drive. It does not change the `ubuntu-server` entry or the shared source disk.
 
-### Creation defaults and requirements
+### Hardware profiles and image requirements
+
+Define profiles and images inside their owning `cloud` block. Every image must
+reference a named profile using `hardware_profile`; missing or unknown references
+fail configuration loading. Multiple images may reference one profile. To change
+hardware for one image, define and select another complete profile; there are no
+inline overrides or profile inheritance.
+
+The following settings belong to `hardware_profile`, not `image`:
 
 | Setting | Values | When omitted |
 | --- | --- | --- |
 | `firmware` | `auto`, `bios`, `efi` | Existing backend firmware selection |
 | `disk_bus` | `virtio`, `scsi`, `ide` | `virtio` |
-| `disk_controller` | `virtio-scsi` (requires `disk_bus = "scsi"`) | Backend-selected controller |
+| `disk_controller` | `virtio-scsi` with SCSI | Resolved compatible controller |
 | `nic_model` | `virtio`, `e1000`, `rtl8139`, subject to backend support | `virtio` |
 | `guest_agent` | `true`, `false` | `true` |
 | `graphics` | `none`, `vnc`, `spice`, subject to backend support | `vnc` |
-| `video_model` | `none`, `cirrus`, `qxl`, `virtio` (2D), subject to backend support | `none` |
-| `initialization` | `none`, `nocloud`, `openstack` | Selected node's `config_drive_write_format` |
-| `minimum_memory_mib` | Nonnegative integer, MiB | No additional minimum |
-| `minimum_disk_gib` | Nonnegative integer, GiB | Source volume capacity |
+| `video_model` | `none`, `cirrus`, `qxl`, `virtio` (2D) | `none` |
+| `hugepages` | `true`, `false` | `false` |
+| `config_drive.enabled` | `true`, `false` | `true` |
+| `config_drive.format` | `nocloud`, `openstack` | `nocloud` |
+| `config_drive.device_type` | `disk`, `cdrom`, where supported | `disk` |
+| `config_drive.bus` | Supported combination of device type and bus | `virtio` |
 
-`graphics = "none"` requires `video_model = "none"` (or omission). The image
-owns these guest device settings. The graphics listener is a private
-`graphics_listen` IP address in each cloud `host` block, resolved after host selection;
-it does not belong to an image or type. Omission preserves the backend listener
-default.
+`graphics="none"` requires no video model. New graphics-enabled VMs listen only
+on host loopback, and remote console traffic uses SSH. The listener address is
+not configurable. Existing VM listeners are preserved. Hugepages must already
+be available on the host; Vmango does not configure host page pools.
 
-The backend checks capabilities for the selected architecture and node. A listed
-option is not necessarily supported by every backend. For example, built-in
-QEMU user networking and socket-vmnet support only virtio NICs.
+The ordinary `disk_bus` policy covers root disks, required and user data disks,
+existing volumes and later attachments. Virtio block uses individual devices;
+virtio SCSI shares compatible controllers. Selecting virtio asserts that the
+image already has the guest drivers. Vmango checks host/backend support and
+attachment capacity without installing drivers or falling back to another bus.
+Config-drive format and attachment are independent of the ordinary disk policy;
+the generated drive is VM-owned and excluded from system-disk boot priority.
 
-The simplified cloud form resolves launch settings from the selected image,
-instance type, network and storage class. It does not expose device, firmware,
-guest-agent or initialization overrides. Administrators configure these settings
-in HCL; explicit `false` and initialization `none` remain distinct from omitted
-values. Conflicting requirements are rejected rather than silently overridden.
+Images retain `minimum_memory_mib`, `minimum_disk_gib`, artifact sources and
+required data disks. Instance types set CPU, RAM and new boot-disk capacity;
+actual source capacity and image minimums are checked before cloning. Existing
+disk sizes remain unchanged when a stopped VM changes instance type.
 
-Instance types set CPU, RAM and the size of a newly provisioned boot disk. Image
-minimum memory, minimum disk size and actual source virtual capacity are checked
-before cloning. An instance type with an undersized boot disk is rejected; no
-clone shrinks the source. Additional data disks have independent sizes. Changing
-a stopped VM's instance type stays on its current host and preserves all existing
-disk sizes; insufficient host capacity produces an error.
+The user form still selects image, instance type, network and storage class.
+It exposes no firmware, guest-agent or config-drive overrides. Accepted tasks
+retain their backend plans, and existing VMs retain applied policy independently
+of task retention. Later attachments use that policy even after a profile edit.
+Type changes preserve hardware policy, hugepages, explicit pinning and autostart.
 
-Editing image policy affects future creations, not existing VMs. There is no
-per-machine policy override or PATCH endpoint for changing guest-agent, graphics
-or video settings. Explicit instance type changes apply CPU, RAM, hugepages and
-autostart while preserving existing guest devices, graphics listener and disk
-sizes. Adoption also preserves the existing VM configuration. Accepted tasks
-retain their policy and private binding snapshots. Restart Vmango after changing
-the configuration to reload the read-only catalog.
+Restart Vmango to reload the configuration catalog. Existing VMs missing applied
+policy require explicit adoption/re-adoption with a compatible named profile;
+there is no policy inference or hardware conversion. See the
+[release migration guide](https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md)
+for ignored legacy fields and the incompatible task-format boundary.
 
 ### Required image data disks
 
@@ -366,11 +383,12 @@ ID and put the former label in `path`:
 
 ```hcl
 cloud "local" {
+    hardware_profile "linux-uefi" { firmware = "efi" }
     image "ubuntu-local" {
         path = "/var/lib/libvirt/images/ubuntu-cloud.img"
         os_name = "Ubuntu"
         os_arch = "x86_64"
-        firmware = "efi"
+        hardware_profile = "linux-uefi"
         protected = true
     }
     # Keep this cloud's zones, types, network/storage catalogs and host bindings.
@@ -378,10 +396,10 @@ cloud "local" {
 ```
 
 IDs match `^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$` and are unique within their cloud;
-source paths need not be unique. `efi = true` still maps to `firmware = "efi"` and
-`efi = false` maps to `firmware = "auto"`; conflicting settings are rejected.
-Omitted settings retain launch inheritance, including the target host's config
-drive format. Restart to activate file edits.
+source paths need not be unique. Move legacy image hardware fields into a named
+profile, and explicitly reference it. `efi`, inline hardware and `initialization`
+warn and are ignored. Config-drive omission defaults to NoCloud on a virtio disk,
+independent of deprecated host fields. Restart to activate file edits.
 
 Legacy image blocks used only for volume policy become top-level volume blocks:
 
@@ -421,6 +439,15 @@ extraction, source-volume registration or local `path` is needed. Configure the
 host's `image_pool` as described above.
 
 ```hcl
+hardware_profile "android-arm64" {
+    firmware = "efi"
+    disk_bus = "virtio"
+    nic_model = "virtio"
+    graphics = "vnc"
+    video_model = "virtio"
+    guest_agent = false
+    config_drive { enabled = false }
+}
 image "android-lineage-24-arm64" {
     name = "Android / LineageOS 24 (ARM64)"
     os_name = "Android (LineageOS)"
@@ -433,13 +460,7 @@ image "android-lineage-24-arm64" {
     archive_format = "zip"
     archive_member = "LineageOS_on_arm64.utm/Data/vda.qcow2"
     extracted_size_bytes = 2222784512
-    firmware = "efi"
-    disk_bus = "virtio"
-    nic_model = "virtio"
-    graphics = "vnc"
-    video_model = "virtio"
-    guest_agent = false
-    initialization = "none"
+    hardware_profile = "android-arm64"
     protected = true
     minimum_memory_mib = 2048
     minimum_disk_gib = 5

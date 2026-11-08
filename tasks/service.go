@@ -298,6 +298,22 @@ func (s *Service) RecoverInterrupted() error {
 func (s *Service) recoverInterrupted() error {
 	return s.repo.Update(func(store *Store) error {
 		for id, rec := range store.Records {
+			if !rec.Task.State.Terminal() {
+				if validator, ok := s.handler.(CommandCompatibility); ok {
+					command := Command{NamespaceID: rec.Task.NamespaceID, CloudID: rec.Task.CloudID, Kind: rec.Task.Kind, Payload: rec.Payload}
+					if err := validator.CheckCommandCompatibility(command); err != nil {
+						// A failed upgrade boundary is not a rollback. Keep all
+						// recorded effects and fence any possibly started work.
+						blocks := rec.Task.BlocksResources && (rec.Task.OutcomeUncertain || rec.Task.State == Running || len(rec.Task.Effects) > 0)
+						rec.Task.OutcomeUncertain = rec.Task.OutcomeUncertain || rec.Task.State == Running || blocks
+						finish(&rec, Failed, err.Error())
+						rec.Task.BlocksResources = rec.Task.BlocksResources || blocks
+						rec.Task.Error = &Diagnostic{Message: err.Error(), Operation: "command format upgrade"}
+						store.Records[id] = rec
+						continue
+					}
+				}
+			}
 			if rec.Task.State != Running {
 				continue
 			}

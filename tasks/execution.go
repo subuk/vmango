@@ -50,6 +50,37 @@ func (e *Execution) Protect(refs []ResourceRef) error {
 	return err
 }
 
+// AcceptPlan persists the final selected command and its concrete resource locks
+// in one commit. No provisioning may start unless this commit succeeds.
+func (e *Execution) AcceptPlan(command Command) error {
+	e.service.mu.Lock()
+	defer e.service.mu.Unlock()
+	store, err := e.service.repo.Read()
+	if err != nil {
+		e.persistenceFailed = true
+		return err
+	}
+	current := store.Records[e.id]
+	if command.NamespaceID != current.Task.NamespaceID || command.CloudID != current.Task.CloudID || command.Kind != current.Task.Kind {
+		return ErrInvalid
+	}
+	delete(store.Records, e.id)
+	locks := e.service.lockRefs(command.Resources)
+	if c := conflict(store, locks); c != nil {
+		return scopedConflict(store, c, command.NamespaceID)
+	}
+	err = e.service.change(e.id, func(rec *Record) error {
+		rec.Payload = append([]byte(nil), command.Payload...)
+		rec.Task.Resources = unique(append(rec.Task.Resources, command.Resources...))
+		rec.Locks = unique(append(rec.Locks, locks...))
+		return nil
+	})
+	if err != nil {
+		e.persistenceFailed = true
+	}
+	return err
+}
+
 func (e *Execution) AcceptedAt() time.Time { return e.acceptedAt }
 
 // Transfer updates the currently running stage. Callers throttle persistence

@@ -51,6 +51,14 @@ func apiError(err error) error {
 	if errors.As(err, &dependency) {
 		return huma.Error409Conflict(dependency.Message)
 	}
+	var adoption *compute.AdoptionRequiredError
+	if errors.As(err, &adoption) {
+		return huma.Error409Conflict(adoption.Message)
+	}
+	var console *compute.ConsoleUnavailableError
+	if errors.As(err, &console) {
+		return huma.Error503ServiceUnavailable(console.Message)
+	}
 	var validation *compute.ValidationError
 	if errors.As(err, &validation) {
 		return &huma.ErrorModel{Type: "about:blank", Title: "Validation failed", Status: 422, Detail: "Correct the indicated field.", Errors: []*huma.ErrorDetail{{Location: "body." + validation.Field, Message: validation.Message}}}

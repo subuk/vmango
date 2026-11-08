@@ -61,10 +61,10 @@ func TestShutdownConfirmationTimeout(t *testing.T) {
 				}
 				start := time.Now()
 				err := waitForMachineEvent(observed, "shutdown", "stopped (shutdown)")
-				if elapsed := time.Since(start); elapsed != 10*time.Second {
-					t.Fatalf("waited %s, want 10s", elapsed)
+				if elapsed := time.Since(start); elapsed != 120*time.Second {
+					t.Fatalf("waited %s, want 120s", elapsed)
 				}
-				if err == nil || !strings.Contains(err.Error(), "shutdown was requested") || !strings.Contains(err.Error(), "within 10s; the backend outcome is uncertain") {
+				if err == nil || !strings.Contains(err.Error(), "shutdown was requested") || !strings.Contains(err.Error(), "within 2m0s; the backend outcome is uncertain") {
 					t.Fatalf("expected shutdown timeout with uncertain outcome, got %v", err)
 				}
 			})

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sort"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 
 	"github.com/danielgtaylor/huma/v2"
 )
@@ -43,6 +44,31 @@ func administrationError(err error) error {
 	return apiError(err)
 }
 func (e *Environ) registerAdministration(api huma.API) {
+	registerAPI(api, "GET", "/administration/clouds/{cloud}/hardware-profiles", "list-libvirt-hardware-profiles", "Read accepted libvirt hardware profiles", func(ctx context.Context, in *apiAdministrationCloudInput) (*apiResult[[]hardware.Profile], error) {
+		cloud, err := e.administration.Cloud(in.Cloud)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		if cloud.BackendKind != "libvirt" {
+			return nil, apiError(compute.ErrNotFound)
+		}
+		out := []hardware.Profile{}
+		for _, p := range e.hardwareProfiles[in.Cloud] {
+			out = append(out, p)
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+		return &apiResult[[]hardware.Profile]{Body: out}, nil
+	})
+	registerAPI(api, "GET", "/administration/clouds/{cloud}/images/{image}/hardware-profile", "get-libvirt-image-hardware-profile", "Read the libvirt hardware profile selected by an image", func(ctx context.Context, in *apiAdministrationImageInput) (*apiResult[hardware.Profile], error) {
+		if _, err := e.administration.Image(in.Cloud, in.Image); err != nil {
+			return nil, apiError(err)
+		}
+		p, ok := e.hardwareProfiles[in.Cloud][e.imageProfiles[in.Cloud][in.Image]]
+		if !ok {
+			return nil, apiError(compute.ErrNotFound)
+		}
+		return &apiResult[hardware.Profile]{Body: p}, nil
+	})
 	registerAPI(api, "GET", "/administration/configuration", "get-administration-configuration", "Read the accepted installation configuration", func(ctx context.Context, in *apiEmpty) (*apiResult[compute.AdministrationInstallation], error) {
 		if e.administration == nil {
 			return nil, apiError(compute.ErrNotFound)

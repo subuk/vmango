@@ -18,7 +18,13 @@ func VolumeRef(node, path string) tasks.ResourceRef {
 
 // InfrastructureCommand is a private, versioned desired command. Read models
 // and command payloads are deliberately separate from the public task schema.
+const InfrastructureCommandVersion = 3
+
 type InfrastructureCommand struct {
+	CandidateSettings     map[string]VirtualMachineManagerNodeSettings `json:",omitempty"`
+	CandidatePolicies     map[string]json.RawMessage                   `json:",omitempty"`
+	AdoptionPolicyRef     string                                       `json:",omitempty"`
+	AdoptionPolicy        json.RawMessage                              `json:",omitempty"`
 	NamespaceID           NamespaceID
 	Label                 string                     `json:",omitempty"`
 	AcceptedVolumes       map[string]string          `json:",omitempty"`
@@ -63,7 +69,7 @@ type InfrastructureCommand struct {
 }
 
 func NewCommand(kind string, c InfrastructureCommand) tasks.Command {
-	c.Version = 2
+	c.Version = InfrastructureCommandVersion
 	if len(c.KeyIDs) == 0 {
 		c.KeyIDs = nil
 	}
@@ -125,7 +131,7 @@ func (h *CommandHandler) destination(node, pool, name string) (tasks.ResourceRef
 
 func (h *CommandHandler) prepare(command tasks.Command) (tasks.Command, error) {
 	var c InfrastructureCommand
-	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 2 {
+	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != InfrastructureCommandVersion {
 		return command, ErrInvalid
 	}
 	if h.Clouds != nil {
@@ -270,8 +276,11 @@ func (h *CommandHandler) prepare(command tasks.Command) (tasks.Command, error) {
 			if vm.State != StateStopped {
 				return command, ErrConflict
 			}
-			if c.Disk == nil {
+			if c.Disk == nil || c.Disk.Alias == "configdrive" {
 				return command, ErrInvalid
+			}
+			if err := h.VMs.ResolveDiskAttachment(vm, c.Disk); err != nil {
+				return command, err
 			}
 			if err := ValidateVolumeAttachment(c.Disk); err != nil {
 				return command, err
@@ -293,6 +302,9 @@ func (h *CommandHandler) prepare(command tasks.Command) (tasks.Command, error) {
 			}
 			if c.Interface == nil {
 				return command, ErrInvalid
+			}
+			if err := h.VMs.ResolveInterfaceAttachment(vm, c.Interface); err != nil {
+				return command, err
 			}
 			if err := ValidateInterface(c.Interface); err != nil {
 				return command, err
@@ -427,7 +439,7 @@ func validateAcceptedImageContext(c InfrastructureCommand) error {
 
 func (h *CommandHandler) execute(ctx context.Context, command tasks.Command, progress *tasks.Execution) error {
 	var c InfrastructureCommand
-	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != 2 {
+	if err := json.Unmarshal(command.Payload, &c); err != nil || c.Version != InfrastructureCommandVersion {
 		return ErrInvalid
 	}
 	if err := validateAcceptedImageContext(c); err != nil {
@@ -598,10 +610,22 @@ func (h *CommandHandler) execute(ctx context.Context, command tasks.Command, pro
 		}); err != nil {
 			return err
 		}
-		if action == "poweroff" {
-			return checkVM(func(vm *VirtualMachine) bool { return vm.State == StateStopped })
+		if action == "reboot" {
+			return nil
 		}
-		return nil
+		desired := StateStopped
+		if action == "start" {
+			desired = StateRunning
+		}
+		if err := checkVM(func(vm *VirtualMachine) bool { return vm.State == desired }); err != nil {
+			return err
+		}
+		return stage("synchronize-autostart", func() error {
+			if err := h.VMs.SetAutostart(c.VM, c.Node, action == "start"); err != nil {
+				return fmt.Errorf("power operation completed, but autostart synchronization failed: %w", err)
+			}
+			return effect(ref, "autostart-synchronized")
+		})
 	case "machine.attach-disk":
 		if err := stage("attach-disk", func() error {
 			if err := h.Manager.AttachVolume(c.VM, c.Node, c.Disk); err != nil {

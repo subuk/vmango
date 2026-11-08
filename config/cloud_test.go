@@ -9,7 +9,8 @@ import (
 
 const cloudConfig = `
 cloud "test" {
- image "linux" { path="/source" os_arch="x86_64" }
+ hardware_profile "default" {}
+ image "linux" { hardware_profile="default" path="/source" os_arch="x86_64" }
  name="Test cloud"
  zone "zone" { name="Zone" }
  instance_type "small" { cpu=2 cpu_request=1 memory_mib=2048 boot_disk_gib=20 }
@@ -69,8 +70,8 @@ func TestAdministratorPolicyOwnershipAndDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	clouds, _ = cfg.CloudDefinitions()
-	if !clouds[0].InstanceTypes[0].Autostart {
-		t.Fatal("explicit type autostart lost")
+	if clouds[0].InstanceTypes[0].Autostart || len(cfg.MigrationWarnings) != 1 {
+		t.Fatal("legacy type autostart was not ignored with a warning")
 	}
 	for _, tt := range []struct{ old, new, field string }{
 		{`os_arch="x86_64"`, `os_arch="x86_64" autostart=true`, "autostart"},
@@ -97,11 +98,11 @@ func TestCloudHostBackendSettings(t *testing.T) {
 		t.Fatalf("host order/identity lost: %+v", hosts)
 	}
 	h := hosts[0]
-	if h.Uri != "qemu:///session" || h.ImagePool != "images" || h.ConfigDrivePool != "seed" || h.ConfigDriveSuffix != "-seed.iso" || h.ConfigDriveWriteFormat != "openstack" || h.Emulator != "/usr/local/bin/qemu-custom" || h.GraphicsListen != "::1" || !h.QcowPreallocMetadata || !h.Cache {
+	if h.Uri != "qemu:///session" || h.ImagePool != "images" || h.ConfigDrivePool != "seed" || h.ConfigDriveSuffix != "-seed.iso" || h.ConfigDriveWriteFormat != "" || h.Emulator != "/usr/local/bin/qemu-custom" || h.GraphicsListen != "" || !h.QcowPreallocMetadata || !h.Cache {
 		t.Fatalf("backend settings lost: %+v", h)
 	}
 	other := hosts[1]
-	if other.ImagePool != "default" || other.ConfigDrivePool != "default" || other.ConfigDriveSuffix != "_config.iso" || other.ConfigDriveWriteFormat != "nocloud" || other.Emulator != "" || other.GraphicsListen != "" || other.QcowPreallocMetadata || other.Cache {
+	if other.ImagePool != "default" || other.ConfigDrivePool != "default" || other.ConfigDriveSuffix != "_config.iso" || other.ConfigDriveWriteFormat != "" || other.Emulator != "" || other.GraphicsListen != "" || other.QcowPreallocMetadata || other.Cache {
 		t.Fatalf("defaults leaked between hosts: %+v", other)
 	}
 	clouds, err := cfg.CloudDefinitions()
@@ -114,8 +115,6 @@ func TestInvalidCloudHostBackendSettings(t *testing.T) {
 	for _, tc := range []struct{ old, replacement, message string }{
 		{`uri="qemu:///session"`, ``, "uri is required"},
 		{`uri="qemu:///session"`, `uri=""`, "uri is required"},
-		{`uri="qemu:///session"`, `uri="qemu:///session" graphics_listen="localhost"`, "graphics_listen"},
-		{`uri="qemu:///session"`, `uri="qemu:///session" config_drive_write_format="invalid"`, "config_drive_write_format"},
 		{`host "b"`, `host "a"`, "exactly one cloud"},
 	} {
 		t.Run(tc.message+tc.replacement, func(t *testing.T) {

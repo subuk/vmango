@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"sort"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,7 +49,7 @@ func (cfg *Config) AdministrationSnapshot(version string) (compute.Administratio
 			for k, v := range h.Labels {
 				labels[k] = v
 			}
-			out := compute.AdministrationHost{ID: h.Node, CloudID: c.ID, Zone: h.Zone, Labels: labels, CPUOvercommit: h.CPUOvercommit, CPUReserve: h.CPUReserve, MemoryReserveBytes: h.MemoryReserveBytes, Emulator: emulator, ImagePool: conf.ImagePool, ConfigDrivePool: conf.ConfigDrivePool, ConfigDriveSuffix: conf.ConfigDriveSuffix, ConfigDriveFormat: conf.ConfigDriveWriteFormat, GraphicsListen: conf.GraphicsListen, Cache: conf.Cache, QcowPreallocMetadata: conf.QcowPreallocMetadata, Networks: []compute.AdministrationNetworkBinding{}, Storage: []compute.AdministrationStorageBinding{}}
+			out := compute.AdministrationHost{ID: h.Node, CloudID: c.ID, Zone: h.Zone, Labels: labels, CPUOvercommit: h.CPUOvercommit, CPUReserve: h.CPUReserve, MemoryReserveBytes: h.MemoryReserveBytes, Emulator: emulator, ImagePool: conf.ImagePool, ConfigDrivePool: conf.ConfigDrivePool, ConfigDriveSuffix: conf.ConfigDriveSuffix, ConfigDriveFormat: "profile-owned", GraphicsListen: "derived per VM", Cache: conf.Cache, QcowPreallocMetadata: conf.QcowPreallocMetadata, Networks: []compute.AdministrationNetworkBinding{}, Storage: []compute.AdministrationStorageBinding{}}
 			for id, b := range h.Networks {
 				kind := "network"
 				if b.Bridge {
@@ -74,6 +75,14 @@ func (cfg *Config) AdministrationSnapshot(version string) (compute.Administratio
 
 func administrationImage(i compute.Image) compute.AdministrationImage {
 	d := i.Defaults
+	profile, profileErr := hardware.DecodePolicy(i.BackendPolicy)
+	if profileErr == nil {
+		initialization := profile.ConfigDrive.Format
+		if !profile.ConfigDrive.IsEnabled() {
+			initialization = "none"
+		}
+		d = compute.ImageDefaults{Firmware: profile.Firmware, DiskBus: compute.NewDeviceBus(profile.DiskBus), DiskController: profile.DiskController, NICModel: profile.NICModel, Graphics: profile.Graphics, VideoModel: profile.VideoModel, GuestAgent: profile.GuestAgent, Initialization: initialization}
+	}
 	graphics, video := d.Display()
 	bus := d.BootDiskBus().String()
 	guestAgent := d.GuestAgentEnabled()
@@ -103,6 +112,12 @@ func administrationImage(i compute.Image) compute.AdministrationImage {
 		state, source = "defaulted", "domain guest agent default"
 	}
 	out.Settings = append(out.Settings, compute.AdministrationFieldState{Field: "guest_agent", State: state, Source: source})
+	if profileErr == nil {
+		for n := range out.Settings {
+			out.Settings[n].Source = "hardware_profile." + profile.ID
+			out.Settings[n].State = "configured"
+		}
+	}
 	if i.Download != nil {
 		u, _ := url.Parse(i.Download.URL)
 		remote := &compute.AdministrationRemoteSource{Redacted: true}

@@ -34,7 +34,7 @@ api {
 	if len(cfg.API.Oidc.Scopes) != 2 || cfg.API.Oidc.Scopes[1] != "email" {
 		t.Fatalf("explicit OIDC scopes were changed: %v", cfg.API.Oidc.Scopes)
 	}
-	if len(cfg.Hosts()) != 2 || cfg.Hosts()[0].ConfigDriveWriteFormat != "nocloud" || cfg.Hosts()[0].ConfigDrivePool != "default" {
+	if len(cfg.Hosts()) != 2 || cfg.Hosts()[0].ConfigDriveWriteFormat != "" || cfg.Hosts()[0].ConfigDrivePool != "default" {
 		t.Fatalf("host backend defaults were not applied: %+v", cfg.Hosts())
 	}
 }

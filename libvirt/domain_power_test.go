@@ -52,7 +52,7 @@ func TestDomainPowerPolicy(t *testing.T) {
 	}
 }
 
-func TestAdoptionNormalizesPersistentPowerSettings(t *testing.T) {
+func TestExplicitAdoptionPreservesPersistentPowerSettings(t *testing.T) {
 	for _, running := range []bool{false, true} {
 		t.Run(map[bool]string{false: "stopped", true: "running"}[running], func(t *testing.T) {
 			pool := NewConnectionPool(map[string]string{"n": "test:///default"}, []string{"n"}, zerolog.Nop())
@@ -111,11 +111,21 @@ func TestAdoptionNormalizesPersistentPowerSettings(t *testing.T) {
 			liveBefore := read(vir.DOMAIN_XML_SECURE)
 			repo := NewVirtualMachineRepository(pool, map[string]NodeSettings{"n": {}}, zerolog.Nop())
 			metadata := &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 2, MemoryRequestBytes: 1 << 30}
-			if err := repo.Adopt(id, "n", metadata); err != nil {
+			if err := repo.Adopt(id, "n", metadata); err == nil {
+				t.Fatal("legacy adoption accepted without explicit policy")
+			}
+			info, err := domain.GetInfo()
+			if err != nil {
+				t.Fatal(err)
+			}
+			observedVM, err := VirtualMachineFromDomainConfig(before, info)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := repo.AdoptWithPolicy(id, "n", metadata, fixtureHardwarePolicy(t, observedVM)); err != nil {
 				t.Fatal(err)
 			}
 			after := read(flags)
-			applyDomainPowerPolicy(before)
 			if err := writeSchedulerMetadata(before, metadata); err != nil {
 				t.Fatal(err)
 			}

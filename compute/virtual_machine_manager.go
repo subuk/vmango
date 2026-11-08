@@ -51,6 +51,7 @@ type VirtualMachineManagerCreatedVolumeParams struct {
 
 type VirtualMachineManager struct {
 	creationBindings map[string]json.RawMessage
+	appliedPolicies  map[string]json.RawMessage
 	Clouds           *CloudService
 	createMu         *sync.Mutex
 	createOnce       sync.Once
@@ -87,6 +88,8 @@ func (m *VirtualMachineManager) coordinationLock() *sync.Mutex {
 func (m *VirtualMachineManager) withImages(images *ImageService) *VirtualMachineManager {
 	bound := NewVirtualMachineManager(m.vms, m.volumes, m.epub, m.settings, images)
 	bound.createMu = m.coordinationLock()
+	bound.creationBindings = m.creationBindings
+	bound.appliedPolicies = m.appliedPolicies
 	return bound
 }
 
@@ -95,7 +98,7 @@ func (manager *VirtualMachineManager) Create(vm *VirtualMachine, cloneVols []Vir
 }
 
 func (manager *VirtualMachineManager) AttachVolume(id, node string, disk *VirtualMachineAttachedVolume) error {
-	if disk == nil {
+	if disk == nil || disk.Alias == "configdrive" {
 		return ErrInvalid
 	}
 	manager.coordinationLock().Lock()
@@ -118,7 +121,7 @@ func (manager *VirtualMachineManager) PrepareCreation(vm *VirtualMachine, cloneV
 		return nil, nil, err
 	}
 	vm, cloneVols = prepared, clones
-	if !vm.Graphic.BindingResolved {
+	if !vm.Graphic.BindingResolved && len(vm.AppliedPolicy) == 0 {
 		binding, pinned := manager.creationBindings[vm.NodeId]
 		if !pinned {
 			binding, err = manager.vms.SnapshotCreationBinding(vm.NodeId)
@@ -347,7 +350,13 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 			return err
 		}
 		if err := stage("attach-config-drive", vmRef, true, func() error {
-			if err := manager.vms.AttachVolume(vm.Id, vm.NodeId, &VirtualMachineAttachedVolume{Path: cdVolume.Path, Alias: "configdrive", DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio}); err != nil {
+			attachment := VirtualMachineAttachedVolume{GeneratedArtifact: true, Alias: "configdrive", DeviceType: DeviceTypeDisk, DeviceBus: DeviceBusVirtio}
+			if vm.ConfigDriveAttachment != nil {
+				attachment = *vm.ConfigDriveAttachment
+			}
+			attachment.GeneratedArtifact = true
+			attachment.Path = cdVolume.Path
+			if err := manager.vms.AttachVolume(vm.Id, vm.NodeId, &attachment); err != nil {
 				return err
 			}
 			return effect(cdRef, "attached")
@@ -385,7 +394,22 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 			if err := manager.vms.Start(vm.Id, vm.NodeId); err != nil {
 				return err
 			}
+			observed, err := manager.vms.Get(vm.Id, vm.NodeId)
+			if err != nil {
+				return err
+			}
+			if observed.State != StateRunning {
+				return fmt.Errorf("start completion was not confirmed; autostart is unchanged")
+			}
 			return effect(vmRef, "start-request-completed")
+		}); err != nil {
+			return err
+		}
+		if err := stage("synchronize-autostart", vmRef, true, func() error {
+			if err := manager.vms.SetAutostart(vm.Id, vm.NodeId, true); err != nil {
+				return fmt.Errorf("machine started, but autostart synchronization failed: %w", err)
+			}
+			return effect(vmRef, "autostart-synchronized")
 		}); err != nil {
 			return err
 		}

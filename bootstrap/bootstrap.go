@@ -110,38 +110,31 @@ func Web(configFilename string) error {
 	vmRepSettings := map[string]libvirt.NodeSettings{}
 	vmManSettings := map[string]compute.VirtualMachineManagerNodeSettings{}
 	for _, c := range cfg.Hosts() {
-		if err := libvirt.ValidateGraphicsListen(c.GraphicsListen); err != nil {
-			logger.Fatal().Err(err).Str("node", c.Node).Msg("invalid graphics listener")
-		}
 		nodeUri[c.Node] = c.Uri
 		scopeHash := sha256.Sum256([]byte(c.Uri))
 		nodeScopes[c.Node] = "libvirt:" + hex.EncodeToString(scopeHash[:])
 		nodeOrder = append(nodeOrder, c.Node)
-		configDriveWriteFormat := configdrive.NewFormat(c.ConfigDriveWriteFormat)
-		if configDriveWriteFormat == configdrive.FormatUnknown {
-			logger.Error().
-				Str("format", c.ConfigDriveWriteFormat).
-				Strs("allowed", configdrive.AllFormatsStrings()).
-				Msg("unknown libvirt configdrive write format")
-			os.Exit(1)
-		}
 		vmRepSettings[c.Node] = libvirt.NodeSettings{
 			CdSuffix:             c.ConfigDriveSuffix,
 			Emulator:             c.Emulator,
-			GraphicsListen:       c.GraphicsListen,
 			QcowPreallocMetadata: c.QcowPreallocMetadata,
 			Cache:                c.Cache,
 		}
 		vmManSettings[c.Node] = compute.VirtualMachineManagerNodeSettings{
 			CdPool:   c.ConfigDrivePool,
 			CdSuffix: c.ConfigDriveSuffix,
-			CdFormat: configDriveWriteFormat,
+			CdFormat: configdrive.FormatNoCloud,
 		}
 
 	}
 	connectionPool := libvirt.NewConnectionPool(nodeUri, nodeOrder, logger.With().Str("component", "libvirt-connection-pool").Logger())
 
 	vmRepo := libvirt.NewVirtualMachineRepository(connectionPool, vmRepSettings, logger.With().Str("component", "vm-repository").Logger())
+	profiles, err := cfg.HardwareProfiles()
+	if err != nil {
+		return err
+	}
+	vmRepo.ConfigureHardwareProfiles(profiles)
 	volumeRepo := libvirt.NewVolumeRepository(connectionPool, vmRepSettings, volumeMetadata, logger.With().Str("component", "volume-repository").Logger())
 	volpoolRepo := libvirt.NewVolumePoolRepository(connectionPool, logger.With().Str("component", "vol-pool-repository").Logger())
 	nodeRepo := libvirt.NewNodeRepository(connectionPool, logger.With().Str("component", "node-repository").Logger())
@@ -182,9 +175,6 @@ func Web(configFilename string) error {
 	defer artifactRepo.Close()
 	imageBindings := map[string]compute.ImageBinding{}
 	for _, c := range cfg.Hosts() {
-		if err := libvirt.ValidateGraphicsListen(c.GraphicsListen); err != nil {
-			logger.Fatal().Err(err).Str("node", c.Node).Msg("invalid graphics listener")
-		}
 		imageBindings[c.Node] = compute.ImageBinding{Scope: nodeScopes[c.Node], Pool: c.ImagePool}
 	}
 	images.ManagedSources = compute.NewManagedImageService(volumeRepo, artifactRepo, imageBindings, compute.ImageTransferLimits{MaxBytes: uint64(cfg.ImageTransfers.MaxBytes), Timeout: time.Duration(cfg.ImageTransfers.TimeoutSeconds) * time.Second, IdleTimeout: time.Duration(cfg.ImageTransfers.IdleTimeoutSeconds) * time.Second})

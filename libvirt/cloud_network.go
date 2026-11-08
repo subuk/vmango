@@ -40,6 +40,9 @@ func (repo *VirtualMachineRepository) ValidateNetwork(node string, nic *compute.
 		return nil
 	}
 	if nic.NetworkName == "qemu-usernet" || nic.NetworkName == "macos-socket-vmnet" {
+		if nic.Model != "" && nic.Model != "virtio" {
+			return &compute.ValidationError{Field: "network", Message: "This network requires the virtio NIC model; select a compatible hardware profile or network."}
+		}
 		if nic.AccessVlan != 0 {
 			return fmt.Errorf("%w: this network does not support VLAN tags", compute.ErrInvalid)
 		}

@@ -59,6 +59,13 @@ func (s *VirtualMachineService) AttachVolume(id, node string, v *VirtualMachineA
 	if err := s.RequireManaged(id, node); err != nil {
 		return err
 	}
+	vm, err := s.Get(id, node)
+	if err != nil {
+		return err
+	}
+	if err := s.ResolveDiskAttachment(vm, v); err != nil {
+		return err
+	}
 	if err := ValidateVolumeAttachment(v); err != nil {
 		return err
 	}
@@ -66,10 +73,20 @@ func (s *VirtualMachineService) AttachVolume(id, node string, v *VirtualMachineA
 }
 
 func (s *VirtualMachineService) AttachInterface(id, node string, v *VirtualMachineAttachedInterface) error {
-	if err := s.ValidateNetwork(node, v); err != nil {
-		return err
+	if v == nil {
+		return ErrInvalid
 	}
 	if err := s.RequireManaged(id, node); err != nil {
+		return err
+	}
+	vm, err := s.Get(id, node)
+	if err != nil {
+		return err
+	}
+	if err := s.ResolveInterfaceAttachment(vm, v); err != nil {
+		return err
+	}
+	if err := s.ValidateNetwork(node, v); err != nil {
 		return err
 	}
 	if err := ValidateInterface(v); err != nil {

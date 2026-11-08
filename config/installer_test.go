@@ -132,11 +132,15 @@ func TestInstallerNewConfiguration(t *testing.T) {
 	if profile.ID != "small" || profile.CPU != 2 || profile.MemoryMiB != 2048 || profile.BootDiskGiB != 8 {
 		t.Fatalf("incorrect first-run profile: %+v", profile)
 	}
+	policies, err := cfg.HardwareProfiles()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, image := range cfg.Clouds[0].Images {
-		if image.OsArch == "x86_64" && (image.ID != "ubuntu-24.04-x86_64" || image.Firmware != "auto") {
+		if image.OsArch == "x86_64" && (image.ID != "ubuntu-24.04-x86_64" || policies[cfg.Clouds[0].ID][image.HardwareProfile].Firmware != "auto") {
 			t.Fatalf("x86 installer image must use host-default firmware: %+v", image)
 		}
-		if image.OsArch == "aarch64" && image.Firmware != "efi" {
+		if image.OsArch == "aarch64" && policies[cfg.Clouds[0].ID][image.HardwareProfile].Firmware != "efi" {
 			t.Fatalf("AArch64 installer image must retain EFI firmware: %+v", image)
 		}
 	}

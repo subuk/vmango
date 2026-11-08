@@ -125,7 +125,8 @@ identity. The wizard does not elevate privileges to write that local file.
 A new cloud starts with a `small` instance profile: two vCPUs, 2048 MiB RAM
 and an 8 GiB boot disk, matching the minimum disk size of its pinned Ubuntu
 24.04 images. The initial catalog includes x86_64 images using the host's default
-firmware and AArch64 UEFI images, with NoCloud initialization. The final review
+firmware and AArch64 UEFI images, each referencing an explicit reusable hardware
+profile with NoCloud config-drive policy. The final review
 lists these additions; existing
 instance profiles and image catalogs are left unchanged. API changes show the
 old and new listener, public URL and TLS file paths, plus whether administrator

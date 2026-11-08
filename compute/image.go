@@ -2,6 +2,7 @@ package compute
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"slices"
@@ -10,8 +11,9 @@ import (
 // Image describes a reusable launch configuration. SourcePath is resolved on
 // the selected node; storage properties are never cached in the catalog.
 type Image struct {
-	CloudID            string         `json:",omitempty"`
-	ConfiguredPolicy   VolumeMetadata `json:",omitempty"`
+	BackendPolicy      json.RawMessage `json:",omitempty"`
+	CloudID            string          `json:",omitempty"`
+	ConfiguredPolicy   VolumeMetadata  `json:",omitempty"`
 	ID                 string
 	Name               string
 	OSName             string
@@ -87,7 +89,7 @@ func (i Image) Validate() error {
 			return fmt.Errorf("image %q: downloadable sources require an HTTP(S) URL, SHA-256 and raw/qcow2 source_format, without path or URL credentials", i.ID)
 		}
 	}
-	seen := map[string]bool{"root": true}
+	seen := map[string]bool{"root": true, "configdrive": true}
 	var total uint64
 	for _, disk := range i.DataDisks {
 		if !resourceName.MatchString(disk.Name) || seen[disk.Name] || disk.SizeBytes == 0 {
@@ -165,6 +167,7 @@ func (p pinnedImages) Get(cloud, id string) (Image, error) {
 	return Image{}, fmt.Errorf("image %q is not pinned", id)
 }
 func copyPinnedImage(i Image) Image {
+	i.BackendPolicy = append(json.RawMessage(nil), i.BackendPolicy...)
 	i.DataDisks = slices.Clone(i.DataDisks)
 	if i.Download != nil {
 		d := *i.Download

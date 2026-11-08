@@ -11,6 +11,12 @@ type ValidationError struct {
 func (e *ValidationError) Error() string { return e.Message }
 func (e *ValidationError) Unwrap() error { return ErrInvalid }
 
+// ConsoleUnavailableError carries a safe console transport recovery hint.
+type ConsoleUnavailableError struct{ Message string }
+
+func (e *ConsoleUnavailableError) Error() string { return e.Message }
+func (e *ConsoleUnavailableError) Unwrap() error { return ErrUnavailable }
+
 var (
 	ErrNotFound    = errors.New("resource not found")
 	ErrConflict    = errors.New("resource conflict")

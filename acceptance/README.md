@@ -57,7 +57,7 @@ The harness uses a dedicated task directory under its own artifact directory.
 It also uses a dedicated cloud-init template catalog: the booting guest receives
 user-data selected through the template API, and deleting that template after
 provisioning does not alter the guest configuration.
-It also checks API discovery, duplicate-create conflicts and rejection of the removed machine PATCH route. It checks administrator-owned autostart during an explicit type change and a loopback graphics binding. It checks the image-selected SCSI/virtio-scsi configuration, explicit guest agent
+It also checks API discovery, duplicate-create conflicts and rejection of the removed machine PATCH route. It checks lifecycle-managed autostart after create/start/stop and its preservation during an explicit type change and a loopback graphics binding. It checks the image-selected SCSI/virtio-scsi configuration, explicit guest agent
 disablement and presence/absence of the config drive. It checks the generated domain
 uses the expected virtualization type (hardware acceleration by default), starts it through HTTP and checks libvirt reports
 it running. It then checks the VNC WebSocket proxy's RFB greeting and reads the
@@ -74,21 +74,35 @@ this does not test graceful shutdown. The suite does not yet test reboot, SSH,
 guest-agent integration, browser interaction, external networking or Linux KVM
 when run on a Mac.
 
-For the legacy x86 power-management regression, add `ACCEPTANCE_ADOPT_POWER=1`
-to an x86_64 run with a guest that handles ACPI power-button events, such as
-Ubuntu cloud. The test keeps the guest agent disabled, so a minimal image without
-an ACPI event handler will time out on shutdown even with correct virtual hardware.
-Before booting its isolated VM, the suite removes ACPI/APIC,
-sets poweroff/crash to restart and removes management metadata. It then adopts
-the VM through HTTP, checks the repaired persistent settings, boots the guest,
-requests graceful shutdown and verifies it stays off. It also starts it again
-and checks hard power-off. This mode never changes existing user machines.
+For the x86 adoption and graceful-shutdown regression, add
+`ACCEPTANCE_ADOPT_POWER=1` to an x86_64 run with a guest that handles ACPI
+power-button events, such as Ubuntu cloud. The test keeps the guest agent disabled,
+so a minimal image without an ACPI event handler can time out. The suite removes
+management identity only from its isolated VM, explicitly adopts it with the
+compatible `boot` hardware profile and verifies that hardware and power settings
+are unchanged. It then boots the guest, requests graceful shutdown and confirms
+that the VM stays off and autostart is disabled. It starts again and checks hard
+power-off. It never changes existing user machines.
 
-To exercise the OpenStack config drive instead of NoCloud:
+To exercise the profile-owned OpenStack config drive instead of NoCloud:
 
 ```sh
 ACCEPTANCE_INITIALIZATION=openstack ACCEPTANCE_IMAGE=/absolute/path/cloud.img make acceptance
 ```
+
+The default attachment is a virtio disk. To verify another supported attachment
+and actual guest discovery, combine `ACCEPTANCE_CONFIG_DRIVE_BUS=scsi` with
+`ACCEPTANCE_CONFIG_DRIVE_DEVICE=disk` or `cdrom`. `ide` requires a compatible host
+platform. For example:
+
+```sh
+ACCEPTANCE_CONFIG_DRIVE_BUS=scsi ACCEPTANCE_CONFIG_DRIVE_DEVICE=cdrom \
+ACCEPTANCE_INITIALIZATION=openstack ACCEPTANCE_IMAGE=/absolute/path/cloud.img make acceptance
+```
+
+Each run validates the attachment type/bus and absence of firmware boot priority,
+then requires the guest's cloud-init marker. XML validation alone is not a guest
+discovery result. Report each tested format/attachment/platform combination.
 
 ## Running on a shared Linux host
 

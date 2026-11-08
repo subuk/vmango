@@ -195,3 +195,7 @@ func (e *ConflictError) Error() string {
 
 // ContextValidator validates active request scope before replay without backend reads.
 type ContextValidator interface{ ValidateContext(Command) error }
+
+// CommandCompatibility checks a persisted command's version before recovery or
+// execution. It must not read backend state or reconstruct historical payloads.
+type CommandCompatibility interface{ CheckCommandCompatibility(Command) error }

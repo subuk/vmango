@@ -3,7 +3,9 @@ package compute
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"subuk/vmango/tasks"
 )
 
@@ -117,14 +119,6 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 		if image.Managed() && len(c.AcceptedImageBindings) == 0 || !image.Managed() && len(c.AcceptedImageSources) == 0 {
 			return command, c, invalid("image", "No eligible host has an available image source.")
 		}
-		c.CreationBindings = map[string]json.RawMessage{}
-		for _, host := range cloud.Hosts {
-			binding, err := h.VMs.SnapshotCreationBinding(host.Node)
-			if err != nil {
-				return command, c, err
-			}
-			c.CreationBindings[host.Node] = binding
-		}
 		for _, id := range c.CreateSpec.KeyIDs {
 			key, err := h.Keys.Get(id)
 			if err != nil {
@@ -133,6 +127,48 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 			c.AcceptedKeys = append(c.AcceptedKeys, key)
 		}
 		c.CreateSpec.KeyIDs = nil
+		c.CreationBindings = map[string]json.RawMessage{}
+		c.CandidatePolicies = map[string]json.RawMessage{}
+		c.CandidateSettings = map[string]VirtualMachineManagerNodeSettings{}
+		backend, hasPolicyBackend := h.VMs.VirtualMachineRepository.(BackendMachineRepository)
+		selectedType, err := cloud.InstanceType(c.CreateSpec.InstanceType)
+		if err != nil {
+			return command, c, err
+		}
+		var policyErrors []string
+		for _, host := range cloud.Hosts {
+			if host.Zone != c.CreateSpec.Zone {
+				continue
+			}
+			if _, ok := host.Storage[c.CreateSpec.StorageClass]; !ok {
+				continue
+			}
+			network, ok := host.Networks[c.CreateSpec.Network]
+			if !ok {
+				continue
+			}
+			binding, err := h.VMs.SnapshotCreationBinding(host.Node)
+			if err != nil {
+				policyErrors = append(policyErrors, host.Node+": "+safePolicyFailure(err))
+				continue
+			}
+			c.CreationBindings[host.Node] = binding
+			c.CandidateSettings[host.Node] = h.Manager.settings[host.Node]
+			if len(image.BackendPolicy) != 0 {
+				if !hasPolicyBackend {
+					return command, c, ErrUnavailable
+				}
+				vm := &VirtualMachine{NodeId: host.Node, Name: c.CreateSpec.Name, Arch: image.Arch, VCpus: selectedType.VCPUs, Memory: NewSize(selectedType.MemoryBytes, SizeUnitB), Config: &VirtualMachineConfig{Hostname: c.CreateSpec.Name, Userdata: []byte(c.CreateSpec.UserData), Keys: c.AcceptedKeys}, Metadata: &MachineMetadata{Cloud: cloud.ID, Image: image.ID}, Interfaces: []*VirtualMachineAttachedInterface{{Model: network.Model, NetworkName: network.Network}}}
+				if err := backend.ResolveHardware(vm, image.BackendPolicy, binding); err != nil {
+					policyErrors = append(policyErrors, host.Node+": "+safePolicyFailure(err))
+					continue
+				}
+				c.CandidatePolicies[host.Node] = append(json.RawMessage(nil), vm.AppliedPolicy...)
+			}
+		}
+		if len(image.BackendPolicy) != 0 && len(c.CandidatePolicies) == 0 {
+			return command, c, invalid("hardware_profile", "No host supports the selected image policy: "+strings.Join(policyErrors, "; "))
+		}
 		command.Resources = append(command.Resources, tasks.ResourceRef{Kind: "machine-request", Scope: cloud.ID, ID: c.CreateSpec.Name})
 		for _, disk := range c.CreateSpec.ExistingDisks {
 			if err := h.Volumes.ValidateAttachable(disk.Path, disk.Host, h.Manager.images.ForCloud(cloud.ID)); err != nil {
@@ -146,7 +182,7 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 			return command, c, ErrInvalid
 		}
 	} else if c.NewDisk != nil {
-		if command.Kind != "machine.create-disk" || !resourceName.MatchString(c.NewDisk.Name) || c.NewDisk.SizeBytes == 0 {
+		if command.Kind != "machine.create-disk" || c.NewDisk.Name == "configdrive" || !resourceName.MatchString(c.NewDisk.Name) || c.NewDisk.SizeBytes == 0 {
 			return command, c, ErrInvalid
 		}
 		if err = h.VMs.RequireManaged(c.VM, c.Node); err != nil {
@@ -175,14 +211,35 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 			return command, c, ErrInvalid
 		}
 		if command.Kind == "machine.adopt" {
+			if backend, ok := h.VMs.VirtualMachineRepository.(BackendMachineRepository); ok {
+				if vm.Metadata != nil && backend.ValidateAppliedPolicy(vm) == nil {
+					return command, c, fmt.Errorf("%w: machine already has an applied policy", ErrConflict)
+				}
+				if c.AdoptionPolicyRef == "" {
+					return command, c, invalid("hardware_profile", "Select an explicit compatible hardware profile for adoption.")
+				}
+				c.AdoptionPolicy, err = backend.PrepareAdoption(vm, cloud.ID, c.AdoptionPolicyRef)
+				if err != nil {
+					return command, c, err
+				}
+			} else {
+				if vm.Metadata != nil {
+					return command, c, fmt.Errorf("%w: machine is already managed", ErrConflict)
+				}
+				if _, ok := h.VMs.VirtualMachineRepository.(MachineAdoptionRepository); !ok {
+					return command, c, ErrUnavailable
+				}
+			}
 			if vm.Metadata != nil {
-				return command, c, fmt.Errorf("%w: machine is already managed", ErrConflict)
+				copyMetadata := *vm.Metadata
+				c.Adoption = &copyMetadata
+			} else {
+				c.Adoption = &MachineMetadata{Cloud: cloud.ID, Zone: host.Zone, CPURequest: vm.VCpus, MemoryRequestBytes: vm.Memory.Bytes()}
 			}
-			if _, ok := h.VMs.VirtualMachineRepository.(MachineAdoptionRepository); !ok {
-				return command, c, ErrUnavailable
-			}
-			c.Adoption = &MachineMetadata{Cloud: cloud.ID, Zone: host.Zone, CPURequest: vm.VCpus, MemoryRequestBytes: vm.Memory.Bytes()}
 		} else {
+			if err := h.VMs.RequireManaged(c.VM, c.Node); err != nil {
+				return command, c, err
+			}
 			if vm.Metadata == nil || vm.State != StateStopped {
 				return command, c, fmt.Errorf("%w: type changes require a stopped managed machine", ErrConflict)
 			}
@@ -241,17 +298,22 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 			if !ok {
 				return command, c, invalid("network", "Logical network is unavailable on this host.")
 			}
-			model := b.Model
-			if model == "" {
-				vm, err := h.VMs.Get(c.VM, c.Node)
-				if err != nil {
+			vm, err := h.VMs.Get(c.VM, c.Node)
+			if err != nil {
+				return command, c, err
+			}
+			nic := &VirtualMachineAttachedInterface{LogicalNetwork: c.Interface.NetworkName, NetworkName: b.Network, Bridge: b.Bridge, Model: c.Interface.Model, AccessVlan: b.VLAN, Mac: c.Interface.Mac}
+			if len(vm.AppliedPolicy) != 0 {
+				if err := h.VMs.ResolveInterfaceAttachment(vm, nic); err != nil {
 					return command, c, err
 				}
-				if len(vm.Interfaces) > 0 {
-					model = vm.Interfaces[0].Model
+				if b.Model != "" && b.Model != nic.Model {
+					return command, c, invalid("network", "The host network model conflicts with the VM's applied hardware policy; choose a compatible network binding.")
 				}
+			} else {
+				nic.Model = b.Model
 			}
-			c.Interface = &VirtualMachineAttachedInterface{LogicalNetwork: c.Interface.NetworkName, NetworkName: b.Network, Bridge: b.Bridge, Model: model, AccessVlan: b.VLAN, Mac: c.Interface.Mac}
+			c.Interface = nic
 		}
 	}
 	command.Payload, err = json.Marshal(c)
@@ -346,52 +408,61 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		inventoryCloud.Hosts = []CloudHost{mustHost(cloud, c.Node)}
 	}
 	var inventory []HostInventory
-	if err := p.Stage("cloud-inventory", nil, false, func() error { var err error; inventory, err = h.Clouds.Inventory(inventoryCloud); return err }); err != nil {
-		return err
-	}
 	if c.CreateSpec != nil {
 		images := h.Manager.images.ForCloud(cloud.ID).Snapshot(c.Images, nil, true)
 		images.AcceptedSources = c.AcceptedImageSources
 		images.AcceptedBindings = c.AcceptedImageBindings
 		var resolved InfrastructureCommand
-		if err := p.Stage("schedule-machine", nil, false, func() error {
+		var prepared tasks.Command
+		local := *h
+		if err := p.Stage("prepare-machine", nil, false, func() error {
 			var err error
-			resolved, err = h.Clouds.ResolveCreate(cloud, *c.CreateSpec, images, inventory, c.CreationBindings)
-			return err
+			inventory, err = h.Clouds.Inventory(inventoryCloud)
+			if err != nil {
+				return err
+			}
+			resolver := *h.Clouds
+			resolver.Manager = h.Manager.withImages(images)
+			resolver.Manager.settings = c.CandidateSettings
+			resolved, err = resolver.ResolveCreate(cloud, *c.CreateSpec, images, inventory, c.CreationBindings, c.CandidatePolicies)
+			if err != nil {
+				return err
+			}
+			resolved.CloudID = cloud.ID
+			resolved.NamespaceID, resolved.Label = c.NamespaceID, c.Label
+			resolved.Machine.NamespaceID, resolved.Machine.Label = c.NamespaceID, c.Label
+			if c.CreateSpec.Hostname != "" && resolved.Machine.Config != nil {
+				resolved.Machine.Config.Hostname = c.CreateSpec.Hostname
+			}
+			for i := range resolved.Clones {
+				if c.Label != "" {
+					resolved.Clones[i].Label = c.Label + "_" + resolved.Clones[i].Alias
+				}
+			}
+			for i := range resolved.NewVolumes {
+				if c.Label != "" {
+					resolved.NewVolumes[i].Label = c.Label + "_" + resolved.NewVolumes[i].Alias
+				}
+			}
+			resolved.Catalog = &cloud
+			resolved.AcceptedScopes = c.AcceptedScopes
+			if resolved.Machine.Config != nil {
+				resolved.Machine.Config.Keys = c.AcceptedKeys
+			}
+			local.Manager = h.Manager.withImages(images)
+			local.Manager.settings = c.CandidateSettings
+			prepared, err = local.Prepare(NewCommand("machine.create", resolved))
+			if err != nil {
+				return err
+			}
+			return p.AcceptPlan(prepared)
 		}); err != nil {
 			return err
 		}
-		resolved.CloudID = cloud.ID
-		resolved.NamespaceID, resolved.Label = c.NamespaceID, c.Label
-		resolved.Machine.NamespaceID, resolved.Machine.Label = c.NamespaceID, c.Label
-		if c.CreateSpec.Hostname != "" && resolved.Machine.Config != nil {
-			resolved.Machine.Config.Hostname = c.CreateSpec.Hostname
-		}
-		for i := range resolved.Clones {
-			if c.Label != "" {
-				resolved.Clones[i].Label = c.Label + "_" + resolved.Clones[i].Alias
-			}
-		}
-		for i := range resolved.NewVolumes {
-			if c.Label != "" {
-				resolved.NewVolumes[i].Label = c.Label + "_" + resolved.NewVolumes[i].Alias
-			}
-		}
-		resolved.Catalog = &cloud
-		resolved.AcceptedScopes = c.AcceptedScopes
-		if resolved.Machine.Config != nil {
-			resolved.Machine.Config.Keys = c.AcceptedKeys
-		}
-		local := *h
-		local.Manager = h.Manager.withImages(images)
-		prepared, err := local.Prepare(NewCommand("machine.create", resolved))
-		if err != nil {
-			return err
-		}
-		if err = p.Protect(prepared.Resources); err != nil {
-			return err
-		}
 		return local.Execute(ctx, prepared, p)
+	}
+	if err := p.Stage("prepare-resources", nil, false, func() error { var err error; inventory, err = h.Clouds.Inventory(inventoryCloud); return err }); err != nil {
+		return err
 	}
 	if c.VolumeSpec != nil {
 		v := c.VolumeSpec
@@ -431,7 +502,15 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 	if err != nil {
 		return err
 	}
+	if command.Kind != "machine.adopt" {
+		if err := h.VMs.RequireManaged(c.VM, c.Node); err != nil {
+			return err
+		}
+	}
 	if c.NewDisk != nil {
+		if err := h.VMs.RequireManaged(c.VM, c.Node); err != nil {
+			return err
+		}
 		if vm.Metadata == nil || vm.State != StateStopped {
 			return ErrConflict
 		}
@@ -446,6 +525,13 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 					return err
 				}
 			}
+		}
+		attachment := &VirtualMachineAttachedVolume{Alias: d.Name, DeviceType: DeviceTypeDisk}
+		if err := h.VMs.ResolveDiskAttachment(vm, attachment); err != nil {
+			return err
+		}
+		if len(vm.AppliedPolicy) == 0 {
+			attachment.DeviceBus = DeviceBusVirtio
 		}
 		params := VolumeCreateParams{NamespaceID: c.NamespaceID, Label: d.Name, NodeId: c.Node, Name: vm.Name + "_" + d.Name, Pool: b.Pool, Format: b.Format, Size: NewSize(d.SizeBytes, SizeUnitB), Cloud: cloud.ID, StorageClass: d.StorageClass}
 		path, err := h.Volumes.ResolvePath(c.Node, b.Pool, params.Name)
@@ -474,13 +560,6 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		}); err != nil {
 			return err
 		}
-		bus := DeviceBusVirtio
-		for _, disk := range vm.Volumes {
-			if disk.DeviceType == DeviceTypeDisk {
-				bus = disk.DeviceBus
-				break
-			}
-		}
 		return p.Stage("attach-disk", &ref, true, func() error {
 			manager := h.Manager
 			if h.Workloads != nil {
@@ -490,14 +569,14 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 				}
 				manager = scoped
 			}
-			if err := manager.AttachVolume(c.VM, c.Node, &VirtualMachineAttachedVolume{Path: volume.Path, Alias: d.Name, DeviceType: DeviceTypeDisk, DeviceBus: bus}); err != nil {
+			if err := manager.AttachVolume(c.VM, c.Node, &VirtualMachineAttachedVolume{Path: volume.Path, Alias: d.Name, DeviceType: DeviceTypeDisk, DeviceBus: attachment.DeviceBus}); err != nil {
 				return err
 			}
 			return p.Effect(VolumeRef(c.Node, volume.Path), "attached")
 		})
 	}
 	if command.Kind == "machine.adopt" {
-		if vm.Metadata != nil {
+		if vm.Metadata != nil && len(c.AdoptionPolicy) == 0 {
 			return fmt.Errorf("%w: already managed", ErrConflict)
 		}
 		m := c.Adoption
@@ -506,9 +585,15 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		}
 		m.CPURequest = vm.VCpus
 		m.MemoryRequestBytes = vm.Memory.Bytes()
-		backend, ok := h.VMs.VirtualMachineRepository.(MachineAdoptionRepository)
-		if !ok {
+		backend, legacyOK := h.VMs.VirtualMachineRepository.(MachineAdoptionRepository)
+		policyBackend, policyOK := h.VMs.VirtualMachineRepository.(BackendMachineRepository)
+		if len(c.AdoptionPolicy) != 0 && !policyOK || len(c.AdoptionPolicy) == 0 && !legacyOK {
 			return ErrUnavailable
+		}
+		if len(c.AdoptionPolicy) != 0 {
+			if err := policyBackend.ValidateAdoptionPolicy(vm, c.AdoptionPolicy); err != nil {
+				return err
+			}
 		}
 		return p.Stage("adopt-machine", &ref, true, func() error {
 			if h.Workloads != nil {
@@ -519,7 +604,11 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 					return err
 				}
 			}
-			if err := backend.Adopt(c.VM, c.Node, m); err != nil {
+			if len(c.AdoptionPolicy) != 0 {
+				if err := policyBackend.AdoptWithPolicy(c.VM, c.Node, m, c.AdoptionPolicy); err != nil {
+					return err
+				}
+			} else if err := backend.Adopt(c.VM, c.Node, m); err != nil {
 				return err
 			}
 			return p.Effect(ref, "adopted")
@@ -543,13 +632,20 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 				if _, err := Fit(i, t, vm.Id); err != nil {
 					return err
 				}
-				if t.Hugepages && !i.Node.Has2mPages() && !i.Node.Has1gPages() {
-					return invalid("instance_type", "Hugepages are unavailable.")
-				}
 			}
 		}
 		if !found {
 			return ErrUnknownNode
+		}
+		if len(vm.AppliedPolicy) != 0 {
+			backend, ok := h.VMs.VirtualMachineRepository.(BackendMachineRepository)
+			if !ok {
+				return ErrUnavailable
+			}
+			requested := *vm
+			requested.VCpus = t.VCPUs
+			requested.Memory = NewSize(t.MemoryBytes, SizeUnitB)
+			return backend.ValidateResourceChange(vm, &requested)
 		}
 		caps, err := h.VMs.Capabilities(c.Node, vm.Arch)
 		if err != nil {
@@ -578,15 +674,20 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		if current.State != StateStopped || current.Metadata == nil {
 			return ErrConflict
 		}
+		before := *current
 		current.VCpus = t.VCPUs
 		current.Memory = NewSize(t.MemoryBytes, SizeUnitB)
-		current.Hugepages = t.Hugepages
-		current.Autostart = t.Autostart
+
 		metadata := *current.Metadata
 		metadata.InstanceType = t.ID
 		metadata.CPURequest = t.CPURequest
 		metadata.MemoryRequestBytes = t.MemoryBytes
 		current.Metadata = &metadata
+		if backend, ok := h.VMs.VirtualMachineRepository.(BackendMachineRepository); ok {
+			if err := backend.ValidateResourceChange(&before, current); err != nil {
+				return err
+			}
+		}
 		if err = h.VMs.SaveResources(current); err != nil {
 			return err
 		}
@@ -597,7 +698,7 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		if err != nil {
 			return err
 		}
-		if actual.Autostart != t.Autostart || actual.VCpus != t.VCPUs || actual.Memory.Bytes() != t.MemoryBytes || actual.Metadata == nil || actual.Metadata.CPURequest != t.CPURequest || actual.Metadata.InstanceType != t.ID {
+		if actual.Autostart != before.Autostart || actual.VCpus != t.VCPUs || actual.Memory.Bytes() != t.MemoryBytes || actual.Metadata == nil || actual.Metadata.CPURequest != t.CPURequest || actual.Metadata.InstanceType != t.ID {
 			return fmt.Errorf("instance type change was not confirmed")
 		}
 		return nil
@@ -615,4 +716,12 @@ func usesCloudCapacity(kind string) bool {
 	default:
 		return false
 	}
+}
+
+func safePolicyFailure(err error) string {
+	var validation *ValidationError
+	if errors.As(err, &validation) {
+		return validation.Message
+	}
+	return "Backend capabilities could not be checked; inspect the host in Administration."
 }

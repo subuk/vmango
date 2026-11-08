@@ -132,7 +132,7 @@ func newNamespaceRuntime(cfg *config.Config) (_ *namespaceRuntime, err error) {
 		order = append(order, host.Node)
 		hash := sha256.Sum256([]byte(host.Uri))
 		scopes[host.Node] = "libvirt:" + hex.EncodeToString(hash[:])
-		settings[host.Node] = libvirt.NodeSettings{CdSuffix: host.ConfigDriveSuffix, Emulator: host.Emulator, GraphicsListen: host.GraphicsListen, QcowPreallocMetadata: host.QcowPreallocMetadata, Cache: host.Cache}
+		settings[host.Node] = libvirt.NodeSettings{CdSuffix: host.ConfigDriveSuffix, Emulator: host.Emulator, QcowPreallocMetadata: host.QcowPreallocMetadata, Cache: host.Cache}
 	}
 	pool := libvirt.NewConnectionPool(uris, order, zerolog.Nop())
 	r.VMRepository = libvirt.NewVirtualMachineRepository(pool, settings, zerolog.Nop())

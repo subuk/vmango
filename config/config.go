@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
-	"net"
 	"net/url"
+	"os"
 	"strings"
 	"subuk/vmango/auth"
 	"subuk/vmango/compute"
-	"subuk/vmango/configdrive"
+	"subuk/vmango/libvirt/hardware"
 	"subuk/vmango/util"
 
 	"dario.cat/mergo"
@@ -80,6 +80,7 @@ func (c *APIConfig) ValidateTLS() error {
 }
 
 type ImageConfig struct {
+	HardwareProfile    string `hcl:"hardware_profile"`
 	ID                 string `hcl:",key"`
 	Path               string `hcl:"path"`
 	URL                string `hcl:"url"`
@@ -124,6 +125,10 @@ type VolumeConfig struct {
 // ImageDefinitions normalizes cloud-owned definitions without backend calls.
 // Image-derived source policies are scoped to the owning cloud's hosts.
 func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeMetadata, error) {
+	profiles, err := c.HardwareProfiles()
+	if err != nil {
+		return nil, nil, err
+	}
 	images := []compute.Image{}
 	policies := map[string]compute.VolumeMetadata{}
 	mergePolicy := func(path string, protected, hidden bool) {
@@ -151,20 +156,13 @@ func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeM
 					mergePolicy(compute.VolumePolicyKey(host.Node, path), entry.Protected, entry.Hidden)
 				}
 			}
-			firmware := entry.Firmware
-			if entry.Efi != nil {
-				legacy := "auto"
-				if *entry.Efi {
-					legacy = "efi"
-				}
-				if firmware != "" && firmware != legacy {
-					return nil, nil, fmt.Errorf("image %q: conflicting efi and firmware", entry.ID)
-				}
-				firmware = legacy
+			profile, ok := profiles[cloud.ID][entry.HardwareProfile]
+			if entry.HardwareProfile == "" || !ok {
+				return nil, nil, fmt.Errorf("cloud %s image %s: hardware_profile must reference an existing named profile; see %s", cloud.ID, entry.ID, HardwareMigrationGuide)
 			}
-			bus := compute.NewDeviceBus(entry.DiskBus)
-			if entry.DiskBus != "" && bus == compute.DeviceBusUnknown {
-				return nil, nil, fmt.Errorf("image %q: invalid disk_bus", entry.ID)
+			policy, err := hardware.Encode(profile)
+			if err != nil {
+				return nil, nil, err
 			}
 			if entry.MinimumMemoryMiB < 0 || entry.MinimumDiskGiB < 0 || entry.MinimumMemoryMiB > math.MaxUint64/(1<<20) || entry.MinimumDiskGiB > math.MaxUint64/(1<<30) {
 				return nil, nil, fmt.Errorf("image %q: resource minimum overflows", entry.ID)
@@ -174,7 +172,7 @@ func (c *Config) ImageDefinitions() ([]compute.Image, map[string]compute.VolumeM
 				name = entry.ID
 			}
 			i := compute.Image{CloudID: cloud.ID, ConfiguredPolicy: compute.VolumeMetadata{Protected: entry.Protected, Hidden: entry.Hidden}, ID: entry.ID, Name: name, OSName: entry.OsName, OSVersion: entry.OsVersion, Arch: compute.NewArch(entry.OsArch), SourcePath: path,
-				Defaults:           compute.ImageDefaults{Firmware: firmware, DiskBus: bus, DiskController: entry.DiskController, NICModel: entry.NICModel, GuestAgent: entry.GuestAgent, Graphics: entry.Graphics, VideoModel: entry.VideoModel, Initialization: entry.Initialization},
+				BackendPolicy:      policy,
 				MinimumMemoryBytes: uint64(entry.MinimumMemoryMiB) << 20, MinimumDiskBytes: uint64(entry.MinimumDiskGiB) << 30}
 			for _, disk := range entry.DataDisks {
 				if disk.SizeGiB <= 0 || disk.SizeGiB > math.MaxUint64/(1<<30) {
@@ -236,6 +234,7 @@ type SubscribeConfig struct {
 }
 
 type Config struct {
+	MigrationWarnings     []string            `hcl:"-"`
 	Namespaces            []NamespaceConfig   `hcl:"namespace"`
 	NamespaceDirectory    string              `hcl:"namespace_directory"`
 	Clouds                []CloudConfig       `hcl:"cloud"`
@@ -302,6 +301,11 @@ func Parse(filename string) (*Config, error) {
 		return nil, util.NewError(err, "cannot read configuration file")
 	}
 	config, err := ParseBytes(content)
+	if err == nil {
+		for _, warning := range config.MigrationWarnings {
+			fmt.Fprintf(os.Stderr, "%s: warning: %s\n", filename, warning)
+		}
+	}
 	if err == nil && len(config.LegacyBridges) > 0 {
 		fmt.Println(OLD_BRIDGES_WARNING)
 	}
@@ -340,7 +344,10 @@ func ParseBytes(content []byte) (*Config, error) {
 			return nil, err
 		}
 	}
-	if err := hcl.Unmarshal(content, config); err != nil {
+	if list, ok := parsed.Node.(*ast.ObjectList); ok {
+		config.MigrationWarnings = removeDeprecatedHardware(list)
+	}
+	if err := hcl.DecodeObject(config, parsed); err != nil {
 		return nil, util.NewError(err, "invalid configuration format")
 	}
 	if err := mergo.Merge(config, Default()); err != nil {
@@ -353,17 +360,8 @@ func ParseBytes(content []byte) (*Config, error) {
 		cloud := &config.Clouds[cloudIndex]
 		for hostIndex := range cloud.Hosts {
 			host := &cloud.Hosts[hostIndex]
-			if host.GraphicsListen != "" && net.ParseIP(host.GraphicsListen) == nil {
-				return nil, fmt.Errorf("cloud %s host %s: graphics_listen must be empty or an IP address", cloud.ID, host.Node)
-			}
 			if host.ImagePool == "" {
 				host.ImagePool = "default"
-			}
-			if host.ConfigDriveWriteFormat == "" {
-				host.ConfigDriveWriteFormat = configdrive.FormatNoCloud.String()
-			}
-			if configdrive.NewFormat(host.ConfigDriveWriteFormat) == configdrive.FormatUnknown {
-				return nil, fmt.Errorf("cloud %s host %s: invalid config_drive_write_format %q", cloud.ID, host.Node, host.ConfigDriveWriteFormat)
 			}
 			if host.ConfigDriveSuffix == "" {
 				host.ConfigDriveSuffix = "_config.iso"
@@ -423,7 +421,8 @@ func ParseBytes(content []byte) (*Config, error) {
 // not be silently ignored by the permissive HCL decoder.
 func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 	owners := map[string]string{
-		"guest_agent": "image", "graphics": "image", "video_model": "image",
+		"guest_agent": "hardware_profile", "graphics": "hardware_profile", "video_model": "hardware_profile",
+		"firmware": "hardware_profile", "disk_bus": "hardware_profile", "disk_controller": "hardware_profile", "nic_model": "hardware_profile", "hugepages": "hardware_profile", "config_drive": "hardware_profile",
 		"autostart":       "instance_type",
 		"clone_mode":      "cloud.storage_class",
 		"graphics_listen": "host", "uri": "host", "image_pool": "host",
@@ -436,6 +435,24 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 			continue
 		}
 		key, _ := item.Keys[0].Token.Value().(string)
+		if owner == "hardware_profile" {
+			allowed := map[string]bool{"name": true, "firmware": true, "disk_bus": true, "disk_controller": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "hugepages": true, "config_drive": true}
+			if !allowed[key] {
+				return fmt.Errorf("hardware_profile: unsupported setting %s; see %s", key, HardwareMigrationGuide)
+			}
+		}
+		if owner == "config_drive" && key != "enabled" && key != "format" && key != "device_type" && key != "bus" {
+			return fmt.Errorf("hardware_profile.config_drive: unsupported setting %s; see %s", key, HardwareMigrationGuide)
+		}
+		if key == "hardware_profile" {
+			_, block := item.Val.(*ast.ObjectType)
+			if (owner == "cloud" && !block) || (owner == "image" && block) || (owner != "cloud" && owner != "image") {
+				return fmt.Errorf("hardware_profile must be a named cloud block or an image reference; per-image overrides are unsupported")
+			}
+		}
+		if owner == "hardware_profile" && key == "config_drive" && len(list.Filter("config_drive").Items) > 1 {
+			return fmt.Errorf("hardware_profile may declare config_drive only once")
+		}
 		if key == "libvirt" {
 			return fmt.Errorf("libvirt blocks are unsupported: put backend settings directly in cloud.host")
 		}
@@ -448,7 +465,7 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 		if key == "host" && owner != "cloud" {
 			return fmt.Errorf("host blocks belong only inside cloud configuration")
 		}
-		if required, exists := owners[key]; exists && owner != required {
+		if required, exists := owners[key]; exists && owner != required && !((owner == "image" && (key == "guest_agent" || key == "graphics" || key == "video_model" || key == "firmware" || key == "disk_bus" || key == "disk_controller" || key == "nic_model")) || (owner == "instance_type" && key == "hugepages")) {
 			return fmt.Errorf("%s belongs only in %s configuration", key, required)
 		}
 		if object, ok := item.Val.(*ast.ObjectType); ok {
@@ -457,7 +474,7 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 				if err := validatePolicyOwners(object.List, owner+".storage_class"); err != nil {
 					return err
 				}
-			case "image", "cloud", "host", "instance_type":
+			case "image", "cloud", "host", "instance_type", "hardware_profile", "config_drive":
 				if err := validatePolicyOwners(object.List, key); err != nil {
 					return err
 				}

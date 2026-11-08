@@ -1,3 +1,4 @@
+import { HardwareProfileFields } from "./HardwareProfiles";
 import {
     diskDependencyLabel,
     dependentDiskNotice,
@@ -181,6 +182,25 @@ export function MachineDetail() {
 function Overview({ vm }: { vm: VM }) {
     return (
         <Stack spacing={3}>
+            {vm.libvirt_hardware && (
+                <DetailSection
+                    title="Applied hardware profile"
+                    description="Saved when this machine was created or adopted. Current profile edits do not change this policy."
+                >
+                    <HardwareProfileFields
+                        profile={vm.libvirt_hardware.profile}
+                    />
+                    <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 2 }}
+                    >
+                        Autostart follows successful user start and stop
+                        operations. Graphics listeners are derived and
+                        read-only.
+                    </Typography>
+                </DetailSection>
+            )}
             <Box className="detail-grid">
                 <DetailSection
                     title="Identity and placement"
@@ -560,8 +580,6 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
     );
     const [id, setID] = useState("");
     const [alias, setAlias] = useState("");
-    const [device, setDevice] = useState("disk");
-    const [bus, setBus] = useState("virtio");
     return (
         <OperationDialog
             disabled={!!blocked.task || blocked.unavailable}
@@ -572,8 +590,6 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
                 request(`${vmPath(vm.cloud, vm.id)}/disks/attach`, "POST", {
                     volume_id: id,
                     alias,
-                    device,
-                    bus,
                 })
             }
         >
@@ -604,30 +620,13 @@ function AttachDisk({ vm, onClose }: { vm: VM; onClose: () => void }) {
                         value={alias}
                         onChange={(e) => setAlias(e.target.value)}
                     />
-                    <TextField
-                        select
-                        label="Device"
-                        value={device}
-                        onChange={(e) => setDevice(e.target.value)}
-                    >
-                        {["disk", "cdrom"].map((d) => (
-                            <MenuItem value={d} key={d}>
-                                {d}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        select
-                        label="Bus"
-                        value={bus}
-                        onChange={(e) => setBus(e.target.value)}
-                    >
-                        {["virtio", "scsi", "ide"].map((b) => (
-                            <MenuItem value={b} key={b}>
-                                {b}
-                            </MenuItem>
-                        ))}
-                    </TextField>
+                    <Typography variant="body2" color="text.secondary">
+                        New attachments use the machine’s applied disk policy
+                        {vm.libvirt_hardware
+                            ? ` (${vm.libvirt_hardware.profile.disk_bus})`
+                            : ""}
+                        . Existing attachments are preserved.
+                    </Typography>
                 </>
             )}
         </OperationDialog>

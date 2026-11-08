@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 
 	libvirt "libvirt.org/go/libvirt"
 	libvirtxml "libvirt.org/go/libvirtxml"
@@ -91,6 +92,15 @@ func imageCapabilities(caps *libvirtxml.DomainCaps) compute.VirtualMachineCapabi
 
 // ValidateNew prevents a create request from silently updating an existing VM.
 func (repo *VirtualMachineRepository) ValidateNew(vm *compute.VirtualMachine) error {
+	if len(vm.AppliedPolicy) > 0 {
+		plan, err := hardware.DecodePlan(vm.AppliedPolicy)
+		if err != nil {
+			return err
+		}
+		if err = repo.validateHardwareCapabilities(vm, plan, true); err != nil {
+			return err
+		}
+	}
 	conn, err := repo.pool.Acquire(vm.NodeId)
 	if err != nil {
 		return repositoryError(err, "backend validation failed")

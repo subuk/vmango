@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/administration/clouds/{cloud}/hardware-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read accepted libvirt hardware profiles */
+        get: operations["list-libvirt-hardware-profiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/administration/clouds/{cloud}/hosts": {
         parameters: {
             query?: never;
@@ -234,6 +251,23 @@ export interface paths {
         };
         /** Observe image sources without preparing them */
         get: operations["get-administration-image-availability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/clouds/{cloud}/images/{image}/hardware-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the libvirt hardware profile selected by an image */
+        get: operations["get-libvirt-image-hardware-profile"];
         put?: never;
         post?: never;
         delete?: never;
@@ -592,7 +626,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Explicitly adopt a machine without claiming its existing disks */
+        /** Explicitly adopt a machine with a compatible hardware profile without changing its hardware */
         post: operations["adopt-machine"];
         delete?: never;
         options?: never;
@@ -1287,6 +1321,10 @@ export interface components {
             items: components["schemas"]["ApiNode"][];
             unavailable_hosts: components["schemas"]["AdministrationUnavailableHost"][];
         };
+        ApiAdoptInputBody: {
+            /** @description Libvirt clouds require a compatible named hardware profile. */
+            hardware_profile?: string;
+        };
         ApiAssignmentPreview: {
             machines: components["schemas"]["ApiVM"][];
             volumes: components["schemas"]["ApiVolume"][];
@@ -1404,10 +1442,7 @@ export interface components {
         };
         ApiDisk: {
             alias?: string;
-            /**
-             * @default virtio
-             * @enum {string}
-             */
+            /** @enum {string} */
             bus?: "virtio" | "scsi" | "ide";
             /**
              * @default disk
@@ -1450,6 +1485,12 @@ export interface components {
         };
         ApiKeyCreateInputBody: {
             public_key: string;
+        };
+        ApiLibvirtMachineHardware: {
+            devices: components["schemas"]["Device"][];
+            profile: components["schemas"]["Profile"];
+            /** Format: int64 */
+            version: number;
         };
         ApiLoginInputBody: {
             password: string;
@@ -1616,6 +1657,7 @@ export interface components {
             vcpu: number;
         };
         ApiVM: {
+            adoption_required?: boolean;
             arch: string;
             autostart: boolean;
             backend_name?: string;
@@ -1637,6 +1679,7 @@ export interface components {
             instance_type: string;
             interfaces: components["schemas"]["ApiReadInterface"][];
             ip_addresses: string[];
+            libvirt_hardware?: components["schemas"]["ApiLibvirtMachineHardware"];
             managed: boolean;
             /** Format: int64 */
             memory_bytes: number;
@@ -1653,6 +1696,7 @@ export interface components {
             zone: string;
         };
         ApiVMDetail: {
+            adoption_required?: boolean;
             arch: string;
             autostart: boolean;
             backend_name?: string;
@@ -1675,6 +1719,7 @@ export interface components {
             instance_type: string;
             interfaces: components["schemas"]["ApiReadInterface"][];
             ip_addresses: string[];
+            libvirt_hardware?: components["schemas"]["ApiLibvirtMachineHardware"];
             managed: boolean;
             /** Format: int64 */
             memory_bytes: number;
@@ -1774,6 +1819,12 @@ export interface components {
             storage_class: string;
             zone: string;
         };
+        ConfigDrive: {
+            bus: string;
+            device_type: string;
+            enabled?: boolean;
+            format: string;
+        };
         Cookie: {
             Domain: string;
             /** Format: date-time */
@@ -1802,6 +1853,13 @@ export interface components {
         DeleteInputBody: {
             /** Format: uuid */
             revision: string;
+        };
+        Device: {
+            dependencies?: string[] | null;
+            id: string;
+            kind: string;
+            model: string;
+            state_owner?: string;
         };
         Diagnostic: {
             backend?: string;
@@ -1839,12 +1897,10 @@ export interface components {
             size_bytes: number;
         };
         InstanceType: {
-            autostart: boolean;
             /** Format: int64 */
             boot_disk_bytes: number;
             /** Format: int64 */
             cpu_request: number;
-            hugepages: boolean;
             id: string;
             /** Format: int64 */
             memory_bytes: number;
@@ -1873,6 +1929,19 @@ export interface components {
             required?: {
                 [key: string]: string;
             };
+        };
+        Profile: {
+            config_drive: components["schemas"]["ConfigDrive"];
+            disk_bus: string;
+            disk_controller?: string;
+            firmware: string;
+            graphics: string;
+            guest_agent?: boolean;
+            hugepages: boolean;
+            id: string;
+            name: string;
+            nic_model: string;
+            video_model: string;
         };
         Release: {
             /** Format: date-time */
@@ -2373,6 +2442,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdministrationHost"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "list-libvirt-hardware-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cloud: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"][];
                 };
             };
             /** @description Bad Request */
@@ -3230,6 +3393,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdministrationImageAvailability"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    "get-libvirt-image-hardware-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cloud: string;
+                image: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
                 };
             };
             /** @description Bad Request */
@@ -5505,7 +5763,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiAdoptInputBody"];
+            };
+        };
         responses: {
             /** @description Accepted */
             202: {

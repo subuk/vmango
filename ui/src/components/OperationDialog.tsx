@@ -19,6 +19,7 @@ export function OperationDialog({
     run,
     children,
     disabled = false,
+    submitDisabled = false,
 }: {
     title: string;
     action: string;
@@ -26,6 +27,7 @@ export function OperationDialog({
     run: () => Promise<unknown>;
     children: (error: unknown) => ReactNode;
     disabled?: boolean;
+    submitDisabled?: boolean;
 }) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<unknown>();
@@ -56,7 +58,7 @@ export function OperationDialog({
                     e.preventDefault();
                     if (
                         busy ||
-                        ((uncertain || disabled) &&
+                        ((uncertain || disabled || submitDisabled) &&
                             !(error instanceof APIError && error.recover))
                     )
                         return;
@@ -120,7 +122,7 @@ export function OperationDialog({
                         variant="contained"
                         disabled={
                             busy ||
-                            ((uncertain || disabled) &&
+                            ((uncertain || disabled || submitDisabled) &&
                                 !(error instanceof APIError && error.recover))
                         }
                     >

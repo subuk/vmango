@@ -1,3 +1,4 @@
+import { AdoptMachine } from "./HardwareProfiles";
 import { WorkspaceLink as RouterLink } from "../app/Workspace";
 import { useRequest } from "../app/Workspace";
 import { useState } from "react";
@@ -376,19 +377,20 @@ export function MachineActions({
                     Change instance type
                 </Button>
             )}
-            {confirm && (
+            {confirm === "adopt" && (
+                <AdoptMachine vm={vm} onClose={() => setConfirm(undefined)} />
+            )}
+            {confirm && confirm !== "adopt" && (
                 <Confirm
-                    title={`${confirm === "adopt" ? "Adopt" : confirm === "delete" ? "Delete" : confirm === "poweroff" ? "Hard power-off" : confirm === "shutdown" ? "Shutdown" : "Reboot"} ${vm.name}?`}
+                    title={`${confirm === "delete" ? "Delete" : confirm === "poweroff" ? "Hard power-off" : confirm === "shutdown" ? "Shutdown" : "Reboot"} ${vm.name}?`}
                     action={
-                        confirm === "adopt"
-                            ? "Adopt machine"
-                            : confirm === "delete"
-                              ? "Delete machine"
-                              : confirm === "poweroff"
-                                ? "Hard power-off"
-                                : confirm === "shutdown"
-                                  ? "Shutdown"
-                                  : "Reboot"
+                        confirm === "delete"
+                            ? "Delete machine"
+                            : confirm === "poweroff"
+                              ? "Hard power-off"
+                              : confirm === "shutdown"
+                                ? "Shutdown"
+                                : "Reboot"
                     }
                     extra={
                         confirm === "delete"
@@ -397,13 +399,7 @@ export function MachineActions({
                     }
                     onClose={() => setConfirm(undefined)}
                     run={async (deleteVolumes) => {
-                        if (confirm === "adopt")
-                            await request(
-                                `/api/v1/clouds/${encodeURIComponent(vm.cloud)}/machines/${encodeURIComponent(vm.id)}/adopt`,
-                                "POST",
-                                {},
-                            );
-                        else if (confirm === "delete")
+                        if (confirm === "delete")
                             await request(
                                 `${vmPath(vm.cloud, vm.id)}?delete_volumes=${deleteVolumes}`,
                                 "DELETE",
@@ -420,15 +416,13 @@ export function MachineActions({
                         });
                     }}
                 >
-                    {confirm === "adopt"
-                        ? "Take this machine under management and apply standard power management settings. Resources and existing disks are preserved. Power settings take effect after a full shutdown and start."
-                        : confirm === "delete"
-                          ? `Permanently remove ${vm.node}/${vm.name}. Attached disks are kept unless you explicitly choose to delete them.`
-                          : confirm === "poweroff"
-                            ? `Immediately cut power to ${vm.node}/${vm.name}. Unsaved guest data may be lost.`
-                            : confirm === "shutdown"
-                              ? `Request graceful shutdown of ${vm.node}/${vm.name}. The guest operating system must respond to the request.`
-                              : `Reboot ${vm.node}/${vm.name}.`}
+                    {confirm === "delete"
+                        ? `Permanently remove ${vm.node}/${vm.name}. Attached disks are kept unless you explicitly choose to delete them.`
+                        : confirm === "poweroff"
+                          ? `Immediately cut power to ${vm.node}/${vm.name}. Unsaved guest data may be lost.`
+                          : confirm === "shutdown"
+                            ? `Request graceful shutdown of ${vm.node}/${vm.name}. The guest operating system must respond to the request.`
+                            : `Reboot ${vm.node}/${vm.name}.`}
                 </Confirm>
             )}
         </>

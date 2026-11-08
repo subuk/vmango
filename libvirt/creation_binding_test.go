@@ -16,7 +16,7 @@ func TestCreationBindingPinsListener(t *testing.T) {
 	}
 	repo.settings["host"] = NodeSettings{GraphicsListen: "0.0.0.0"}
 	vm := &compute.VirtualMachine{Graphic: compute.VirtualMachineGraphic{Type: compute.GraphicTypeVnc}}
-	if err := repo.ApplyCreationBinding(vm, binding); err != nil || vm.Graphic.Listen != "::1" {
+	if err := repo.ApplyCreationBinding(vm, binding); err != nil || vm.Graphic.Listen != "127.0.0.1" {
 		t.Fatalf("binding drift: %+v %v", vm, err)
 	}
 	if err := repo.ApplyCreationBinding(vm, nil); err == nil {
@@ -36,8 +36,8 @@ func TestConsoleListenerTargets(t *testing.T) {
 		{"qemu+ssh://user@host/system", "0.0.0.0", "127.0.0.1"},
 		{"qemu+ssh://user@host/system", "::1", "::1"},
 		{"qemu+ssh://user@host/system", "192.0.2.8", "192.0.2.8"},
-		{"qemu+tls://host/system", "0.0.0.0", "host"},
-		{"qemu+tls://[2001:db8::1]/system", "::", "2001:db8::1"},
+		{"qemu+tls://host/system", "0.0.0.0", "127.0.0.1"},
+		{"qemu+tls://[2001:db8::1]/system", "::", "::1"},
 	} {
 		u, _ := url.Parse(tt.uri)
 		got, err := graphicsDialHost(tt.listen, u)
@@ -45,17 +45,19 @@ func TestConsoleListenerTargets(t *testing.T) {
 			t.Fatalf("%s listen=%s: %s %v", tt.uri, tt.listen, got, err)
 		}
 	}
-	cmd := graphicsForwardCommand("::1", "5900")
-	if !strings.Contains(cmd, "TCP:[::1]:5900") || !strings.Contains(cmd, "nc ::1 5900") {
-		t.Fatal(cmd)
-	}
+
 }
 
 func TestRemoteLoopbackCannotDialVmangoHost(t *testing.T) {
 	for _, address := range []string{"127.0.0.1", "127.0.0.2", "::1"} {
 		u, _ := url.Parse("qemu+tls://hypervisor/system")
-		if _, err := graphicsDialHost(address, u); err == nil {
-			t.Fatalf("remote listener %s could dial local machine", address)
+		target, err := graphicsDialHost(address, u)
+		if err != nil || target != address {
+			t.Fatalf("remote loopback target lost: %s %v", target, err)
+		}
+		args := graphicsSSHArguments(u, target, 5900)
+		if !strings.Contains(strings.Join(args, " "), "-p 22 -W ") {
+			t.Fatalf("remote listener must tunnel through SSH: %v", args)
 		}
 	}
 }

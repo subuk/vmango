@@ -60,6 +60,7 @@ func (s *WorkloadService) bindWithSources(c WorkloadContext, manager *VirtualMac
 	}
 	bound := NewVirtualMachineManager(vms, volumes, manager.epub, manager.settings, manager.images)
 	bound.creationBindings, bound.Clouds, bound.createMu = manager.creationBindings, manager.Clouds, manager.coordinationLock()
+	bound.appliedPolicies = manager.appliedPolicies
 	return bound, vms, volumes, nil
 }
 
@@ -625,4 +626,93 @@ func (r *namespaceVolumeRepository) Upload(path, node string, content io.Reader,
 		return err
 	}
 	return r.VolumeRepository.Upload(path, node, content, size)
+}
+
+func (r *namespaceVMRepository) ResolveHardware(vm *VirtualMachine, policy, binding json.RawMessage) error {
+	if err := r.host(vm.NodeId); err != nil {
+		return err
+	}
+	if backend, ok := r.VirtualMachineRepository.(BackendMachineRepository); ok {
+		return backend.ResolveHardware(vm, policy, binding)
+	}
+	if len(policy) != 0 {
+		return ErrUnavailable
+	}
+	return nil
+}
+func (r *namespaceVMRepository) ApplyHardware(vm *VirtualMachine, policy json.RawMessage) error {
+	if err := r.host(vm.NodeId); err != nil {
+		return err
+	}
+	if backend, ok := r.VirtualMachineRepository.(BackendMachineRepository); ok {
+		return backend.ApplyHardware(vm, policy)
+	}
+	if len(policy) != 0 {
+		return ErrUnavailable
+	}
+	return nil
+}
+func (r *namespaceVMRepository) ValidateAppliedPolicy(vm *VirtualMachine) error {
+	if backend, ok := r.VirtualMachineRepository.(BackendMachineRepository); ok {
+		return backend.ValidateAppliedPolicy(vm)
+	}
+	return nil
+}
+func (r *namespaceVMRepository) ResolveDiskAttachment(vm *VirtualMachine, disk *VirtualMachineAttachedVolume) error {
+	if backend, ok := r.VirtualMachineRepository.(BackendMachineRepository); ok {
+		return backend.ResolveDiskAttachment(vm, disk)
+	}
+	return nil
+}
+func (r *namespaceVMRepository) ResolveInterfaceAttachment(vm *VirtualMachine, nic *VirtualMachineAttachedInterface) error {
+	if backend, ok := r.VirtualMachineRepository.(BackendMachineRepository); ok {
+		return backend.ResolveInterfaceAttachment(vm, nic)
+	}
+	return nil
+}
+func (r *namespaceVMRepository) ValidateResourceChange(current, requested *VirtualMachine) error {
+	if backend, ok := r.VirtualMachineRepository.(BackendMachineRepository); ok {
+		return backend.ValidateResourceChange(current, requested)
+	}
+	return nil
+}
+func (r *namespaceVMRepository) PrepareAdoption(vm *VirtualMachine, cloud, policyRef string) (json.RawMessage, error) {
+	if err := r.host(vm.NodeId); err != nil {
+		return nil, err
+	}
+	if backend, ok := r.VirtualMachineRepository.(BackendMachineRepository); ok {
+		return backend.PrepareAdoption(vm, cloud, policyRef)
+	}
+	return nil, ErrUnavailable
+}
+func (r *namespaceVMRepository) AdoptWithPolicy(id, node string, metadata *MachineMetadata, policy json.RawMessage) error {
+	r.workload.Namespaces.mutationMu.Lock()
+	defer r.workload.Namespaces.mutationMu.Unlock()
+	if _, err := r.graph(id, node); err != nil {
+		return err
+	}
+	if backend, ok := r.VirtualMachineRepository.(BackendMachineRepository); ok {
+		return backend.AdoptWithPolicy(id, node, metadata, policy)
+	}
+	return ErrUnavailable
+}
+func (r *namespaceVMRepository) SetAutostart(id, node string, enabled bool) error {
+	r.workload.Namespaces.mutationMu.Lock()
+	defer r.workload.Namespaces.mutationMu.Unlock()
+	if _, err := r.graph(id, node); err != nil {
+		return err
+	}
+	if backend, ok := r.VirtualMachineRepository.(MachineAutostartRepository); ok {
+		return backend.SetAutostart(id, node, enabled)
+	}
+	return nil
+}
+func (r *namespaceVMRepository) ValidateAdoptionPolicy(vm *VirtualMachine, policy json.RawMessage) error {
+	if err := r.host(vm.NodeId); err != nil {
+		return err
+	}
+	if backend, ok := r.VirtualMachineRepository.(BackendMachineRepository); ok {
+		return backend.ValidateAdoptionPolicy(vm, policy)
+	}
+	return ErrUnavailable
 }
