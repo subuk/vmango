@@ -1,4 +1,7 @@
-import { HardwareProfileFields } from "./HardwareProfiles";
+import {
+    HardwareProfileFields,
+    PlatformBindingFields,
+} from "./HardwareProfiles";
 import {
     diskDependencyLabel,
     dependentDiskNotice,
@@ -190,6 +193,11 @@ function Overview({ vm }: { vm: VM }) {
                     <HardwareProfileFields
                         profile={vm.libvirt_hardware.profile}
                     />
+                    <DetailSection title="Applied platform binding">
+                        <PlatformBindingFields
+                            binding={vm.libvirt_hardware.applied}
+                        />
+                    </DetailSection>
                     <Typography
                         variant="body2"
                         color="text.secondary"
@@ -199,6 +207,14 @@ function Overview({ vm }: { vm: VM }) {
                         operations. Graphics listeners are derived and
                         read-only.
                     </Typography>
+                </DetailSection>
+            )}
+            {vm.libvirt_observed && (
+                <DetailSection
+                    title="Observed platform binding"
+                    description="Read from the backend domain XML; aliases in the requested policy may differ from these concrete values."
+                >
+                    <PlatformBindingFields binding={vm.libvirt_observed} />
                 </DetailSection>
             )}
             <Box className="detail-grid">

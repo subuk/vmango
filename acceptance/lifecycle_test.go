@@ -323,10 +323,18 @@ api {
 }
 `, filepath.Join(root, "keys"), filepath.Join(root, "cloud-init-templates"), filepath.Join(root, "namespaces"), filepath.Join(root, "tasks"), address, filepath.Join(root, "jwt-key"), filepath.Join(root, "sessions"), filepath.Join(root, "tokens"), string(hash))
 
+	machineAcceleration := os.Getenv("ACCEPTANCE_VIRT_TYPE")
+	if machineAcceleration == "" {
+		machineAcceleration = "hardware"
+	}
+	machineType := os.Getenv("ACCEPTANCE_MACHINE_TYPE")
+	if machineType == "" {
+		machineType = "auto"
+	}
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {
- hardware_profile "boot" { firmware = %q disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" config_drive { format = %q device_type = %q bus = %q } }
- hardware_profile "no-init" { firmware = %q config_drive { enabled = false } }
+ hardware_profile "boot" { machine { type = %q acceleration = %q } firmware = %q disk_bus = "scsi" disk_controller = "virtio-scsi" guest_agent = false graphics = "vnc" video_model = "none" config_drive { format = %q device_type = %q bus = %q } }
+ hardware_profile "no-init" { machine { type = %q acceleration = %q } firmware = %q config_drive { enabled = false } }
  image "boot" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "boot" protected = true minimum_memory_mib = 1024 minimum_disk_gib = 8 }
  image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "no-init" }
  zone "test" {}
@@ -346,7 +354,7 @@ cloud "acceptance" {
  storage_class "efficient" {pool=%q format="qcow2"}
  storage_class "raw" {pool=%q format="raw"} }
 }
-`, firmware, initialization, configDriveDevice, configDriveBus, firmware, base, arch, base, arch, uri, name, name, name, name, name)
+`, machineType, machineAcceleration, firmware, initialization, configDriveDevice, configDriveBus, machineType, machineAcceleration, firmware, base, arch, base, arch, uri, name, name, name, name, name)
 	if imageURL != "" {
 		if strings.Contains(imageURL, "alpinelinux.org/") {
 			configuration = strings.ReplaceAll(configuration, `os_name = "Ubuntu"`, `os_name = "Alpine Linux"`)
@@ -684,6 +692,17 @@ cloud "offline" {
 
 	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/instance-type", map[string]any{"instance_type": "larger"})
 	changedXML := mustVir("dumpxml", domainUUID)
+	var beforePlatform, afterPlatform libvirtxml.Domain
+	if err := beforePlatform.Unmarshal(noInitXML); err != nil {
+		t.Fatal(err)
+	}
+	if err := afterPlatform.Unmarshal(changedXML); err != nil {
+		t.Fatal(err)
+	}
+	if beforePlatform.Type != afterPlatform.Type || beforePlatform.OS.Type.Machine != afterPlatform.OS.Type.Machine || beforePlatform.Devices.Emulator != afterPlatform.Devices.Emulator {
+		t.Fatal("resource change replaced platform binding")
+	}
+
 	if !strings.Contains(mustVir("dominfo", domainUUID), "disable") || !strings.Contains(mustVir("domstate", domainUUID), "shut off") || !strings.Contains(changedXML, "org.qemu.guest_agent.0") || !strings.Contains(changedXML, "127.0.0.1") {
 		t.Fatal("type change did not preserve disabled autostart, power, devices and listener")
 	}
@@ -798,6 +817,9 @@ cloud "offline" {
 		if bootVolume.BackingStore == nil || bootVolume.BackingStore.Path != base {
 			t.Fatal("boot disk does not depend on selected image")
 		}
+	}
+	if runtimeDomain.OS.Type.Machine == "" || runtimeDomain.OS.Type.Machine == "auto" || runtimeDomain.Devices.Emulator == "" {
+		t.Fatal("missing concrete platform binding")
 	}
 	if runtimeDomain.Type != expectedType {
 		t.Fatalf("expected virtualization type %s, got %s; see domain.xml", expectedType, runtimeDomain.Type)

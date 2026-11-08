@@ -53,6 +53,7 @@ func (g VirtualMachineGraphic) Vnc() bool {
 }
 
 type VirtualMachine struct {
+	ObservedBackend       json.RawMessage               `json:",omitempty"`
 	AppliedPolicy         json.RawMessage               `json:",omitempty"`
 	ConfigDriveAttachment *VirtualMachineAttachedVolume `json:",omitempty"`
 	NamespaceID           NamespaceID

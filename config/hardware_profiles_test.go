@@ -88,3 +88,26 @@ func TestHardwareProfilesRejectOverridesAndUnknownSettings(t *testing.T) {
 		}
 	}
 }
+
+func TestMachinePolicyConfig(t *testing.T) {
+	for _, body := range []string{"", `machine {}`, `machine { type="q35" }`, `machine { acceleration="qemu" }`, `machine { type="virt" acceleration="hvf" }`} {
+		cfg, err := ParseBytes([]byte(strings.Replace(cloudConfig, `hardware_profile "default" {}`, `hardware_profile "default" {`+body+`}`, 1)))
+		if err != nil {
+			t.Fatal(body, err)
+		}
+		profiles, err := cfg.HardwareProfiles()
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := profiles["test"]["default"].Machine
+		if m == nil || m.Type == "" || m.Acceleration == "" || m.TypeExplicit != strings.Contains(body, "type=") || m.AccelerationExplicit != strings.Contains(body, "acceleration=") {
+			t.Fatalf("explicitness lost for %s: %+v", body, m)
+		}
+	}
+	for _, body := range []string{`machine {} machine {}`, `machine { unknown="q35" }`, `machine { acceleration="auto" }`, `machine { type="q35" type="pc" }`, `machine { acceleration="hardware" acceleration="qemu" }`, `machine { emulator="/qemu" }`, `machine { arch="aarch64" }`, `machine "named" {}`, `machine="q35"`, `machine { type="" }`, `machine { acceleration="" }`, `machine { type="q35,property=on" }`} {
+		_, err := ParseBytes([]byte(strings.Replace(cloudConfig, `hardware_profile "default" {}`, `hardware_profile "default" {`+body+`}`, 1)))
+		if err == nil || !strings.Contains(err.Error(), "cloud test") || !strings.Contains(err.Error(), "hardware_profile default") {
+			t.Fatalf("missing actionable rejection for %s: %v", body, err)
+		}
+	}
+}

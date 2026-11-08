@@ -334,3 +334,37 @@ func TestInstanceTypeChangeValidatesAppliedBindingInsteadOfCurrentEmulator(t *te
 		t.Fatal("current emulator replaced applied binding", vm)
 	}
 }
+
+func TestBackendValidatedGuestArchitectureIsIndependentOfHostCPU(t *testing.T) {
+	h, base, _, cloud := cloudFixtureHandler(t, 4, nil)
+	backend := &policyTestBackend{cloudVMBackend: base}
+	h.VMs.VirtualMachineRepository = backend
+	images := compute.NewImageService(&mutableImageCatalog{image: compute.Image{CloudID: "c", ID: "image", Arch: compute.ArchAarch64, SourcePath: "/source", BackendPolicy: json.RawMessage(`{"emulation":"explicit"}`)}})
+	h.Manager = compute.NewVirtualMachineManager(h.VMs, h.Volumes, cloudEvents{}, nil, images)
+	h.Manager.Clouds = h.Clouds
+	h.Clouds.Manager = h.Manager
+	offers, err := h.Clouds.Offers(cloud)
+	if err != nil || len(offers) == 0 {
+		t.Fatalf("backend-supported guest architecture hidden by host CPU: %+v %v", offers, err)
+	}
+	repo, err := filesystem.NewTaskRepository(filepath.Join(t.TempDir(), "tasks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer repo.Close()
+	service := tasks.New(repo, h, zerolog.Nop())
+	accepted := submitCloud(t, service, "emulated-architecture", "machine.create", compute.InfrastructureCommand{CloudID: "c", CreateSpec: createSpec("emulated")})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() { cancel(); service.Wait() }()
+	if err := service.Start(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	result := awaitCloudTask(t, service, accepted.ID)
+	if result.State != tasks.Succeeded {
+		t.Fatal(result)
+	}
+	vm, err := base.Get(taskMachineID(t, result), "a")
+	if err != nil || vm.Arch != compute.ArchAarch64 {
+		t.Fatal("guest architecture replaced", vm, err)
+	}
+}

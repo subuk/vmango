@@ -97,7 +97,7 @@ func (repo *VirtualMachineRepository) ValidateNew(vm *compute.VirtualMachine) er
 		if err != nil {
 			return err
 		}
-		if err = repo.validateHardwareCapabilities(vm, plan, true); err != nil {
+		if err = repo.validateHardwareCapabilities(vm, plan, true, true); err != nil {
 			return err
 		}
 	}

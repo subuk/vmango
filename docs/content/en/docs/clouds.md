@@ -72,6 +72,26 @@ Every image references a named `hardware_profile` in its cloud. See the
 [release migration guide](https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md) for before/after examples,
 existing VM adoption and the incompatible task-format boundary.
 
+### Machine type and acceleration
+
+Profiles may declare `machine { type = "q35" acceleration = "kvm" }`.
+Omitted settings default to machine `auto` and acceleration `hardware` (KVM or
+HVF). Explicit `qemu` selects software TCG; hardware never falls back to it.
+The image continues to own the guest architecture. Each candidate resolves
+aliases/defaults in the exact architecture/emulator/acceleration context and
+retains its concrete machine, domain type and host-local emulator path.
+
+Use a concrete machine such as `pc-q35-9.2` to require the same supported version
+across hosts. Existing VMs and accepted plans keep saved bindings through profile
+and host-setting edits. Adoption preserves omitted fields and `auto`, while
+explicit aliases must resolve to the existing concrete machine. QEMU package
+updates do not upgrade saved machine types or pin the binary's contents.
+
+See [machine policy examples, prerequisites and preservation guarantees](https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md#machine-type-and-acceleration)
+for Linux/KVM, macOS/HVF, software-emulated guests, joint capability validation,
+remote emulator paths and adoption diagnostics. Administration distinguishes
+requested policy, applied bindings and observed backend configuration.
+
 ### Migrate existing connections
 
 Move the contents of each former top-level `libvirt "name"` block into

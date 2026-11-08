@@ -1,6 +1,7 @@
 package libvirt
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"subuk/vmango/compute"
@@ -114,6 +115,7 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	if err != nil {
 		return nil, err
 	}
+	vm.ObservedBackend, _ = json.Marshal(domainPlatform(domainConfig))
 	vm.Metadata = metadata
 	vm.AppliedPolicy, err = readHardwareMetadata(domainConfig)
 	if err != nil {

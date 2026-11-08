@@ -193,3 +193,135 @@ and schedules in one preparation stage, then durably stores the selected host
 and final plan before provisioning. No automatic retry or uncertain side-effect
 replay is introduced. Supported work interrupted during execution retains the
 existing interruption and inspection workflow.
+
+## Machine type and acceleration
+
+The optional profile `machine` block controls new VM platform selection. Omitted
+blocks, empty blocks and omitted fields default to `type = "auto"` and
+`acceleration = "hardware"`. `auto` is a machine-selection sentinel, never a
+libvirt machine name. Acceleration has no `auto` value. The image's `os_arch`
+remains the guest architecture; instance types cannot override it or the profile.
+
+These independent profile examples belong inside a libvirt cloud. Select one
+explicitly from an image; all other profile requirements must also be supported.
+Names and machine versions below are illustrative, not a compatibility catalog.
+
+```hcl
+hardware_profile "server-q35" {
+    machine { type = "q35" acceleration = "hardware" }
+}
+hardware_profile "linux-kvm" {
+    machine { type = "q35" acceleration = "kvm" }
+}
+hardware_profile "arm-hvf" {
+    machine { type = "virt" acceleration = "hvf" }
+    firmware = "efi"
+}
+hardware_profile "arm-emulated" {
+    machine { type = "virt" acceleration = "qemu" }
+    firmware = "efi"
+}
+hardware_profile "pinned-platform" {
+    machine { type = "pc-q35-9.2" acceleration = "kvm" }
+}
+```
+
+`hardware` requires compatible KVM or HVF. `kvm` requires Linux KVM, `hvf`
+requires macOS Hypervisor.framework, and `qemu` explicitly selects QEMU/TCG
+software emulation. These concrete values map directly to the root libvirt
+`domain` type. Hardware never falls back to software, and explicit backends never
+substitute for one another. The host must already have a suitable QEMU build,
+permissions and prepared acceleration. Its OS name alone proves nothing.
+Hardware acceleration generally requires a compatible host/guest architecture;
+TCG can support other architectures only when the emulator and the full profile
+support them. It does not promise hardware-equivalent performance or CPU/device
+features. Vmango does not install QEMU, load KVM modules or enable HVF.
+
+Machine names and aliases come from the backend. At acceptance, each candidate
+host resolves the requested architecture, emulator and acceleration together,
+then resolves `auto` or an alias in that context. Driver canonical mappings and
+exact domain-capability queries determine the concrete name. Vmango does not
+sort version numbers or infer chipset families from name prefixes. `q35` can
+resolve to `pc-q35-9.2` on one host and a different version on another; specifying
+`pc-q35-9.2` requires exactly that supported machine on every eligible candidate.
+An unversioned backend machine without a canonical version keeps its real name;
+this does not provide a version-pinning guarantee. The concrete result is emitted
+as `os/type/@machine`, never `auto`.
+
+Firmware, CPU mode, ordinary/config-drive disk buses, NIC and display requirements
+are validated for that same combination before provisioning artifacts. A machine
+name appearing in a list is insufficient. Unsupported candidates are excluded
+with diagnostics; no candidate means rejection without disk/config-drive creation.
+Capability inspection does not create temporary VMs or modify host configuration.
+
+Emulators remain host-local bindings:
+
+```hcl
+host "kvm-01" {
+    uri = "qemu+ssh://root@kvm-01/system"
+    emulator = "/usr/bin/qemu-system-x86_64"
+    # Keep this host's zone, network and storage bindings here.
+}
+```
+
+The path belongs to the hypervisor host, including with remote SSH connections.
+An explicit path must support the complete requested combination; Vmango never
+replaces an unavailable/incompatible path. When omitted, libvirt supplies the
+appropriate path. The resolved path is stored and emitted as `devices/emulator`.
+No per-profile emulator, arbitrary QEMU options, machine properties, download
+catalog or binary management is supported.
+
+### Accepted bindings and existing machines
+
+Acceptance stores the requested policy (including which fields were explicit)
+and each candidate's concrete machine, domain type and emulator. Execution
+collects live inventory and schedules against those saved candidates. It
+revalidates the exact saved combination without resolving the original alias or
+using edited host settings. The selected host and final plan are persisted before
+provisioning side effects. Capability removal produces a diagnostic, not a newer
+machine, substitute path, software fallback or automatic retry of uncertain work.
+Applied policy lives in VM metadata independently of task-history retention.
+
+Start/stop/reboot, resource and device changes preserve existing platform bindings.
+Ordinary mutations still require management identity and a valid applied policy.
+Compatible older policy/accepted payloads without the new optional machine block
+retain their interpretation; this extension alone does not require re-adoption.
+The foundation's incompatible-command boundary still preserves terminal history,
+recorded effects and uncertainty/resource fences without replay.
+
+Adoption is validation, not conversion. Omitted fields and explicit `type="auto"`
+preserve the existing machine rather than imposing today's creation defaults.
+An explicit concrete name must match the existing concrete machine. An explicit
+alias is resolved on that host at adoption time: if `q35` now points to a newer
+version, use a compatible profile naming the existing older version exactly.
+Ambiguous aliases in old XML are not guessed to refer to a historical version.
+Explicit `hardware` rejects TCG; explicit `kvm`, `hvf` or `qemu` must match the
+existing domain type. A configured host emulator must match the existing path.
+Adoption writes policy metadata while preserving hardware.
+
+Administration profiles show requested machine/acceleration and whether each was
+explicit. Machine details/API expose the applied platform and separately observed
+backend XML bindings, including unmanaged VMs. A requested alias is not presented
+as a pinned concrete version. No API/UI/CLI operation changes existing guest
+architecture, machine type, acceleration or emulator; migration, conversion and
+automatic remediation remain outside this feature.
+
+### QEMU updates and guarantees
+
+The saved machine version is not the QEMU package or binary version. A VM using
+`pc-q35-9.2` continues using that type after an administrator updates QEMU while it
+remains supported. Removing that machine's support makes start fail; Vmango does
+not upgrade it. Replacing the binary at the saved path changes implementation at
+the next cold start. The path does not pin file contents, and machine compatibility
+behavior is not byte-level reproducibility or immunity to all host changes.
+Package/artifact updates, copying, downloading and hashing QEMU binaries remain
+administrator responsibilities.
+
+References: [libvirt driver capabilities and canonical aliases](https://libvirt.org/formatcaps.html#examples),
+[domain capabilities](https://libvirt.org/formatdomaincaps.html),
+[domain types](https://libvirt.org/formatdomain.html#element-and-attribute-overview),
+[guest architecture and machine type](https://libvirt.org/formatdomain.html#guest-firmware),
+[QEMU/KVM/HVF driver](https://libvirt.org/drvqemu.html),
+[QEMU machine invocation](https://www.qemu.org/docs/master/system/qemu-manpage.html),
+[machine-version compatibility](https://www.qemu.org/docs/master/devel/migration/compatibility.html),
+[ARM virt platform](https://www.qemu.org/docs/master/system/arm/virt.html).

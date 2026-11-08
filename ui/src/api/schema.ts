@@ -1487,6 +1487,7 @@ export interface components {
             public_key: string;
         };
         ApiLibvirtMachineHardware: {
+            applied: components["schemas"]["PlatformBinding"];
             devices: components["schemas"]["Device"][];
             profile: components["schemas"]["Profile"];
             /** Format: int64 */
@@ -1680,6 +1681,7 @@ export interface components {
             interfaces: components["schemas"]["ApiReadInterface"][];
             ip_addresses: string[];
             libvirt_hardware?: components["schemas"]["ApiLibvirtMachineHardware"];
+            libvirt_observed?: components["schemas"]["PlatformBinding"];
             managed: boolean;
             /** Format: int64 */
             memory_bytes: number;
@@ -1720,6 +1722,7 @@ export interface components {
             interfaces: components["schemas"]["ApiReadInterface"][];
             ip_addresses: string[];
             libvirt_hardware?: components["schemas"]["ApiLibvirtMachineHardware"];
+            libvirt_observed?: components["schemas"]["PlatformBinding"];
             managed: boolean;
             /** Format: int64 */
             memory_bytes: number;
@@ -1910,6 +1913,12 @@ export interface components {
             /** Format: int64 */
             vcpus: number;
         };
+        Machine: {
+            acceleration: string;
+            acceleration_explicit: boolean;
+            type: string;
+            type_explicit: boolean;
+        };
         Namespace: {
             clouds: string[];
             description: string;
@@ -1930,6 +1939,11 @@ export interface components {
                 [key: string]: string;
             };
         };
+        PlatformBinding: {
+            domain_type: string;
+            emulator: string;
+            machine: string;
+        };
         Profile: {
             config_drive: components["schemas"]["ConfigDrive"];
             disk_bus: string;
@@ -1939,6 +1953,7 @@ export interface components {
             guest_agent?: boolean;
             hugepages: boolean;
             id: string;
+            machine?: components["schemas"]["Machine"];
             name: string;
             nic_model: string;
             video_model: string;

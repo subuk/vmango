@@ -12,6 +12,7 @@ import (
 const HardwareMigrationGuide = "https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md"
 
 type HardwareProfileConfig struct {
+	Machine        HardwareMachineConfig     `hcl:"machine"`
 	ID             string                    `hcl:",key"`
 	Name           string                    `hcl:"name"`
 	Firmware       string                    `hcl:"firmware"`
@@ -23,6 +24,22 @@ type HardwareProfileConfig struct {
 	GuestAgent     *bool                     `hcl:"guest_agent"`
 	Hugepages      bool                      `hcl:"hugepages"`
 	ConfigDrive    HardwareConfigDriveConfig `hcl:"config_drive"`
+}
+
+type HardwareMachineConfig struct {
+	Type         *string `hcl:"type"`
+	Acceleration *string `hcl:"acceleration"`
+}
+
+func (c HardwareMachineConfig) policy() *hardware.Machine {
+	m := &hardware.Machine{}
+	if c.Type != nil {
+		m.Type, m.TypeExplicit = *c.Type, true
+	}
+	if c.Acceleration != nil {
+		m.Acceleration, m.AccelerationExplicit = *c.Acceleration, true
+	}
+	return m
 }
 
 type HardwareConfigDriveConfig struct {
@@ -44,7 +61,7 @@ func (c *Config) HardwareProfiles() (map[string]map[string]hardware.Profile, err
 			if _, exists := profiles[p.ID]; exists {
 				return nil, fmt.Errorf("cloud %s: duplicate hardware_profile %q", cloud.ID, p.ID)
 			}
-			policy, err := hardware.Normalize(hardware.Profile{ID: p.ID, Name: p.Name, Firmware: p.Firmware, DiskBus: p.DiskBus, DiskController: p.DiskController, NICModel: p.NICModel, Graphics: p.Graphics, VideoModel: p.VideoModel, GuestAgent: p.GuestAgent, Hugepages: p.Hugepages, ConfigDrive: hardware.ConfigDrive{Enabled: p.ConfigDrive.Enabled, Format: p.ConfigDrive.Format, DeviceType: p.ConfigDrive.DeviceType, Bus: p.ConfigDrive.Bus}})
+			policy, err := hardware.Normalize(hardware.Profile{Machine: p.Machine.policy(), ID: p.ID, Name: p.Name, Firmware: p.Firmware, DiskBus: p.DiskBus, DiskController: p.DiskController, NICModel: p.NICModel, Graphics: p.Graphics, VideoModel: p.VideoModel, GuestAgent: p.GuestAgent, Hugepages: p.Hugepages, ConfigDrive: hardware.ConfigDrive{Enabled: p.ConfigDrive.Enabled, Format: p.ConfigDrive.Format, DeviceType: p.ConfigDrive.DeviceType, Bus: p.ConfigDrive.Bus}})
 			if err != nil {
 				return nil, fmt.Errorf("cloud %s hardware_profile %s: %w; see %s", cloud.ID, p.ID, err, HardwareMigrationGuide)
 			}

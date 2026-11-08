@@ -19,6 +19,7 @@ vi.mock("../app/Auth", () => ({ useMe: () => ({ id: "operator" }) }));
 const profile: HardwareProfile = {
     id: "linux-scsi",
     name: "Linux SCSI",
+    machine: {type: "q35", acceleration: "hardware", type_explicit: true, acceleration_explicit: false},
     firmware: "efi",
     disk_bus: "scsi",
     disk_controller: "virtio-scsi",
@@ -61,6 +62,8 @@ it("shows ordinary disk and config-drive policies separately without editable li
     show(<HardwareProfiles cloud="local" />);
     expect(await screen.findByText("Linux SCSI")).toBeTruthy();
     expect(screen.getByText("Ordinary disk bus")).toBeTruthy();
+    expect(screen.getByText("q35 (explicit)")).toBeTruthy();
+    expect(screen.getByText("hardware (default for new VMs)")).toBeTruthy();
     expect(screen.getByText("nocloud · disk · virtio")).toBeTruthy();
     expect(screen.queryByRole("textbox")).toBeNull();
 });

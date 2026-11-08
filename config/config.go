@@ -423,6 +423,7 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 	owners := map[string]string{
 		"guest_agent": "hardware_profile", "graphics": "hardware_profile", "video_model": "hardware_profile",
 		"firmware": "hardware_profile", "disk_bus": "hardware_profile", "disk_controller": "hardware_profile", "nic_model": "hardware_profile", "hugepages": "hardware_profile", "config_drive": "hardware_profile",
+		"machine": "hardware_profile", "acceleration": "machine",
 		"autostart":       "instance_type",
 		"clone_mode":      "cloud.storage_class",
 		"graphics_listen": "host", "uri": "host", "image_pool": "host",
@@ -436,9 +437,28 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 		}
 		key, _ := item.Keys[0].Token.Value().(string)
 		if owner == "hardware_profile" {
-			allowed := map[string]bool{"name": true, "firmware": true, "disk_bus": true, "disk_controller": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "hugepages": true, "config_drive": true}
+			allowed := map[string]bool{"name": true, "firmware": true, "disk_bus": true, "disk_controller": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "hugepages": true, "config_drive": true, "machine": true}
 			if !allowed[key] {
 				return fmt.Errorf("hardware_profile: unsupported setting %s; see %s", key, HardwareMigrationGuide)
+			}
+		}
+		if owner == "machine" {
+			if key != "type" && key != "acceleration" {
+				return fmt.Errorf("hardware_profile.machine: unsupported setting %s", key)
+			}
+			if len(list.Filter(key).Items) > 1 {
+				return fmt.Errorf("hardware_profile.machine.%s may be declared only once", key)
+			}
+			if _, block := item.Val.(*ast.ObjectType); block {
+				return fmt.Errorf("hardware_profile.machine.%s must be a string", key)
+			}
+		}
+		if owner == "hardware_profile" && key == "machine" {
+			if len(list.Filter("machine").Items) > 1 {
+				return fmt.Errorf("hardware_profile may declare machine only once")
+			}
+			if _, block := item.Val.(*ast.ObjectType); !block || len(item.Keys) != 1 {
+				return fmt.Errorf("hardware_profile.machine must be one unnamed block")
 			}
 		}
 		if owner == "config_drive" && key != "enabled" && key != "format" && key != "device_type" && key != "bus" {
@@ -474,8 +494,11 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 				if err := validatePolicyOwners(object.List, owner+".storage_class"); err != nil {
 					return err
 				}
-			case "image", "cloud", "host", "instance_type", "hardware_profile", "config_drive":
+			case "image", "cloud", "host", "instance_type", "hardware_profile", "config_drive", "machine":
 				if err := validatePolicyOwners(object.List, key); err != nil {
+					if len(item.Keys) > 1 {
+						return fmt.Errorf("%s %v: %w", key, item.Keys[1].Token.Value(), err)
+					}
 					return err
 				}
 			}

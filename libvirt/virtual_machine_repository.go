@@ -388,6 +388,9 @@ func (repo *VirtualMachineRepository) generateNewDomainConfig(conn *libvirt.Conn
 		return nil, repositoryError(err, "cannot parse domain capabilities")
 	}
 
+	if err := validateMachineCapabilities(hardware.PlatformBinding{Machine: machine, DomainType: domainType, Emulator: settings.Emulator}, vm.Arch.String(), domCapsConfig); err != nil {
+		return nil, err
+	}
 	return newDomainConfig(vm, domCapsConfig), nil
 }
 

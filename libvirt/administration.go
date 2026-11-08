@@ -119,8 +119,17 @@ func (b *AdministrationObservations) ImageAvailability(ctx context.Context, clou
 		entry.Compatibility = "unsupported"
 		compatible := i.Compatible(caps)
 		if len(i.BackendPolicy) > 0 {
-			policy, e := hardware.DecodePolicy(i.BackendPolicy)
-			compatible = e == nil && i.Arch == caps.Arch && validateProfileCapabilities(policy, caps) == nil
+			_, e := hardware.DecodePolicy(i.BackendPolicy)
+			compatible = false
+			if e == nil {
+				if backend, ok := b.VMs.VirtualMachineRepository.(compute.BackendMachineRepository); ok {
+					binding, bindingErr := b.VMs.SnapshotCreationBinding(h.ID)
+					vm := &compute.VirtualMachine{NodeId: h.ID, Arch: i.Arch, VCpus: 1, Memory: compute.NewSize(max(i.MinimumMemoryBytes, 1<<30), compute.SizeUnitB)}
+					if bindingErr == nil {
+						compatible = backend.ResolveHardware(vm, i.BackendPolicy, binding) == nil
+					}
+				}
+			}
 		}
 
 		if compatible {

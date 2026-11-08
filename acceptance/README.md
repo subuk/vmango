@@ -137,8 +137,9 @@ use a wildcard deletion against a shared libvirt host.
 ## Explicit software-emulation checks
 
 For disposable Linux hosts without nested KVM, set `ACCEPTANCE_VIRT_TYPE=qemu`.
-This changes the expected domain XML type in the test only. It does not add a
-Vmango configuration option or force libvirt to choose another backend. The host
+This sets the test profiles' explicit `machine.acceleration` policy and checks
+the resulting domain XML type. It requires software emulation without falling
+back to another backend. The host
 must provide a QEMU binary with software emulation and libvirt must report
 `qemu` domain capabilities. If its QEMU build only supports KVM, installation of
 libvirt packages alone does not make the emulation test possible.
@@ -250,7 +251,8 @@ disk size, explicit adoption preserves resources, and unmanaged commands are
 rejected before mutation. Existing user domains remain part of fresh capacity
 accounting, including inactive domains.
 
-On a shared host whose existing requests already exceed physical capacity,
+On a shared host whose existing requests already exceed its configured CPU
+admission budget (physical CPUs after reserve multiplied by CPU overcommit),
 `ACCEPTANCE_CAPACITY_REJECTION=1` runs a separate negative admission check.
 Use it with the pinned downloadable-image settings above and the chosen URI.
 It expects a failed task without uncertain effects, no VM/root disk/image
@@ -377,3 +379,42 @@ formats (69.60 seconds), with artifacts in
 `result/vmango-acceptance-75e65605-eb3d-4463-bae2-4281032cf95a/`.
 Final read-only inventories confirmed all original VM states, allocations and
 autostart settings were unchanged and no acceptance VMs or pools remained.
+
+## Machine binding verification
+
+`ACCEPTANCE_MACHINE_TYPE` selects the disposable profiles' machine requirement;
+omission uses `auto`. For example, combine `ACCEPTANCE_MACHINE_TYPE=q35` with
+`ACCEPTANCE_VIRT_TYPE=kvm` on an eligible Linux x86_64 host, or use `virt` and
+`hvf` on macOS ARM64. A supported exact name can test version pinning.
+The suite checks concrete machine/emulator bindings and preserves the machine,
+domain type and emulator across a resource change. Real boot still requires the
+guest cloud-init marker, not just XML acceptance. Report Linux/KVM, macOS/HVF
+and explicit TCG results separately; simulated capability removal and alias
+changes are covered by focused unit tests.
+
+### Recorded machine-policy verification, 2026-11-08
+
+The isolated Ubuntu 24.04 ARM64 lifecycle passed on macOS with explicit
+`machine { type="virt" acceleration="hvf" }` (49 seconds), and again with the
+new `hardware` acceleration default (42 seconds). Both resolved `virt-9.2` and
+preserved the concrete machine/domain/emulator through the resource-change
+check. Explicit software emulation with `type="virt-9.2" acceleration="qemu"`
+also passed the full guest cloud-init/VNC/serial/storage/restart/cleanup flow
+(387 seconds). TCG timing and CPU/device support are distinct from HVF.
+
+Artifacts remain under `result/vmango-acceptance-65c6d94e-ee8a-47fd-bed9-16146212b4d5/`
+(explicit HVF), `result/vmango-acceptance-ce367274-58df-4f1c-98c4-4e2240d02bf1/`
+(hardware default), and `result/vmango-acceptance-6e4c4103-3fb2-467c-9ed9-1d7b4932a4d6/`
+(explicit TCG). Existing user machines and pools were preserved.
+
+The separate remote Linux/KVM run on `lanst.net.krglv.com` passed the full
+managed Alpine 3.24.3 x86_64 lifecycle in 202 seconds with
+`type="q35" acceleration="kvm"`. Its authoritative canonical target was
+`pc-q35-rhel8.6.0`, emulator `/usr/libexec/qemu-kvm`. Artifacts remain under
+`result/vmango-acceptance-e33f3ac5-28ed-47e0-b3aa-bbdbd664721a/`. The original
+eight domains and two pools retained their states; the test VM, pool and remote
+pool directory were removed. This run used the existing default CPU overcommit
+of four, with 24 configured vCPUs within the 48-CPU admission budget. An earlier
+negative-only run had an invalid capacity-rejection precondition and timed out;
+its owned resources were also verified cleaned. No package build/install result
+or rendered-browser verification is implied by these lifecycle tests.

@@ -140,21 +140,20 @@ func TestAdoptionInfrastructureFailuresDoNotLeakBackendDetails(t *testing.T) {
 	}
 }
 
-func TestAppliedHardwareProjectionDoesNotExposePrivateBackendBindings(t *testing.T) {
-	plan, err := hardware.Resolve(hardware.Profile{ID: "linux"}, "/private/emulator")
+func TestAppliedAndObservedPlatformProjectionIsTyped(t *testing.T) {
+	plan, err := hardware.Resolve(hardware.Profile{ID: "linux", Machine: &hardware.Machine{Type: "q35", Acceleration: "kvm", TypeExplicit: true, AccelerationExplicit: true}}, "/host/qemu")
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := json.Marshal(plan)
-	if err != nil {
-		t.Fatal(err)
+	plan.Machine, plan.DomainType = "pc-q35-9.2", "kvm"
+	raw, _ := json.Marshal(plan)
+	observed, _ := json.Marshal(hardware.PlatformBinding{Machine: "pc-q35-9.2", DomainType: "kvm", Emulator: "/host/qemu"})
+	vm := vmDTO(&compute.VirtualMachine{AppliedPolicy: raw, ObservedBackend: observed, Memory: compute.NewSize(1, compute.SizeUnitG)})
+	if vm.LibvirtHardware == nil || vm.LibvirtHardware.Profile.Machine.Type != "q35" || vm.LibvirtHardware.Applied.Machine != "pc-q35-9.2" || vm.LibvirtHardware.Applied.Emulator != "/host/qemu" || vm.LibvirtObserved == nil || *vm.LibvirtObserved != vm.LibvirtHardware.Applied {
+		t.Fatalf("requested/applied/observed conflated: %+v", vm)
 	}
-	vm := vmDTO(&compute.VirtualMachine{AppliedPolicy: raw, Memory: compute.NewSize(1, compute.SizeUnitG)})
-	if vm.LibvirtHardware == nil || vm.LibvirtHardware.Profile.ID != "linux" {
-		t.Fatal("missing applied profile")
-	}
-	data, _ := json.Marshal(vm)
-	if strings.Contains(string(data), "/private/emulator") {
-		t.Fatal("private plan binding leaked")
+	unmanaged := vmDTO(&compute.VirtualMachine{ObservedBackend: observed, Memory: compute.NewSize(1, compute.SizeUnitG)})
+	if unmanaged.LibvirtObserved == nil || unmanaged.LibvirtHardware != nil {
+		t.Fatal("unmanaged observation requires policy")
 	}
 }

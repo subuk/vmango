@@ -21,6 +21,18 @@ export function HardwareProfileFields({
         <Fields
             entries={[
                 ["Profile ID", profile.id],
+                [
+                    "Requested machine",
+                    profile.machine
+                        ? `${profile.machine.type}${profile.machine.type_explicit ? " (explicit)" : " (default for new VMs)"}`
+                        : "Preserved legacy policy",
+                ],
+                [
+                    "Requested acceleration",
+                    profile.machine
+                        ? `${profile.machine.acceleration}${profile.machine.acceleration_explicit ? " (explicit)" : " (default for new VMs)"}`
+                        : "Preserved legacy policy",
+                ],
                 ["Firmware", profile.firmware],
                 ["Ordinary disk bus", profile.disk_bus],
                 [
@@ -161,5 +173,21 @@ export function AdoptMachine({ vm, onClose }: { vm: VM; onClose: () => void }) {
                 </Stack>
             )}
         </OperationDialog>
+    );
+}
+
+export function PlatformBindingFields({
+    binding,
+}: {
+    binding: components["schemas"]["PlatformBinding"];
+}) {
+    return (
+        <Fields
+            entries={[
+                ["Machine type", binding.machine || "Unavailable"],
+                ["Acceleration backend", binding.domain_type || "Unavailable"],
+                ["Emulator on host", binding.emulator || "Unavailable"],
+            ]}
+        />
     );
 }

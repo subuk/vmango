@@ -71,11 +71,7 @@ func (s *CloudService) StorageAvailability(c Cloud) ([]StorageAvailability, erro
 func (s *CloudService) Offers(c Cloud) ([]CloudOffer, error) {
 	result := []CloudOffer{}
 	for _, h := range c.Hosts {
-		node, err := s.Nodes.Get(h.Node, NodeGetOptions{NoPins: true})
-		if err != nil {
-			return nil, err
-		}
-		caps, err := s.VMs.Capabilities(h.Node, node.CpuArch)
+		_, err := s.Nodes.Get(h.Node, NodeGetOptions{NoPins: true})
 		if err != nil {
 			return nil, err
 		}
@@ -91,6 +87,10 @@ func (s *CloudService) Offers(c Cloud) ([]CloudOffer, error) {
 			image, err := s.Manager.images.ForCloud(c.ID).Get(id)
 			if err != nil {
 				return nil, err
+			}
+			caps, err := s.VMs.Capabilities(h.Node, image.Arch)
+			if err != nil {
+				continue
 			}
 			if image.Arch != caps.Arch || (len(image.BackendPolicy) == 0 && !image.Compatible(caps)) {
 				continue
@@ -123,7 +123,7 @@ func (s *CloudService) Offers(c Cloud) ([]CloudOffer, error) {
 				}
 			}
 			for _, t := range c.InstanceTypes {
-				if t.MemoryBytes < image.MinimumMemoryBytes || t.BootDiskBytes < minimumDisk || (caps.MaxVCPUs > 0 && uint(t.VCPUs) > caps.MaxVCPUs) {
+				if t.MemoryBytes < image.MinimumMemoryBytes || t.BootDiskBytes < minimumDisk || (len(image.BackendPolicy) == 0 && caps.MaxVCPUs > 0 && uint(t.VCPUs) > caps.MaxVCPUs) {
 					continue
 				}
 				offer := CloudOffer{Zone: h.Zone, Image: id, InstanceType: t.ID, Networks: []string{}, StorageClasses: []string{}}
@@ -408,7 +408,9 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 			if err != nil {
 				return InfrastructureCommand{}, err
 			}
-			if i.Node.CpuArch != image.Arch {
+			// Backend policy validates architecture jointly with acceleration. A
+			// host CPU architecture alone cannot rule out explicit emulation.
+			if len(image.BackendPolicy) == 0 && i.Node.CpuArch != image.Arch {
 				return InfrastructureCommand{}, fmt.Errorf("image architecture is incompatible")
 			}
 

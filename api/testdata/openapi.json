@@ -1441,6 +1441,9 @@
       "ApiLibvirtMachineHardware": {
         "additionalProperties": false,
         "properties": {
+          "applied": {
+            "$ref": "#/components/schemas/PlatformBinding"
+          },
           "devices": {
             "items": {
               "$ref": "#/components/schemas/Device"
@@ -1456,6 +1459,7 @@
           }
         },
         "required": [
+          "applied",
           "profile",
           "version",
           "devices"
@@ -2118,6 +2122,9 @@
           "libvirt_hardware": {
             "$ref": "#/components/schemas/ApiLibvirtMachineHardware"
           },
+          "libvirt_observed": {
+            "$ref": "#/components/schemas/PlatformBinding"
+          },
           "managed": {
             "type": "boolean"
           },
@@ -2275,6 +2282,9 @@
           },
           "libvirt_hardware": {
             "$ref": "#/components/schemas/ApiLibvirtMachineHardware"
+          },
+          "libvirt_observed": {
+            "$ref": "#/components/schemas/PlatformBinding"
           },
           "managed": {
             "type": "boolean"
@@ -2994,6 +3004,30 @@
         ],
         "type": "object"
       },
+      "Machine": {
+        "additionalProperties": false,
+        "properties": {
+          "acceleration": {
+            "type": "string"
+          },
+          "acceleration_explicit": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "type_explicit": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "acceleration",
+          "type_explicit",
+          "acceleration_explicit"
+        ],
+        "type": "object"
+      },
       "Namespace": {
         "additionalProperties": false,
         "properties": {
@@ -3066,6 +3100,26 @@
         },
         "type": "object"
       },
+      "PlatformBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "domain_type": {
+            "type": "string"
+          },
+          "emulator": {
+            "type": "string"
+          },
+          "machine": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "machine",
+          "domain_type",
+          "emulator"
+        ],
+        "type": "object"
+      },
       "Profile": {
         "additionalProperties": false,
         "properties": {
@@ -3092,6 +3146,9 @@
           },
           "id": {
             "type": "string"
+          },
+          "machine": {
+            "$ref": "#/components/schemas/Machine"
           },
           "name": {
             "type": "string"

@@ -275,3 +275,46 @@ func TestSyntheticNetworksRejectConflictingNICPolicy(t *testing.T) {
 		}
 	}
 }
+
+func TestPlatformBindingSurvivesMetadataAndUnrelatedResourceChange(t *testing.T) {
+	plan, err := hardware.Resolve(hardware.Profile{ID: "stable", Machine: &hardware.Machine{Type: "q35", TypeExplicit: true, Acceleration: "hardware"}}, "/saved/qemu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.Machine, plan.DomainType = "pc-q35-8.2", "kvm"
+	raw, _ := json.Marshal(plan)
+	vm := &compute.VirtualMachine{Id: "vm", Arch: compute.ArchAmd64, VCpus: 2, Memory: compute.NewSize(2, compute.SizeUnitG), AppliedPolicy: raw}
+	config := newDomainConfig(vm, &xmlmodel.DomainCaps{Arch: "x86_64", Machine: plan.Machine, Domain: plan.DomainType, Path: plan.Emulator})
+	if err := writeHardwareMetadata(config, raw); err != nil {
+		t.Fatal(err)
+	}
+	original := domainPlatform(config)
+	applyDomainPolicy(config, vm, &xmlmodel.Caps{}, true)
+	stored, err := readHardwareMetadata(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := hardware.DecodePlan(stored)
+	if err != nil || restored.Platform() != original || domainPlatform(config) != original || restored.Profile.Machine.Type != "q35" {
+		t.Fatal("platform or requested alias lost", err)
+	}
+	for _, observed := range []hardware.PlatformBinding{{Machine: "pc-q35-9.2", DomainType: "kvm", Emulator: plan.Emulator}, {Machine: plan.Machine, DomainType: "qemu", Emulator: plan.Emulator}, {Machine: plan.Machine, DomainType: "kvm", Emulator: "/replacement"}} {
+		if err := validateMachineCapabilities(restored.Platform(), "x86_64", &xmlmodel.DomainCaps{Arch: "x86_64", Machine: observed.Machine, Domain: observed.DomainType, Path: observed.Emulator}); err == nil {
+			t.Fatal("live validation changed accepted platform")
+		}
+	}
+}
+
+func TestOrdinaryMutationRejectsPlatformDriftWithoutConversion(t *testing.T) {
+	plan, _ := hardware.Resolve(hardware.Profile{ID: "stable"}, "/saved/qemu")
+	plan.Machine, plan.DomainType = "pc-q35-8.2", "kvm"
+	raw, _ := json.Marshal(plan)
+	observed, _ := json.Marshal(hardware.PlatformBinding{Machine: "pc-q35-9.2", DomainType: "kvm", Emulator: "/saved/qemu"})
+	vm := &compute.VirtualMachine{Metadata: &compute.MachineMetadata{Cloud: "c"}, AppliedPolicy: raw, ObservedBackend: observed}
+	if err := (&VirtualMachineRepository{}).ValidateAppliedPolicy(vm); err == nil {
+		t.Fatal("external platform drift was silently accepted")
+	}
+	if string(vm.AppliedPolicy) != string(raw) || string(vm.ObservedBackend) != string(observed) {
+		t.Fatal("validation rewrote platform")
+	}
+}

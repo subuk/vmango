@@ -33,27 +33,20 @@ func (repo *VirtualMachineRepository) ResolveHardware(vm *compute.VirtualMachine
 	if e != nil {
 		return e
 	}
-	capsRaw, e := conn.GetDomainCapabilities(plan.Emulator, vm.Arch.String(), "", "", 0)
+	hostRaw, e := conn.GetCapabilities()
+	var host xmlmodel.Caps
 	if e == nil {
-		var caps xmlmodel.DomainCaps
-		e = caps.Unmarshal(capsRaw)
-		if e == nil {
-			plan.Emulator = caps.Path
-			plan.Machine = caps.Machine
-			plan.DomainType = caps.Domain
-		}
+		e = host.Unmarshal(hostRaw)
 	}
 	plan.CPUThreads = 1
 	if e == nil {
-		hostRaw, hostErr := conn.GetCapabilities()
-		if hostErr != nil {
-			e = hostErr
-		} else {
-			var host xmlmodel.Caps
-			e = host.Unmarshal(hostRaw)
-			if e == nil && host.Host.CPU != nil && host.Host.CPU.Topology != nil && host.Host.CPU.Topology.Threads > 0 && vm.VCpus%host.Host.CPU.Topology.Threads == 0 {
-				plan.CPUThreads = host.Host.CPU.Topology.Threads
-			}
+		var caps *xmlmodel.DomainCaps
+		caps, e = resolveMachineCapabilities(p, vm.Arch.String(), plan.Emulator, &host, queryDomainCapabilities(conn), func(c *xmlmodel.DomainCaps) error { return validateCreationCapabilities(vm, p, c) })
+		if e == nil {
+			plan.Emulator, plan.Machine, plan.DomainType = caps.Path, caps.Machine, caps.Domain
+		}
+		if host.Host.CPU != nil && host.Host.CPU.Topology != nil && host.Host.CPU.Topology.Threads > 0 && vm.VCpus%host.Host.CPU.Topology.Threads == 0 {
+			plan.CPUThreads = host.Host.CPU.Topology.Threads
 		}
 	}
 	repo.pool.Release(vm.NodeId)
@@ -78,7 +71,7 @@ func (repo *VirtualMachineRepository) ResolveHardware(vm *compute.VirtualMachine
 	if err = repo.ApplyHardware(vm, raw); err != nil {
 		return err
 	}
-	return repo.validateHardwareCapabilities(vm, plan, false)
+	return repo.validateHardwareCapabilities(vm, plan, false, true)
 }
 func (repo *VirtualMachineRepository) ApplyHardware(vm *compute.VirtualMachine, raw json.RawMessage) error {
 	plan, err := hardware.DecodePlan(raw)
@@ -125,7 +118,7 @@ func (repo *VirtualMachineRepository) ApplyHardware(vm *compute.VirtualMachine, 
 	vm.ConfigDriveAttachment = &compute.VirtualMachineAttachedVolume{Alias: "configdrive", GeneratedArtifact: true, DeviceType: compute.NewDeviceType(p.ConfigDrive.DeviceType), DeviceBus: compute.NewDeviceBus(p.ConfigDrive.Bus)}
 	return nil
 }
-func (repo *VirtualMachineRepository) validateHardwareCapabilities(vm *compute.VirtualMachine, plan hardware.Plan, live bool) error {
+func (repo *VirtualMachineRepository) validateHardwareCapabilities(vm *compute.VirtualMachine, plan hardware.Plan, live, creation bool) error {
 	conn, err := repo.pool.Acquire(vm.NodeId)
 	if err != nil {
 		return err
@@ -138,6 +131,14 @@ func (repo *VirtualMachineRepository) validateHardwareCapabilities(vm *compute.V
 	capsXML := &xmlmodel.DomainCaps{}
 	if err = capsXML.Unmarshal(raw); err != nil {
 		return err
+	}
+	if err = validateMachineCapabilities(plan.Platform(), vm.Arch.String(), capsXML); err != nil {
+		return err
+	}
+	if creation && plan.Profile.Machine != nil {
+		if err = validateCreationCapabilities(vm, plan.Profile, capsXML); err != nil {
+			return err
+		}
 	}
 	caps := imageCapabilities(capsXML)
 	p := plan.Profile
@@ -222,8 +223,18 @@ func (repo *VirtualMachineRepository) ValidateAppliedPolicy(vm *compute.VirtualM
 	if vm.Metadata == nil {
 		return &compute.AdoptionRequiredError{Message: "VM is read-only; explicitly adopt it with a compatible hardware profile."}
 	}
-	if _, err := hardware.DecodePlan(vm.AppliedPolicy); err != nil {
+	plan, err := hardware.DecodePlan(vm.AppliedPolicy)
+	if err != nil {
 		return &compute.AdoptionRequiredError{Message: "VM requires adoption or re-adoption with an explicit compatible hardware profile; its applied policy is missing or unsupported."}
+	}
+	if len(vm.ObservedBackend) > 0 {
+		var observed hardware.PlatformBinding
+		if err := json.Unmarshal(vm.ObservedBackend, &observed); err != nil {
+			return err
+		}
+		if err := hardware.ValidateSavedPlatform(plan.Platform(), observed); err != nil {
+			return &compute.AdoptionRequiredError{Message: "VM platform differs from its applied policy; inspect and explicitly re-adopt it: " + err.Error()}
+		}
 	}
 	return nil
 }
@@ -308,7 +319,7 @@ func (repo *VirtualMachineRepository) ValidateResourceChange(current, requested 
 	requested.AppliedPolicy = append(json.RawMessage(nil), current.AppliedPolicy...)
 	requested.Hugepages = plan.Profile.Hugepages
 	requested.Autostart = current.Autostart
-	return repo.validateHardwareCapabilities(requested, plan, true)
+	return repo.validateHardwareCapabilities(requested, plan, true, false)
 }
 func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine, cloud, profile string) (json.RawMessage, error) {
 	p, ok := repo.hardwareProfiles[cloud][profile]
@@ -339,6 +350,10 @@ func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine
 	if config.CPU != nil && config.CPU.Topology != nil {
 		plan.CPUThreads = config.CPU.Topology.Threads
 	}
+	if err = repo.validateAdoptionMachine(vm, plan); err != nil {
+		return nil, err
+	}
+
 	if plan.Profile.Hugepages {
 		plan.HugepageSizeKiB, err = adoptedHugepageSize(config)
 		if err != nil {

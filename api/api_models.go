@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"sort"
 	"subuk/vmango/compute"
 	"subuk/vmango/libvirt/hardware"
@@ -40,11 +41,13 @@ type apiConfiguredKey struct {
 }
 
 type apiLibvirtMachineHardware struct {
-	Profile hardware.Profile  `json:"profile"`
-	Version int               `json:"version"`
-	Devices []hardware.Device `json:"devices" nullable:"false"`
+	Applied hardware.PlatformBinding `json:"applied"`
+	Profile hardware.Profile         `json:"profile"`
+	Version int                      `json:"version"`
+	Devices []hardware.Device        `json:"devices" nullable:"false"`
 }
 type apiVM struct {
+	LibvirtObserved    *hardware.PlatformBinding  `json:"libvirt_observed,omitempty"`
 	LibvirtHardware    *apiLibvirtMachineHardware `json:"libvirt_hardware,omitempty"`
 	AdoptionRequired   bool                       `json:"adoption_required,omitempty"`
 	NamespaceID        compute.NamespaceID        `json:"namespace_id,omitempty"`
@@ -105,7 +108,13 @@ type apiVolumeDetail struct {
 func vmDTO(vm *compute.VirtualMachine) apiVM {
 	v := apiVM{Node: vm.NodeId, ID: vm.Id, Name: vm.Name, Arch: vm.Arch.String(), State: vm.State.String(), VCPUs: vm.VCpus, MemoryBytes: vm.Memory.Bytes(), Firmware: vm.Firmware, DiskController: vm.DiskController, GuestAgent: vm.GuestAgent, Autostart: vm.Autostart, Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), GraphicsListen: vm.Graphic.Listen, VideoModel: vm.VideoModel.String(), Disks: []apiDisk{}, Interfaces: []apiReadInterface{}, IPAddresses: vm.IpAddressList()}
 	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
-		v.LibvirtHardware = &apiLibvirtMachineHardware{Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices}
+		v.LibvirtHardware = &apiLibvirtMachineHardware{Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices, Applied: plan.Platform()}
+	}
+	if len(vm.ObservedBackend) > 0 {
+		var observed hardware.PlatformBinding
+		if json.Unmarshal(vm.ObservedBackend, &observed) == nil {
+			v.LibvirtObserved = &observed
+		}
 	}
 	if vm.Cpupin != nil {
 		v.CPUPinning = &apiCPUPinning{Emulator: append([]uint{}, vm.Cpupin.Emulator...), VCPUs: []apiVCPUPin{}}

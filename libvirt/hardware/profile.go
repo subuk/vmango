@@ -23,6 +23,7 @@ type ConfigDrive struct {
 func (c ConfigDrive) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
 
 type Profile struct {
+	Machine        *Machine    `json:"machine,omitempty"`
 	ID             string      `json:"id"`
 	Name           string      `json:"name"`
 	Firmware       string      `json:"firmware"`
@@ -89,6 +90,13 @@ func Normalize(p Profile) (Profile, error) {
 	}
 	if !identifier.MatchString(p.ID) {
 		return fail("identifier")
+	}
+	if p.Machine != nil {
+		machine, err := NormalizeMachine(*p.Machine)
+		if err != nil {
+			return p, fmt.Errorf("hardware profile %q: %w", p.ID, err)
+		}
+		p.Machine = &machine
 	}
 	if p.Name == "" {
 		p.Name = p.ID
