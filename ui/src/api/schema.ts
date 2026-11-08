@@ -1337,7 +1337,11 @@ export interface components {
         };
         ApiCPU: {
             /** Format: int64 */
+            cluster: number;
+            /** Format: int64 */
             core: number;
+            /** Format: int64 */
+            die: number;
             /**
              * Format: int64
              * @description Stable host CPU ID, independent of frontend sorting.
@@ -1345,9 +1349,11 @@ export interface components {
             id: number;
             /** Format: int64 */
             numa: number;
+            online: boolean;
             pins: components["schemas"]["ApiCPUPin"][];
             /** Format: int64 */
             socket: number;
+            topology_known: boolean;
         };
         ApiCPUPin: {
             description: string;
@@ -1488,9 +1494,11 @@ export interface components {
         };
         ApiLibvirtMachineHardware: {
             applied: components["schemas"]["PlatformBinding"];
+            cpu?: components["schemas"]["CPUObservation"];
             devices: components["schemas"]["Device"][];
             guest_system?: components["schemas"]["GuestSystemObservation"];
             profile: components["schemas"]["Profile"];
+            simple_cpu_topology: boolean;
             /** Format: int64 */
             version: number;
         };
@@ -1568,6 +1576,7 @@ export interface components {
             arch: string;
             cpu_info: string;
             cpu_model: string;
+            cpu_topology_diagnostic?: string;
             cpu_vendor: string;
             cpus: components["schemas"]["ApiCPU"][];
             hostname: string;
@@ -1576,6 +1585,8 @@ export interface components {
             /** Format: int64 */
             memory_bytes: number;
             numa: components["schemas"]["ApiNUMA"][];
+            /** Format: int64 */
+            physical_cores?: number;
             /** Format: int64 */
             threads_per_core: number;
         };
@@ -1667,8 +1678,6 @@ export interface components {
             /** @description Null means unavailable; an empty array means a known empty key configuration. */
             configured_keys: components["schemas"]["ApiConfiguredKey"][] | null;
             cpu_pinning: components["schemas"]["ApiCPUPinning"];
-            /** Format: int64 */
-            cpu_request: number;
             disk_controller: string;
             disks: components["schemas"]["ApiDisk"][];
             firmware: string;
@@ -1708,8 +1717,6 @@ export interface components {
             /** @description Null means unavailable; an empty array means a known empty key configuration. */
             configured_keys: components["schemas"]["ApiConfiguredKey"][] | null;
             cpu_pinning: components["schemas"]["ApiCPUPinning"];
-            /** Format: int64 */
-            cpu_request: number;
             disk_controller: string;
             disks: components["schemas"]["ApiDisk"][];
             firmware: string;
@@ -1812,6 +1819,45 @@ export interface components {
             product?: string;
             version?: string;
         };
+        CPU: {
+            features?: components["schemas"]["CPUFeature"][] | null;
+            mode: string;
+            mode_explicit: boolean;
+            model?: string;
+            vendor?: string;
+        };
+        CPUFeature: {
+            name: string;
+            policy: string;
+        };
+        CPUObservation: {
+            cpuset?: string;
+            features?: components["schemas"]["CPUFeature"][] | null;
+            guest_numa: boolean;
+            hyperv?: components["schemas"]["PresentationFeature"][] | null;
+            hyperv_mode?: string;
+            kvm?: components["schemas"]["PresentationFeature"][] | null;
+            memory_mode?: string;
+            memory_nodeset?: string;
+            memory_placement?: string;
+            mode?: string;
+            model?: string;
+            placement?: string;
+            topology?: components["schemas"]["CPUTopology"];
+            vendor?: string;
+        };
+        CPUTopology: {
+            /** Format: int64 */
+            clusters: number;
+            /** Format: int64 */
+            cores: number;
+            /** Format: int64 */
+            dies: number;
+            /** Format: int64 */
+            sockets: number;
+            /** Format: int64 */
+            threads: number;
+        };
         CatalogEntry: {
             id: string;
             name: string;
@@ -1913,6 +1959,20 @@ export interface components {
             networks: components["schemas"]["CatalogEntry"][];
             storage_classes: components["schemas"]["StorageClass"][];
         };
+        HyperV: {
+            frequencies?: boolean;
+            ipi?: boolean;
+            mode: string;
+            relaxed?: boolean;
+            reset?: boolean;
+            runtime?: boolean;
+            spinlocks?: components["schemas"]["Spinlocks"];
+            stimer?: components["schemas"]["STimer"];
+            synic?: boolean;
+            tlbflush?: boolean;
+            vapic?: boolean;
+            vpindex?: boolean;
+        };
         Identity: {
             id: string;
             name?: string;
@@ -1925,8 +1985,6 @@ export interface components {
         InstanceType: {
             /** Format: int64 */
             boot_disk_bytes: number;
-            /** Format: int64 */
-            cpu_request: number;
             id: string;
             /** Format: int64 */
             memory_bytes: number;
@@ -1935,6 +1993,11 @@ export interface components {
             name: string;
             /** Format: int64 */
             vcpus: number;
+        };
+        KVM: {
+            hidden?: boolean;
+            poll_control?: boolean;
+            pv_ipi?: boolean;
         };
         Machine: {
             acceleration: string;
@@ -1947,6 +2010,11 @@ export interface components {
             description: string;
             id: string;
             name: string;
+        };
+        NativePlacement: {
+            memory_mode?: string;
+            mode: string;
+            mode_explicit: boolean;
         };
         ObservedCatchUp: {
             /** Format: int64 */
@@ -1966,7 +2034,9 @@ export interface components {
             timezone?: string;
         };
         ObservedHardware: {
+            cpu: components["schemas"]["CPUObservation"];
             domain_type: string;
+            effective_cpu?: components["schemas"]["CPUObservation"];
             emulator: string;
             guest_system: components["schemas"]["GuestSystemObservation"];
             machine: string;
@@ -2000,19 +2070,28 @@ export interface components {
             emulator: string;
             machine: string;
         };
+        PresentationFeature: {
+            name: string;
+            state: string;
+            value?: string;
+        };
         Profile: {
             clock?: components["schemas"]["Clock"];
             config_drive: components["schemas"]["ConfigDrive"];
+            cpu?: components["schemas"]["CPU"];
             disk_bus: string;
             disk_controller?: string;
             firmware: string;
             graphics: string;
             guest_agent?: boolean;
             hugepages: boolean;
+            hyperv?: components["schemas"]["HyperV"];
             id: string;
+            kvm?: components["schemas"]["KVM"];
             machine?: components["schemas"]["Machine"];
             name: string;
             nic_model: string;
+            placement?: components["schemas"]["NativePlacement"];
             smbios?: components["schemas"]["SMBIOS"];
             timers?: components["schemas"]["Timer"][] | null;
             video_model: string;
@@ -2037,6 +2116,15 @@ export interface components {
             baseboard?: components["schemas"]["Baseboard"];
             bios?: components["schemas"]["BIOS"];
             system?: components["schemas"]["SystemInfo"];
+        };
+        STimer: {
+            direct?: boolean;
+            enabled?: boolean;
+        };
+        Spinlocks: {
+            enabled?: boolean;
+            /** Format: int64 */
+            retries?: number;
         };
         Stage: {
             error?: components["schemas"]["Diagnostic"];

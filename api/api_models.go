@@ -41,11 +41,13 @@ type apiConfiguredKey struct {
 }
 
 type apiLibvirtMachineHardware struct {
-	GuestSystem *hardware.GuestSystemObservation `json:"guest_system,omitempty"`
-	Applied     hardware.PlatformBinding         `json:"applied"`
-	Profile     hardware.Profile                 `json:"profile"`
-	Version     int                              `json:"version"`
-	Devices     []hardware.Device                `json:"devices" nullable:"false"`
+	CPU               *hardware.CPUObservation         `json:"cpu,omitempty"`
+	SimpleCPUTopology bool                             `json:"simple_cpu_topology"`
+	GuestSystem       *hardware.GuestSystemObservation `json:"guest_system,omitempty"`
+	Applied           hardware.PlatformBinding         `json:"applied"`
+	Profile           hardware.Profile                 `json:"profile"`
+	Version           int                              `json:"version"`
+	Devices           []hardware.Device                `json:"devices" nullable:"false"`
 }
 type apiVM struct {
 	LibvirtObserved    *hardware.ObservedHardware `json:"libvirt_observed,omitempty"`
@@ -58,7 +60,6 @@ type apiVM struct {
 	InstanceType       string                     `json:"instance_type"`
 	Image              string                     `json:"image"`
 	Managed            bool                       `json:"managed"`
-	CPURequest         int                        `json:"cpu_request"`
 	MemoryRequestBytes uint64                     `json:"memory_request_bytes"`
 
 	Node           string              `json:"node"`
@@ -109,7 +110,7 @@ type apiVolumeDetail struct {
 func vmDTO(vm *compute.VirtualMachine) apiVM {
 	v := apiVM{Node: vm.NodeId, ID: vm.Id, Name: vm.Name, Arch: vm.Arch.String(), State: vm.State.String(), VCPUs: vm.VCpus, MemoryBytes: vm.Memory.Bytes(), Firmware: vm.Firmware, DiskController: vm.DiskController, GuestAgent: vm.GuestAgent, Autostart: vm.Autostart, Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), GraphicsListen: vm.Graphic.Listen, VideoModel: vm.VideoModel.String(), Disks: []apiDisk{}, Interfaces: []apiReadInterface{}, IPAddresses: vm.IpAddressList()}
 	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
-		v.LibvirtHardware = &apiLibvirtMachineHardware{Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices, Applied: plan.Platform(), GuestSystem: plan.GuestSystem}
+		v.LibvirtHardware = &apiLibvirtMachineHardware{Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices, Applied: plan.Platform(), GuestSystem: plan.GuestSystem, CPU: plan.CPU, SimpleCPUTopology: plan.SimpleCPUTopology}
 	}
 	if len(vm.ObservedBackend) > 0 {
 		var observed hardware.ObservedHardware
@@ -209,10 +210,8 @@ func (e *Environ) machineDTO(vm *compute.VirtualMachine) apiVM {
 		d.Zone = m.Zone
 		d.InstanceType = m.InstanceType
 		d.Image = m.Image
-		d.CPURequest = m.CPURequest
 		d.MemoryRequestBytes = m.MemoryRequestBytes
 	} else {
-		d.CPURequest = vm.VCpus
 		d.MemoryRequestBytes = vm.Memory.Bytes()
 	}
 	// Resource routes follow the host's current cloud and zone; allocation

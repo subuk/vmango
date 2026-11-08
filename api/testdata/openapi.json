@@ -839,7 +839,15 @@
       "ApiCPU": {
         "additionalProperties": false,
         "properties": {
+          "cluster": {
+            "format": "int64",
+            "type": "integer"
+          },
           "core": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "die": {
             "format": "int64",
             "type": "integer"
           },
@@ -852,6 +860,9 @@
             "format": "int64",
             "type": "integer"
           },
+          "online": {
+            "type": "boolean"
+          },
           "pins": {
             "items": {
               "$ref": "#/components/schemas/ApiCPUPin"
@@ -861,9 +872,16 @@
           "socket": {
             "format": "int64",
             "type": "integer"
+          },
+          "topology_known": {
+            "type": "boolean"
           }
         },
         "required": [
+          "die",
+          "cluster",
+          "online",
+          "topology_known",
           "id",
           "socket",
           "core",
@@ -1444,6 +1462,9 @@
           "applied": {
             "$ref": "#/components/schemas/PlatformBinding"
           },
+          "cpu": {
+            "$ref": "#/components/schemas/CPUObservation"
+          },
           "devices": {
             "items": {
               "$ref": "#/components/schemas/Device"
@@ -1456,12 +1477,16 @@
           "profile": {
             "$ref": "#/components/schemas/Profile"
           },
+          "simple_cpu_topology": {
+            "type": "boolean"
+          },
           "version": {
             "format": "int64",
             "type": "integer"
           }
         },
         "required": [
+          "simple_cpu_topology",
           "applied",
           "profile",
           "version",
@@ -1770,6 +1795,9 @@
           "cpu_model": {
             "type": "string"
           },
+          "cpu_topology_diagnostic": {
+            "type": "string"
+          },
           "cpu_vendor": {
             "type": "string"
           },
@@ -1798,6 +1826,10 @@
               "$ref": "#/components/schemas/ApiNUMA"
             },
             "type": "array"
+          },
+          "physical_cores": {
+            "format": "int64",
+            "type": "integer"
           },
           "threads_per_core": {
             "format": "int64",
@@ -2073,10 +2105,6 @@
           "cpu_pinning": {
             "$ref": "#/components/schemas/ApiCPUPinning"
           },
-          "cpu_request": {
-            "format": "int64",
-            "type": "integer"
-          },
           "disk_controller": {
             "type": "string"
           },
@@ -2175,7 +2203,6 @@
           "instance_type",
           "image",
           "managed",
-          "cpu_request",
           "memory_request_bytes",
           "node",
           "id",
@@ -2233,10 +2260,6 @@
           },
           "cpu_pinning": {
             "$ref": "#/components/schemas/ApiCPUPinning"
-          },
-          "cpu_request": {
-            "format": "int64",
-            "type": "integer"
           },
           "disk_controller": {
             "type": "string"
@@ -2337,7 +2360,6 @@
           "instance_type",
           "image",
           "managed",
-          "cpu_request",
           "memory_request_bytes",
           "node",
           "id",
@@ -2619,6 +2641,155 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "CPU": {
+        "additionalProperties": false,
+        "properties": {
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/CPUFeature"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "mode": {
+            "type": "string"
+          },
+          "mode_explicit": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          },
+          "vendor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "mode_explicit"
+        ],
+        "type": "object"
+      },
+      "CPUFeature": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "policy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "policy"
+        ],
+        "type": "object"
+      },
+      "CPUObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "cpuset": {
+            "type": "string"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/CPUFeature"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "guest_numa": {
+            "type": "boolean"
+          },
+          "hyperv": {
+            "items": {
+              "$ref": "#/components/schemas/PresentationFeature"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "hyperv_mode": {
+            "type": "string"
+          },
+          "kvm": {
+            "items": {
+              "$ref": "#/components/schemas/PresentationFeature"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "memory_mode": {
+            "type": "string"
+          },
+          "memory_nodeset": {
+            "type": "string"
+          },
+          "memory_placement": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "topology": {
+            "$ref": "#/components/schemas/CPUTopology"
+          },
+          "vendor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "guest_numa"
+        ],
+        "type": "object"
+      },
+      "CPUTopology": {
+        "additionalProperties": false,
+        "properties": {
+          "clusters": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "cores": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "dies": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sockets": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "threads": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sockets",
+          "dies",
+          "clusters",
+          "cores",
+          "threads"
+        ],
         "type": "object"
       },
       "CatalogEntry": {
@@ -3000,6 +3171,51 @@
         ],
         "type": "object"
       },
+      "HyperV": {
+        "additionalProperties": false,
+        "properties": {
+          "frequencies": {
+            "type": "boolean"
+          },
+          "ipi": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "relaxed": {
+            "type": "boolean"
+          },
+          "reset": {
+            "type": "boolean"
+          },
+          "runtime": {
+            "type": "boolean"
+          },
+          "spinlocks": {
+            "$ref": "#/components/schemas/Spinlocks"
+          },
+          "stimer": {
+            "$ref": "#/components/schemas/STimer"
+          },
+          "synic": {
+            "type": "boolean"
+          },
+          "tlbflush": {
+            "type": "boolean"
+          },
+          "vapic": {
+            "type": "boolean"
+          },
+          "vpindex": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
       "Identity": {
         "additionalProperties": false,
         "properties": {
@@ -3041,10 +3257,6 @@
             "minimum": 0,
             "type": "integer"
           },
-          "cpu_request": {
-            "format": "int64",
-            "type": "integer"
-          },
           "id": {
             "type": "string"
           },
@@ -3070,11 +3282,25 @@
           "id",
           "name",
           "vcpus",
-          "cpu_request",
           "memory_bytes",
           "memory_request_bytes",
           "boot_disk_bytes"
         ],
+        "type": "object"
+      },
+      "KVM": {
+        "additionalProperties": false,
+        "properties": {
+          "hidden": {
+            "type": "boolean"
+          },
+          "poll_control": {
+            "type": "boolean"
+          },
+          "pv_ipi": {
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "Machine": {
@@ -3126,6 +3352,25 @@
           "name",
           "description",
           "clouds"
+        ],
+        "type": "object"
+      },
+      "NativePlacement": {
+        "additionalProperties": false,
+        "properties": {
+          "memory_mode": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "mode_explicit": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode",
+          "mode_explicit"
         ],
         "type": "object"
       },
@@ -3190,8 +3435,14 @@
       "ObservedHardware": {
         "additionalProperties": false,
         "properties": {
+          "cpu": {
+            "$ref": "#/components/schemas/CPUObservation"
+          },
           "domain_type": {
             "type": "string"
+          },
+          "effective_cpu": {
+            "$ref": "#/components/schemas/CPUObservation"
           },
           "emulator": {
             "type": "string"
@@ -3204,6 +3455,7 @@
           }
         },
         "required": [
+          "cpu",
           "guest_system",
           "machine",
           "domain_type",
@@ -3307,6 +3559,25 @@
         ],
         "type": "object"
       },
+      "PresentationFeature": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "state"
+        ],
+        "type": "object"
+      },
       "Profile": {
         "additionalProperties": false,
         "properties": {
@@ -3315,6 +3586,9 @@
           },
           "config_drive": {
             "$ref": "#/components/schemas/ConfigDrive"
+          },
+          "cpu": {
+            "$ref": "#/components/schemas/CPU"
           },
           "disk_bus": {
             "type": "string"
@@ -3334,8 +3608,14 @@
           "hugepages": {
             "type": "boolean"
           },
+          "hyperv": {
+            "$ref": "#/components/schemas/HyperV"
+          },
           "id": {
             "type": "string"
+          },
+          "kvm": {
+            "$ref": "#/components/schemas/KVM"
           },
           "machine": {
             "$ref": "#/components/schemas/Machine"
@@ -3345,6 +3625,9 @@
           },
           "nic_model": {
             "type": "string"
+          },
+          "placement": {
+            "$ref": "#/components/schemas/NativePlacement"
           },
           "smbios": {
             "$ref": "#/components/schemas/SMBIOS"
@@ -3445,6 +3728,31 @@
           },
           "system": {
             "$ref": "#/components/schemas/SystemInfo"
+          }
+        },
+        "type": "object"
+      },
+      "STimer": {
+        "additionalProperties": false,
+        "properties": {
+          "direct": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "Spinlocks": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "retries": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "type": "object"

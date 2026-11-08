@@ -27,7 +27,6 @@ type InstanceType struct {
 	ID                 string `json:"id"`
 	Name               string `json:"name"`
 	VCPUs              int    `json:"vcpus"`
-	CPURequest         int    `json:"cpu_request"`
 	MemoryBytes        uint64 `json:"memory_bytes"`
 	MemoryRequestBytes uint64 `json:"memory_request_bytes"`
 	BootDiskBytes      uint64 `json:"boot_disk_bytes"`
@@ -58,10 +57,11 @@ type CloudHost struct {
 // MachineMetadata is an applied snapshot, never reconstructed from today's
 // instance type catalog. Limits continue to come from actual VM configuration.
 type MachineMetadata struct {
-	Cloud              string `json:"cloud"`
-	Zone               string `json:"zone"`
-	InstanceType       string `json:"instance_type,omitempty"`
-	Image              string `json:"image,omitempty"`
+	Cloud        string `json:"cloud"`
+	Zone         string `json:"zone"`
+	InstanceType string `json:"instance_type,omitempty"`
+	Image        string `json:"image,omitempty"`
+	// CPURequest is retained only for historical XML compatibility, never admission.
 	CPURequest         int    `json:"cpu_request"`
 	MemoryRequestBytes uint64 `json:"memory_request_bytes"`
 	MinimumMemoryBytes uint64 `json:"minimum_memory_bytes,omitempty"`
@@ -181,7 +181,7 @@ func (c Cloud) Validate() error {
 		if t.MemoryRequestBytes != t.MemoryBytes {
 			return fmt.Errorf("instance type %s: memory overselling is not supported yet; memory requests must equal limits", t.ID)
 		}
-		if !resourceName.MatchString(t.ID) || seen[t.ID] || t.VCPUs < 1 || t.VCPUs > 65535 || t.CPURequest < 1 || t.CPURequest > t.VCPUs || t.MemoryBytes == 0 || t.BootDiskBytes == 0 {
+		if !resourceName.MatchString(t.ID) || seen[t.ID] || t.VCPUs < 1 || t.VCPUs > 65535 || t.MemoryBytes == 0 || t.BootDiskBytes == 0 {
 			return fmt.Errorf("invalid instance type %q", t.ID)
 		}
 		seen[t.ID] = true
@@ -234,30 +234,35 @@ type PlacementCandidate struct {
 func accounted(vm *VirtualMachine) (int, uint64, error) {
 	cpu, mem := vm.VCpus, vm.Memory.Bytes()
 	if vm.Metadata != nil {
-		cpu, mem = vm.Metadata.CPURequest, vm.Metadata.MemoryRequestBytes
+		mem = vm.Metadata.MemoryRequestBytes
 	}
-	if cpu < 1 || cpu > vm.VCpus || mem == 0 || mem != vm.Memory.Bytes() {
+	if cpu < 1 || mem == 0 || mem != vm.Memory.Bytes() {
 		return 0, 0, fmt.Errorf("machine %s has invalid scheduling metadata", vm.Id)
 	}
 	return cpu, mem, nil
 }
 
-// Fit accounts requests rather than instantaneous runtime usage. Replacing
-// excludes precisely the existing machine when admitting a type change.
+// Fit counts full configured vCPUs, including stopped and unmanaged domains.
+// A replacement that does not grow a constrained resource can reduce an already
+// overcommitted host; this never creates a quota or chooses physical CPU IDs.
 func Fit(i HostInventory, t InstanceType, replacing string) (PlacementCandidate, error) {
 	r := PlacementCandidate{Inventory: i}
 	if i.Node == nil {
 		return r, fmt.Errorf("host inventory is unavailable")
 	}
-	overcommit := i.Host.CPUOvercommit
-	if overcommit == 0 {
-		overcommit = 4
+	cores, err := i.Node.PhysicalCoreCount()
+	if err != nil {
+		return r, err
 	}
-	physicalCPU := len(i.Node.Cpus) - i.Host.CPUReserve
-	if physicalCPU < 0 || overcommit < 1 || physicalCPU > int(^uint(0)>>1)/overcommit {
-		return r, fmt.Errorf("invalid host CPU capacity")
+	ratio := i.Host.CPUOvercommit
+	if ratio == 0 {
+		ratio = 4
 	}
-	cpuBudget := physicalCPU * overcommit
+	available := cores - i.Host.CPUReserve
+	if available < 0 || ratio < 1 || available > int(^uint(0)>>1)/ratio {
+		return r, fmt.Errorf("invalid host physical-core capacity/reserve")
+	}
+	budget := available * ratio
 	memory := i.Node.Memory().Bytes()
 	if i.Host.MemoryReserveBytes > memory {
 		return r, fmt.Errorf("host memory reserve exceeds capacity")
@@ -265,25 +270,37 @@ func Fit(i HostInventory, t InstanceType, replacing string) (PlacementCandidate,
 	memory -= i.Host.MemoryReserveBytes
 	usedCPU := 0
 	usedMemory := uint64(0)
+	oldCPU := 0
+	oldMemory := uint64(0)
 	for _, vm := range i.Machines {
-		if vm.Id == replacing {
-			continue
-		}
 		cpu, mem, err := accounted(vm)
 		if err != nil {
 			return r, err
 		}
-		if cpu > cpuBudget-usedCPU || mem > memory-usedMemory {
-			return r, fmt.Errorf("existing requests exceed host capacity")
+		if vm.Id == replacing && replacing != "" {
+			if oldCPU != 0 {
+				return r, fmt.Errorf("duplicate replacement identity")
+			}
+			oldCPU, oldMemory = cpu, mem
+			continue
+		}
+		if cpu > int(^uint(0)>>1)-usedCPU || mem > ^uint64(0)-usedMemory {
+			return r, fmt.Errorf("host occupancy overflow")
 		}
 		usedCPU += cpu
 		usedMemory += mem
 	}
-	if t.CPURequest > cpuBudget-usedCPU || t.MemoryBytes > memory-usedMemory {
-		return r, fmt.Errorf("insufficient resources on host %s", i.Host.Node)
+	if t.VCPUs < 1 || t.VCPUs > int(^uint(0)>>1)-usedCPU || t.MemoryBytes == 0 || t.MemoryBytes > ^uint64(0)-usedMemory {
+		return r, fmt.Errorf("invalid or overflowing requested resources")
 	}
-	r.FreeCPU = cpuBudget - usedCPU - t.CPURequest
-	r.FreeMemory = memory - usedMemory - t.MemoryBytes
+	cpuTotal, memTotal := usedCPU+t.VCPUs, usedMemory+t.MemoryBytes
+	if cpuTotal > budget && (oldCPU == 0 || t.VCPUs > oldCPU) || memTotal > memory && (oldMemory == 0 || t.MemoryBytes > oldMemory) {
+		return r, fmt.Errorf("insufficient resources on host %s: full-vCPU occupancy %d/%d, memory %d/%d", i.Host.Node, cpuTotal, budget, memTotal, memory)
+	}
+	r.FreeCPU = budget - cpuTotal
+	if memTotal <= memory {
+		r.FreeMemory = memory - memTotal
+	}
 	return r, nil
 }
 

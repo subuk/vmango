@@ -29,7 +29,6 @@ function show(overrides: Partial<VM> = {}) {
         arch: "x86_64",
         instance_type: "medium",
         image: "ubuntu",
-        cpu_request: 4,
         memory_request_bytes: 4 * 2 ** 30,
         interfaces: [],
         disks: [],

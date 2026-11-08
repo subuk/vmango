@@ -1,9 +1,16 @@
 package libvirt
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
+	"net/url"
+	"os/exec"
+	"runtime"
+	"strconv"
+	"strings"
 	"subuk/vmango/compute"
+	"time"
 
 	"github.com/rs/zerolog"
 	libvirt "libvirt.org/go/libvirt"
@@ -92,7 +99,6 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 	}
 
 	reqFreePagesMap := map[uint64]struct{}{}
-	nodeCpuMap := map[int]compute.NodeCpu{}
 	if capsConfig.Host.NUMA != nil && capsConfig.Host.NUMA.Cells != nil {
 		node.Numas = make([]compute.NodeNuma, capsConfig.Host.NUMA.Cells.Num)
 		for _, numaInfo := range capsConfig.Host.NUMA.Cells.Cells {
@@ -113,26 +119,27 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 				}
 			}
 
-			if numaInfo.CPUS != nil {
-				for _, numaCpuInfo := range numaInfo.CPUS.CPUs {
-					cpu := compute.NodeCpu{
-						NumaId: numaInfo.ID,
-					}
-					if numaCpuInfo.SocketID != nil {
-						cpu.SocketId = *numaCpuInfo.SocketID
-					}
-					if numaCpuInfo.CoreID != nil {
-						cpu.CoreId = *numaCpuInfo.CoreID
-					}
-					nodeCpuMap[numaCpuInfo.ID] = cpu
+		}
+	}
+	online, _, onlineErr := conn.GetCPUMap(0)
+	onlineKnown := onlineErr == nil
+	if !onlineKnown && runtime.GOOS == "darwin" {
+		uri, _ := url.Parse(repo.pool.nodeUri[nodeId])
+		if uri != nil && uri.Host == "" && uri.Scheme == "qemu" {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			values, e := exec.CommandContext(ctx, "/usr/sbin/sysctl", "-n", "hw.physicalcpu", "hw.logicalcpu").Output()
+			cancel()
+			fields := strings.Fields(string(values))
+			if e == nil && len(fields) == 2 {
+				physical, e1 := strconv.Atoi(fields[0])
+				logical, e2 := strconv.Atoi(fields[1])
+				if e1 == nil && e2 == nil {
+					online, onlineKnown = localDarwinOnlineMap(capsConfig, physical, logical)
 				}
 			}
 		}
 	}
-	node.Cpus = make([]compute.NodeCpu, len(nodeCpuMap))
-	for idx := 0; idx < len(node.Cpus); idx++ {
-		node.Cpus[idx] = nodeCpuMap[idx]
-	}
+	node.Cpus = hostCPUTopology(capsConfig, online, onlineKnown)
 
 	if len(reqFreePagesMap) > 0 {
 		reqFreePages := []uint64{}
@@ -205,6 +212,9 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 
 		affinity := ParseCpuAffinity(virDomainConfig.CPUTune.EmulatorPin.CPUSet)
 		for _, cpuId := range affinity {
+			if int(cpuId) >= len(node.Cpus) {
+				continue
+			}
 			node.Cpus[cpuId].Pins = append(node.Cpus[cpuId].Pins, compute.NodeCpuPin{
 				Desc: "emulator",
 				VmId: virDomainConfig.UUID,
@@ -214,6 +224,9 @@ func (repo *NodeRepository) Get(nodeId string, options compute.NodeGetOptions) (
 		for _, vcpupin := range virDomainConfig.CPUTune.VCPUPin {
 			vcpuAffinity := ParseCpuAffinity(vcpupin.CPUSet)
 			for _, cpuId := range vcpuAffinity {
+				if int(cpuId) >= len(node.Cpus) {
+					continue
+				}
 				node.Cpus[cpuId].Pins = append(node.Cpus[cpuId].Pins, compute.NodeCpuPin{
 					Desc: fmt.Sprintf("vcpu-%d", vcpupin.VCPU),
 					VmId: virDomainConfig.UUID,

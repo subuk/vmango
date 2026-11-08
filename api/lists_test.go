@@ -119,13 +119,13 @@ func TestMachineReadsUseCurrentHostCloudAndZone(t *testing.T) {
 					t.Fatal("machine management status changed")
 				}
 				if m := vm.Metadata; m != nil {
-					if got.InstanceType != m.InstanceType || got.Image != m.Image || got.CPURequest != m.CPURequest || got.MemoryRequestBytes != m.MemoryRequestBytes {
+					if got.InstanceType != m.InstanceType || got.Image != m.Image || got.MemoryRequestBytes != m.MemoryRequestBytes {
 						t.Fatal("applied allocation snapshot changed", got)
 					}
 					if m.Cloud != storedCloud || m.Zone != "old-zone" {
 						t.Fatal("read mutated stored metadata")
 					}
-				} else if got.CPURequest != vm.VCpus || got.MemoryRequestBytes != vm.Memory.Bytes() {
+				} else if got.MemoryRequestBytes != vm.Memory.Bytes() {
 					t.Fatal("unmanaged resource requests lost", got)
 				}
 			}

@@ -178,24 +178,20 @@ func TestDisabledVideoCannotBeReintroducedByLibvirtDefaults(t *testing.T) {
 	}
 }
 
-func TestResourceChangePreservesTopologyAndAllowsCompatibleGrowth(t *testing.T) {
+func TestResourceChangePreservesLegacyTopologyForRAMOnly(t *testing.T) {
 	config := &xmlmodel.Domain{VCPU: &xmlmodel.DomainVCPU{Value: 2}, CPU: &xmlmodel.DomainCPU{Mode: "host-passthrough", Topology: &xmlmodel.DomainCPUTopology{Sockets: 1, Cores: 1, Threads: 2}}, Devices: &xmlmodel.DomainDeviceList{}}
-	if err := validateResourceTopology(config, 4); err != nil {
+	if err := validateResourceTopology(config, 4); err == nil {
+		t.Fatal("legacy topology resized")
+	}
+	if err := validateResourceTopology(config, 2); err != nil {
 		t.Fatal(err)
 	}
-	vm := &compute.VirtualMachine{VCpus: 4, Memory: compute.NewSize(2, compute.SizeUnitG)}
-	applyDomainPolicy(config, vm, &xmlmodel.Caps{Host: xmlmodel.CapsHost{CPU: &xmlmodel.CapsHostCPU{Topology: &xmlmodel.CapsHostCPUTopology{Threads: 8}}}}, true)
-	if config.CPU.Mode != "host-passthrough" || config.CPU.Topology.Sockets != 1 || config.CPU.Topology.Threads != 2 || config.CPU.Topology.Cores != 2 {
-		t.Fatalf("topology policy changed: %+v", config.CPU)
-	}
-	if err := validateResourceTopology(config, 3); err == nil {
-		t.Fatal("incompatible thread count accepted")
-	}
-	config.CPUTune = &xmlmodel.DomainCPUTune{VCPUPin: []xmlmodel.DomainCPUTuneVCPUPin{{VCPU: 0, CPUSet: "2"}}}
-	if err := validateResourceTopology(config, 6); err == nil {
-		t.Fatal("explicit pinning lost during vCPU growth")
+	applyDomainPolicy(config, &compute.VirtualMachine{VCpus: 2, Memory: compute.NewSize(2, compute.SizeUnitG)}, &xmlmodel.Caps{}, true)
+	if config.CPU.Topology.Cores != 1 || config.CPU.Topology.Threads != 2 || config.CPU.Mode != "host-passthrough" {
+		t.Fatal("RAM-only update changed CPU")
 	}
 }
+
 func TestCapturedHostTopologyOverridesLaterHostDefaults(t *testing.T) {
 	plan, err := hardware.Resolve(hardware.Profile{ID: "stable"}, "/accepted/qemu")
 	if err != nil {

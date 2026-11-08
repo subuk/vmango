@@ -18,7 +18,9 @@ func VolumeRef(node, path string) tasks.ResourceRef {
 
 // InfrastructureCommand is a private, versioned desired command. Read models
 // and command payloads are deliberately separate from the public task schema.
-const InfrastructureCommandVersion = 3
+// Version 4 retires discounted CPU admission and host-derived new-VM topology.
+// Version 3 commands remain historical and require a fresh request, never replay.
+const InfrastructureCommandVersion = 4
 
 type InfrastructureCommand struct {
 	CandidateSettings     map[string]VirtualMachineManagerNodeSettings `json:",omitempty"`

@@ -5,11 +5,15 @@ import (
 )
 
 type apiCPU struct {
-	ID     int         `json:"id" doc:"Stable host CPU ID, independent of frontend sorting."`
-	Socket int         `json:"socket"`
-	Core   int         `json:"core"`
-	NUMA   int         `json:"numa"`
-	Pins   []apiCPUPin `json:"pins" nullable:"false"`
+	Die           int         `json:"die"`
+	Cluster       int         `json:"cluster"`
+	Online        bool        `json:"online"`
+	TopologyKnown bool        `json:"topology_known"`
+	ID            int         `json:"id" doc:"Stable host CPU ID, independent of frontend sorting."`
+	Socket        int         `json:"socket"`
+	Core          int         `json:"core"`
+	NUMA          int         `json:"numa"`
+	Pins          []apiCPUPin `json:"pins" nullable:"false"`
 }
 type apiCPUPin struct {
 	VM          string `json:"vm"`
@@ -26,23 +30,30 @@ type apiNUMA struct {
 	FreePages1G uint64 `json:"free_pages_1g"`
 }
 type apiNode struct {
-	ID             string    `json:"id"`
-	Hostname       string    `json:"hostname"`
-	Arch           string    `json:"arch"`
-	CPUModel       string    `json:"cpu_model"`
-	CPUVendor      string    `json:"cpu_vendor"`
-	CPUInfo        string    `json:"cpu_info"`
-	ThreadsPerCore int       `json:"threads_per_core"`
-	IOMMU          bool      `json:"iommu"`
-	MemoryBytes    uint64    `json:"memory_bytes"`
-	CPUs           []apiCPU  `json:"cpus" nullable:"false"`
-	NUMA           []apiNUMA `json:"numa" nullable:"false"`
+	PhysicalCores         *int      `json:"physical_cores,omitempty"`
+	CPUTopologyDiagnostic string    `json:"cpu_topology_diagnostic,omitempty"`
+	ID                    string    `json:"id"`
+	Hostname              string    `json:"hostname"`
+	Arch                  string    `json:"arch"`
+	CPUModel              string    `json:"cpu_model"`
+	CPUVendor             string    `json:"cpu_vendor"`
+	CPUInfo               string    `json:"cpu_info"`
+	ThreadsPerCore        int       `json:"threads_per_core"`
+	IOMMU                 bool      `json:"iommu"`
+	MemoryBytes           uint64    `json:"memory_bytes"`
+	CPUs                  []apiCPU  `json:"cpus" nullable:"false"`
+	NUMA                  []apiNUMA `json:"numa" nullable:"false"`
 }
 
 func nodeDTO(n *compute.Node) apiNode {
 	d := apiNode{ID: n.Id, Hostname: n.Hostname, Arch: n.CpuArch.String(), CPUModel: n.CpuModel, CPUVendor: n.CpuVendor, CPUInfo: n.CpuInfo, ThreadsPerCore: n.ThreadsPerCore, IOMMU: n.Iommu, MemoryBytes: n.Memory().Bytes(), CPUs: []apiCPU{}, NUMA: []apiNUMA{}}
+	if cores, err := n.PhysicalCoreCount(); err == nil {
+		d.PhysicalCores = &cores
+	} else {
+		d.CPUTopologyDiagnostic = err.Error()
+	}
 	for id, cpu := range n.Cpus {
-		c := apiCPU{ID: id, Socket: cpu.SocketId, Core: cpu.CoreId, NUMA: cpu.NumaId, Pins: []apiCPUPin{}}
+		c := apiCPU{Die: cpu.DieId, Cluster: cpu.ClusterId, Online: cpu.Online, TopologyKnown: cpu.TopologyKnown, ID: id, Socket: cpu.SocketId, Core: cpu.CoreId, NUMA: cpu.NumaId, Pins: []apiCPUPin{}}
 		for _, pin := range cpu.Pins {
 			c.Pins = append(c.Pins, apiCPUPin{pin.VmId, pin.Desc})
 		}

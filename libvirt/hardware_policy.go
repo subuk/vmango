@@ -39,20 +39,22 @@ func (repo *VirtualMachineRepository) ResolveHardware(vm *compute.VirtualMachine
 		e = host.Unmarshal(hostRaw)
 	}
 	plan.CPUThreads = 1
+	plan.SimpleCPUTopology = true
 	if e == nil {
 		var caps *xmlmodel.DomainCaps
 		caps, e = resolveMachineCapabilities(p, vm.Arch.String(), plan.Emulator, &host, queryDomainCapabilities(conn), func(c *xmlmodel.DomainCaps) error {
 			if err := validateCreationCapabilities(vm, p, c); err != nil {
 				return err
 			}
-			return validateGuestSystemCapabilities(conn, p, c)
+			if err := validateGuestSystemCapabilities(conn, p, c); err != nil {
+				return err
+			}
+			return repo.validateCPUCapabilities(conn, p, c, vm.VCpus, vm.NodeId)
 		})
 		if e == nil {
 			plan.Emulator, plan.Machine, plan.DomainType = caps.Path, caps.Machine, caps.Domain
 		}
-		if host.Host.CPU != nil && host.Host.CPU.Topology != nil && host.Host.CPU.Topology.Threads > 0 && vm.VCpus%host.Host.CPU.Topology.Threads == 0 {
-			plan.CPUThreads = host.Host.CPU.Topology.Threads
-		}
+
 	}
 	repo.pool.Release(vm.NodeId)
 	if e != nil {
@@ -71,6 +73,10 @@ func (repo *VirtualMachineRepository) ResolveHardware(vm *compute.VirtualMachine
 	}
 	preview := &xmlmodel.Domain{UUID: vm.Id, OS: &xmlmodel.DomainOS{}}
 	applyGuestSystem(preview, p)
+	applyCPUPolicy(preview, p)
+	preview.CPU.Topology = &xmlmodel.DomainCPUTopology{Sockets: 1, Cores: vm.VCpus, Threads: 1}
+	cpuObserved := observeCPU(preview)
+	plan.CPU = &cpuObserved
 	observed := observeGuestSystem(preview)
 	plan.GuestSystem = &observed
 	raw, err := json.Marshal(plan)
@@ -150,6 +156,9 @@ func (repo *VirtualMachineRepository) validateHardwareCapabilities(vm *compute.V
 		}
 	}
 	if creation {
+		if err = repo.validateCPUCapabilities(conn, plan.Profile, capsXML, vm.VCpus, vm.NodeId); err != nil {
+			return err
+		}
 		if err = validateGuestSystemCapabilities(conn, plan.Profile, capsXML); err != nil {
 			return err
 		}
@@ -313,6 +322,9 @@ func (repo *VirtualMachineRepository) ResolveDiskAttachment(vm *compute.VirtualM
 	return nil
 }
 func (repo *VirtualMachineRepository) ValidateResourceChange(current, requested *compute.VirtualMachine) error {
+	if current.State != compute.StateStopped {
+		return fmt.Errorf("resource changes require a stopped VM")
+	}
 	if err := repo.ValidateAppliedPolicy(current); err != nil {
 		return err
 	}
@@ -330,7 +342,41 @@ func (repo *VirtualMachineRepository) ValidateResourceChange(current, requested 
 	if err = validateResourceTopology(config, requested.VCpus); err != nil {
 		return err
 	}
-	requested.AppliedPolicy = append(json.RawMessage(nil), current.AppliedPolicy...)
+	if err = validateCPUAdoption(config, plan.Profile); err != nil {
+		return err
+	}
+	{
+		conn, e := repo.pool.Acquire(current.NodeId)
+		if e != nil {
+			return e
+		}
+		caps, e := queryDomainCapabilities(conn)(plan.Emulator, current.Arch.String(), plan.Machine, plan.DomainType)
+		if e == nil {
+			raw, _ := json.Marshal(config)
+			var resized xmlmodel.Domain
+			_ = json.Unmarshal(raw, &resized)
+			resized.Memory = &xmlmodel.DomainMemory{Unit: "bytes", Value: uint(requested.Memory.Bytes())}
+			resized.CurrentMemory = &xmlmodel.DomainCurrentMemory{Unit: "bytes", Value: uint(requested.Memory.Bytes())}
+			e = repo.validateCPUCapabilities(conn, plan.Profile, caps, requested.VCpus, current.NodeId, &resized)
+		}
+		repo.pool.Release(current.NodeId)
+		if e != nil {
+			return e
+		}
+	}
+	if plan.CPU != nil && plan.CPU.Topology != nil && current.VCpus != requested.VCpus {
+		cpuCopy := *plan.CPU
+		topologyCopy := *plan.CPU.Topology
+		topologyCopy.Cores = requested.VCpus
+		cpuCopy.Topology = &topologyCopy
+		plan.CPU = &cpuCopy
+		requested.AppliedPolicy, err = json.Marshal(plan)
+		if err != nil {
+			return err
+		}
+	} else {
+		requested.AppliedPolicy = append(json.RawMessage(nil), current.AppliedPolicy...)
+	}
 	requested.Hugepages = plan.Profile.Hugepages
 	requested.Autostart = current.Autostart
 	return repo.validateHardwareCapabilities(requested, plan, true, false)
@@ -351,6 +397,9 @@ func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine
 	if err != nil {
 		return nil, err
 	}
+	if err = validateCPUAdoption(config, plan.Profile); err != nil {
+		return nil, err
+	}
 	if err = validateGuestSystemAdoption(config, plan.Profile); err != nil {
 		return nil, err
 	}
@@ -367,7 +416,7 @@ func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine
 	if config.CPU != nil && config.CPU.Topology != nil {
 		plan.CPUThreads = config.CPU.Topology.Threads
 	}
-	if err = repo.validateAdoptionMachine(vm, plan); err != nil {
+	if err = repo.validateAdoptionMachine(vm, plan, config); err != nil {
 		return nil, err
 	}
 
@@ -379,6 +428,8 @@ func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine
 	}
 	observed := observeGuestSystem(config)
 	plan.GuestSystem = &observed
+	cpuObserved := observeCPU(config)
+	plan.CPU = &cpuObserved
 	return json.Marshal(plan)
 }
 func validateAdoptionPolicy(vm *compute.VirtualMachine, plan hardware.Plan) error {
@@ -472,9 +523,12 @@ func (repo *VirtualMachineRepository) AdoptWithPolicy(id, node string, m *comput
 	if err = validateAdoptionBindings(&config, plan); err != nil {
 		return err
 	}
-	if plan.Profile.HasGuestSystemConstraints() {
+	if plan.Profile.HasGuestSystemConstraints() || plan.Profile.CPU != nil || plan.Profile.HyperV != nil || plan.Profile.KVM != nil || plan.Profile.Placement != nil {
 		caps, e := queryDomainCapabilities(conn)(plan.Emulator, vm.Arch.String(), plan.Machine, plan.DomainType)
 		if e != nil {
+			return e
+		}
+		if e = repo.validateCPUCapabilities(conn, plan.Profile, caps, vm.VCpus, node, &config); e != nil {
 			return e
 		}
 		if e = validateGuestSystemCapabilities(conn, plan.Profile, caps); e != nil {
@@ -588,7 +642,7 @@ func (repo *VirtualMachineRepository) ValidateAdoptionPolicy(vm *compute.Virtual
 	if err = validateAdoptionBindings(c, plan); err != nil {
 		return err
 	}
-	if err = repo.validateAdoptionMachine(vm, plan); err != nil {
+	if err = repo.validateAdoptionMachine(vm, plan, c); err != nil {
 		return err
 	}
 	if plan.Profile.Hugepages {
@@ -635,6 +689,9 @@ func validateProfileCapabilities(p hardware.Profile, caps compute.VirtualMachine
 }
 
 func validateAdoptionBindings(config *xmlmodel.Domain, plan hardware.Plan) error {
+	if err := validateCPUAdoption(config, plan.Profile); err != nil {
+		return err
+	}
 	if err := validateGuestSystemAdoption(config, plan.Profile); err != nil {
 		return err
 	}

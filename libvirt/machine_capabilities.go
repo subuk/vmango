@@ -101,7 +101,7 @@ func domainPlatform(c *xmlmodel.Domain) hardware.PlatformBinding {
 	return p
 }
 
-func (repo *VirtualMachineRepository) validateAdoptionMachine(vm *compute.VirtualMachine, plan hardware.Plan) error {
+func (repo *VirtualMachineRepository) validateAdoptionMachine(vm *compute.VirtualMachine, plan hardware.Plan, observed ...*xmlmodel.Domain) error {
 	conn, err := repo.pool.Acquire(vm.NodeId)
 	if err != nil {
 		return err
@@ -145,6 +145,9 @@ func (repo *VirtualMachineRepository) validateAdoptionMachine(vm *compute.Virtua
 		return err
 	}
 	if err := validateProfileCapabilities(plan.Profile, imageCapabilities(actual)); err != nil {
+		return err
+	}
+	if err := repo.validateCPUCapabilities(conn, plan.Profile, actual, vm.VCpus, vm.NodeId, observed...); err != nil {
 		return err
 	}
 	return validateGuestSystemCapabilities(conn, plan.Profile, actual)

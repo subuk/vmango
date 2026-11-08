@@ -7,6 +7,7 @@ import {
     AdoptMachine,
     HardwareProfileFields,
     GuestSystemFields,
+    CPUObservationFields,
     HardwareProfiles,
     type HardwareProfile,
 } from "./HardwareProfiles";
@@ -146,4 +147,51 @@ it("shows observed clock and timer attributes without inferring missing settings
     expect(
         screen.getByText("hpet; tsc · mode=native · frequency=12345"),
     ).toBeTruthy();
+});
+
+it("separates requested CPU constraints from effective backend presentation", () => {
+    show(
+        <HardwareProfileFields
+            profile={{
+                ...profile,
+                cpu: {
+                    mode: "maximum",
+                    mode_explicit: false,
+                    features: [{ name: "aes", policy: "require" }],
+                },
+                hyperv: { mode: "host-model" },
+                kvm: { hidden: false, pv_ipi: true },
+            }}
+        />,
+    );
+    expect(
+        screen.getByText(
+            "maximum (default for new VMs; preserved on adoption)",
+        ),
+    ).toBeTruthy();
+    expect(screen.getByText("aes: require")).toBeTruthy();
+    expect(
+        screen.getByText("host-model (backend-selected enlightenments)"),
+    ).toBeTruthy();
+    expect(screen.getByText("hidden: off; pv_ipi: on")).toBeTruthy();
+});
+it("shows native placement nodesets and extra observed hypervisor features", () => {
+    show(
+        <CPUObservationFields
+            value={{
+                mode: "host-passthrough",
+                guest_numa: false,
+                placement: "auto",
+                memory_placement: "auto",
+                memory_mode: "strict",
+                memory_nodeset: "0-1",
+                hyperv_mode: "passthrough",
+                hyperv: [{ name: "evmcs", state: "on" }],
+                kvm: [{ name: "hint-dedicated", state: "on" }],
+            }}
+        />,
+    );
+    expect(screen.getByText("auto · strict · nodes 0-1")).toBeTruthy();
+    expect(screen.getByText("passthrough · evmcs: on")).toBeTruthy();
+    expect(screen.getByText("hint-dedicated: on")).toBeTruthy();
 });

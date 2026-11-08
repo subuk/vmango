@@ -21,7 +21,6 @@ type InstanceTypeConfig struct {
 	ID               string `hcl:",key"`
 	Name             string `hcl:"name"`
 	CPU              int    `hcl:"cpu"`
-	CPURequest       *int   `hcl:"cpu_request"`
 	MemoryMiB        int64  `hcl:"memory_mib"`
 	MemoryRequestMiB *int64 `hcl:"memory_request_mib"`
 	BootDiskGiB      int64  `hcl:"boot_disk_gib"`
@@ -131,11 +130,7 @@ func (cfg *Config) CloudDefinitions() ([]compute.Cloud, error) {
 			if err != nil {
 				return nil, err
 			}
-			cpuRequest := t.CPU
-			if t.CPURequest != nil {
-				cpuRequest = *t.CPURequest
-			}
-			c.InstanceTypes = append(c.InstanceTypes, compute.InstanceType{ID: t.ID, Name: displayName(t.ID, t.Name), VCPUs: t.CPU, CPURequest: cpuRequest, MemoryBytes: memory, MemoryRequestBytes: request, BootDiskBytes: disk})
+			c.InstanceTypes = append(c.InstanceTypes, compute.InstanceType{ID: t.ID, Name: displayName(t.ID, t.Name), VCPUs: t.CPU, MemoryBytes: memory, MemoryRequestBytes: request, BootDiskBytes: disk})
 		}
 		for _, h := range entry.Hosts {
 			if h.Uri == "" {

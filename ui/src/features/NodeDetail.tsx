@@ -55,9 +55,11 @@ export function NodeDetail({ cloud, node }: { cloud: string; node: string }) {
                                 label="Host summary"
                                 items={[
                                     {
-                                        label: "Host CPUs",
-                                        value: n.cpus.length,
-                                        detail: `${n.threads_per_core || "—"} threads per core`,
+                                        label: "Physical cores",
+                                        value: n.physical_cores ?? "Unknown",
+                                        detail:
+                                            n.cpu_topology_diagnostic ||
+                                            `${n.cpus.filter((c) => c.online).length} online logical CPUs`,
                                     },
                                     {
                                         label: "Installed memory",

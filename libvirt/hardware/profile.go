@@ -23,21 +23,25 @@ type ConfigDrive struct {
 func (c ConfigDrive) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
 
 type Profile struct {
-	SMBIOS         *SMBIOS     `json:"smbios,omitempty"`
-	Clock          *Clock      `json:"clock,omitempty"`
-	Timers         []Timer     `json:"timers,omitempty"`
-	Machine        *Machine    `json:"machine,omitempty"`
-	ID             string      `json:"id"`
-	Name           string      `json:"name"`
-	Firmware       string      `json:"firmware"`
-	DiskBus        string      `json:"disk_bus"`
-	DiskController string      `json:"disk_controller,omitempty"`
-	NICModel       string      `json:"nic_model"`
-	Graphics       string      `json:"graphics"`
-	VideoModel     string      `json:"video_model"`
-	GuestAgent     *bool       `json:"guest_agent,omitempty"`
-	Hugepages      bool        `json:"hugepages"`
-	ConfigDrive    ConfigDrive `json:"config_drive"`
+	CPU            *CPU             `json:"cpu,omitempty"`
+	Placement      *NativePlacement `json:"placement,omitempty"`
+	HyperV         *HyperV          `json:"hyperv,omitempty"`
+	KVM            *KVM             `json:"kvm,omitempty"`
+	SMBIOS         *SMBIOS          `json:"smbios,omitempty"`
+	Clock          *Clock           `json:"clock,omitempty"`
+	Timers         []Timer          `json:"timers,omitempty"`
+	Machine        *Machine         `json:"machine,omitempty"`
+	ID             string           `json:"id"`
+	Name           string           `json:"name"`
+	Firmware       string           `json:"firmware"`
+	DiskBus        string           `json:"disk_bus"`
+	DiskController string           `json:"disk_controller,omitempty"`
+	NICModel       string           `json:"nic_model"`
+	Graphics       string           `json:"graphics"`
+	VideoModel     string           `json:"video_model"`
+	GuestAgent     *bool            `json:"guest_agent,omitempty"`
+	Hugepages      bool             `json:"hugepages"`
+	ConfigDrive    ConfigDrive      `json:"config_drive"`
 }
 
 func (p Profile) GuestAgentEnabled() bool { return p.GuestAgent == nil || *p.GuestAgent }
@@ -70,16 +74,18 @@ type StateContract struct {
 	Snapshot bool   `json:"snapshot"`
 }
 type Plan struct {
-	GuestSystem     *GuestSystemObservation `json:"guest_system,omitempty"`
-	Version         int                     `json:"version"`
-	Profile         Profile                 `json:"profile"`
-	Devices         []Device                `json:"devices"`
-	State           []StateContract         `json:"state,omitempty"`
-	CPUThreads      int                     `json:"cpu_threads,omitempty"`
-	Machine         string                  `json:"machine,omitempty"`
-	DomainType      string                  `json:"domain_type,omitempty"`
-	HugepageSizeKiB uint64                  `json:"hugepage_size_kib,omitempty"`
-	Emulator        string                  `json:"emulator,omitempty"`
+	CPU               *CPUObservation         `json:"cpu,omitempty"`
+	SimpleCPUTopology bool                    `json:"simple_cpu_topology,omitempty"`
+	GuestSystem       *GuestSystemObservation `json:"guest_system,omitempty"`
+	Version           int                     `json:"version"`
+	Profile           Profile                 `json:"profile"`
+	Devices           []Device                `json:"devices"`
+	State             []StateContract         `json:"state,omitempty"`
+	CPUThreads        int                     `json:"cpu_threads,omitempty"`
+	Machine           string                  `json:"machine,omitempty"`
+	DomainType        string                  `json:"domain_type,omitempty"`
+	HugepageSizeKiB   uint64                  `json:"hugepage_size_kib,omitempty"`
+	Emulator          string                  `json:"emulator,omitempty"`
 }
 type policyEnvelope struct {
 	Version int     `json:"version"`
@@ -181,7 +187,11 @@ func Normalize(p Profile) (Profile, error) {
 	if !slices.Contains([]string{"disk", "cdrom"}, p.ConfigDrive.DeviceType) || !slices.Contains([]string{"virtio", "scsi", "ide"}, p.ConfigDrive.Bus) || p.ConfigDrive.DeviceType == "cdrom" && p.ConfigDrive.Bus == "virtio" {
 		return fail("config_drive device_type/bus combination (virtio supports disks only)")
 	}
-	return NormalizeGuestSystem(p)
+	p, err := NormalizeGuestSystem(p)
+	if err != nil {
+		return p, err
+	}
+	return NormalizeCPU(p)
 }
 func Encode(p Profile) (json.RawMessage, error) {
 	p, err := Normalize(p)
@@ -295,7 +305,7 @@ func DecodePlan(raw json.RawMessage) (Plan, error) {
 	if !reflect.DeepEqual(p.Devices, expected.Devices) || !reflect.DeepEqual(p.State, expected.State) {
 		return p, fmt.Errorf("applied device dependencies or state ownership are incomplete or incompatible; explicitly re-adopt the VM")
 	}
-	if p.CPUThreads < 0 || p.Profile.Hugepages && p.HugepageSizeKiB <= 4 || !p.Profile.Hugepages && p.HugepageSizeKiB != 0 {
+	if p.SimpleCPUTopology && p.CPUThreads != 1 || p.CPUThreads < 0 || p.Profile.Hugepages && p.HugepageSizeKiB <= 4 || !p.Profile.Hugepages && p.HugepageSizeKiB != 0 {
 		return p, fmt.Errorf("applied host bindings are incomplete or incompatible; explicitly re-adopt the VM")
 	}
 	return p, nil

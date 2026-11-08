@@ -343,6 +343,18 @@ api {
 			guestPolicy += ` smbios { bios {vendor="Vmango" version="1.0" date="01/02/2026" release="1.2"} system {manufacturer="Vmango" product="Acceptance Guest" version="1" sku="test" family="Cloud"} baseboard {manufacturer="Vmango" product="Acceptance Board" version="2"} } timer "rtc" {tickpolicy="catchup"} timer "pit" {tickpolicy="catchup"} timer "hpet" {present=false} timer "kvmclock" {present=true} timer "hypervclock" {present=true}`
 		}
 	}
+	cpuPolicy := os.Getenv("ACCEPTANCE_CPU_POLICY") == "1"
+	nativeAuto := os.Getenv("ACCEPTANCE_NATIVE_AUTO") == "1"
+	if cpuPolicy {
+		if arch == "x86_64" {
+			guestPolicy += ` cpu {mode="host-model" feature "aes" {policy="require"} feature "avx2" {policy="disable"}} hyperv {relaxed=true vapic=true spinlocks {retries=4096}} kvm {hidden=false poll_control=true pv_ipi=true}`
+		} else {
+			guestPolicy += ` cpu {mode="maximum"}`
+		}
+	}
+	if nativeAuto {
+		guestPolicy += ` placement {mode="auto" memory_mode="strict"}`
+	}
 	machineAcceleration := os.Getenv("ACCEPTANCE_VIRT_TYPE")
 	if machineAcceleration == "" {
 		machineAcceleration = "hardware"
@@ -360,7 +372,7 @@ cloud "acceptance" {
  zone "test" {}
  instance_type "small" { cpu=2 memory_mib=2048 boot_disk_gib=8 }
  instance_type "too-small" { cpu=2 memory_mib=512 boot_disk_gib=8 }
- instance_type "larger" { cpu=2 memory_mib=3072 boot_disk_gib=16 }
+ instance_type "larger" { cpu=4 memory_mib=3072 boot_disk_gib=16 }
  network "lan" {}
  storage_class "standard" {}
  storage_class "efficient" { name="Space-efficient" description="Shares its source." clone_mode="overlay" }
@@ -370,6 +382,7 @@ cloud "acceptance" {
  config_drive_pool = %q
  image_pool = %q
  qcow_prealloc_metadata = false
+ cpu_overcommit=8
  zone="test" labels={rack="test"} network "lan" { network="qemu-usernet" } storage_class "standard" {pool=%q format="qcow2"}
  storage_class "efficient" {pool=%q format="qcow2"}
  storage_class "raw" {pool=%q format="raw"} }
@@ -641,6 +654,13 @@ cloud "offline" {
 		commands += fmt.Sprintf(`echo VMANGO_RTC=$(cat /sys/class/rtc/rtc0/date)T$(cat /sys/class/rtc/rtc0/time) > %s && echo VMANGO_CLOCKSOURCE=$(cat /sys/devices/system/clocksource/clocksource0/current_clocksource) > %s && `, serialDevice, serialDevice)
 		userdata = fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, '%stest \"$(hostname)\" = %s && echo %s > %s']\n", commands, name, marker, serialDevice)
 	}
+	if cpuPolicy {
+		commands := fmt.Sprintf(`test "$(getconf _NPROCESSORS_ONLN)" = "2" && cat /proc/cpuinfo > %s && `, serialDevice)
+		if arch == "x86_64" {
+			commands += `grep -qw aes /proc/cpuinfo && ! grep -qw avx2 /proc/cpuinfo && test "$(cat /sys/devices/system/cpu/cpu0/topology/physical_package_id)" = "0" && `
+		}
+		userdata = fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, '%stest \"$(hostname)\" = %s && echo %s > %s']\n", commands, name, marker, serialDevice)
+	}
 	// Check image constraints and the no-init alias through the same JSON API.
 	if os.Getenv("ACCEPTANCE_STORAGE_ONLY") == "1" {
 		testStorageCloning(t, root, name, "", apiRequest, apiCommand, mustVir, run)
@@ -732,6 +752,15 @@ cloud "offline" {
 	}
 	if !reflect.DeepEqual(beforePlatform.SysInfo, afterPlatform.SysInfo) || !reflect.DeepEqual(beforePlatform.Clock, afterPlatform.Clock) {
 		t.Fatal("resource change replaced guest system settings")
+	}
+	if beforePlatform.CPU == nil || beforePlatform.CPU.Topology == nil || afterPlatform.CPU == nil || afterPlatform.CPU.Topology == nil || beforePlatform.CPU.Topology.Cores != 2 || afterPlatform.CPU.Topology.Cores != 4 || afterPlatform.CPU.Topology.Sockets != 1 || afterPlatform.CPU.Topology.Threads != 1 {
+		t.Fatal("generated topology did not resize from 1/2/1 to 1/4/1")
+	}
+	beforeCPU, afterCPU := *beforePlatform.CPU, *afterPlatform.CPU
+	beforeCPU.Topology = nil
+	afterCPU.Topology = nil
+	if !reflect.DeepEqual(beforeCPU, afterCPU) || !reflect.DeepEqual(beforePlatform.Features, afterPlatform.Features) || !reflect.DeepEqual(beforePlatform.NUMATune, afterPlatform.NUMATune) || beforePlatform.VCPU.Placement != afterPlatform.VCPU.Placement {
+		t.Fatal("resize changed CPU/presentation/placement policy")
 	}
 	if beforePlatform.Type != afterPlatform.Type || beforePlatform.OS.Type.Machine != afterPlatform.OS.Type.Machine || beforePlatform.Devices.Emulator != afterPlatform.Devices.Emulator {
 		t.Fatal("resource change replaced platform binding")
@@ -1169,6 +1198,15 @@ cloud "offline" {
 		}
 		if !reflect.DeepEqual(runtimeDomain.SysInfo, afterRestart.SysInfo) || !reflect.DeepEqual(runtimeDomain.Clock, afterRestart.Clock) {
 			t.Fatal("restart changed guest system settings")
+		}
+	}
+	if cpuPolicy || nativeAuto {
+		var afterRestart libvirtxml.Domain
+		if err := afterRestart.Unmarshal(mustVir("dumpxml", domainUUID, "--inactive")); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(runtimeDomain.CPU, afterRestart.CPU) || !reflect.DeepEqual(runtimeDomain.Features, afterRestart.Features) || !reflect.DeepEqual(runtimeDomain.NUMATune, afterRestart.NUMATune) {
+			t.Fatal("process restart changed CPU/presentation/placement policy")
 		}
 	}
 	t.Log("process restart retained task history, backend references and compound volume navigation")

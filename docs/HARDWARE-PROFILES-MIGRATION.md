@@ -26,7 +26,7 @@ rewrite existing VM hardware, convert disks, or replay unfinished old commands.
 | Artifact URL/path, digest, architecture, resource minimums, required data disks | Image |
 | Firmware, ordinary disk protocol, NIC model, guest agent, graphics/video, hugepages | Libvirt hardware profile |
 | Config-drive enablement, data format and attachment type/bus | Libvirt hardware profile |
-| CPU count, CPU admission request, RAM and new root-disk size | Instance type |
+| CPU count, RAM and new root-disk size | Instance type |
 | Connection, pools, emulator and local network/storage bindings | Host |
 | User-data, metadata and SSH keys | Provisioning request |
 | Autostart | Successful user-requested power operations |
@@ -436,3 +436,24 @@ Compatible older plans lacking the optional SMBIOS/clock/timer fields remain
 valid with their previous meaning; no blanket re-adoption or command-version
 change is introduced. Missing or unsupported management policy still requires
 explicit adoption under the foundation contract.
+
+## CPU policy and admission upgrade (KRG-113)
+
+Remove every `cpu_request` field: configuration now rejects it rather than
+silently discounting admission. Historical VM metadata remains intact but full
+configured vCPUs count, including stopped/unmanaged domains. Capacity uses
+online physical cores (SMT siblings do not add cores), host reserve and overcommit
+(default 4). A previously overcommitted host remains observable; compatible
+resource reductions are allowed, additional exhausted-resource consumption fails.
+
+Command version 4 deliberately rejects queued/running version-3 commands at the
+existing incompatible-upgrade boundary. Inspect and resubmit; uncertain work
+retains effects/resource fences and is never replayed. Terminal history is
+preserved. Version-1 applied policies remain supported; omitted optional CPU
+policy does not require blanket re-adoption or hardware rewrites.
+
+New VMs get one socket, N cores and one thread per core. Existing/adopted
+topology and pins remain unchanged; only stopped simple-topology CPU resize or
+compatible RAM-only changes are supported. Consult the
+[CPU policy reference](content/en/docs/cpu-policies.md) for complete configuration,
+capability limits, native numad prerequisites and Hyper-V/timer dependencies.

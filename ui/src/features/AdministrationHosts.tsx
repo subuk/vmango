@@ -276,10 +276,11 @@ function HostInventory({
                                     },
                                     {
                                         id: "cpu",
-                                        label: "Host CPUs",
-                                        value: (h) => h.live?.cpus.length ?? -1,
+                                        label: "Physical cores",
+                                        value: (h) =>
+                                            h.live?.physical_cores ?? -1,
                                         render: (h) =>
-                                            h.live?.cpus.length ?? "—",
+                                            h.live?.physical_cores ?? "—",
                                         numeric: true,
                                     },
                                     {
@@ -526,7 +527,10 @@ function HostDetail({
                                                     "CPU overcommit",
                                                     h.cpu_overcommit,
                                                 ],
-                                                ["CPU reserve", h.cpu_reserve],
+                                                [
+                                                    "Physical core reserve",
+                                                    h.cpu_reserve,
+                                                ],
                                                 [
                                                     "Memory reserve",
                                                     bytes(

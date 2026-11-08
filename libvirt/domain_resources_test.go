@@ -22,7 +22,7 @@ func TestResourceChangeOnAdoptedDomainPreservesUnrelatedXML(t *testing.T) {
 			}
 			vm := &compute.VirtualMachine{VCpus: 4, Memory: compute.NewSize(4, compute.SizeUnitG), Hugepages: true}
 			applyDomainResources(config, vm, caps)
-			if config.CPU == nil || config.CPU.Topology == nil || config.CPU.Topology.Cores != 2 || config.CurrentMemory.Value != 4<<30 {
+			if config.CPU == nil || config.CPU.Topology == nil || config.CPU.Topology.Cores != 4 || config.CurrentMemory.Value != 4<<30 {
 				t.Fatalf("resource sizing was not applied: %+v", config)
 			}
 			if cpuXML != "" && (config.CPU.Mode != "host-passthrough" || len(config.CPU.Features) != 1) {

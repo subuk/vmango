@@ -457,3 +457,42 @@ preflight refinement, under
 `result/vmango-acceptance-d7b437b2-ef59-4dd4-a00c-f64d69dfb03d/`.
 These are functional boot/preservation observations, not clock-accuracy
 measurements or claims about every machine, firmware or timer combination.
+
+## CPU, topology and native placement
+
+Set `ACCEPTANCE_CPU_POLICY=1` to verify CPU policy on real guests. On x86/KVM the
+suite requests host-model, requires AES, disables AVX2, enables a small explicit
+Hyper-V custom set and KVM poll-control/pv-ipi. Guest cloud-init verifies its
+2-vCPU count and feature presence/absence and records `/proc/cpuinfo`. On
+macOS/HVF it uses maximum and checks guest CPU count. Every lifecycle run now
+checks a stopped resize from one socket/two cores/one thread to one socket/four
+cores/one thread, preserving all other CPU and presentation policy. The isolated
+acceptance host uses CPU overcommit 8 with full-vCPU/physical-core accounting.
+
+`ACCEPTANCE_NATIVE_AUTO=1` additionally requires a separately prepared Linux/KVM
+host with installed/running numad. The suite does not start numad or change host
+configuration. Inspect the isolated VM's live `virsh numatune --live` and
+`virsh vcpupin --live` results when it is running. A returned strict nodeset is
+native libvirt placement, not proof of single-node guarantees, exclusive CPUs or
+SMT isolation. Do not change existing guest affinity or host SMT for this test.
+
+### Recorded CPU verification, 2026-11-08
+
+- Local macOS/aarch64 HVF: full lifecycle and actual guest CPU count passed in
+  42 seconds; simple stopped topology resize and settings preservation passed.
+  Libvirt lacks the online-CPU-map RPC here; active native CPU counts matched the
+  complete per-core capabilities topology.
+- Remote Linux/x86_64 Q35/KVM, libvirt 8.0.0/QEMU 6.2.0: host-model AES/AVX2
+  requirements, custom Hyper-V/KVM flags, native auto placement, guest boot,
+  stopped resize, process restart and cleanup passed in 232 seconds. Live memory
+  policy was strict on nodeset 0; vCPUs had affinity 0–11 on the 6-core/12-thread
+  host. Temporarily started numad was restored to its original inactive state.
+- Read-only preflight rejected unknown required/disabled feature names, missing
+  models, Hyper-V host-model on libvirt 8, and missing active numad before VM
+  provisioning. A first numeric-HCL decoder failure was fixed and regressed
+  before the successful Linux run; the failed run created no VM.
+
+These runs do not establish Windows guest behavior, Hyper-V automatic modes on
+libvirt >=11.9, other CPU architectures, performance or SMT isolation. Browser
+inspection was unavailable because the built-in browser provider was unavailable;
+no external Chrome session was used. No package builds were performed.

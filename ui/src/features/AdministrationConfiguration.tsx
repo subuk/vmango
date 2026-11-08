@@ -256,9 +256,8 @@ export function CloudConfiguration({
                                     },
                                     {
                                         id: "cpu",
-                                        label: "vCPUs / request",
-                                        value: (t) =>
-                                            `${t.vcpus} / ${t.cpu_request}`,
+                                        label: "vCPUs",
+                                        value: (t) => t.vcpus,
                                     },
                                     {
                                         id: "memory",

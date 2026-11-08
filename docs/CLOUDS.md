@@ -114,11 +114,9 @@ warn and are ignored: format belongs to the profile, and listeners are derived.
 
 ## Catalog and placement
 
-Instance types configure the actual positive integer vCPU count (`cpu`), admission
-requests (`cpu_request`, defaulting to `cpu`), guest RAM (`memory_mib`) and the size
-of a newly provisioned boot disk (`boot_disk_gib`). CPU requests must be positive
-and no greater than the vCPU count; they do not configure CPU quotas, shares or
-runtime guarantees. Memory requests default to the limit and must equal it;
+Instance types configure vCPU count (`cpu`), guest RAM (`memory_mib`) and the new
+boot disk size (`boot_disk_gib`). Admission always counts full configured vCPUs;
+`cpu_request` has been removed and must be deleted from configuration. Memory requests default to the limit and must equal it;
 memory overselling and automatic ballooning are unsupported. Images own artifact sources and minimum resource requirements, and select a named
 libvirt hardware profile. Profiles own guest devices, hugepages and config-drive
 policy. Defaults include guest agent enabled, VNC, no video device and NoCloud on
@@ -321,7 +319,7 @@ Queued commands accepted with the former name-based identity are rejected before
 execution. Inspect old tasks and resubmit through the new API. New commands retain
 the resolved host and UUID, and idempotent recovery happens before backend reads.
 
-Host `cpu_overcommit` is an integer multiplier (default `4`, minimum `1`). CPU request capacity is `(host CPUs - cpu_reserve) * cpu_overcommit`; this applies to creation, adoption and instance type changes. Memory is not overcommitted.
+Host `cpu_overcommit` is an integer multiplier (default `4`, minimum `1`). Full-vCPU capacity is `(online physical cores - cpu_reserve) * cpu_overcommit`; SMT threads are not independent cores; this applies to creation, adoption and instance type changes. Memory is not overcommitted.
 
 ## Storage clone policy
 
@@ -349,3 +347,5 @@ An inactive storage pool or a domain disk whose metadata cannot be read makes
 the host dependency scan incomplete. Dependency-sensitive operations can then
 be blocked even for other disks on that host; the administrator must restore
 a complete, readable inventory before retrying.
+
+See [Guest CPU policies](https://vmango.org/docs/cpu-policies/) for CPU modes, full-vCPU migration, native placement, Hyper-V/KVM presentation and stopped resize.

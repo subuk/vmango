@@ -2,6 +2,7 @@ import {
     HardwareProfileFields,
     PlatformBindingFields,
     GuestSystemFields,
+    CPUObservationFields,
 } from "./HardwareProfiles";
 import {
     diskDependencyLabel,
@@ -194,6 +195,16 @@ function Overview({ vm }: { vm: VM }) {
                     <HardwareProfileFields
                         profile={vm.libvirt_hardware.profile}
                     />
+                    {vm.libvirt_hardware.cpu && (
+                        <DetailSection
+                            title="Applied CPU settings"
+                            description="Accepted CPU presentation. Host-derived capabilities can change across cold starts or hosts."
+                        >
+                            <CPUObservationFields
+                                value={vm.libvirt_hardware.cpu}
+                            />
+                        </DetailSection>
+                    )}
                     <DetailSection title="Applied platform binding">
                         <PlatformBindingFields
                             binding={vm.libvirt_hardware.applied}
@@ -226,6 +237,23 @@ function Overview({ vm }: { vm: VM }) {
                     description="Read from the backend domain XML; aliases in the requested policy may differ from these concrete values."
                 >
                     <PlatformBindingFields binding={vm.libvirt_observed} />
+                    {vm.libvirt_observed.cpu && (
+                        <DetailSection title="Observed persistent CPU settings">
+                            <CPUObservationFields
+                                value={vm.libvirt_observed.cpu}
+                            />
+                        </DetailSection>
+                    )}
+                    {vm.libvirt_observed.effective_cpu && (
+                        <DetailSection
+                            title="Observed live CPU settings"
+                            description="Effective libvirt XML. Native placement may span several NUMA nodes and does not provide SMT isolation."
+                        >
+                            <CPUObservationFields
+                                value={vm.libvirt_observed.effective_cpu}
+                            />
+                        </DetailSection>
+                    )}
                     {vm.libvirt_observed.guest_system && (
                         <DetailSection
                             title="Observed guest system settings"

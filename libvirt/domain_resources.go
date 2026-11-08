@@ -9,7 +9,11 @@ import (
 )
 
 func applyDomainResources(config *libvirtxml.Domain, vm *compute.VirtualMachine, caps *libvirtxml.Caps) {
-	config.VCPU = &libvirtxml.DomainVCPU{Placement: "static", Value: uint(vm.VCpus)}
+	placement := "static"
+	if config.VCPU != nil && config.VCPU.Placement != "" {
+		placement = config.VCPU.Placement
+	}
+	config.VCPU = &libvirtxml.DomainVCPU{Placement: placement, Value: uint(vm.VCpus)}
 	config.Memory = &libvirtxml.DomainMemory{Unit: "bytes", Value: uint(vm.Memory.Bytes())}
 	config.CurrentMemory = &libvirtxml.DomainCurrentMemory{Unit: "bytes", Value: uint(vm.Memory.Bytes())}
 	if vm.Hugepages {
@@ -25,25 +29,17 @@ func applyDomainResources(config *libvirtxml.Domain, vm *compute.VirtualMachine,
 	} else if config.MemoryBacking != nil {
 		config.MemoryBacking.MemoryHugePages = nil
 	}
-	threads := 0
-	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
+	threads := 1
+	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil && !plan.SimpleCPUTopology && plan.CPUThreads > 0 {
 		threads = plan.CPUThreads
-	}
-	if threads == 0 && caps.Host.CPU != nil && caps.Host.CPU.Topology != nil {
-		threads = caps.Host.CPU.Topology.Threads
-	}
-	if threads < 1 {
-		return
 	}
 	if config.CPU == nil {
 		config.CPU = &libvirtxml.DomainCPU{}
 	}
-
 	if vm.VCpus%threads == 0 {
-		config.CPU.Topology = &libvirtxml.DomainCPUTopology{Sockets: VirtualMachineSockets, Cores: vm.VCpus / threads, Threads: threads}
-	} else {
-		config.CPU.Topology = nil
+		config.CPU.Topology = &libvirtxml.DomainCPUTopology{Sockets: 1, Cores: vm.VCpus / threads, Threads: threads}
 	}
+
 }
 
 // Type changes update resource policy without rebuilding existing guest devices.
@@ -74,7 +70,7 @@ func applyDomainPolicy(virDomainConfig *libvirtxml.Domain, vm *compute.VirtualMa
 		virDomainConfig.CPU = previous
 		if previous != nil && previous.Topology != nil {
 			factor := topologyFactor(previous.Topology)
-			if factor > 0 && vm.VCpus%factor == 0 {
+			if factor == 1 {
 				previous.Topology.Cores = vm.VCpus / factor
 			}
 		}
@@ -173,10 +169,16 @@ func validateResourceTopology(c *libvirtxml.Domain, vcpus int) error {
 	if c.CPUTune != nil && (len(c.CPUTune.VCPUPin) > 0 || c.CPUTune.EmulatorPin != nil) && c.VCPU != nil && int(c.VCPU.Value) != vcpus {
 		return fmt.Errorf("explicit CPU pinning requires preserving vCPU count")
 	}
+	if c.VCPU != nil && int(c.VCPU.Value) == vcpus {
+		return nil
+	}
+	if c.CPU != nil && c.CPU.Numa != nil {
+		return fmt.Errorf("vCPU resize cannot restructure existing guest NUMA cells")
+	}
 	if c.CPU != nil && c.CPU.Topology != nil {
-		factor := topologyFactor(c.CPU.Topology)
-		if factor <= 0 || vcpus%factor != 0 {
-			return fmt.Errorf("vCPU count %d is incompatible with the applied CPU sockets/dies/clusters/threads topology", vcpus)
+		t := c.CPU.Topology
+		if t.Sockets != 1 || t.Threads != 1 || t.Dies > 1 || t.Clusters > 1 || c.VCPU == nil || t.Cores != int(c.VCPU.Value) {
+			return fmt.Errorf("vCPU resize requires the existing one-socket/one-thread simple topology; RAM-only changes remain supported")
 		}
 	}
 	return nil

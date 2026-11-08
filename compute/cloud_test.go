@@ -8,15 +8,24 @@ import (
 )
 
 func testType() InstanceType {
-	return InstanceType{ID: "small", Name: "Small", VCPUs: 4, CPURequest: 2, MemoryBytes: 2 << 30, MemoryRequestBytes: 2 << 30, BootDiskBytes: 10 << 30}
+	return InstanceType{ID: "small", Name: "Small", VCPUs: 4, MemoryBytes: 2 << 30, MemoryRequestBytes: 2 << 30, BootDiskBytes: 10 << 30}
+}
+func testPhysicalCPUs(n int) []NodeCpu {
+	r := make([]NodeCpu, n)
+	for i := range r {
+		r[i] = NodeCpu{CoreId: i, Online: true, TopologyKnown: true}
+	}
+	return r
 }
 func testInventory() HostInventory {
-	return HostInventory{Host: CloudHost{Node: "a", CPUOvercommit: 1, CPUReserve: 1, MemoryReserveBytes: 1 << 30}, Node: &Node{Cpus: make([]NodeCpu, 8), Numas: []NodeNuma{{Memory: NewSize(16, SizeUnitG)}}}}
+	return HostInventory{Host: CloudHost{Node: "a", CPUOvercommit: 1, CPUReserve: 1, MemoryReserveBytes: 1 << 30}, Node: &Node{Cpus: testPhysicalCPUs(8), Numas: []NodeNuma{{Memory: NewSize(16, SizeUnitG)}}}}
 }
 func TestSchedulingAccountsInactiveLegacyAndAppliedRequests(t *testing.T) {
 	i := testInventory()
 	legacy := &VirtualMachine{Id: "legacy", Name: "legacy", VCpus: 4, Memory: NewSize(4, SizeUnitG), State: StateStopped}
 	managed := &VirtualMachine{Id: "managed", Name: "managed", VCpus: 4, Memory: NewSize(4, SizeUnitG), Metadata: &MachineMetadata{CPURequest: 1, MemoryRequestBytes: 4 << 30}}
+	i.Host.CPUOvercommit = 2
+	i.Host.CPUReserve = 2
 	i.Machines = []*VirtualMachine{legacy, managed}
 	fit, err := Fit(i, testType(), "")
 	if err != nil || fit.FreeCPU != 0 || fit.FreeMemory != 5<<30 {
@@ -37,7 +46,7 @@ func TestTypeAdmissionReplacesCurrentRequests(t *testing.T) {
 	if _, err := Fit(i, testType(), ""); err == nil {
 		t.Fatal("expected insufficient CPU")
 	}
-	if fit, err := Fit(i, testType(), "current"); err != nil || fit.FreeCPU != 5 || fit.FreeMemory != 13<<30 {
+	if fit, err := Fit(i, testType(), "current"); err != nil || fit.FreeCPU != 3 || fit.FreeMemory != 13<<30 {
 		t.Fatalf("old allocation was double counted: %+v %v", fit, err)
 	}
 }
@@ -286,12 +295,11 @@ func TestCPUOvercommit(t *testing.T) {
 			effective = 4
 		}
 		typ := testType()
-		typ.CPURequest = 7 * effective
-		typ.VCPUs = typ.CPURequest
+		typ.VCPUs = 7 * effective
 		if fit, err := Fit(i, typ, ""); err != nil || fit.FreeCPU != 0 {
 			t.Fatalf("ratio %d: %+v %v", ratio, fit, err)
 		}
-		typ.CPURequest++
+		typ.VCPUs++
 		if _, err := Fit(i, typ, ""); err == nil {
 			t.Fatalf("ratio %d exceeded capacity", ratio)
 		}

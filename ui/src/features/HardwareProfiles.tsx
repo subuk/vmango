@@ -22,6 +22,41 @@ export function HardwareProfileFields({
             entries={[
                 ["Profile ID", profile.id],
                 [
+                    "Requested CPU",
+                    profile.cpu
+                        ? `${profile.cpu.mode}${profile.cpu.model ? ` · ${profile.cpu.model}` : ""}${profile.cpu.vendor ? ` · ${profile.cpu.vendor}` : ""}${profile.cpu.mode_explicit ? " (explicit)" : " (default for new VMs; preserved on adoption)"}`
+                        : "Preserved legacy policy",
+                ],
+                [
+                    "CPU features",
+                    profile.cpu?.features
+                        ?.map((f) => `${f.name}: ${f.policy}`)
+                        .join("; ") || "Mode/model defaults",
+                ],
+                [
+                    "Native placement",
+                    profile.placement
+                        ? `${profile.placement.mode}${profile.placement.memory_mode ? ` · ${profile.placement.memory_mode} memory` : ""}`
+                        : "Static for new VMs; existing affinity preserved",
+                ],
+                [
+                    "Hyper-V policy",
+                    profile.hyperv
+                        ? describeHyperV(profile.hyperv)
+                        : "Not enabled for new VMs; existing presentation preserved",
+                ],
+                [
+                    "KVM presentation",
+                    profile.kvm
+                        ? Object.entries(profile.kvm)
+                              .map(
+                                  ([name, value]) =>
+                                      `${name}: ${value ? "on" : "off"}`,
+                              )
+                              .join("; ") || "Backend defaults"
+                        : "Visible for new VMs; backend defaults / preserved on adoption",
+                ],
+                [
                     "Requested machine",
                     profile.machine
                         ? `${profile.machine.type}${profile.machine.type_explicit ? " (explicit)" : " (default for new VMs)"}`
@@ -271,4 +306,95 @@ export function GuestSystemFields({
             ]}
         />
     );
+}
+
+export function CPUObservationFields({
+    value,
+}: {
+    value: components["schemas"]["CPUObservation"];
+}) {
+    const t = value.topology;
+    return (
+        <Fields
+            entries={[
+                [
+                    "CPU mode / model / vendor",
+                    [value.mode, value.model, value.vendor]
+                        .filter(Boolean)
+                        .join(" · ") || "Backend default",
+                ],
+                [
+                    "CPU features",
+                    value.features
+                        ?.map((f) => `${f.name}: ${f.policy}`)
+                        .join("; ") || "Mode/model defaults",
+                ],
+                [
+                    "Guest topology",
+                    t
+                        ? `${t.sockets} sockets · ${t.cores} cores · ${t.threads} threads${t.dies ? ` · ${t.dies} dies` : ""}${t.clusters ? ` · ${t.clusters} clusters` : ""}`
+                        : "Not explicitly described",
+                ],
+                ["Guest NUMA cells", value.guest_numa],
+                [
+                    "CPU placement",
+                    `${value.placement || "static"}${value.cpuset ? ` · CPUs ${value.cpuset}` : ""}`,
+                ],
+                [
+                    "Memory placement",
+                    [
+                        value.memory_placement,
+                        value.memory_mode,
+                        value.memory_nodeset
+                            ? `nodes ${value.memory_nodeset}`
+                            : "",
+                    ]
+                        .filter(Boolean)
+                        .join(" · ") || "Unrestricted",
+                ],
+                [
+                    "Hyper-V presentation",
+                    [
+                        value.hyperv_mode,
+                        value.hyperv
+                            ?.map(
+                                (f) =>
+                                    `${f.name}: ${f.state}${f.value ? ` (${f.value})` : ""}`,
+                            )
+                            .join("; "),
+                    ]
+                        .filter(Boolean)
+                        .join(" · ") || "Not explicitly enabled",
+                ],
+                [
+                    "KVM presentation",
+                    value.kvm
+                        ?.map(
+                            (f) =>
+                                `${f.name}: ${f.state}${f.value ? ` (${f.value})` : ""}`,
+                        )
+                        .join("; ") || "Backend defaults",
+                ],
+            ]}
+        />
+    );
+}
+
+function describeHyperV(h: NonNullable<HardwareProfile["hyperv"]>) {
+    if (h.mode !== "custom")
+        return `${h.mode} (backend-selected enlightenments)`;
+    const values = Object.entries(h)
+        .filter(
+            ([name, value]) => name !== "mode" && typeof value === "boolean",
+        )
+        .map(([name, value]) => `${name}: ${value ? "on" : "off"}`);
+    if (h.spinlocks)
+        values.push(
+            `spinlocks: ${h.spinlocks.enabled ? `on (${h.spinlocks.retries} retries)` : "off"}`,
+        );
+    if (h.stimer)
+        values.push(
+            `stimer: ${h.stimer.enabled ? `on (direct ${h.stimer.direct ? "on" : "off"})` : "off"}`,
+        );
+    return `custom · ${values.join("; ") || "all features disabled"}`;
 }

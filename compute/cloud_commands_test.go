@@ -99,7 +99,11 @@ type cloudNodeBackend struct {
 }
 
 func (r cloudNodeBackend) Get(id string, _ compute.NodeGetOptions) (*compute.Node, error) {
-	return &compute.Node{Id: id, CpuArch: compute.ArchAmd64, Cpus: make([]compute.NodeCpu, r.cpus), Numas: []compute.NodeNuma{{Memory: compute.NewSize(16, compute.SizeUnitG)}}}, nil
+	cpus := make([]compute.NodeCpu, r.cpus)
+	for i := range cpus {
+		cpus[i] = compute.NodeCpu{CoreId: i, Online: true, TopologyKnown: true}
+	}
+	return &compute.Node{Id: id, CpuArch: compute.ArchAmd64, Cpus: cpus, Numas: []compute.NodeNuma{{Memory: compute.NewSize(16, compute.SizeUnitG)}}}, nil
 }
 
 type cloudPoolBackend struct{ compute.VolumePoolRepository }
@@ -192,7 +196,7 @@ func cloudFixtureInitialization(t *testing.T, cpus int, disks []compute.ImageDat
 	nodes := compute.NewNodeService(cloudNodeBackend{cpus: cpus})
 	pools := compute.NewVolumePoolService(cloudPoolBackend{})
 	manager := compute.NewVirtualMachineManager(vms, volumes, cloudEvents{}, nil, images)
-	c := compute.Cloud{ID: "c", Name: "Cloud", Zones: []compute.CatalogEntry{{ID: "z", Name: "Zone"}}, InstanceTypes: []compute.InstanceType{{ID: "small", Name: "Small", Autostart: true, VCPUs: 2, CPURequest: 2, MemoryBytes: 2 << 30, MemoryRequestBytes: 2 << 30, BootDiskBytes: 2 << 30}}, Images: []string{"image"}, Networks: []compute.CatalogEntry{{ID: "lan", Name: "LAN"}}, StorageClasses: []compute.StorageClass{{ID: "fast", Name: "Fast"}}, Hosts: []compute.CloudHost{{Node: "a", Zone: "z", CPUOvercommit: 1, Labels: map[string]string{"rack": "one"}, Networks: map[string]compute.NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]compute.StorageBinding{"fast": {Pool: "pool", Format: compute.VolumeFormatRaw}}}, {Node: "b", Zone: "z", CPUOvercommit: 1, Labels: map[string]string{"rack": "two"}, Networks: map[string]compute.NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]compute.StorageBinding{"fast": {Pool: "pool", Format: compute.VolumeFormatRaw}}}}}
+	c := compute.Cloud{ID: "c", Name: "Cloud", Zones: []compute.CatalogEntry{{ID: "z", Name: "Zone"}}, InstanceTypes: []compute.InstanceType{{ID: "small", Name: "Small", Autostart: true, VCPUs: 2, MemoryBytes: 2 << 30, MemoryRequestBytes: 2 << 30, BootDiskBytes: 2 << 30}}, Images: []string{"image"}, Networks: []compute.CatalogEntry{{ID: "lan", Name: "LAN"}}, StorageClasses: []compute.StorageClass{{ID: "fast", Name: "Fast"}}, Hosts: []compute.CloudHost{{Node: "a", Zone: "z", CPUOvercommit: 1, Labels: map[string]string{"rack": "one"}, Networks: map[string]compute.NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]compute.StorageBinding{"fast": {Pool: "pool", Format: compute.VolumeFormatRaw}}}, {Node: "b", Zone: "z", CPUOvercommit: 1, Labels: map[string]string{"rack": "two"}, Networks: map[string]compute.NetworkBinding{"lan": {Network: "net"}}, Storage: map[string]compute.StorageBinding{"fast": {Pool: "pool", Format: compute.VolumeFormatRaw}}}}}
 	clouds := &compute.CloudService{Definitions: []compute.Cloud{c}, Nodes: nodes, VMs: vms, Pools: pools, Volumes: volumes, Manager: manager}
 	manager.Clouds = clouds
 	handler := &compute.CommandHandler{Clouds: clouds, Manager: manager, VMs: vms, Volumes: volumes, Nodes: nodes}

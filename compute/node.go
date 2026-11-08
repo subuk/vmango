@@ -1,5 +1,7 @@
 package compute
 
+import "fmt"
+
 type NodeCpuPin struct {
 	VmId string
 	Desc string
@@ -73,10 +75,14 @@ func (n *NodeNuma) Pages1gUsedPercent() int {
 }
 
 type NodeCpu struct {
-	SocketId int
-	CoreId   int
-	NumaId   int
-	Pins     []NodeCpuPin
+	DieId         int
+	ClusterId     int
+	Online        bool
+	TopologyKnown bool
+	SocketId      int
+	CoreId        int
+	NumaId        int
+	Pins          []NodeCpuPin
 }
 
 type Node struct {
@@ -116,4 +122,25 @@ func (n *Node) Has1gPages() bool {
 		}
 	}
 	return false
+}
+
+// PhysicalCoreCount requires explicit topology and online state from the backend.
+// Package/die/cluster identities prevent repeated core IDs collapsing together.
+func (n *Node) PhysicalCoreCount() (int, error) {
+	cores := map[[4]int]bool{}
+	for _, c := range n.Cpus {
+		if !c.TopologyKnown {
+			return 0, fmt.Errorf("host %s: reliable physical CPU topology/online availability is unavailable", n.Id)
+		}
+		if c.Online {
+			if c.SocketId < 0 || c.DieId < 0 || c.ClusterId < 0 || c.CoreId < 0 {
+				return 0, fmt.Errorf("host %s: invalid physical CPU topology", n.Id)
+			}
+			cores[[4]int{c.SocketId, c.DieId, c.ClusterId, c.CoreId}] = true
+		}
+	}
+	if len(cores) == 0 {
+		return 0, fmt.Errorf("host %s: no online physical cores", n.Id)
+	}
+	return len(cores), nil
 }

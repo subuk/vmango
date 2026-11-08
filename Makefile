@@ -6,7 +6,7 @@ GO = go
 INSTALL = install
 GO_SOURCES = $(shell find . -path './ui/node_modules' -prune -o -path './ui/dist' -prune -o -path './vendor' -prune -o -name '*.go' -print)
 UNAME_S := $(shell uname -s)
-TARBALL_SOURCES = main.go main_test.go bootstrap/ compute/ tasks/ auth/ api/ ui/ installer/ filesystem/ libvirt/ config/ configdrive/ catalog/ util/ acceptance/ Makefile README.md LICENSE docs/NAMESPACES.md docs/API.md docs/UI-MIGRATION.md docs/TASKS.md docs/CLOUDS.md docs/HARDWARE-PROFILES-MIGRATION.md docs/INSTALLER.md docs/content/en/docs/images.md docs/content/en/docs/cloud-init-templates.md docs/content/en/docs/docker.md docs/data/image-sources.json scripts/verify-image-sources.py scripts/test-installer-lifecycle.py vmango.dist.conf vmango.quickstart.conf vmango.service vendor/ go.mod go.sum scripts/version.sh scripts/ui-assets.py
+TARBALL_SOURCES = main.go main_test.go bootstrap/ compute/ tasks/ auth/ api/ ui/ installer/ filesystem/ libvirt/ config/ configdrive/ catalog/ util/ acceptance/ Makefile README.md LICENSE docs/NAMESPACES.md docs/API.md docs/UI-MIGRATION.md docs/TASKS.md docs/CLOUDS.md docs/HARDWARE-PROFILES-MIGRATION.md docs/content/en/docs/cpu-policies.md docs/INSTALLER.md docs/content/en/docs/images.md docs/content/en/docs/cloud-init-templates.md docs/content/en/docs/docker.md docs/data/image-sources.json scripts/verify-image-sources.py scripts/test-installer-lifecycle.py vmango.dist.conf vmango.quickstart.conf vmango.service vendor/ go.mod go.sum scripts/version.sh scripts/ui-assets.py
 UI_PREBUILT ?= 0
 
 # Release workflows can override this before the release tag exists.

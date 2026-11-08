@@ -438,10 +438,24 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 		}
 		key, _ := item.Keys[0].Token.Value().(string)
 		if owner == "hardware_profile" {
-			allowed := map[string]bool{"name": true, "firmware": true, "disk_bus": true, "disk_controller": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "hugepages": true, "config_drive": true, "machine": true, "smbios": true, "clock": true, "timer": true}
+			allowed := map[string]bool{"name": true, "firmware": true, "disk_bus": true, "disk_controller": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "hugepages": true, "config_drive": true, "machine": true, "smbios": true, "clock": true, "timer": true, "cpu": true, "placement": true, "hyperv": true, "kvm": true}
 			if !allowed[key] {
 				return fmt.Errorf("hardware_profile: unsupported setting %s; see %s", key, HardwareMigrationGuide)
 			}
+		}
+		if key == "cpu_request" {
+			return fmt.Errorf("cpu_request was removed: remove this field; admission counts the full instance_type.cpu quantity (see %s)", HardwareMigrationGuide)
+		}
+		if owner == "hardware_profile" && (key == "cpu" || key == "placement" || key == "hyperv" || key == "kvm") {
+			if len(list.Filter(key).Items) > 1 {
+				return fmt.Errorf("hardware_profile.%s may be declared only once", key)
+			}
+			if err := validateCPUBlock(item, key); err != nil {
+				return err
+			}
+		}
+		if (key == "placement" || key == "hyperv" || key == "kvm" || key == "cpu" && owner != "instance_type") && owner != "hardware_profile" {
+			return fmt.Errorf("%s belongs only in hardware_profile", key)
 		}
 		if owner == "hardware_profile" && (key == "smbios" || key == "clock" || key == "timer") {
 			if key != "timer" && len(list.Filter(key).Items) > 1 {

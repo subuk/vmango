@@ -32,7 +32,6 @@ cloud "local" {
     instance_type "small" {
         name = "Small"
         cpu = 2
-        cpu_request = 1
         memory_mib = 2048
         boot_disk_gib = 20
     }
@@ -120,9 +119,8 @@ migration instruction. Backend settings do not belong in the public cloud API.
 
 ## Resources and placement
 
-`cpu` sets the actual vCPU count. `cpu_request` defaults to `cpu`, must be positive
-and no greater than it, and affects admission only; it does not impose quotas or
-CPU shares. Memory requests equal guest RAM; memory overselling is unsupported.
+`cpu` sets the actual vCPU count. Admission always counts full configured vCPUs;
+`cpu_request` has been removed and must be deleted from configuration. Memory requests equal guest RAM; memory overselling is unsupported.
 `boot_disk_gib` sets the size of a newly created boot disk and must satisfy the
 image minimum. Additional disks have independent sizes.
 
@@ -300,3 +298,5 @@ An inactive storage pool or a domain disk whose metadata cannot be read makes
 the host dependency scan incomplete. Dependency-sensitive operations can then
 be blocked even for other disks on that host; the administrator must restore
 a complete, readable inventory before retrying.
+
+See [Guest CPU policies](../cpu-policies/) for physical-core accounting, migration, CPU and hypervisor presentation, native placement and stopped resize.

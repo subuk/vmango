@@ -425,7 +425,7 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 			if network.Model != "" && image.Defaults.NICModel != "" && network.Model != image.Defaults.NICModel {
 				return InfrastructureCommand{}, fmt.Errorf("network model conflicts with image requirements")
 			}
-			vm := &VirtualMachine{Id: uuid.NewString(), Name: spec.Name, NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Config: &VirtualMachineConfig{Hostname: spec.Name, Userdata: []byte(spec.UserData)}, Interfaces: []*VirtualMachineAttachedInterface{{NetworkName: network.Network, LogicalNetwork: spec.Network, Bridge: network.Bridge, Model: network.Model, AccessVlan: network.VLAN}}, Metadata: &MachineMetadata{Cloud: c.ID, Zone: h.Zone, InstanceType: t.ID, Image: image.ID, CPURequest: t.CPURequest, MemoryRequestBytes: t.MemoryBytes, MinimumMemoryBytes: image.MinimumMemoryBytes}}
+			vm := &VirtualMachine{Id: uuid.NewString(), Name: spec.Name, NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Config: &VirtualMachineConfig{Hostname: spec.Name, Userdata: []byte(spec.UserData)}, Interfaces: []*VirtualMachineAttachedInterface{{NetworkName: network.Network, LogicalNetwork: spec.Network, Bridge: network.Bridge, Model: network.Model, AccessVlan: network.VLAN}}, Metadata: &MachineMetadata{Cloud: c.ID, Zone: h.Zone, InstanceType: t.ID, Image: image.ID, CPURequest: t.VCPUs, MemoryRequestBytes: t.MemoryBytes, MinimumMemoryBytes: image.MinimumMemoryBytes}}
 			if spec.Hostname != "" {
 				vm.Config.Hostname = spec.Hostname
 			}

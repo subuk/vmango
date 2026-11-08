@@ -1,6 +1,7 @@
 package libvirt
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -112,6 +113,19 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId s
 		return nil, repositoryError(err, "cannot create virtual machine from domain config")
 	}
 
+	if vm.IsRunning() {
+		if raw, e := domain.GetXMLDesc(0); e == nil {
+			var live libvirtxml.Domain
+			if live.Unmarshal(raw) == nil {
+				var observed hardware.ObservedHardware
+				if json.Unmarshal(vm.ObservedBackend, &observed) == nil {
+					effective := observeCPU(&live)
+					observed.EffectiveCPU = &effective
+					vm.ObservedBackend, _ = json.Marshal(observed)
+				}
+			}
+		}
+	}
 	autostart, err := domain.GetAutostart()
 	if err != nil {
 		return nil, repositoryError(err, "cannot get domain autostart value")
@@ -415,6 +429,7 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 	virDomainConfig.Clock = &libvirtxml.DomainClock{Offset: "utc"}
 	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
 		applyGuestSystem(virDomainConfig, plan.Profile)
+		applyCPUPolicy(virDomainConfig, plan.Profile)
 	}
 	applyDomainPowerPolicy(virDomainConfig)
 	virDomainConfig.Devices = &libvirtxml.DomainDeviceList{Emulator: domCapsConfig.Path}
@@ -487,6 +502,15 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 		}
 		virDomainConfig = newVirDomainConfig
 	} else {
+		if resourcesOnly {
+			active, e := existingVirDomain.IsActive()
+			if e != nil {
+				return e
+			}
+			if active {
+				return fmt.Errorf("%w: resource changes require a stopped VM", compute.ErrConflict)
+			}
+		}
 		flags := libvirt.DOMAIN_XML_INACTIVE
 		if resourcesOnly {
 			flags |= libvirt.DOMAIN_XML_SECURE

@@ -680,7 +680,7 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 
 		metadata := *current.Metadata
 		metadata.InstanceType = t.ID
-		metadata.CPURequest = t.CPURequest
+		metadata.CPURequest = t.VCPUs
 		metadata.MemoryRequestBytes = t.MemoryBytes
 		current.Metadata = &metadata
 		if backend, ok := h.VMs.VirtualMachineRepository.(BackendMachineRepository); ok {
@@ -698,7 +698,7 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		if err != nil {
 			return err
 		}
-		if actual.Autostart != before.Autostart || actual.VCpus != t.VCPUs || actual.Memory.Bytes() != t.MemoryBytes || actual.Metadata == nil || actual.Metadata.CPURequest != t.CPURequest || actual.Metadata.InstanceType != t.ID {
+		if actual.Autostart != before.Autostart || actual.VCpus != t.VCPUs || actual.Memory.Bytes() != t.MemoryBytes || actual.Metadata == nil || actual.Metadata.CPURequest != t.VCPUs || actual.Metadata.InstanceType != t.ID {
 			return fmt.Errorf("instance type change was not confirmed")
 		}
 		return nil

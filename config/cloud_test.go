@@ -13,7 +13,7 @@ cloud "test" {
  image "linux" { hardware_profile="default" path="/source" os_arch="x86_64" }
  name="Test cloud"
  zone "zone" { name="Zone" }
- instance_type "small" { cpu=2 cpu_request=1 memory_mib=2048 boot_disk_gib=20 }
+ instance_type "small" { cpu=2 memory_mib=2048 boot_disk_gib=20 }
  network "lan" { name="LAN" }
  storage_class "fast" { name="Fast" }
  host "a" { uri="qemu:///session" zone="zone" cpu_reserve=1 memory_reserve_mib=512 labels={rack="one"} network "lan" {network="default"} storage_class "fast" {pool="nvme"} }
@@ -39,12 +39,12 @@ func TestCloudBindingsAndRequests(t *testing.T) {
 		t.Fatal(clouds, err)
 	}
 	c := clouds[0]
-	if len(c.Hosts) != 2 || c.Hosts[0].Storage["fast"].Pool != "nvme" || c.Hosts[1].Storage["fast"].Pool != "ssd" || c.InstanceTypes[0].CPURequest != 1 || c.InstanceTypes[0].MemoryRequestBytes != 2<<30 || c.InstanceTypes[0].BootDiskBytes != 20<<30 || c.Hosts[0].MemoryReserveBytes != 512<<20 {
+	if len(c.Hosts) != 2 || c.Hosts[0].Storage["fast"].Pool != "nvme" || c.Hosts[1].Storage["fast"].Pool != "ssd" || c.InstanceTypes[0].MemoryRequestBytes != 2<<30 || c.InstanceTypes[0].BootDiskBytes != 20<<30 || c.Hosts[0].MemoryReserveBytes != 512<<20 {
 		t.Fatalf("incorrect cloud conversion: %+v", c)
 	}
 }
 func TestInvalidCloudConfiguration(t *testing.T) {
-	for _, tt := range []struct{ old, new, reason string }{{"memory_mib=2048", "memory_mib=2048 memory_request_mib=1024", "memory overselling is not supported yet"}, {"cpu_request=1", "cpu_request=3", "invalid instance type"}, {"cpu_request=1", "cpu_request=0", "invalid instance type"}, {"zone=\"zone\"", "zone=\"unknown\"", "invalid host"}, {`image "linux"`, `image "invalid/id"`, "stable catalog ID"}, {"pool=\"nvme\"", "pool=\"nvme\" format=\"invalid\"", "invalid storage binding"}, {"qemu+ssh://b/system", "qemu:///session", "exactly one cloud"}, {"memory_mib=2048", "memory_mib=-1", "invalid or overflowing"}} {
+	for _, tt := range []struct{ old, new, reason string }{{"memory_mib=2048", "memory_mib=2048 memory_request_mib=1024", "memory overselling is not supported yet"}, {"cpu=2", "cpu=2 cpu_request=1", "cpu_request was removed"}, {"cpu=2", "cpu=2 cpu_request=0", "cpu_request was removed"}, {"zone=\"zone\"", "zone=\"unknown\"", "invalid host"}, {`image "linux"`, `image "invalid/id"`, "stable catalog ID"}, {"pool=\"nvme\"", "pool=\"nvme\" format=\"invalid\"", "invalid storage binding"}, {"qemu+ssh://b/system", "qemu:///session", "exactly one cloud"}, {"memory_mib=2048", "memory_mib=-1", "invalid or overflowing"}} {
 		t.Run(tt.reason, func(t *testing.T) {
 			_, err := parseCloudTest(t, strings.Replace(cloudConfig, tt.old, tt.new, 1))
 			if err == nil || !strings.Contains(err.Error(), tt.reason) {
@@ -65,7 +65,7 @@ func TestAdministratorPolicyOwnershipAndDefaults(t *testing.T) {
 	if clouds[0].InstanceTypes[0].Autostart || images[0].Defaults.GuestAgent != nil || g.String() != "vnc" || v.String() != "none" || cfg.Hosts()[0].GraphicsListen != "" {
 		t.Fatal("omission defaults changed")
 	}
-	cfg, err = parseCloudTest(t, strings.Replace(cloudConfig, "cpu=2 cpu_request=1", "autostart=true cpu=2 cpu_request=1", 1))
+	cfg, err = parseCloudTest(t, strings.Replace(cloudConfig, "cpu=2", "autostart=true cpu=2", 1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,8 +76,8 @@ func TestAdministratorPolicyOwnershipAndDefaults(t *testing.T) {
 	for _, tt := range []struct{ old, new, field string }{
 		{`os_arch="x86_64"`, `os_arch="x86_64" autostart=true`, "autostart"},
 		{`os_arch="x86_64"`, `os_arch="x86_64" graphics_listen="127.0.0.1"`, "graphics_listen"},
-		{`cpu=2 cpu_request=1`, `cpu=2 cpu_request=1 guest_agent=true`, "guest_agent"},
-		{`cpu=2 cpu_request=1`, `cpu=2 cpu_request=1 graphics="vnc"`, "graphics"},
+		{`cpu=2`, `cpu=2 guest_agent=true`, "guest_agent"},
+		{`cpu=2`, `cpu=2 graphics="vnc"`, "graphics"},
 		{`uri="qemu:///session"`, `uri="qemu:///session" video_model="qxl"`, "video_model"},
 	} {
 		_, err := parseCloudTest(t, strings.Replace(cloudConfig, tt.old, tt.new, 1))
