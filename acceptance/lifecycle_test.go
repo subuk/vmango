@@ -75,11 +75,15 @@ func TestLifecycle(t *testing.T) {
 	if runtime.GOARCH == "arm64" {
 		arch = "aarch64"
 	}
-	if remote {
+	if remote || os.Getenv("ACCEPTANCE_ARCH") != "" {
 		arch = os.Getenv("ACCEPTANCE_ARCH")
 		if arch != "x86_64" && arch != "aarch64" {
-			t.Fatal("remote acceptance needs ACCEPTANCE_ARCH")
+			t.Fatal("ACCEPTANCE_ARCH must be x86_64 or aarch64")
 		}
+	}
+	displayMode := os.Getenv("ACCEPTANCE_DISPLAY")
+	if displayMode != "" && displayMode != "headless" && displayMode != "vnc" && displayMode != "vmvga" {
+		t.Fatal("ACCEPTANCE_DISPLAY must be headless, vnc or vmvga")
 	}
 	adoptPower := os.Getenv("ACCEPTANCE_ADOPT_POWER") == "1"
 	if adoptPower && arch != "x86_64" {
@@ -397,7 +401,7 @@ api {
 	}
 	configuration += fmt.Sprintf(`
 cloud "acceptance" {
- hardware_profile "boot" { %s machine { type = %q acceleration = %q } %s %s guest_agent = false graphics = "vnc" video_model = "none" config_drive { format = %q device_type = %q bus = %q controller_model=%q } }
+ hardware_profile "boot" { %s machine { type = %q acceleration = %q } %s %s guest_agent = false %s config_drive { format = %q device_type = %q bus = %q controller_model=%q } }
  hardware_profile "no-init" { %s machine { type = %q acceleration = %q } %s config_drive { enabled = false } }
  image "boot" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "boot" protected = true minimum_memory_mib = 1024 minimum_disk_gib = 8 }
  image "no-init" { path = %q os_name = "Ubuntu" os_arch = %q hardware_profile = "no-init" }
@@ -419,7 +423,10 @@ cloud "acceptance" {
  storage_class "efficient" {pool=%q format="qcow2"}
  storage_class "raw" {pool=%q format="raw"} }
 }
-`, guestPolicy, machineType, machineAcceleration, firmwareBlock, disksBlock, initialization, configDriveDevice, configDriveBus, cdModel, guestPolicy, machineType, machineAcceleration, firmwareBlock, base, arch, base, arch, uri, name, name, name, name, name)
+`, guestPolicy, machineType, machineAcceleration, firmwareBlock, disksBlock, presentationProfile(displayMode), initialization, configDriveDevice, configDriveBus, cdModel, guestPolicy, machineType, machineAcceleration, firmwareBlock, base, arch, base, arch, uri, name, name, name, name, name)
+	if network := os.Getenv("ACCEPTANCE_NETWORK"); network != "" {
+		configuration = strings.Replace(configuration, `network="qemu-usernet"`, fmt.Sprintf("network=%q", network), 1)
+	}
 	if loader := os.Getenv("ACCEPTANCE_FIRMWARE_LOADER"); loader != "" {
 		template, format := os.Getenv("ACCEPTANCE_FIRMWARE_TEMPLATE"), os.Getenv("ACCEPTANCE_FIRMWARE_FORMAT")
 		if !firmwareTest || template == "" || (format != "raw" && format != "qcow2") {
@@ -711,6 +718,9 @@ cloud "offline" {
 		}
 		userdata = fmt.Sprintf("#cloud-config\nruncmd:\n  - [sh, -c, '%stest \"$(hostname)\" = %s && echo %s > %s']\n", commands, name, marker, serialDevice)
 	}
+	if displayMode != "" {
+		userdata = presentationUserdata(displayMode, password, name, marker, serialDevice)
+	}
 	storageTopology := os.Getenv("ACCEPTANCE_STORAGE_TOPOLOGY") == "1"
 	dataMarker := "VMANGO_DATA_OK_" + uuid.NewString()
 	if storageTopology {
@@ -804,6 +814,9 @@ cloud "offline" {
 	}
 	if err := afterPlatform.Unmarshal(changedXML); err != nil {
 		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(beforePlatform.Devices.Inputs, afterPlatform.Devices.Inputs) || !reflect.DeepEqual(beforePlatform.Devices.Videos, afterPlatform.Devices.Videos) {
+		t.Fatal("instance type changed video/input")
 	}
 	if !reflect.DeepEqual(beforePlatform.OS, afterPlatform.OS) {
 		t.Fatal("resource change rewrote firmware XML")
@@ -945,6 +958,9 @@ cloud "offline" {
 	if err := runtimeDomain.Unmarshal(xml); err != nil {
 		t.Fatal(err)
 	}
+	if displayMode != "" {
+		checkPresentationXML(t, &runtimeDomain, displayMode)
+	}
 	if guestSystem {
 		if runtimeDomain.Clock == nil || runtimeDomain.Clock.Offset != clockMode || clockMode == "timezone" && runtimeDomain.Clock.TimeZone != "Europe/Berlin" {
 			t.Fatal("clock policy missing from XML")
@@ -1040,14 +1056,20 @@ cloud "offline" {
 		t.Fatal(err)
 	}
 	defer consoleLog.Close()
-	vnc := dial("vnc/ws")
-	vnc.SetReadDeadline(time.Now().Add(10 * time.Second))
-	_, greeting, err := vnc.ReadMessage()
-	vnc.Close()
-	if err != nil || !strings.HasPrefix(string(greeting), "RFB ") {
-		t.Fatalf("VNC handshake: %q %v", greeting, err)
+	if displayMode != "headless" {
+		vnc := dial("vnc/ws")
+		vnc.SetReadDeadline(time.Now().Add(10 * time.Second))
+		_, greeting, e := vnc.ReadMessage()
+		vnc.Close()
+		if e != nil || !strings.HasPrefix(string(greeting), "RFB ") {
+			t.Fatalf("VNC handshake: %q %v", greeting, e)
+		}
+	} else {
+		if _, e := vir("vncdisplay", domainUUID); e == nil {
+			t.Fatal("headless has VNC endpoint")
+		}
 	}
-	t.Log("VNC proxy returned RFB greeting; waiting for cloud-init boot marker")
+	t.Log("waiting for cloud-init boot marker over serial")
 	tail := ""
 	for !strings.Contains(tail, marker) {
 		_, data, err := console.ReadMessage()
@@ -1060,7 +1082,35 @@ cloud "offline" {
 			tail = tail[len(tail)-65536:]
 		}
 	}
+	if displayMode != "" && displayMode != "headless" {
+		console.SetReadDeadline(time.Now().Add(90 * time.Second))
+		for !strings.Contains(tail, "VMANGO_INPUT_READY") {
+			_, data, e := console.ReadMessage()
+			if e != nil {
+				t.Fatal("USB guest probe not ready", e)
+			}
+			consoleLog.Write(data)
+			tail += string(data)
+		}
+		inputVNC := dial("vnc/ws")
+		defer inputVNC.Close()
+		sendRFBInput(t, inputVNC)
+		for !strings.Contains(tail, "VMANGO_INPUT_KEY") || !strings.Contains(tail, "VMANGO_INPUT_POINTER") {
+			_, data, e := console.ReadMessage()
+			if e != nil {
+				t.Fatal("guest did not receive RFB keyboard/pointer", e)
+			}
+			consoleLog.Write(data)
+			tail += string(data)
+		}
+		inputVNC.Close()
+		mustVir("screenshot", domainUUID, filepath.Join(root, "framebuffer.ppm"))
+		t.Log("guest received USB keyboard and pointer; framebuffer captured")
+	}
 	console.Close()
+	if displayMode == "headless" {
+		serialLogin(t, dial("serial/ws"), password)
+	}
 	if guestSystem {
 		if arch == "x86_64" && !strings.Contains(strings.ToLower(tail), "vmango_dmi_uuid="+strings.ToLower(domainUUID)) {
 			t.Fatal("guest SMBIOS UUID differs from domain UUID; see console.log")
@@ -1106,7 +1156,11 @@ cloud "offline" {
 	}
 
 	// Test signed browser transports without browser refresh cookies or resource Bearer headers.
-	for _, kind := range []string{"serial", "vnc"} {
+	consoleKinds := []string{"serial", "vnc"}
+	if displayMode == "headless" {
+		consoleKinds = []string{"serial"}
+	}
+	for _, kind := range consoleKinds {
 		var link struct {
 			URL string `json:"url"`
 		}
@@ -1147,7 +1201,7 @@ cloud "offline" {
 			c.Close()
 		}
 	}
-	t.Log("signed serial/VNC links reconnected; second serial client rejected")
+	t.Log("signed console links reconnected; second serial client rejected")
 	if adoptPower {
 		apiCommand("POST", apiVMPath+"/actions", map[string]string{"action": "shutdown"})
 		for deadline := time.Now().Add(90 * time.Second); ; {
@@ -1310,6 +1364,16 @@ cloud "offline" {
 		t.Fatal("restart changed task history/resource references")
 	}
 	apiRequest("GET", volumeBase+"/"+disk.ID, nil, 200)
+	if displayMode != "" {
+		var after libvirtxml.Domain
+		if e := after.Unmarshal(mustVir("dumpxml", domainUUID, "--inactive")); e != nil {
+			t.Fatal(e)
+		}
+		checkPresentationXML(t, &after, displayMode)
+		if !reflect.DeepEqual(runtimeDomain.Devices.Inputs, after.Devices.Inputs) || !reflect.DeepEqual(runtimeDomain.Devices.Videos, after.Devices.Videos) {
+			t.Fatal("unrelated mutations or restart changed graphics/input")
+		}
+	}
 	if guestSystem {
 		var afterRestart libvirtxml.Domain
 		if err := afterRestart.Unmarshal(mustVir("dumpxml", domainUUID, "--inactive")); err != nil {
@@ -1538,7 +1602,7 @@ cloud "offline" {
 			t.Fatalf("volume remains after HTTP delete: %s (%v)", file, err)
 		}
 	}
-	t.Log("PASS: create → start → VNC/serial → guest cloud-init → poweroff → delete VM and disks")
+	t.Log("PASS: create → start → configured consoles → guest cloud-init → poweroff → delete VM and disks")
 }
 
 // These settings describe what the test must observe. They do not change the

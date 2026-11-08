@@ -118,7 +118,7 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 	if err != nil {
 		return nil, err
 	}
-	vm.ObservedBackend, _ = json.Marshal(hardware.ObservedHardware{Storage: observeStorage(domainConfig), Firmware: observeFirmware(domainConfig), PlatformBinding: domainPlatform(domainConfig), GuestSystem: observeGuestSystem(domainConfig), CPU: observeCPU(domainConfig)})
+	vm.ObservedBackend, _ = json.Marshal(hardware.ObservedHardware{Presentation: observeDisplayDevices(domainConfig), Storage: observeStorage(domainConfig), Firmware: observeFirmware(domainConfig), PlatformBinding: domainPlatform(domainConfig), GuestSystem: observeGuestSystem(domainConfig), CPU: observeCPU(domainConfig)})
 	vm.Metadata = metadata
 	vm.AppliedPolicy, err = readHardwareMetadata(domainConfig)
 	if err != nil {
@@ -221,18 +221,10 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 		vm.Graphic.Type = compute.GraphicTypeNone
 	}
 
-	for _, video := range domainConfig.Devices.Videos {
-		switch video.Model.Type {
-		case "qxl":
-			vm.VideoModel = compute.VideoModelQxl
-		case "cirrus":
-			vm.VideoModel = compute.VideoModelCirrus
-		case "virtio":
-			vm.VideoModel = compute.VideoModelVirtio
-		}
-	}
-	if vm.VideoModel == compute.VideoModelUnknown {
+	if len(domainConfig.Devices.Videos) == 0 {
 		vm.VideoModel = compute.VideoModelNone
+	} else {
+		vm.VideoModel = compute.NewVideoModel(domainConfig.Devices.Videos[0].Model.Type)
 	}
 
 	if domainConfig.QEMUCommandline != nil && len(domainConfig.QEMUCommandline.Args) > 0 {

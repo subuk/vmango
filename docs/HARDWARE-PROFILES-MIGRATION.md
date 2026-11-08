@@ -478,3 +478,20 @@ its own explicit `controller_model`. See [Disk policy and complete examples](DIS
 
 This configuration migration does not convert existing VM devices or alter
 supported saved plans. Adoption checks compatibility without rewriting hardware.
+
+## Graphics, video and USB input blocks
+
+Flat hardware-profile `graphics` and `video_model` fields are rejected. Use
+`graphics { type="vnc" video_model="virtio" }`, `input { keyboard="usb" pointer="usb-tablet" }`
+and optional `usb_controller { model="qemu-xhci" }`. New defaults on both x86/ARM
+are VNC, virtio video and USB keyboard/tablet with one shared XHCI. To retain no
+managed USB input for newly accepted guests, explicitly disable both input fields.
+An explicit `video_model="none"` still means no video; it is never replaced.
+
+Use `graphics {type="none"}` for a serial-only server. It adds no graphics/video,
+input or USB dependency; an explicit standalone XHCI is retained. Existing
+applied policies and accepted plans keep historical omission semantics. Adoption
+preserves omitted input constraints and extra PS/2/devices/addresses/listeners.
+Image-inline deprecated fields and host `graphics_listen` remain warned/ignored.
+See [graphics/input documentation](content/en/docs/graphics-input.md) and the
+[parser-tested examples](examples/graphics.conf) before migrating profiles.

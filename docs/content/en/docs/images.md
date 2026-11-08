@@ -309,8 +309,10 @@ The following settings belong to `hardware_profile`, not `image`:
 | `disks.controller_model` | `virtio-scsi`, `lsilogic`, `lsisas1068`, `vmpvscsi`; SCSI only | Required for SCSI; forbidden otherwise |
 | `nic_model` | `virtio`, `e1000`, `rtl8139`, subject to backend support | `virtio` |
 | `guest_agent` | `true`, `false` | `true` |
-| `graphics` | `none`, `vnc`, `spice`, subject to backend support | `vnc` |
-| `video_model` | `none`, `cirrus`, `qxl`, `virtio` (2D) | `none` |
+| `graphics.type` | `none`, `vnc`, `spice`, subject to backend support | `vnc` |
+| `graphics.video_model` | `none`, `cirrus`, `qxl`, `virtio` (2D), `vmvga` | `virtio` with graphics, otherwise `none` |
+| `input.keyboard` / `input.pointer` | `usb` or `none` / `usb-tablet`, `usb-mouse`, `none` | USB keyboard/tablet with graphics |
+| `usb_controller.model` | `qemu-xhci` | One shared input dependency, otherwise absent |
 | `hugepages` | `true`, `false` | `false` |
 | `config_drive.enabled` | `true`, `false` | `true` |
 | `config_drive.format` | `nocloud`, `openstack` | `nocloud` |
@@ -318,7 +320,7 @@ The following settings belong to `hardware_profile`, not `image`:
 | `config_drive.bus` | `virtio`, `scsi`, `ide`, `sata`, compatible with device type | `virtio` |
 | `config_drive.controller_model` | Same explicit SCSI models as ordinary disks | Required for SCSI; forbidden otherwise |
 
-`graphics="none"` requires no video model. New graphics-enabled VMs listen only
+`graphics { type="none" }` disables video and input defaults. See [graphics and input](../graphics-input/) for complete server examples, guest prerequisites and migration. New graphics-enabled VMs listen only
 on host loopback, and remote console traffic uses SSH. The listener address is
 not configurable. Existing VM listeners are preserved. Hugepages must already
 be available on the host; Vmango does not configure host page pools.
@@ -444,8 +446,7 @@ hardware_profile "android-arm64" {
     firmware { type = "efi" }
     disks { bus = "virtio" }
     nic_model = "virtio"
-    graphics = "vnc"
-    video_model = "virtio"
+    graphics { type = "vnc" video_model = "virtio" }
     guest_agent = false
     config_drive { enabled = false }
 }
@@ -480,7 +481,7 @@ blank disk and libvirt creates fresh UEFI variables.
 
 Open the machine's console, select **VNC**, and connect to complete the LineageOS
 setup wizard. New ARM64 graphical VMs include USB keyboard and tablet input;
-`video_model = "virtio"` uses 2D graphics without host OpenGL acceleration.
+`graphics.video_model = "virtio"` uses 2D graphics without host OpenGL acceleration.
 SSH keys and cloud-init user data do not configure this image.
 
 Verified on 2026-11-03 through Vmango's creation API on an Apple M1 Pro with

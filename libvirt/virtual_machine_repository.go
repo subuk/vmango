@@ -436,7 +436,10 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 	virDomainConfig.Devices = &libvirtxml.DomainDeviceList{Emulator: domCapsConfig.Path}
 	// ARM virt has no implicit PS/2 input. USB input works in both UEFI and
 	// graphical guests, including before guest-specific drivers are loaded.
-	if domCapsConfig.Arch == "aarch64" && (vm.Graphic.Type == compute.GraphicTypeVnc || vm.Graphic.Type == compute.GraphicTypeSpice) {
+	plan, planErr := hardware.DecodePlan(vm.AppliedPolicy)
+	if planErr == nil && plan.Profile.Presentation != nil {
+		applyPresentation(virDomainConfig, plan.Profile.Presentation)
+	} else if domCapsConfig.Arch == "aarch64" && (vm.Graphic.Type == compute.GraphicTypeVnc || vm.Graphic.Type == compute.GraphicTypeSpice) {
 		virDomainConfig.Devices.Controllers = append(virDomainConfig.Devices.Controllers, libvirtxml.DomainController{Type: "usb", Model: "qemu-xhci"})
 		virDomainConfig.Devices.Inputs = []libvirtxml.DomainInput{
 			{Type: "keyboard", Bus: "usb"},
@@ -579,6 +582,9 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 	}
 	if isNewVm {
 		if err = repo.recordFirmwareAllocation(virDomain, vm); err != nil {
+			return err
+		}
+		if err = repo.recordPresentation(virDomain, vm); err != nil {
 			return err
 		}
 	}

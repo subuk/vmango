@@ -29,6 +29,7 @@ type ConfigDrive struct {
 func (c ConfigDrive) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
 
 type Profile struct {
+	Presentation   *Presentation    `json:"presentation,omitempty"`
 	Disks          *Disks           `json:"disks,omitempty"`
 	FirmwarePolicy *Firmware        `json:"firmware_policy,omitempty"`
 	CPU            *CPU             `json:"cpu,omitempty"`
@@ -82,20 +83,21 @@ type StateContract struct {
 	Snapshot bool   `json:"snapshot"`
 }
 type Plan struct {
-	Storage           *StorageObservation     `json:"storage,omitempty"`
-	Firmware          *FirmwareBinding        `json:"firmware,omitempty"`
-	CPU               *CPUObservation         `json:"cpu,omitempty"`
-	SimpleCPUTopology bool                    `json:"simple_cpu_topology,omitempty"`
-	GuestSystem       *GuestSystemObservation `json:"guest_system,omitempty"`
-	Version           int                     `json:"version"`
-	Profile           Profile                 `json:"profile"`
-	Devices           []Device                `json:"devices"`
-	State             []StateContract         `json:"state,omitempty"`
-	CPUThreads        int                     `json:"cpu_threads,omitempty"`
-	Machine           string                  `json:"machine,omitempty"`
-	DomainType        string                  `json:"domain_type,omitempty"`
-	HugepageSizeKiB   uint64                  `json:"hugepage_size_kib,omitempty"`
-	Emulator          string                  `json:"emulator,omitempty"`
+	Presentation      *PresentationObservation `json:"presentation,omitempty"`
+	Storage           *StorageObservation      `json:"storage,omitempty"`
+	Firmware          *FirmwareBinding         `json:"firmware,omitempty"`
+	CPU               *CPUObservation          `json:"cpu,omitempty"`
+	SimpleCPUTopology bool                     `json:"simple_cpu_topology,omitempty"`
+	GuestSystem       *GuestSystemObservation  `json:"guest_system,omitempty"`
+	Version           int                      `json:"version"`
+	Profile           Profile                  `json:"profile"`
+	Devices           []Device                 `json:"devices"`
+	State             []StateContract          `json:"state,omitempty"`
+	CPUThreads        int                      `json:"cpu_threads,omitempty"`
+	Machine           string                   `json:"machine,omitempty"`
+	DomainType        string                   `json:"domain_type,omitempty"`
+	HugepageSizeKiB   uint64                   `json:"hugepage_size_kib,omitempty"`
+	Emulator          string                   `json:"emulator,omitempty"`
 }
 type policyEnvelope struct {
 	Version int     `json:"version"`
@@ -165,6 +167,14 @@ func Normalize(p Profile) (Profile, error) {
 	if !slices.Contains([]string{"virtio", "e1000", "rtl8139"}, p.NICModel) {
 		return fail("nic_model")
 	}
+	if p.Presentation != nil {
+		value, err := NormalizePresentation(*p.Presentation)
+		if err != nil {
+			return p, fmt.Errorf("hardware profile %q: %w", p.ID, err)
+		}
+		p.Presentation = &value
+		p.Graphics, p.VideoModel = value.Type, value.VideoModel
+	}
 	if p.Graphics == "" {
 		p.Graphics = "vnc"
 	}
@@ -174,7 +184,7 @@ func Normalize(p Profile) (Profile, error) {
 	if p.VideoModel == "" {
 		p.VideoModel = "none"
 	}
-	if !slices.Contains([]string{"none", "qxl", "cirrus", "virtio"}, p.VideoModel) || p.Graphics == "none" && p.VideoModel != "none" {
+	if !slices.Contains([]string{"none", "qxl", "cirrus", "virtio", "vmvga"}, p.VideoModel) || p.Graphics == "none" && p.VideoModel != "none" {
 		return fail("video_model")
 	}
 	if p.GuestAgent != nil {
@@ -282,6 +292,7 @@ func Resolve(p Profile, emulator string) (Plan, error) {
 	if p.Graphics != "none" {
 		result.Devices = append(result.Devices, Device{ID: "graphics", Kind: Display, Model: p.Graphics})
 	}
+	addPresentationDependencies(&result)
 	return result, ValidateDevices(result.Devices)
 }
 func ValidateDevices(devices []Device) error {

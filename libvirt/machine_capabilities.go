@@ -144,7 +144,12 @@ func (repo *VirtualMachineRepository) validateAdoptionMachine(vm *compute.Virtua
 	if err = hardware.ValidateAdoptionMachine(plan.Profile.Machine, existing, requestedMachine, repo.settings[vm.NodeId].Emulator); err != nil {
 		return err
 	}
-	if err := validateProfileCapabilities(plan.Profile, imageCapabilities(actual)); err != nil {
+	capabilityProfile := plan.Profile
+	if capabilityProfile.Presentation != nil {
+		capabilityProfile.Graphics = "none"
+		capabilityProfile.VideoModel = "none"
+	}
+	if err := validateProfileCapabilities(capabilityProfile, imageCapabilities(actual)); err != nil {
 		return err
 	}
 	if err := repo.validateCPUCapabilities(conn, plan.Profile, actual, vm.VCpus, vm.NodeId, observed...); err != nil {

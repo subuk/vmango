@@ -41,15 +41,16 @@ type apiConfiguredKey struct {
 }
 
 type apiLibvirtMachineHardware struct {
-	Storage           *hardware.StorageObservation     `json:"storage,omitempty"`
-	Firmware          *hardware.FirmwareBinding        `json:"firmware,omitempty"`
-	CPU               *hardware.CPUObservation         `json:"cpu,omitempty"`
-	SimpleCPUTopology bool                             `json:"simple_cpu_topology"`
-	GuestSystem       *hardware.GuestSystemObservation `json:"guest_system,omitempty"`
-	Applied           hardware.PlatformBinding         `json:"applied"`
-	Profile           hardware.Profile                 `json:"profile"`
-	Version           int                              `json:"version"`
-	Devices           []hardware.Device                `json:"devices" nullable:"false"`
+	Presentation      *hardware.PresentationObservation `json:"presentation,omitempty"`
+	Storage           *hardware.StorageObservation      `json:"storage,omitempty"`
+	Firmware          *hardware.FirmwareBinding         `json:"firmware,omitempty"`
+	CPU               *hardware.CPUObservation          `json:"cpu,omitempty"`
+	SimpleCPUTopology bool                              `json:"simple_cpu_topology"`
+	GuestSystem       *hardware.GuestSystemObservation  `json:"guest_system,omitempty"`
+	Applied           hardware.PlatformBinding          `json:"applied"`
+	Profile           hardware.Profile                  `json:"profile"`
+	Version           int                               `json:"version"`
+	Devices           []hardware.Device                 `json:"devices" nullable:"false"`
 }
 type apiVM struct {
 	LibvirtObserved    *hardware.ObservedHardware `json:"libvirt_observed,omitempty"`
@@ -112,7 +113,7 @@ type apiVolumeDetail struct {
 func vmDTO(vm *compute.VirtualMachine) apiVM {
 	v := apiVM{Node: vm.NodeId, ID: vm.Id, Name: vm.Name, Arch: vm.Arch.String(), State: vm.State.String(), VCPUs: vm.VCpus, MemoryBytes: vm.Memory.Bytes(), Firmware: vm.Firmware, DiskController: vm.DiskController, GuestAgent: vm.GuestAgent, Autostart: vm.Autostart, Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), GraphicsListen: vm.Graphic.Listen, VideoModel: vm.VideoModel.String(), Disks: []apiDisk{}, Interfaces: []apiReadInterface{}, IPAddresses: vm.IpAddressList()}
 	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
-		v.LibvirtHardware = &apiLibvirtMachineHardware{Storage: plan.Storage, Firmware: plan.Firmware, Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices, Applied: plan.Platform(), GuestSystem: plan.GuestSystem, CPU: plan.CPU, SimpleCPUTopology: plan.SimpleCPUTopology}
+		v.LibvirtHardware = &apiLibvirtMachineHardware{Presentation: plan.Presentation, Storage: plan.Storage, Firmware: plan.Firmware, Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices, Applied: plan.Platform(), GuestSystem: plan.GuestSystem, CPU: plan.CPU, SimpleCPUTopology: plan.SimpleCPUTopology}
 	}
 	if len(vm.ObservedBackend) > 0 {
 		var observed hardware.ObservedHardware
@@ -188,7 +189,7 @@ type apiImageDefaults struct {
 	DiskController string `json:"disk_controller,omitempty" enum:"virtio-scsi,lsilogic,lsisas1068,vmpvscsi"`
 	NICModel       string `json:"nic_model,omitempty" enum:"virtio,e1000,rtl8139"`
 	Graphics       string `json:"graphics" enum:"none,vnc,spice"`
-	VideoModel     string `json:"video_model" enum:"none,cirrus,qxl,virtio"`
+	VideoModel     string `json:"video_model" enum:"none,cirrus,qxl,virtio,vmvga"`
 	GuestAgent     *bool  `json:"guest_agent,omitempty"`
 	Initialization string `json:"initialization,omitempty" enum:"none,nocloud,openstack"`
 }

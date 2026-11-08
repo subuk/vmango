@@ -12,24 +12,25 @@ import (
 const HardwareMigrationGuide = "https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md"
 
 type HardwareProfileConfig struct {
-	CPU         *hardware.CPU             `hcl:"cpu"`
-	Placement   *hardware.NativePlacement `hcl:"placement"`
-	HyperV      *hardware.HyperV          `hcl:"hyperv"`
-	KVM         *hardware.KVM             `hcl:"kvm"`
-	SMBIOS      *hardware.SMBIOS          `hcl:"smbios"`
-	Clock       HardwareClockConfig       `hcl:"clock"`
-	Timers      []hardware.Timer          `hcl:"timer"`
-	Machine     HardwareMachineConfig     `hcl:"machine"`
-	ID          string                    `hcl:",key"`
-	Name        string                    `hcl:"name"`
-	Firmware    *hardware.Firmware        `hcl:"firmware"`
-	Disks       hardware.Disks            `hcl:"disks"`
-	NICModel    string                    `hcl:"nic_model"`
-	Graphics    string                    `hcl:"graphics"`
-	VideoModel  string                    `hcl:"video_model"`
-	GuestAgent  *bool                     `hcl:"guest_agent"`
-	Hugepages   bool                      `hcl:"hugepages"`
-	ConfigDrive HardwareConfigDriveConfig `hcl:"config_drive"`
+	CPU           *hardware.CPU                `hcl:"cpu"`
+	Placement     *hardware.NativePlacement    `hcl:"placement"`
+	HyperV        *hardware.HyperV             `hcl:"hyperv"`
+	KVM           *hardware.KVM                `hcl:"kvm"`
+	SMBIOS        *hardware.SMBIOS             `hcl:"smbios"`
+	Clock         HardwareClockConfig          `hcl:"clock"`
+	Timers        []hardware.Timer             `hcl:"timer"`
+	Machine       HardwareMachineConfig        `hcl:"machine"`
+	ID            string                       `hcl:",key"`
+	Name          string                       `hcl:"name"`
+	Firmware      *hardware.Firmware           `hcl:"firmware"`
+	Disks         hardware.Disks               `hcl:"disks"`
+	NICModel      string                       `hcl:"nic_model"`
+	Graphics      HardwareGraphicsConfig       `hcl:"graphics"`
+	Input         HardwareInputConfig          `hcl:"input"`
+	USBController *HardwareUSBControllerConfig `hcl:"usb_controller"`
+	GuestAgent    *bool                        `hcl:"guest_agent"`
+	Hugepages     bool                         `hcl:"hugepages"`
+	ConfigDrive   HardwareConfigDriveConfig    `hcl:"config_drive"`
 }
 
 type HardwareClockConfig struct {
@@ -104,7 +105,7 @@ func (c *Config) HardwareProfiles() (map[string]map[string]hardware.Profile, err
 			if err != nil {
 				return nil, fmt.Errorf("hardware_profile %s: %w", p.ID, err)
 			}
-			policy, err := hardware.Normalize(hardware.Profile{CPU: cpu, Placement: placement, HyperV: p.HyperV, KVM: p.KVM, SMBIOS: p.SMBIOS, Clock: p.Clock.policy(), Timers: p.Timers, Machine: p.Machine.policy(), ID: p.ID, Name: p.Name, FirmwarePolicy: firmware, Disks: &p.Disks, NICModel: p.NICModel, Graphics: p.Graphics, VideoModel: p.VideoModel, GuestAgent: p.GuestAgent, Hugepages: p.Hugepages, ConfigDrive: hardware.ConfigDrive{Enabled: p.ConfigDrive.Enabled, Format: p.ConfigDrive.Format, DeviceType: p.ConfigDrive.DeviceType, Bus: p.ConfigDrive.Bus, ControllerModel: p.ConfigDrive.ControllerModel}})
+			policy, err := hardware.Normalize(hardware.Profile{CPU: cpu, Placement: placement, HyperV: p.HyperV, KVM: p.KVM, SMBIOS: p.SMBIOS, Clock: p.Clock.policy(), Timers: p.Timers, Machine: p.Machine.policy(), ID: p.ID, Name: p.Name, FirmwarePolicy: firmware, Disks: &p.Disks, NICModel: p.NICModel, Presentation: p.presentation(), GuestAgent: p.GuestAgent, Hugepages: p.Hugepages, ConfigDrive: hardware.ConfigDrive{Enabled: p.ConfigDrive.Enabled, Format: p.ConfigDrive.Format, DeviceType: p.ConfigDrive.DeviceType, Bus: p.ConfigDrive.Bus, ControllerModel: p.ConfigDrive.ControllerModel}})
 			if err != nil {
 				return nil, fmt.Errorf("cloud %s hardware_profile %s: %w; see %s", cloud.ID, p.ID, err, HardwareMigrationGuide)
 			}
@@ -156,4 +157,41 @@ func removeDeprecatedHardware(root *ast.ObjectList) []string {
 		}
 	}
 	return warnings
+}
+
+// Pointer fields retain omission separately from an explicit disable.
+type HardwareGraphicsConfig struct {
+	Type       *string `hcl:"type"`
+	VideoModel *string `hcl:"video_model"`
+}
+type HardwareInputConfig struct {
+	Keyboard *string `hcl:"keyboard"`
+	Pointer  *string `hcl:"pointer"`
+}
+type HardwareUSBControllerConfig struct {
+	Model string `hcl:"model"`
+}
+
+func (p HardwareProfileConfig) presentation() *hardware.Presentation {
+	r := &hardware.Presentation{}
+	if p.Graphics.Type != nil {
+		r.Type = *p.Graphics.Type
+		r.TypeExplicit = true
+	}
+	if p.Graphics.VideoModel != nil {
+		r.VideoModel = *p.Graphics.VideoModel
+		r.VideoExplicit = true
+	}
+	if p.Input.Keyboard != nil {
+		r.Keyboard = *p.Input.Keyboard
+		r.KeyboardExplicit = true
+	}
+	if p.Input.Pointer != nil {
+		r.Pointer = *p.Input.Pointer
+		r.PointerExplicit = true
+	}
+	if p.USBController != nil {
+		r.USBController = p.USBController.Model
+	}
+	return r
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"subuk/vmango/compute"
 	"subuk/vmango/libvirt/hardware"
@@ -29,6 +30,9 @@ func (repo *VirtualMachineRepository) ResolveHardware(vm *compute.VirtualMachine
 	if err != nil {
 		return err
 	}
+	if err := validatePresentationNetwork(vm, plan.Profile); err != nil {
+		return err
+	}
 	conn, e := repo.pool.Acquire(vm.NodeId)
 	if e != nil {
 		return e
@@ -47,6 +51,9 @@ func (repo *VirtualMachineRepository) ResolveHardware(vm *compute.VirtualMachine
 				return err
 			}
 			if err := validateStorageProfile(conn, p, c); err != nil {
+				return err
+			}
+			if err := validatePresentationCapabilities(conn, p, c); err != nil {
 				return err
 			}
 			if err := validateGuestSystemCapabilities(conn, p, c); err != nil {
@@ -151,6 +158,11 @@ func (repo *VirtualMachineRepository) ApplyHardware(vm *compute.VirtualMachine, 
 	return nil
 }
 func (repo *VirtualMachineRepository) validateHardwareCapabilities(vm *compute.VirtualMachine, plan hardware.Plan, live, creation bool) error {
+	if creation {
+		if err := validatePresentationNetwork(vm, plan.Profile); err != nil {
+			return err
+		}
+	}
 	conn, err := repo.pool.Acquire(vm.NodeId)
 	if err != nil {
 		return err
@@ -194,6 +206,9 @@ func (repo *VirtualMachineRepository) validateHardwareCapabilities(vm *compute.V
 		if err = repo.validateCPUCapabilities(conn, plan.Profile, capsXML, vm.VCpus, vm.NodeId); err != nil {
 			return err
 		}
+		if err = validatePresentationCapabilities(conn, plan.Profile, capsXML); err != nil {
+			return err
+		}
 		if err = validateGuestSystemCapabilities(conn, plan.Profile, capsXML); err != nil {
 			return err
 		}
@@ -203,7 +218,12 @@ func (repo *VirtualMachineRepository) validateHardwareCapabilities(vm *compute.V
 	if caps.Arch != vm.Arch || caps.MaxVCPUs > 0 && uint(vm.VCpus) > caps.MaxVCPUs {
 		return &compute.ValidationError{Field: "instance_type", Message: fmt.Sprintf("Hardware profile %s: guest architecture or CPU count is unsupported on this host.", p.ID)}
 	}
-	if err := validateProfileCapabilities(p, caps); err != nil {
+	capabilityProfile := p
+	if !creation && p.Presentation != nil {
+		capabilityProfile.Graphics = "none"
+		capabilityProfile.VideoModel = "none"
+	}
+	if err := validateProfileCapabilities(capabilityProfile, caps); err != nil {
 		return err
 	}
 	for _, nic := range vm.Interfaces {
@@ -289,6 +309,9 @@ func (repo *VirtualMachineRepository) ValidateAppliedPolicy(vm *compute.VirtualM
 		var observed hardware.ObservedHardware
 		if err := json.Unmarshal(vm.ObservedBackend, &observed); err != nil {
 			return err
+		}
+		if plan.Presentation != nil && !reflect.DeepEqual(*plan.Presentation, observed.Presentation) {
+			return fmt.Errorf("applied graphics/input hardware changed; inspect and explicitly re-adopt the VM")
 		}
 		if err := firmwareDrift(plan.Firmware, observed.Firmware); err != nil {
 			return err
@@ -402,6 +425,9 @@ func (repo *VirtualMachineRepository) ValidateResourceChange(current, requested 
 	if err = validateResourceTopology(config, requested.VCpus); err != nil {
 		return err
 	}
+	if err = validatePresentation(config, plan.Profile.Presentation, false); err != nil {
+		return err
+	}
 	if err = validateCPUAdoption(config, plan.Profile); err != nil {
 		return err
 	}
@@ -457,6 +483,9 @@ func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine
 	if err != nil {
 		return nil, err
 	}
+	if err = validatePresentation(config, plan.Profile.Presentation, false); err != nil {
+		return nil, err
+	}
 	if err = repo.prepareFirmwareAdoption(vm, &plan, config); err != nil {
 		return nil, err
 	}
@@ -491,6 +520,10 @@ func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine
 	}
 	observed := observeGuestSystem(config)
 	plan.GuestSystem = &observed
+	if plan.Profile.Presentation != nil {
+		o := observeDisplayDevices(config)
+		plan.Presentation = &o
+	}
 	cpuObserved := observeCPU(config)
 	plan.CPU = &cpuObserved
 	return json.Marshal(plan)
@@ -506,7 +539,7 @@ func validateAdoptionPolicy(vm *compute.VirtualMachine, plan hardware.Plan) erro
 	if p.GuestAgentEnabled() != vm.GuestAgent {
 		return conflict("guest-agent channel")
 	}
-	if p.Graphics != vm.Graphic.Type.String() || p.VideoModel != vm.VideoModel.String() {
+	if p.Presentation == nil && (p.Graphics != vm.Graphic.Type.String() || p.VideoModel != vm.VideoModel.String()) {
 		return conflict("graphics/video")
 	}
 	if p.FirmwarePolicy == nil && p.Firmware != "auto" && p.Firmware != vm.Firmware {
@@ -752,6 +785,9 @@ func validateProfileCapabilities(p hardware.Profile, caps compute.VirtualMachine
 }
 
 func validateAdoptionBindings(config *xmlmodel.Domain, plan hardware.Plan) error {
+	if err := presentationDrift(config, plan); err != nil {
+		return err
+	}
 	if err := validateFirmwareAdoption(config, plan.Profile, plan.Firmware); err != nil {
 		return err
 	}

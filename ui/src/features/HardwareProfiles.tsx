@@ -85,17 +85,65 @@ export function HardwareProfileFields({
                         .join("; ") ||
                         "Backend defaults / preserved on adoption",
                 ],
-                ["Firmware", profile.firmware_policy?.profile ? `${profile.firmware} · ${profile.firmware_policy.profile}` : profile.firmware],
-                ["Secure Boot support", profile.firmware_policy?.secure_boot === undefined ? "Unspecified / platform default" : profile.firmware_policy.secure_boot ? "Required" : "Firmware without Secure Boot"],
-                ["Initial enrolled keys", profile.firmware_policy?.secure_boot ? (profile.firmware_policy.enrolled_keys ? "Required" : "Not enrolled") : "Inapplicable"],
+                [
+                    "Firmware",
+                    profile.firmware_policy?.profile
+                        ? `${profile.firmware} · ${profile.firmware_policy.profile}`
+                        : profile.firmware,
+                ],
+                [
+                    "Secure Boot support",
+                    profile.firmware_policy?.secure_boot === undefined
+                        ? "Unspecified / platform default"
+                        : profile.firmware_policy.secure_boot
+                          ? "Required"
+                          : "Firmware without Secure Boot",
+                ],
+                [
+                    "Initial enrolled keys",
+                    profile.firmware_policy?.secure_boot
+                        ? profile.firmware_policy.enrolled_keys
+                            ? "Required"
+                            : "Not enrolled"
+                        : "Inapplicable",
+                ],
                 ["Ordinary disk bus", profile.disks?.bus || profile.disk_bus],
                 [
                     "Disk controller",
-                    profile.disks?.controller_model || profile.disk_controller || (profile.disk_bus === "sata" ? "AHCI (platform mapping)" : profile.disk_bus === "virtio" ? "Virtio-blk per disk" : "Platform IDE"),
+                    profile.disks?.controller_model ||
+                        profile.disk_controller ||
+                        (profile.disk_bus === "sata"
+                            ? "AHCI (platform mapping)"
+                            : profile.disk_bus === "virtio"
+                              ? "Virtio-blk per disk"
+                              : "Platform IDE"),
                 ],
                 ["Network device", profile.nic_model],
                 ["Graphics", profile.graphics],
                 ["Video model", profile.video_model],
+                [
+                    "Keyboard",
+                    profile.presentation
+                        ? `${profile.presentation.keyboard}${profile.presentation.keyboard_explicit ? " (explicit)" : " (new VM default; unconstrained on adoption)"}`
+                        : "Preserved legacy input policy",
+                ],
+                [
+                    "Pointer",
+                    profile.presentation
+                        ? `${profile.presentation.pointer}${profile.presentation.pointer_explicit ? " (explicit)" : " (new VM default; unconstrained on adoption)"}`
+                        : "Preserved legacy input policy",
+                ],
+                [
+                    "USB controller",
+                    profile.presentation?.usb_controller
+                        ? `${profile.presentation.usb_controller} (standalone)`
+                        : profile.presentation
+                          ? profile.presentation.keyboard === "usb" ||
+                            profile.presentation.pointer !== "none"
+                              ? "qemu-xhci (shared input dependency)"
+                              : "None"
+                          : "Preserved legacy topology",
+                ],
                 ["Guest agent", profile.guest_agent ?? true],
                 ["Hugepages", profile.hugepages],
                 [
@@ -401,15 +449,55 @@ function describeHyperV(h: NonNullable<HardwareProfile["hyperv"]>) {
     return `custom · ${values.join("; ") || "all features disabled"}`;
 }
 
-export function FirmwareBindingFields({ binding }: { binding: components["schemas"]["FirmwareBinding"] }) {
-    return <Fields entries={[
-        ["Firmware type", binding.type],
-        ["CODE", binding.loader || "Platform default"],
-        ["CODE format", binding.loader_format || "Backend default"],
-        ["VARS template", binding.nvram_template || "None"],
-        ["Private NVRAM", binding.nvram || "None / not allocated"],
-        ["NVRAM format", binding.nvram_format || "None"],
-        ["NVRAM ownership", binding.owned ? "VM-owned" : "External / not claimed"],
-        ["Selection evidence", binding.evidence || "Persistent domain XML"],
-    ]} />;
+export function FirmwareBindingFields({
+    binding,
+}: {
+    binding: components["schemas"]["FirmwareBinding"];
+}) {
+    return (
+        <Fields
+            entries={[
+                ["Firmware type", binding.type],
+                ["CODE", binding.loader || "Platform default"],
+                ["CODE format", binding.loader_format || "Backend default"],
+                ["VARS template", binding.nvram_template || "None"],
+                ["Private NVRAM", binding.nvram || "None / not allocated"],
+                ["NVRAM format", binding.nvram_format || "None"],
+                [
+                    "NVRAM ownership",
+                    binding.owned ? "VM-owned" : "External / not claimed",
+                ],
+                [
+                    "Selection evidence",
+                    binding.evidence || "Persistent domain XML",
+                ],
+            ]}
+        />
+    );
+}
+
+export function PresentationObservationFields({
+    value,
+}: {
+    value: components["schemas"]["PresentationObservation"];
+}) {
+    const show = (
+        items: components["schemas"]["PresentationDevice"][] | null | undefined,
+    ) =>
+        items
+            ?.map(
+                (d) =>
+                    `${d.model}${d.bus ? ` (${d.bus})` : ""}${d.index !== undefined ? ` #${d.index}` : ""}${d.alias ? ` · ${d.alias}` : ""}${d.address ? ` · ${d.address}` : ""}`,
+            )
+            .join("; ") || "None observed";
+    return (
+        <Fields
+            entries={[
+                ["Graphics listeners", show(value.graphics)],
+                ["Video devices", show(value.videos)],
+                ["Input devices", show(value.inputs)],
+                ["USB controllers", show(value.controllers)],
+            ]}
+        />
+    );
 }

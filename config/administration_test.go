@@ -43,7 +43,7 @@ func TestAcceptedAdministrationProjectionSafeAndComplete(t *testing.T) {
 	if image.Source.Remote == nil || image.Source.Remote.Scheme != "https" || image.Source.Remote.Host != "images.example" || image.Source.Remote.Port != "8443" || !image.Source.Remote.Redacted {
 		t.Fatal(image.Source)
 	}
-	if image.Defaults.Graphics != "vnc" || image.Defaults.VideoModel != "none" {
+	if image.Defaults.Graphics != "vnc" || image.Defaults.VideoModel != "virtio" {
 		t.Fatal("domain display defaults lost", image.Defaults)
 	}
 	h := snapshot.Hosts[0]

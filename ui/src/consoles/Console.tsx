@@ -39,13 +39,18 @@ export function Console({ standalone = false }: { standalone?: boolean }) {
     );
     const [attempt, setAttempt] = useState(0);
     const currentKind = standalone ? pathKind! : kind;
+    const graphicalUnavailable =
+        !standalone &&
+        currentKind === "vnc" &&
+        !!vm.data &&
+        vm.data.graphics !== "vnc";
     const credential = standalone
         ? fragment
         : link
           ? new URL(link.url, location.origin).hash.slice(1)
           : "";
     const issue = async (force = false) => {
-        if (busy) return;
+        if (busy || graphicalUnavailable) return;
         setBusy(true);
         setError(undefined);
         try {
@@ -65,6 +70,20 @@ export function Console({ standalone = false }: { standalone?: boolean }) {
     };
     return (
         <Box className="console-page">
+            {graphicalUnavailable && (
+                <Alert severity="info">
+                    VNC is unavailable for this machine. Select Serial to access
+                    its serial console.
+                </Alert>
+            )}
+            {!standalone &&
+                currentKind === "vnc" &&
+                vm.data?.video_model === "none" && (
+                    <Alert severity="info">
+                        This machine has no managed video device. A VNC listener
+                        does not guarantee visible guest output.
+                    </Alert>
+                )}
             <Stack
                 direction="row"
                 spacing={2}
@@ -113,7 +132,11 @@ export function Console({ standalone = false }: { standalone?: boolean }) {
                 )}
                 <Button
                     variant="contained"
-                    disabled={busy || (standalone && !credential)}
+                    disabled={
+                        busy ||
+                        graphicalUnavailable ||
+                        (standalone && !credential)
+                    }
                     onClick={() =>
                         standalone ? setAttempt((n) => n + 1) : issue()
                     }

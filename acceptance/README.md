@@ -607,3 +607,68 @@ build passed. The built-in browser provider was unavailable, so rendered-page
 verification could not be performed; Chrome was not used. No remote package
 build or publication is included in these results. See [disk policy](../docs/DISKS.md)
 for the supported allocation subset and official device references.
+
+## Graphics and USB input policies
+
+Set `ACCEPTANCE_DISPLAY=headless`, `vnc`, or `vmvga` with a compatible cloud
+image. `vnc` selects virtio video, a USB keyboard and tablet; `vmvga` selects
+VMware SVGA and a USB keyboard and mouse. Both share one qemu-xhci controller.
+`headless` selects no graphics/video/managed USB devices and proves an actual
+root serial login plus a shell command using a random test-only password.
+Serial service and cloud-init must be enabled in the image. The graphical tests
+use Python 3 and Linux evdev inside the disposable guest to confirm keyboard
+and pointer events delivered through the authenticated VNC WebSocket. They
+capture a real framebuffer in `framebuffer.ppm`; protocol checks do not replace
+a rendered browser check. Each mode also checks topology after libvirt
+normalization, resource changes and application restart, and runs the complete
+lifecycle with cleanup.
+
+```sh
+ACCEPTANCE_DISPLAY=headless ACCEPTANCE_DISK_BUS=virtio \
+ACCEPTANCE_IMAGE="$PWD/images/noble-server-cloudimg-arm64.img" make acceptance
+# Repeat with ACCEPTANCE_DISPLAY=vnc on the same compatible ARM image.
+```
+
+For an authorized remote Linux host, combine the remote command above with
+`ACCEPTANCE_DISPLAY=vnc` (or `headless`/`vmvga`), `ACCEPTANCE_DISK_BUS=virtio`
+and `ACCEPTANCE_NETWORK=default` to bind an existing native libvirt network.
+This does not create or change that network. Native networking avoids raw-QEMU
+PCI devices whose transport capacity cannot be safely inferred. Run modes
+serially per host; every run owns a distinct temporary VM and storage pool.
+
+### Recorded graphics verification, 2026-11-08
+
+The new parser/default/dependency/adoption/drift regressions, full Go suite,
+209 UI tests, five asset checks, generated API checks and Hugo build passed.
+The built-in browser provider was unavailable, so rendered-page and interactive
+noVNC browser checks remain unverified; Chrome was not used. No remote package
+build or publication is included in these results.
+
+| Platform and guest | Mode | Result |
+| --- | --- | --- |
+| macOS ARM64/HVF, Ubuntu Noble cloud image | Headless | Full lifecycle, no graphics/video/managed USB, serial root login and shell command passed |
+| macOS ARM64/HVF, Ubuntu Noble cloud image | VNC/virtio + USB keyboard/tablet | Full lifecycle, visible guest framebuffer, guest-observed RFB keyboard/pointer events, stable topology after resource change/restart passed |
+| Linux x86_64 Q35/KVM, Alpine 3.24.3 cloud image | Headless | Full lifecycle and actual serial root login/shell passed |
+| Linux x86_64 Q35/KVM, Alpine 3.24.3 cloud image | VNC/virtio + USB keyboard/tablet | Full lifecycle, visible guest framebuffer and guest-observed keyboard/pointer events passed |
+
+These are device/driver observations for the listed combinations, not universal
+compatibility claims. Initial harness retries exposed missing RFB encoding
+negotiation and serial-getty readiness handling; the retained test implements
+both, with bounded input/login waits. A nested connection lease in new metadata
+recording was also corrected before the successful runs. Each finished run
+cleaned only its owned temporary resources; existing user VMs remained running.
+
+Linux QEMU 6.2 on the tested host omits `vmware-svga`; `vmvga` was rejected
+with HTTP 422 before target VM provisioning. This is a negative capability
+check, not a successful vmvga guest test.
+
+Local x86 Q35/software emulation exposes vmware-svga, but a full positive guest
+check was unavailable: raw `qemu-usernet` devices collided with a libvirt-assigned
+video PCI slot, while native user-network preflight required unsupported macOS
+TAP allocation. That networking implementation was not changed in this feature. New x86
+video/raw-network combinations now fail actionable preflight before effects;
+legacy plans, ARM MMIO and native-network cases remain unchanged.
+No positive vmvga framebuffer/guest-input result is claimed. Use a compatible
+x86 Linux QEMU build and native network for this verification. The harness also
+accepts `ACCEPTANCE_ARCH=x86_64 ACCEPTANCE_VIRT_TYPE=qemu` for explicit local
+software-emulation tests; those never count as HVF/KVM results.

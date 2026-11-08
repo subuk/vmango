@@ -15,6 +15,7 @@ import (
 	"dario.cat/mergo"
 	"github.com/hashicorp/hcl"
 	"github.com/hashicorp/hcl/hcl/ast"
+	"github.com/hashicorp/hcl/hcl/token"
 )
 
 type UserAPIConfig struct {
@@ -421,7 +422,7 @@ func ParseBytes(content []byte) (*Config, error) {
 // not be silently ignored by the permissive HCL decoder.
 func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 	owners := map[string]string{
-		"guest_agent": "hardware_profile", "graphics": "hardware_profile", "video_model": "hardware_profile",
+		"guest_agent": "hardware_profile", "graphics": "hardware_profile", "video_model": "graphics", "input": "hardware_profile", "usb_controller": "hardware_profile",
 		"firmware": "hardware_profile", "disks": "hardware_profile", "disk_bus": "hardware_profile", "disk_controller": "hardware_profile", "nic_model": "hardware_profile", "hugepages": "hardware_profile", "config_drive": "hardware_profile",
 		"machine": "hardware_profile", "acceleration": "machine",
 		"smbios": "hardware_profile", "clock": "hardware_profile", "timer": "hardware_profile",
@@ -437,11 +438,42 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 			continue
 		}
 		key, _ := item.Keys[0].Token.Value().(string)
+
+		if owner == "hardware_profile" && (key == "video_model" || key == "graphics" && !isObject(item)) {
+			return fmt.Errorf("line %d: hardware_profile.%s legacy syntax must migrate to graphics { type = ... video_model = ... }; see %s", item.Pos().Line, key, HardwareMigrationGuide)
+		}
+		if owner == "hardware_profile" && (key == "graphics" || key == "input" || key == "usb_controller") {
+			if len(list.Filter(key).Items) > 1 {
+				return fmt.Errorf("hardware_profile.%s may be declared only once", key)
+			}
+			if len(item.Keys) != 1 || !isObject(item) {
+				return fmt.Errorf("hardware_profile.%s must be one unnamed block", key)
+			}
+			if key == "usb_controller" {
+				obj := item.Val.(*ast.ObjectType)
+				if len(obj.List.Filter("model").Items) != 1 {
+					return fmt.Errorf("hardware_profile.usb_controller.model is required")
+				}
+			}
+		}
+		if owner == "graphics" || owner == "input" || owner == "usb_controller" {
+			allowed := map[string]map[string]bool{"graphics": {"type": true, "video_model": true}, "input": {"keyboard": true, "pointer": true}, "usb_controller": {"model": true}}
+			if !allowed[owner][key] {
+				return fmt.Errorf("hardware_profile.%s: unknown field %s", owner, key)
+			}
+			if len(list.Filter(key).Items) > 1 {
+				return fmt.Errorf("hardware_profile.%s.%s may be declared only once", owner, key)
+			}
+			lit, ok := item.Val.(*ast.LiteralType)
+			if !ok || lit.Token.Type != token.STRING || lit.Token.Value() == "" {
+				return fmt.Errorf("hardware_profile.%s.%s must be a nonempty string", owner, key)
+			}
+		}
 		if owner == "hardware_profile" && (key == "disk_bus" || key == "disk_controller") {
 			return fmt.Errorf("hardware_profile.%s was replaced by disks { bus = ... controller_model = ... }; see %s", key, HardwareMigrationGuide)
 		}
 		if owner == "hardware_profile" {
-			allowed := map[string]bool{"name": true, "firmware": true, "disks": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "hugepages": true, "config_drive": true, "machine": true, "smbios": true, "clock": true, "timer": true, "cpu": true, "placement": true, "hyperv": true, "kvm": true}
+			allowed := map[string]bool{"name": true, "firmware": true, "disks": true, "nic_model": true, "graphics": true, "input": true, "usb_controller": true, "guest_agent": true, "hugepages": true, "config_drive": true, "machine": true, "smbios": true, "clock": true, "timer": true, "cpu": true, "placement": true, "hyperv": true, "kvm": true}
 			if !allowed[key] {
 				return fmt.Errorf("hardware_profile: unsupported setting %s; see %s", key, HardwareMigrationGuide)
 			}
@@ -550,7 +582,7 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 				if err := validatePolicyOwners(object.List, owner+".storage_class"); err != nil {
 					return err
 				}
-			case "image", "cloud", "host", "instance_type", "hardware_profile", "config_drive", "machine", "disks":
+			case "image", "cloud", "host", "instance_type", "hardware_profile", "config_drive", "machine", "disks", "graphics", "input", "usb_controller":
 				if err := validatePolicyOwners(object.List, key); err != nil {
 					if len(item.Keys) > 1 {
 						return fmt.Errorf("%s %v: %w", key, item.Keys[1].Token.Value(), err)
@@ -562,3 +594,5 @@ func validatePolicyOwners(list *ast.ObjectList, owner string) error {
 	}
 	return nil
 }
+
+func isObject(item *ast.ObjectItem) bool { _, ok := item.Val.(*ast.ObjectType); return ok }

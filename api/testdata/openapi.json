@@ -1393,7 +1393,8 @@
               "none",
               "cirrus",
               "qxl",
-              "virtio"
+              "virtio",
+              "vmvga"
             ],
             "type": "string"
           }
@@ -1481,6 +1482,9 @@
           },
           "guest_system": {
             "$ref": "#/components/schemas/GuestSystemObservation"
+          },
+          "presentation": {
+            "$ref": "#/components/schemas/PresentationObservation"
           },
           "profile": {
             "$ref": "#/components/schemas/Profile"
@@ -3619,11 +3623,15 @@
           "machine": {
             "type": "string"
           },
+          "presentation": {
+            "$ref": "#/components/schemas/PresentationObservation"
+          },
           "storage": {
             "$ref": "#/components/schemas/StorageObservation"
           }
         },
         "required": [
+          "presentation",
           "firmware",
           "cpu",
           "guest_system",
@@ -3729,6 +3737,75 @@
         ],
         "type": "object"
       },
+      "Presentation": {
+        "additionalProperties": false,
+        "properties": {
+          "keyboard": {
+            "type": "string"
+          },
+          "keyboard_explicit": {
+            "type": "boolean"
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "pointer_explicit": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "type_explicit": {
+            "type": "boolean"
+          },
+          "usb_controller": {
+            "type": "string"
+          },
+          "video_explicit": {
+            "type": "boolean"
+          },
+          "video_model": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "video_model",
+          "keyboard",
+          "pointer"
+        ],
+        "type": "object"
+      },
+      "PresentationDevice": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "bus": {
+            "type": "string"
+          },
+          "index": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "model"
+        ],
+        "type": "object"
+      },
       "PresentationFeature": {
         "additionalProperties": false,
         "properties": {
@@ -3745,6 +3822,54 @@
         "required": [
           "name",
           "state"
+        ],
+        "type": "object"
+      },
+      "PresentationObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "controllers": {
+            "items": {
+              "$ref": "#/components/schemas/PresentationDevice"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "graphics": {
+            "items": {
+              "$ref": "#/components/schemas/PresentationDevice"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/PresentationDevice"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "videos": {
+            "items": {
+              "$ref": "#/components/schemas/PresentationDevice"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "graphics",
+          "videos",
+          "inputs",
+          "controllers"
         ],
         "type": "object"
       },
@@ -3804,6 +3929,9 @@
           },
           "placement": {
             "$ref": "#/components/schemas/NativePlacement"
+          },
+          "presentation": {
+            "$ref": "#/components/schemas/Presentation"
           },
           "smbios": {
             "$ref": "#/components/schemas/SMBIOS"

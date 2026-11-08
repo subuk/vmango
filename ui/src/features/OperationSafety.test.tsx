@@ -7,6 +7,11 @@ import { MachineActions } from "./Lists";
 import { Console } from "../consoles/Console";
 import type { VM } from "../api/hooks";
 
+const machine = vi.hoisted(() => ({
+    graphics: "vnc",
+    cloud: "local",
+    name: "example",
+}));
 const request = vi.hoisted(() =>
     vi
         .fn()
@@ -24,7 +29,7 @@ vi.mock("../api/hooks", async (original) => ({
     ...(await original<typeof import("../api/hooks")>()),
     useResource: () => ({ data: { graphics: "vnc" } }),
     useMachine: () => ({
-        data: { graphics: "vnc", cloud: "local", name: "example" },
+        data: machine,
     }),
 }));
 vi.mock("../api/tasks", async (original) => ({
@@ -36,6 +41,7 @@ vi.mock("../api/tasks", async (original) => ({
     }),
 }));
 afterEach(() => {
+    machine.graphics = "vnc";
     cleanup();
     request.mockClear();
 });
@@ -122,4 +128,24 @@ it("requires explicit serial takeover and permits cancelling without issuing a l
     expect(
         request.mock.calls.filter(([, method]) => method && method !== "GET"),
     ).toHaveLength(0);
+});
+
+it("blocks a direct VNC route for a headless machine while retaining Serial", async () => {
+    machine.graphics = "none";
+    const router = createMemoryRouter(
+        [{ path: "/machines/:cloud/:id/console/:kind", element: <Console /> }],
+        { initialEntries: ["/machines/local/example/console/vnc"] },
+    );
+    render(
+        <QueryClientProvider client={new QueryClient()}>
+            <RouterProvider router={router} />
+        </QueryClientProvider>,
+    );
+    expect(
+        screen.getByText(/VNC is unavailable for this machine/),
+    ).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Connect" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(screen.getByRole("combobox"));
+    expect(screen.getByRole("option", { name: "Serial" })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "VNC" })).toBeNull();
 });

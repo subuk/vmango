@@ -1476,7 +1476,7 @@ export interface components {
             /** @enum {string} */
             nic_model?: "virtio" | "e1000" | "rtl8139";
             /** @enum {string} */
-            video_model: "none" | "cirrus" | "qxl" | "virtio";
+            video_model: "none" | "cirrus" | "qxl" | "virtio" | "vmvga";
         };
         ApiInterface: {
             mac?: string;
@@ -1498,6 +1498,7 @@ export interface components {
             devices: components["schemas"]["Device"][];
             firmware?: components["schemas"]["FirmwareBinding"];
             guest_system?: components["schemas"]["GuestSystemObservation"];
+            presentation?: components["schemas"]["PresentationObservation"];
             profile: components["schemas"]["Profile"];
             simple_cpu_topology: boolean;
             storage?: components["schemas"]["StorageObservation"];
@@ -2090,6 +2091,7 @@ export interface components {
             firmware: components["schemas"]["FirmwareBinding"];
             guest_system: components["schemas"]["GuestSystemObservation"];
             machine: string;
+            presentation: components["schemas"]["PresentationObservation"];
             storage?: components["schemas"]["StorageObservation"];
         };
         ObservedTimer: {
@@ -2121,10 +2123,36 @@ export interface components {
             emulator: string;
             machine: string;
         };
+        Presentation: {
+            keyboard: string;
+            keyboard_explicit?: boolean;
+            pointer: string;
+            pointer_explicit?: boolean;
+            type: string;
+            type_explicit?: boolean;
+            usb_controller?: string;
+            video_explicit?: boolean;
+            video_model: string;
+        };
+        PresentationDevice: {
+            address?: string;
+            alias?: string;
+            bus?: string;
+            /** Format: int64 */
+            index?: number;
+            kind: string;
+            model: string;
+        };
         PresentationFeature: {
             name: string;
             state: string;
             value?: string;
+        };
+        PresentationObservation: {
+            controllers: components["schemas"]["PresentationDevice"][] | null;
+            graphics: components["schemas"]["PresentationDevice"][] | null;
+            inputs: components["schemas"]["PresentationDevice"][] | null;
+            videos: components["schemas"]["PresentationDevice"][] | null;
         };
         Profile: {
             clock?: components["schemas"]["Clock"];
@@ -2145,6 +2173,7 @@ export interface components {
             name: string;
             nic_model: string;
             placement?: components["schemas"]["NativePlacement"];
+            presentation?: components["schemas"]["Presentation"];
             smbios?: components["schemas"]["SMBIOS"];
             timers?: components["schemas"]["Timer"][] | null;
             video_model: string;

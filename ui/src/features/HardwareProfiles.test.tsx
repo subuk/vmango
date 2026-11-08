@@ -197,14 +197,66 @@ it("shows native placement nodesets and extra observed hypervisor features", () 
 });
 
 it("distinguishes Secure Boot support from initial key enrollment", () => {
-    render(<HardwareProfileFields profile={{ ...profile, firmware_policy: { type: "efi", profile: "release-a", secure_boot: true, enrolled_keys: false } }} />);
+    render(
+        <HardwareProfileFields
+            profile={{
+                ...profile,
+                firmware_policy: {
+                    type: "efi",
+                    profile: "release-a",
+                    secure_boot: true,
+                    enrolled_keys: false,
+                },
+            }}
+        />,
+    );
     expect(screen.getByText("efi · release-a")).toBeTruthy();
     expect(screen.getByText("Required")).toBeTruthy();
     expect(screen.getByText("Not enrolled")).toBeTruthy();
 });
 
 it("keeps ordinary SATA and independent SCSI config-drive requirements visible", () => {
-    show(<HardwareProfileFields profile={{...profile, disk_bus: "sata", disk_controller: "", disks: {bus: "sata"}, config_drive: {enabled: true, format: "openstack", device_type: "cdrom", bus: "scsi", controller_model: "lsilogic"}}} />);
+    show(
+        <HardwareProfileFields
+            profile={{
+                ...profile,
+                disk_bus: "sata",
+                disk_controller: "",
+                disks: { bus: "sata" },
+                config_drive: {
+                    enabled: true,
+                    format: "openstack",
+                    device_type: "cdrom",
+                    bus: "scsi",
+                    controller_model: "lsilogic",
+                },
+            }}
+        />,
+    );
     expect(screen.getByText("AHCI (platform mapping)")).toBeTruthy();
-    expect(screen.getByText("openstack · cdrom · scsi · lsilogic")).toBeTruthy();
+    expect(
+        screen.getByText("openstack · cdrom · scsi · lsilogic"),
+    ).toBeTruthy();
+});
+it("distinguishes standalone USB from dependencies and input omission from disable", () => {
+    show(
+        <HardwareProfileFields
+            profile={{
+                ...profile,
+                presentation: {
+                    type: "none",
+                    video_model: "none",
+                    keyboard: "none",
+                    pointer: "none",
+                    usb_controller: "qemu-xhci",
+                    keyboard_explicit: true,
+                },
+            }}
+        />,
+    );
+    expect(screen.getByText("qemu-xhci (standalone)")).toBeTruthy();
+    expect(screen.getByText("none (explicit)")).toBeTruthy();
+    expect(
+        screen.getByText("none (new VM default; unconstrained on adoption)"),
+    ).toBeTruthy();
 });
