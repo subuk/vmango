@@ -140,8 +140,8 @@ hardware_profile "server" {
 ```
 
 Unmigrated profile fields fail with their cloud/profile location and a migration
-link; they are never silently discarded. Already-deprecated image-inline fields
-retain their warning-and-ignore behavior. Supported stored legacy policies and
+link; they are never silently discarded. Deprecated image-inline fields are
+also rejected, including empty, zero and false values. Supported stored policies and
 plans retain their original interpretation, independently of configuration
 syntax. Accepted task version checks, history, effects and uncertainty fences
 remain in place; no uncertain side effect is replayed.

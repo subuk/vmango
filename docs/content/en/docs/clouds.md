@@ -65,7 +65,7 @@ Connection settings `uri`, `image_pool`, `config_drive_pool`,
 in `cloud.host`. Pools default to `default`; the config-drive suffix defaults
 to `_config.iso`. Hardware profiles own config-drive format and attachment.
 New graphics listeners are derived and loopback-only. Legacy
-`config_drive_write_format` and `graphics_listen` warn and are ignored.
+`config_drive_write_format` and `graphics_listen` are rejected.
 
 Every image references a named `hardware_profile` in its cloud. See the
 [release migration guide](https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md) for before/after examples,

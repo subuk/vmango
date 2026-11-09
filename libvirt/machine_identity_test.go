@@ -58,7 +58,7 @@ func TestUUIDOperationsWithLibvirtTestDriver(t *testing.T) {
 	if err := repo.ValidateNew(&compute.VirtualMachine{Id: id, Name: "another-name", NodeId: "n"}); !errors.Is(err, compute.ErrConflict) {
 		t.Fatalf("UUID collision: %v", err)
 	}
-	if err := repo.AdoptWithPolicy(id, "n", &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: vm.VCpus, MemoryRequestBytes: vm.Memory.Bytes()}, fixtureHardwarePolicy(t, vm)); err != nil {
+	if err := repo.AdoptWithPolicy(id, "n", &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: vm.VCpus, MemoryRequestBytes: vm.Memory.Bytes(), Attachments: fixtureAttachments(vm)}, fixtureHardwarePolicy(t, vm)); err != nil {
 		t.Fatal(err)
 	}
 	vm, err = repo.Get(id, "n")

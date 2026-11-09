@@ -589,26 +589,18 @@
           },
           "kind": {
             "enum": [
-              "network",
-              "bridge"
+              "libvirt-network",
+              "bridge",
+              "qemu-user",
+              "socket-vmnet"
             ],
             "type": "string"
-          },
-          "model": {
-            "type": "string"
-          },
-          "vlan": {
-            "format": "int64",
-            "minimum": 0,
-            "type": "integer"
           }
         },
         "required": [
           "id",
           "kind",
-          "backend",
-          "model",
-          "vlan"
+          "backend"
         ],
         "type": "object"
       },
@@ -784,10 +776,21 @@
       "ApiAdoptInputBody": {
         "additionalProperties": false,
         "properties": {
+          "config_drive": {
+            "description": "Attached disk device_id, or an explicit empty string for No config drive. Required for libvirt adoption.",
+            "type": "string"
+          },
           "hardware_profile": {
             "description": "Libvirt clouds require a compatible named hardware profile.",
             "minLength": 1,
             "type": "string"
+          },
+          "networks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Explicit device_id to logical network choices for ambiguous adoption matches.",
+            "type": "object"
           }
         },
         "type": "object"
@@ -1998,9 +2001,65 @@
         },
         "type": "object"
       },
+      "ApiReadDisk": {
+        "additionalProperties": false,
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "bus": {
+            "enum": [
+              "virtio",
+              "scsi",
+              "ide",
+              "sata"
+            ],
+            "type": "string"
+          },
+          "device": {
+            "default": "disk",
+            "enum": [
+              "disk",
+              "cdrom"
+            ],
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "managed": {
+            "type": "boolean"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "volume_id": {
+            "description": "Compound host/path volume identifier returned by cloud discovery.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "managed",
+          "volume_id"
+        ],
+        "type": "object"
+      },
       "ApiReadInterface": {
         "additionalProperties": false,
         "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/NetworkBinding"
+          },
+          "device_id": {
+            "type": "string"
+          },
           "ip_addresses": {
             "items": {
               "type": "string"
@@ -2009,6 +2068,9 @@
           },
           "mac": {
             "type": "string"
+          },
+          "managed": {
+            "type": "boolean"
           },
           "model": {
             "type": "string"
@@ -2023,6 +2085,7 @@
           }
         },
         "required": [
+          "managed",
           "network",
           "ip_addresses"
         ],
@@ -2125,7 +2188,7 @@
           },
           "disks": {
             "items": {
-              "$ref": "#/components/schemas/ApiDisk"
+              "$ref": "#/components/schemas/ApiReadDisk"
             },
             "type": "array"
           },
@@ -2281,7 +2344,7 @@
           },
           "disks": {
             "items": {
-              "$ref": "#/components/schemas/ApiDisk"
+              "$ref": "#/components/schemas/ApiReadDisk"
             },
             "type": "array"
           },
@@ -3538,6 +3601,27 @@
         "required": [
           "mode",
           "mode_explicit"
+        ],
+        "type": "object"
+      },
+      "NetworkBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "bridge": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "socket": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
         ],
         "type": "object"
       },

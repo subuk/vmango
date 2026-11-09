@@ -7,7 +7,7 @@ func DefaultBootDisk(volumes []*VirtualMachineAttachedVolume) *VirtualMachineAtt
 	var root, only *VirtualMachineAttachedVolume
 	var roots, disks int
 	for _, volume := range volumes {
-		if volume == nil || volume.DeviceType != DeviceTypeDisk || volume.Alias == "configdrive" {
+		if volume == nil || volume.DeviceType != DeviceTypeDisk || volume.Purpose == PurposeConfigDrive || volume.GeneratedArtifact {
 			continue
 		}
 		disks++

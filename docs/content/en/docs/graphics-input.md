@@ -100,10 +100,10 @@ multiple video devices or 3D controls are exposed.
 
 Vmango checks the exact architecture, machine, accelerator and emulator. It
 rejects unsupported requirements instead of substituting a device or software
-acceleration. New x86 graphical policies cannot combine video with the raw
-`qemu-usernet` or `macos-socket-vmnet` bindings: those NICs allocate PCI slots
+acceleration. New x86 graphical policies cannot combine video with raw QEMU network devices
+(including the `socket-vmnet` binding): those NICs allocate PCI slots
 outside libvirt and can collide with video/root ports. Vmango rejects this
-combination before provisioning. Select a native libvirt network/bridge, or
+combination before provisioning. Select a native `qemu-user`, libvirt network or bridge binding, or
 explicitly disable video. ARM MMIO networks and existing applied plans keep
 their behavior; existing devices are never relocated. This is a network/device
 allocation restriction, not a claim that the video model itself is unavailable. Libvirt XML/native conversion is a host support check, not proof
@@ -153,7 +153,7 @@ To retain old x86 creation without managed USB input, explicitly set
 `input { keyboard="none" pointer="none" }`. To retain a listener without video,
 explicitly set `graphics.video_model="none"`. Review defaults before accepting
 new work. Deprecated image-inline hardware and host `graphics_listen` remain
-warned and ignored; they do not reactivate configuration paths.
+rejected; remove them and configure the named hardware profile.
 
 Existing applied policies and accepted plans preserve their supported historical
 interpretation. A restart or catalog edit does not rebuild devices. Explicit

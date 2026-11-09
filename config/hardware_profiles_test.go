@@ -35,29 +35,20 @@ func TestHardwareProfilesAreRequiredAndCloudScoped(t *testing.T) {
 	}
 }
 
-func TestLegacyHardwareIsWarnedAndIgnoredIncludingFalseValues(t *testing.T) {
-	text := strings.Replace(cloudConfig, `path="/source"`, `path="/source" firmware="invalid" efi=false disk_bus="invalid" disk_controller="bad" nic_model="bad" graphics="bad" video_model="bad" guest_agent=false initialization="bad"`, 1)
-	text = strings.Replace(text, `cpu=2`, `cpu=2 hugepages=false autostart=false`, 1)
-	text = strings.Replace(text, `uri="qemu:///session"`, `uri="qemu:///session" graphics_listen="not-an-address" config_drive_write_format="bad"`, 1)
-	cfg, err := ParseBytes([]byte(text))
-	if err != nil {
-		t.Fatal(err)
+func TestRemovedHardwareFieldsAreRejectedIncludingEmptyValues(t *testing.T) {
+	cases := []struct{ anchor, fields string }{
+		{`path="/source"`, `efi=false|firmware=""|disk_bus=""|disk_controller=""|nic_model=""|graphics=""|video_model=""|guest_agent=false|initialization=""`},
+		{`cpu=2`, `hugepages=false|autostart=false`},
+		{`uri="qemu:///session"`, `graphics_listen=""|config_drive_write_format=""`},
+		{`network="default"`, `model=""|vlan=0`},
 	}
-	if len(cfg.MigrationWarnings) != 13 {
-		t.Fatalf("expected a warning for every legacy field, got %d: %v", len(cfg.MigrationWarnings), cfg.MigrationWarnings)
-	}
-	for _, warning := range cfg.MigrationWarnings {
-		if !strings.Contains(warning, "line ") || !strings.Contains(warning, "cloud.test.") || !strings.Contains(warning, HardwareMigrationGuide) {
-			t.Fatal(warning)
+	for _, c := range cases {
+		for _, field := range strings.Split(c.fields, "|") {
+			_, err := ParseBytes([]byte(strings.Replace(cloudConfig, c.anchor, c.anchor+" "+field, 1)))
+			if err == nil || !strings.Contains(err.Error(), "unsupported") || !strings.Contains(err.Error(), "line ") || !strings.Contains(err.Error(), "cloud.test.") || !strings.Contains(err.Error(), HardwareMigrationGuide) {
+				t.Fatalf("%s: %v", field, err)
+			}
 		}
-	}
-	images, _, _ := cfg.ImageDefinitions()
-	p, err := hardware.DecodePolicy(images[0].BackendPolicy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p.Firmware != "auto" || p.DiskBus != "virtio" || p.Graphics != "vnc" || !p.GuestAgentEnabled() || p.Hugepages {
-		t.Fatal("legacy policy leaked", p)
 	}
 }
 

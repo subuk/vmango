@@ -101,6 +101,10 @@ func (vm *VirtualMachine) IsRunning() bool {
 }
 
 type VirtualMachineAttachedVolume struct {
+	DeviceID string
+	Format   string
+	Purpose  string
+	Managed  bool
 	// GeneratedArtifact is set only while attaching a backend-planned, VM-owned artifact.
 	GeneratedArtifact bool `json:"-"`
 	Path              string
@@ -110,6 +114,11 @@ type VirtualMachineAttachedVolume struct {
 }
 
 type VirtualMachineAttachedInterface struct {
+	Observation    string
+	Binding        *NetworkBinding `json:",omitempty"`
+	DeviceID       string
+	Managed        bool
+	RawBackend     bool
 	LogicalNetwork string
 	Bridge         bool
 	NetworkName    string

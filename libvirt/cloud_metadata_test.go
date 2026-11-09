@@ -38,21 +38,3 @@ func TestSchedulerMetadataRejectsCorruptionRatherThanLegacyFallback(t *testing.T
 		t.Fatal("legacy domain needs no metadata")
 	}
 }
-
-func TestLogicalNetworkIdentitySurvivesBindingChanges(t *testing.T) {
-	for _, bridge := range []bool{false, true} {
-		d := &xml.Domain{Devices: &xml.DomainDeviceList{}}
-		repo := &VirtualMachineRepository{}
-		nic := &compute.VirtualMachineAttachedInterface{LogicalNetwork: "private-lan", NetworkName: "actual-network", Bridge: bridge, Model: "virtio", Mac: "52:54:00:00:00:01"}
-		if err := repo.attachInterface(d, nic); err != nil {
-			t.Fatal(err)
-		}
-		actual := VirtualMachineAttachedInterfaceFromInterfaceConfig(d.Devices.Interfaces[0])
-		if actual.LogicalNetwork != "private-lan" || actual.NetworkName != "actual-network" || actual.Bridge != bridge {
-			t.Fatalf("logical network lost: %+v", actual)
-		}
-		if logicalNetworkAlias("private-lan") == d.Devices.Interfaces[0].Alias.Name {
-			t.Fatal("duplicate interface aliases")
-		}
-	}
-}

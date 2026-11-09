@@ -65,13 +65,9 @@ func TestAdministratorPolicyOwnershipAndDefaults(t *testing.T) {
 	if clouds[0].InstanceTypes[0].Autostart || images[0].Defaults.GuestAgent != nil || g.String() != "vnc" || v.String() != "none" || cfg.Hosts()[0].GraphicsListen != "" {
 		t.Fatal("omission defaults changed")
 	}
-	cfg, err = parseCloudTest(t, strings.Replace(cloudConfig, "cpu=2", "autostart=true cpu=2", 1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	clouds, _ = cfg.CloudDefinitions()
-	if clouds[0].InstanceTypes[0].Autostart || len(cfg.MigrationWarnings) != 1 {
-		t.Fatal("legacy type autostart was not ignored with a warning")
+	_, err = parseCloudTest(t, strings.Replace(cloudConfig, "cpu=2", "autostart=false cpu=2", 1))
+	if err == nil || !strings.Contains(err.Error(), "autostart is unsupported") {
+		t.Fatal("removed field accepted", err)
 	}
 	for _, tt := range []struct{ old, new, field string }{
 		{`os_arch="x86_64"`, `os_arch="x86_64" autostart=true`, "autostart"},
@@ -88,7 +84,7 @@ func TestAdministratorPolicyOwnershipAndDefaults(t *testing.T) {
 }
 
 func TestCloudHostBackendSettings(t *testing.T) {
-	settings := `uri="qemu:///session" image_pool="images" config_drive_pool="seed" config_drive_suffix="-seed.iso" config_drive_write_format="openstack" emulator="/usr/local/bin/qemu-custom" graphics_listen="::1" qcow_prealloc_metadata=true cache=true`
+	settings := `uri="qemu:///session" image_pool="images" config_drive_pool="seed" config_drive_suffix="-seed.iso" emulator="/usr/local/bin/qemu-custom" qcow_prealloc_metadata=true cache=true`
 	cfg, err := parseCloudTest(t, strings.Replace(cloudConfig, `uri="qemu:///session"`, settings, 1))
 	if err != nil {
 		t.Fatal(err)

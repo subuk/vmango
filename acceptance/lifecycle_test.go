@@ -86,6 +86,7 @@ func TestLifecycle(t *testing.T) {
 		t.Fatal("ACCEPTANCE_DISPLAY must be headless, vnc or vmvga")
 	}
 	adoptPower := os.Getenv("ACCEPTANCE_ADOPT_POWER") == "1"
+	adoptAttachments := adoptPower || os.Getenv("ACCEPTANCE_ADOPT_ATTACHMENTS") == "1"
 	if adoptPower && arch != "x86_64" {
 		t.Fatal("ACCEPTANCE_ADOPT_POWER requires an x86_64 guest")
 	}
@@ -419,13 +420,13 @@ cloud "acceptance" {
  image_pool = %q
  qcow_prealloc_metadata = false
  cpu_overcommit=8
- zone="test" labels={rack="test"} network "lan" { network="qemu-usernet" } storage_class "standard" {pool=%q format="qcow2"}
+ zone="test" labels={rack="test"} network "lan" { type="qemu-user" } storage_class "standard" {pool=%q format="qcow2"}
  storage_class "efficient" {pool=%q format="qcow2"}
  storage_class "raw" {pool=%q format="raw"} }
 }
 `, guestPolicy, machineType, machineAcceleration, firmwareBlock, disksBlock, presentationProfile(displayMode), initialization, configDriveDevice, configDriveBus, cdModel, guestPolicy, machineType, machineAcceleration, firmwareBlock, base, arch, base, arch, uri, name, name, name, name, name)
 	if network := os.Getenv("ACCEPTANCE_NETWORK"); network != "" {
-		configuration = strings.Replace(configuration, `network="qemu-usernet"`, fmt.Sprintf("network=%q", network), 1)
+		configuration = strings.Replace(configuration, `type="qemu-user"`, fmt.Sprintf("network=%q", network), 1)
 	}
 	if loader := os.Getenv("ACCEPTANCE_FIRMWARE_LOADER"); loader != "" {
 		template, format := os.Getenv("ACCEPTANCE_FIRMWARE_TEMPLATE"), os.Getenv("ACCEPTANCE_FIRMWARE_FORMAT")
@@ -456,7 +457,7 @@ cloud "offline" {
  instance_type "small" { cpu=2 memory_mib=2048 boot_disk_gib=8 }
  network "lan" {}
  storage_class "standard" {}
- host "offline" { uri=%q zone="offline-zone" network "lan" { network="qemu-usernet" } storage_class "standard" {pool="offline" format="qcow2"} }
+ host "offline" { uri=%q zone="offline-zone" network "lan" { type="qemu-user" } storage_class "standard" {pool="offline" format="qcow2"} }
 }
 `, firmware, filepath.Join(root, "offline-source.qcow2"), arch, "qemu+unix:///session?socket="+filepath.Join(root, "offline.sock"))
 	platformNamespace := `namespace "platform" { name="Platform" clouds=["acceptance", "offline"] }` + "\n"
@@ -868,11 +869,16 @@ cloud "offline" {
 		t.Fatal("unmanaged machine was inferred from its name")
 	}
 	apiRequest("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/actions", map[string]string{"action": "start"}, 409)
-	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/adopt", map[string]any{"hardware_profile": "no-init"})
+	apiRequest("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/adopt", map[string]any{"hardware_profile": "no-init", "config_drive": "missing"}, 422)
+	apiRequest("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/adopt", map[string]any{"hardware_profile": "boot", "config_drive": ""}, 422)
+	apiCommand("POST", "/api/v1/clouds/acceptance/machines/"+domainUUID+"/adopt", map[string]any{"hardware_profile": "no-init", "config_drive": ""})
 	if !strings.Contains(mustVir("dumpxml", domainUUID), "3145728") {
 		t.Fatal("adoption changed resource configuration")
 	}
 	apiCommand("DELETE", "/api/v1/clouds/acceptance/machines/"+domainUUID+"?delete_volumes=true", nil)
+	// Adoption does not acquire ownership of an existing root disk.
+	mustVir("vol-info", rootDiskPath)
+	mustVir("vol-delete", rootDiskPath)
 	if firmwareTest {
 		if noInitDomain.OS == nil || noInitDomain.OS.NVRam == nil {
 			t.Fatal("no-init UEFI lacks private NVRAM")
@@ -988,6 +994,7 @@ cloud "offline" {
 		t.Fatal("image launch defaults did not reach domain XML")
 	}
 	foundConfigDrive := false
+	configDriveID := ""
 	for _, disk := range runtimeDomain.Devices.Disks {
 		if disk.Device == "disk" && (disk.Alias == nil || disk.Alias.Name != "ua-configdrive") && (disk.Target == nil || disk.Target.Bus != diskBus) {
 			t.Fatal("ordinary disk ignored selected bus", disk)
@@ -997,15 +1004,17 @@ cloud "offline" {
 			if disk.Device != configDriveDevice || disk.Target == nil || disk.Target.Bus != configDriveBus || disk.Boot != nil {
 				t.Fatalf("config-drive attachment/boot policy mismatch: %+v", disk)
 			}
+			configDriveID = disk.Target.Dev
 		}
 	}
 	if !foundConfigDrive {
 		t.Fatal("config-drive attachment missing")
 	}
-	if adoptPower {
+	if adoptAttachments {
 		// Adoption records explicit compatible policy without rewriting hardware.
 		mustVir("metadata", domainUUID, "--config", "--uri", "https://vmango.org/xmlns/scheduler/1", "--remove")
-		apiCommand("POST", apiVMPath+"/adopt", map[string]any{"hardware_profile": "boot"})
+		apiRequest("POST", apiVMPath+"/adopt", map[string]any{"hardware_profile": "boot", "config_drive": runtimeDomain.Devices.Disks[0].Target.Dev}, 422)
+		apiCommand("POST", apiVMPath+"/adopt", map[string]any{"hardware_profile": "boot", "config_drive": configDriveID})
 		adoptedXML := mustVir("dumpxml", domainUUID, "--inactive")
 		write(filepath.Join(root, "adopted-domain.xml"), adoptedXML)
 		var before, after libvirtxml.Domain
@@ -1081,6 +1090,18 @@ cloud "offline" {
 		if len(tail) > 65536 {
 			tail = tail[len(tail)-65536:]
 		}
+	}
+	if displayMode != "" {
+		console.SetReadDeadline(time.Now().Add(6 * time.Minute))
+		for !strings.Contains(tail, "VMANGO_NETWORK_DNS_HTTP_OK") {
+			_, data, e := console.ReadMessage()
+			if e != nil {
+				t.Fatal("guest DNS/HTTP connectivity failed", e)
+			}
+			consoleLog.Write(data)
+			tail += string(data)
+		}
+		t.Log("guest resolved example.com and fetched HTTP content through its configured network")
 	}
 	if displayMode != "" && displayMode != "headless" {
 		console.SetReadDeadline(time.Now().Add(90 * time.Second))
@@ -1598,6 +1619,12 @@ cloud "offline" {
 			continue
 		}
 		file := d.Source.File.File
+		if adoptAttachments {
+			// Explicit adoption records purpose, not deletion ownership.
+			mustVir("vol-info", "--pool", name, file)
+			mustVir("vol-delete", "--pool", name, file)
+			continue
+		}
 		if _, err := vir("vol-info", "--pool", name, file); err == nil {
 			t.Fatalf("volume remains after HTTP delete: %s (%v)", file, err)
 		}

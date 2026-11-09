@@ -348,7 +348,7 @@ Restart Vmango to reload the configuration catalog. Existing VMs missing applied
 policy require explicit adoption/re-adoption with a compatible named profile;
 there is no policy inference or hardware conversion. See the
 [release migration guide](https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md)
-for ignored legacy fields and the incompatible task-format boundary.
+for removed legacy fields and the incompatible task-format boundary.
 
 ### Required image data disks
 
@@ -401,7 +401,7 @@ cloud "local" {
 IDs match `^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$` and are unique within their cloud;
 source paths need not be unique. Move legacy image hardware fields into a named
 profile, and explicitly reference it. `efi`, inline hardware and `initialization`
-warn and are ignored. Config-drive omission defaults to NoCloud on a virtio disk,
+are rejected. Config-drive omission defaults to NoCloud on a virtio disk,
 independent of deprecated host fields. Restart to activate file edits.
 
 Legacy image blocks used only for volume policy become top-level volume blocks:

@@ -43,11 +43,15 @@ const profile: HardwareProfile = {
         bus: "virtio",
     },
 };
-function show(element: React.ReactNode) {
+function show(
+    element: React.ReactNode,
+    networks: { id: string; kind: string; backend: string }[] = [],
+) {
     mocks.request.mockImplementation(async (path: string, method: string) => {
         if (method === "POST") return { id: "accepted" };
         if (path.endsWith("/configuration")) return { snapshot_id: "snapshot" };
         if (path.endsWith("/hardware-profiles")) return [profile];
+        if (path.includes("/configuration/hosts/")) return { networks };
         throw new Error(path);
     });
     render(
@@ -75,13 +79,36 @@ it("shows ordinary disk and config-drive policies separately without editable li
     expect(screen.getByText("nocloud · disk · virtio")).toBeTruthy();
     expect(screen.queryByRole("textbox")).toBeNull();
 });
-it("requires explicit profile choice before adopting and sends only the selected reference", async () => {
+it("requires explicit disk and profile choices, automatically matching configured networks", async () => {
     const close = vi.fn();
     show(
         <AdoptMachine
-            vm={{ id: "vm", name: "Existing VM", cloud: "local" } as VM}
+            vm={
+                {
+                    id: "vm",
+                    name: "Existing VM",
+                    cloud: "local",
+                    node: "host",
+                    disks: [
+                        {
+                            device_id: "vdb",
+                            source: "/external.iso",
+                            device: "disk",
+                            format: "raw",
+                        },
+                    ],
+                    interfaces: [
+                        {
+                            device_id: "mac:52:54:00:00:00:01",
+                            mac: "52:54:00:00:00:01",
+                            binding: { type: "qemu-user" },
+                        },
+                    ],
+                } as VM
+            }
             onClose={close}
         />,
+        [{ id: "internet", kind: "qemu-user", backend: "" }],
     );
     const button = screen.getByRole("button", {
         name: "Adopt machine",
@@ -93,6 +120,14 @@ it("requires explicit profile choice before adopting and sends only the selected
     await userEvent.click(
         screen.getByRole("option", { name: "Linux SCSI (linux-scsi)" }),
     );
+    expect(button.disabled).toBe(true);
+    await userEvent.click(
+        screen.getByRole("combobox", { name: /Config drive/ }),
+    );
+    await userEvent.click(screen.getByRole("option", { name: /external.iso/ }));
+    expect(
+        await screen.findByText(/matched from host configuration/),
+    ).toBeTruthy();
     expect(button.disabled).toBe(false);
     expect(screen.getByText(/preserves existing hardware/)).toBeTruthy();
     await userEvent.click(button);
@@ -100,7 +135,11 @@ it("requires explicit profile choice before adopting and sends only the selected
         expect(mocks.request).toHaveBeenCalledWith(
             "/api/v1/clouds/local/machines/vm/adopt",
             "POST",
-            { hardware_profile: "linux-scsi" },
+            {
+                hardware_profile: "linux-scsi",
+                config_drive: "vdb",
+                networks: { "mac:52:54:00:00:00:01": "internet" },
+            },
             undefined,
             expect.anything(),
         ),
@@ -259,4 +298,38 @@ it("distinguishes standalone USB from dependencies and input omission from disab
     expect(
         screen.getByText("none (new VM default; unconstrained on adoption)"),
     ).toBeTruthy();
+});
+
+it("requires configuration for an unmatched NIC and an explicit choice for ambiguous matches", async () => {
+    const vm = {
+        id: "vm",
+        name: "External",
+        cloud: "local",
+        node: "host",
+        interfaces: [
+            { device_id: "mac:01", mac: "01", binding: { type: "qemu-user" } },
+        ],
+    } as VM;
+    show(<AdoptMachine vm={vm} onClose={vi.fn()} />);
+    expect(
+        await screen.findByText(/add a matching network and host binding/),
+    ).toBeTruthy();
+    expect(
+        (
+            screen.getByRole("button", {
+                name: "Adopt machine",
+            }) as HTMLButtonElement
+        ).disabled,
+    ).toBe(true);
+    cleanup();
+    show(<AdoptMachine vm={vm} onClose={vi.fn()} />, [
+        { id: "one", kind: "qemu-user", backend: "" },
+        { id: "two", kind: "qemu-user", backend: "" },
+    ]);
+    const network = await screen.findByRole("combobox", {
+        name: "Network for 01",
+    });
+    await userEvent.click(network);
+    await userEvent.click(screen.getByRole("option", { name: "two" }));
+    expect(network.textContent).toContain("two");
 });

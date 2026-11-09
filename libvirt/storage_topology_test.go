@@ -125,7 +125,7 @@ func TestIndependentModelsAndExistingMultipleControllers(t *testing.T) {
 		t.Fatal("different models shared controller")
 	}
 	plan, _ := hardware.Resolve(p, "")
-	if e := validateAdoptionControllers(c, plan); e != nil {
+	if e := validateAdoptionControllers(c, plan, &compute.AttachmentMetadata{ConfigDrive: "sdb"}); e != nil {
 		t.Fatal(e)
 	}
 	c.Devices.Controllers = append(c.Devices.Controllers, x.DomainController{Type: "scsi", Model: "lsilogic", Index: uintPointer(5)})
@@ -136,11 +136,11 @@ func TestIndependentModelsAndExistingMultipleControllers(t *testing.T) {
 	if e != nil || valueOrZero(a.Drive.Controller) != 5 {
 		t.Fatalf("existing second controller unavailable: %v %+v", e, a)
 	}
-	if e = validateAdoptionControllers(c, plan); e != nil {
+	if e = validateAdoptionControllers(c, plan, &compute.AttachmentMetadata{ConfigDrive: "sdb"}); e != nil {
 		t.Fatal(e)
 	}
 	c.Devices.Controllers[0].Model = "unsupported-scsi"
-	if e = validateAdoptionControllers(c, plan); e == nil {
+	if e = validateAdoptionControllers(c, plan, &compute.AttachmentMetadata{ConfigDrive: "sdb"}); e == nil {
 		t.Fatal("unsupported controller silently converted")
 	}
 	observed := observeStorage(c)
@@ -232,5 +232,13 @@ func TestVirtioAllocationRejectsUntrackedRawPCIDevices(t *testing.T) {
 	c.QEMUCommandline.Args[1].Value = "virtio-net-device,netdev=vmngmcos1"
 	if _, err := allocateVirtioTransport(c); err != nil {
 		t.Fatalf("MMIO NIC consumed a PCI slot: %v", err)
+	}
+}
+
+func TestVirtioAllocationReservesImplicitI440FXChipset(t *testing.T) {
+	c := &x.Domain{Devices: &x.DomainDeviceList{Controllers: []x.DomainController{{Type: "pci", Model: "pci-root", Index: uintPointer(0)}}}}
+	address, err := allocateVirtioTransport(c)
+	if err != nil || valueOrZero(address.PCI.Slot) < 2 {
+		t.Fatalf("allocated chipset slot: %+v %v", address, err)
 	}
 }

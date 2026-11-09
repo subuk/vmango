@@ -13,10 +13,17 @@ func ensureDomainBootDisk(config *libvirtxml.Domain) {
 	if config.OS == nil || config.Devices == nil || config.OS.Kernel != "" || config.OS.Init != "" || config.Bootloader != "" {
 		return
 	}
+	configDrive := ""
+	if m, err := readSchedulerMetadata(config); err == nil && m != nil && m.Attachments != nil {
+		configDrive = m.Attachments.ConfigDrive
+	}
 	volumes := make([]*compute.VirtualMachineAttachedVolume, len(config.Devices.Disks))
 	for i, disk := range config.Devices.Disks {
 		if disk.Target != nil {
 			volumes[i] = VirtualMachineAttachedVolumeFromDomainDiskConfig(disk)
+			if disk.Target.Dev == configDrive {
+				volumes[i].Purpose = compute.PurposeConfigDrive
+			}
 		}
 	}
 	selected := compute.DefaultBootDisk(volumes)
@@ -87,7 +94,7 @@ func ensureDomainBootDisk(config *libvirtxml.Domain) {
 		if device.Dev == "cdrom" {
 			for i := range config.Devices.Disks {
 				disk := &config.Devices.Disks[i]
-				if disk.Device == "cdrom" && (disk.Alias == nil || disk.Alias.Name != "ua-configdrive") {
+				if disk.Device == "cdrom" && (disk.Target == nil || disk.Target.Dev != configDrive) {
 					if disk.Boot == nil {
 						disk.Boot = &libvirtxml.DomainDeviceBoot{Order: order}
 						order++

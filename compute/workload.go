@@ -162,7 +162,7 @@ func (s *WorkloadService) PreviewAssignment(c WorkloadContext, ids []string, dis
 					if v.OwnerVM != "" && v.OwnerVM != vm.Id {
 						return p, ErrConflict
 					}
-					if d.Alias == "configdrive" {
+					if d.Purpose == PurposeConfigDrive && d.Managed {
 						v.OwnerVM = vm.Id
 					}
 				}

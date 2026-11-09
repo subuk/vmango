@@ -151,6 +151,9 @@ func TestReattachedBootDiskFollowsExistingDevices(t *testing.T) {
 <hostdev mode='subsystem' type='pci'><source><address domain='0x0000' bus='0x01' slot='0x00' function='0x0'/></source><boot order='4'/></hostdev>
 <redirdev bus='usb' type='spicevmc'><boot order='6'/></redirdev>
 <filesystem type='mount'><source dir='/shared'/><target dir='shared'/><boot order='8'/></filesystem></devices>`)
+	if err := writeSchedulerMetadata(config, &compute.MachineMetadata{Cloud: "c", Zone: "z", CPURequest: 1, MemoryRequestBytes: 1024, Attachments: &compute.AttachmentMetadata{Version: compute.AttachmentVersion, ConfigDrive: "vdb"}}); err != nil {
+		t.Fatal(err)
+	}
 	ensureDomainBootDisk(config)
 	assertDiskBootOrders(t, config, map[string]uint{"vdc": 9})
 }

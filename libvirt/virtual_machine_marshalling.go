@@ -57,6 +57,10 @@ func VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig libvirtxml.Doma
 	volume := &compute.VirtualMachineAttachedVolume{}
 	if diskConfig.Target != nil {
 		volume.DeviceBus = compute.NewDeviceBus(diskConfig.Target.Bus)
+		volume.DeviceID = diskConfig.Target.Dev
+	}
+	if diskConfig.Driver != nil {
+		volume.Format = diskConfig.Driver.Type
 	}
 	if diskConfig.Alias != nil {
 		alias := diskConfig.Alias.Name
@@ -87,23 +91,29 @@ func VirtualMachineAttachedVolumeFromDomainDiskConfig(diskConfig libvirtxml.Doma
 
 func VirtualMachineAttachedInterfaceFromInterfaceConfig(ifaceConfig libvirtxml.DomainInterface) *compute.VirtualMachineAttachedInterface {
 	iface := &compute.VirtualMachineAttachedInterface{}
-	if ifaceConfig.Alias != nil {
-		iface.LogicalNetwork = networkFromAlias(ifaceConfig.Alias.Name)
+	if ifaceConfig.MAC != nil {
+		iface.Mac = strings.ToLower(ifaceConfig.MAC.Address)
 	}
-	iface.Mac = ifaceConfig.MAC.Address
+	iface.DeviceID = "mac:" + iface.Mac
+	iface.Observation = interfaceObservation(ifaceConfig)
 	if ifaceConfig.Model != nil {
 		iface.Model = ifaceConfig.Model.Type
 	}
 	if ifaceConfig.Source != nil {
 		if ifaceConfig.Source.Network != nil {
 			iface.NetworkName = ifaceConfig.Source.Network.Network
+			iface.Binding = &compute.NetworkBinding{Type: compute.NetworkLibvirt, Network: iface.NetworkName}
 		}
 		if ifaceConfig.Source.Bridge != nil {
 			iface.NetworkName = ifaceConfig.Source.Bridge.Bridge
 			iface.Bridge = true
+			iface.Binding = &compute.NetworkBinding{Type: compute.NetworkBridge, Bridge: iface.NetworkName}
 		}
 	}
 
+	if ifaceConfig.Source != nil && ifaceConfig.Source.User != nil {
+		iface.Binding = &compute.NetworkBinding{Type: compute.NetworkUser}
+	}
 	if ifaceConfig.VLan != nil {
 		if len(ifaceConfig.VLan.Tags) == 1 && ifaceConfig.VLan.Trunk == "" {
 			iface.AccessVlan = ifaceConfig.VLan.Tags[0].ID
@@ -227,74 +237,9 @@ func VirtualMachineFromDomainConfig(domainConfig *libvirtxml.Domain, domainInfo 
 		vm.VideoModel = compute.NewVideoModel(domainConfig.Devices.Videos[0].Model.Type)
 	}
 
-	if domainConfig.QEMUCommandline != nil && len(domainConfig.QEMUCommandline.Args) > 0 {
-		qargs := domainConfig.QEMUCommandline.Args
-		qemuNetdevs := map[string]map[string]string{}
-
-		for idx := 0; idx < len(qargs); idx++ {
-			switch qargs[idx].Value {
-			case "-netdev":
-				idx++
-				parts := strings.Split(qargs[idx].Value, ",")
-				params := map[string]string{}
-				params["type"] = parts[0]
-				for _, part := range parts[1:] {
-					kv := strings.SplitN(part, "=", 2)
-					params[kv[0]] = kv[1]
-				}
-				if params["id"] == "" {
-					continue
-				}
-				if _, ok := qemuNetdevs[params["id"]]; !ok {
-					qemuNetdevs[params["id"]] = map[string]string{}
-				}
-				for k, v := range params {
-					qemuNetdevs[params["id"]][k] = v
-				}
-			case "-device":
-				idx++
-				parts := strings.Split(qargs[idx].Value, ",")
-				params := map[string]string{}
-				params["model"] = parts[0]
-				for _, part := range parts[1:] {
-					kv := strings.SplitN(part, "=", 2)
-					params[kv[0]] = kv[1]
-				}
-				if params["netdev"] == "" {
-					continue
-				}
-				if _, ok := qemuNetdevs[params["netdev"]]; !ok {
-					qemuNetdevs[params["netdev"]] = map[string]string{}
-				}
-				for k, v := range params {
-					qemuNetdevs[params["netdev"]][k] = v
-				}
-			}
-		}
-		for netdevName, netdev := range qemuNetdevs {
-			network, model := netdevName, netdev["model"]
-			// Vmango's command-line networks use generated netdev IDs and
-			// architecture-specific QEMU models. Expose their domain meaning
-			// consistently so read-back can confirm attachment commands.
-			if strings.HasPrefix(netdevName, "vmngmcos") {
-				switch netdev["type"] {
-				case "user":
-					network = "qemu-usernet"
-				case "socket":
-					network = "macos-socket-vmnet"
-				}
-				if strings.HasPrefix(model, "virtio-net-") {
-					model = "virtio"
-				}
-			}
-			iface := &compute.VirtualMachineAttachedInterface{
-				NetworkName:    network,
-				LogicalNetwork: networkFromAlias(netdev["id"]),
-				Model:          model,
-				Mac:            netdev["mac"],
-			}
-			vm.Interfaces = append(vm.Interfaces, iface)
-		}
+	vm.Interfaces = append(vm.Interfaces, observeRawInterfaces(domainConfig)...)
+	if vm.Metadata != nil {
+		_ = compute.ApplyAttachmentMetadata(vm, vm.Metadata.Attachments)
 	}
 
 	return vm, nil

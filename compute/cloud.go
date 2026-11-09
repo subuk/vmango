@@ -33,12 +33,6 @@ type InstanceType struct {
 	Hugepages          bool   `json:"-"`
 	Autostart          bool   `json:"-"`
 }
-type NetworkBinding struct {
-	Bridge  bool
-	Network string
-	Model   string
-	VLAN    uint
-}
 type StorageBinding struct {
 	Pool   string
 	Format VolumeFormat
@@ -57,10 +51,11 @@ type CloudHost struct {
 // MachineMetadata is an applied snapshot, never reconstructed from today's
 // instance type catalog. Limits continue to come from actual VM configuration.
 type MachineMetadata struct {
-	Cloud        string `json:"cloud"`
-	Zone         string `json:"zone"`
-	InstanceType string `json:"instance_type,omitempty"`
-	Image        string `json:"image,omitempty"`
+	Attachments  *AttachmentMetadata `json:"attachments,omitempty"`
+	Cloud        string              `json:"cloud"`
+	Zone         string              `json:"zone"`
+	InstanceType string              `json:"instance_type,omitempty"`
+	Image        string              `json:"image,omitempty"`
 	// CPURequest is retained only for historical XML compatibility, never admission.
 	CPURequest         int    `json:"cpu_request"`
 	MemoryRequestBytes uint64 `json:"memory_request_bytes"`
@@ -208,7 +203,7 @@ func (c Cloud) Validate() error {
 			}
 		}
 		for id, b := range h.Networks {
-			if !hasEntry(c.Networks, id) || b.Network == "" || b.VLAN > 4094 {
+			if !hasEntry(c.Networks, id) || b.Validate() != nil {
 				return fmt.Errorf("host %s: invalid network binding %s", h.Node, id)
 			}
 		}

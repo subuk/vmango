@@ -1,59 +1,38 @@
 package libvirt
 
 import (
-	"encoding/base64"
 	"fmt"
-	"github.com/google/uuid"
-	"strings"
 	"subuk/vmango/compute"
 )
-
-func logicalNetworkAlias(network string) string {
-	if network == "" {
-		return ""
-	}
-	return "ua-vmango-net-" + base64.RawURLEncoding.EncodeToString([]byte(network)) + "." + uuid.NewString()
-}
-func networkFromAlias(alias string) string {
-	const prefix = "ua-vmango-net-"
-	if !strings.HasPrefix(alias, prefix) {
-		return ""
-	}
-	encoded := strings.SplitN(strings.TrimPrefix(alias, prefix), ".", 2)[0]
-	value, err := base64.RawURLEncoding.DecodeString(encoded)
-	if err != nil {
-		return ""
-	}
-	return string(value)
-}
 
 func (repo *VirtualMachineRepository) ValidateNetwork(node string, nic *compute.VirtualMachineAttachedInterface) error {
 	if nic == nil {
 		return compute.ErrInvalid
 	}
-	if nic.Bridge {
-		// Direct bridges are administrator-provisioned host devices. Libvirt's
-		// network API does not inventory arbitrary bridges on remote hosts.
-		if nic.NetworkName == "" || strings.ContainsAny(nic.NetworkName, "/\t\r\n ") {
-			return fmt.Errorf("%w: invalid bridge binding", compute.ErrInvalid)
-		}
-		return nil
+	if nic.Binding == nil {
+		return &compute.ValidationError{Field: "network", Message: "A resolved host network binding is required."}
 	}
-	if nic.NetworkName == "qemu-usernet" || nic.NetworkName == "macos-socket-vmnet" {
-		if nic.Model != "" && nic.Model != "virtio" {
-			return &compute.ValidationError{Field: "network", Message: "This network requires the virtio NIC model; select a compatible hardware profile or network."}
-		}
-		if nic.AccessVlan != 0 {
-			return fmt.Errorf("%w: this network does not support VLAN tags", compute.ErrInvalid)
-		}
+	if err := nic.Binding.Validate(); err != nil {
+		return err
+	}
+	if nic.AccessVlan != 0 {
+		return &compute.ValidationError{Field: "network", Message: "Configure VLANs in the host network infrastructure."}
+	}
+	switch nic.Binding.Kind() {
+	case compute.NetworkBridge, compute.NetworkUser:
 		return nil
+	case compute.NetworkSocketVMNet:
+		if nic.Model != "" && nic.Model != "virtio" {
+			return &compute.ValidationError{Field: "network", Message: "socket-vmnet requires a hardware profile with nic_model = virtio."}
+		}
+		return repo.validateSocketVMNet(node, nic.Binding.Socket)
 	}
 	conn, err := repo.pool.Acquire(node)
 	if err != nil {
 		return err
 	}
 	defer repo.pool.Release(node)
-	network, err := conn.LookupNetworkByName(nic.NetworkName)
+	network, err := conn.LookupNetworkByName(nic.Binding.Network)
 	if err != nil {
 		return repositoryError(err, "configured network is unavailable")
 	}

@@ -41,7 +41,7 @@ func (repo *VirtualMachineRepository) Capabilities(node string, arch compute.Arc
 func imageCapabilities(caps *libvirtxml.DomainCaps) compute.VirtualMachineCapabilities {
 	result := compute.VirtualMachineCapabilities{Arch: compute.NewArch(caps.Arch), NICModels: []string{"virtio"},
 		Graphics: []compute.GraphicType{compute.GraphicTypeNone}, VideoModels: []compute.VideoModel{compute.VideoModelNone},
-		NetworkModels: map[string][]string{"qemu-usernet": {"virtio"}, "macos-socket-vmnet": {"virtio"}}}
+		NetworkModels: map[string][]string{compute.NetworkSocketVMNet: {"virtio"}}}
 	if caps.VCPU != nil {
 		result.MaxVCPUs = caps.VCPU.Max
 	}

@@ -123,7 +123,19 @@ func allocateStorageAddress(c *x.Domain, d hardware.Disks, initial bool) (*x.Dom
 	return nil, fmt.Errorf("%s/%s controllers %v are full: supported capacity %d per controller, %d addresses in use; no additional controller will be created", d.Bus, d.ControllerModel, indices, geometry.Capacity(), usage)
 }
 
-func validateAdoptionControllers(c *x.Domain, plan hardware.Plan) error {
+func validateAdoptionControllers(c *x.Domain, plan hardware.Plan, selected ...*compute.AttachmentMetadata) error {
+	configDrive := ""
+	if len(selected) > 0 && selected[0] != nil {
+		configDrive = selected[0].ConfigDrive
+	} else {
+		m, err := readSchedulerMetadata(c)
+		if err != nil {
+			return err
+		}
+		if m != nil && m.Attachments != nil {
+			configDrive = m.Attachments.ConfigDrive
+		}
+	}
 	if c.Devices == nil {
 		return nil
 	}
@@ -145,10 +157,10 @@ func validateAdoptionControllers(c *x.Domain, plan hardware.Plan) error {
 		}
 		targets[disk.Target.Dev] = true
 		alias := ""
-		if disk.Alias != nil {
-			alias = disk.Alias.Name
+		if disk.Target.Dev == configDrive {
+			alias = "configdrive"
 		}
-		if disk.Device != "disk" && alias != "ua-configdrive" {
+		if disk.Device != "disk" && alias != "configdrive" {
 			continue
 		}
 		d := storagePolicy(plan.Profile, alias)
@@ -289,8 +301,8 @@ func allocateVirtioTransport(c *x.Domain) (*x.DomainAddress, error) {
 			switch ctl.Model {
 			case "pcie-root-port", "pcie-switch-downstream-port":
 				start, end = 0, 0
-			case "pci-root", "pci-bridge", "pcie-to-pci-bridge":
-			case "pcie-root":
+			case "pci-bridge", "pcie-to-pci-bridge":
+			case "pci-root", "pcie-root":
 				start = 2 // chipset functions are never borrowed
 			default:
 				continue
@@ -312,7 +324,17 @@ func storageProbeDisk(d *compute.VirtualMachineAttachedVolume, namer *DeviceName
 }
 
 func validateStorageNative(conn *vir.Connect, c *x.Domain) error {
-	raw, err := c.Marshal()
+	// XMLToNative rewrites every native NIC (including type=user) to
+	// ethernet and tries to allocate TAP devices, even for a read-only probe.
+	// Export storage without networking; NIC capabilities are checked separately
+	// and libvirt validates the complete device layout when defining the domain.
+	probe := *c
+	if c.Devices != nil {
+		devices := *c.Devices
+		devices.Interfaces = nil
+		probe.Devices = &devices
+	}
+	raw, err := probe.Marshal()
 	if err != nil {
 		return err
 	}
@@ -370,7 +392,7 @@ func (repo *VirtualMachineRepository) ValidateDiskAttachments(vm *compute.Virtua
 	}
 	// Include the other requested PCI consumers in the same native conversion.
 	for _, nic := range vm.Interfaces {
-		if !nic.Bridge && (nic.NetworkName == "qemu-usernet" || nic.NetworkName == "macos-socket-vmnet") {
+		if nic.RawBackend || nic.BindingKind() == compute.NetworkSocketVMNet {
 			copy := *nic
 			if err := repo.attachInterface(c, &copy); err != nil {
 				return err

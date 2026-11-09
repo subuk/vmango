@@ -230,7 +230,7 @@ func (repo *VirtualMachineRepository) validateHardwareCapabilities(vm *compute.V
 		if nic.Bridge {
 			continue
 		}
-		if models, ok := caps.NetworkModels[nic.NetworkName]; ok && !slices.Contains(models, p.NICModel) {
+		if models, ok := caps.NetworkModels[nic.BindingKind()]; ok && !slices.Contains(models, p.NICModel) {
 			return &compute.ValidationError{Field: "network", Message: fmt.Sprintf("Network %s does not support hardware profile %s NIC model %s.", nic.NetworkName, p.ID, p.NICModel)}
 		}
 	}
@@ -301,8 +301,11 @@ func (repo *VirtualMachineRepository) ValidateAppliedPolicy(vm *compute.VirtualM
 	if vm.Metadata == nil {
 		return &compute.AdoptionRequiredError{Message: "VM is read-only; explicitly adopt it with a compatible hardware profile."}
 	}
+	if err := compute.ValidateAttachments(vm, vm.Metadata.Attachments); err != nil {
+		return err
+	}
 	plan, err := hardware.DecodePlan(vm.AppliedPolicy)
-	if err != nil {
+	if err != nil || plan.Profile.Presentation == nil {
 		return &compute.AdoptionRequiredError{Message: "VM requires adoption or re-adoption with an explicit compatible hardware profile; its applied policy is missing or unsupported."}
 	}
 	if len(vm.ObservedBackend) > 0 {
@@ -468,6 +471,9 @@ func (repo *VirtualMachineRepository) ValidateResourceChange(current, requested 
 	return repo.validateHardwareCapabilities(requested, plan, true, false)
 }
 func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine, cloud, profile string) (json.RawMessage, error) {
+	if vm.Metadata == nil || vm.Metadata.Attachments == nil {
+		return nil, &compute.ValidationError{Field: "config_drive", Message: "Explicit attachment and config-drive selections are required for adoption."}
+	}
 	p, ok := repo.hardwareProfiles[cloud][profile]
 	if !ok {
 		return nil, &compute.ValidationError{Field: "hardware_profile", Message: fmt.Sprintf("Cloud %s: select a known hardware profile for adoption.", cloud)}
@@ -495,7 +501,7 @@ func (repo *VirtualMachineRepository) PrepareAdoption(vm *compute.VirtualMachine
 	if err = validateGuestSystemAdoption(config, plan.Profile); err != nil {
 		return nil, err
 	}
-	if err = validateAdoptionControllers(config, plan); err != nil {
+	if err = validateAdoptionControllers(config, plan, vm.Metadata.Attachments); err != nil {
 		return nil, &compute.ValidationError{Field: "hardware_profile", Message: err.Error()}
 	}
 	if config.Devices != nil {
@@ -552,7 +558,7 @@ func validateAdoptionPolicy(vm *compute.VirtualMachine, plan hardware.Plan) erro
 	}
 	hasConfigDrive := false
 	for _, disk := range vm.Volumes {
-		if disk.Alias == "configdrive" {
+		if disk.Purpose == compute.PurposeConfigDrive {
 			hasConfigDrive = true
 			if vm.Config == nil || vm.Config.Initialization != p.ConfigDrive.Format {
 				return conflict("config-drive data format (unreadable or different)")
@@ -602,18 +608,16 @@ func (repo *VirtualMachineRepository) AdoptWithPolicy(id, node string, m *comput
 	if err != nil {
 		return err
 	}
-	for _, disk := range vm.Volumes {
-		if disk.Alias == "configdrive" {
-			vm.Config, err = repo.parseConfigDrive(conn, disk.Path)
-			if err != nil {
-				return fmt.Errorf("cannot verify existing config-drive format: %w", err)
-			}
-		}
+	if err = compute.ApplyAttachmentMetadata(vm, m.Attachments); err != nil {
+		return err
+	}
+	if err = repo.readSelectedConfigDrive(conn, vm); err != nil {
+		return err
 	}
 	if err = validateAdoptionPolicy(vm, plan); err != nil {
 		return err
 	}
-	if err = validateAdoptionControllers(&config, plan); err != nil {
+	if err = validateAdoptionControllers(&config, plan, m.Attachments); err != nil {
 		return err
 	}
 	if err = validateAdoptionBindings(&config, plan); err != nil {
@@ -732,7 +736,7 @@ func (repo *VirtualMachineRepository) ValidateAdoptionPolicy(vm *compute.Virtual
 	if err != nil {
 		return err
 	}
-	if err = validateAdoptionControllers(c, plan); err != nil {
+	if err = validateAdoptionControllers(c, plan, vm.Metadata.Attachments); err != nil {
 		return err
 	}
 	if err = validateAdoptionBindings(c, plan); err != nil {
@@ -762,6 +766,18 @@ func (repo *VirtualMachineRepository) requireManagedHardware(id, node string) er
 }
 
 var _ compute.BackendMachineRepository = (*VirtualMachineRepository)(nil)
+
+func (repo *VirtualMachineRepository) ValidateAcceptedPolicy(raw json.RawMessage) error {
+	plan, err := hardware.DecodePlan(raw)
+	if err != nil {
+		return err
+	}
+	if plan.Profile.Presentation == nil {
+		return fmt.Errorf("resolved presentation policy is missing")
+	}
+	return nil
+}
+
 var _ compute.MachineAutostartRepository = (*VirtualMachineRepository)(nil)
 
 // Structural support is independent of current host resource availability.

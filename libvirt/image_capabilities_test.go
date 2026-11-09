@@ -26,26 +26,20 @@ func TestImageCapabilitiesAndController(t *testing.T) {
 	}
 }
 
-func TestUserNetworkUsesGuestArchitecture(t *testing.T) {
+func TestUserNetworkUsesNativeInterface(t *testing.T) {
 	for _, arch := range []string{"aarch64", "x86_64"} {
-		config := newDomainConfig(&compute.VirtualMachine{Id: "test", Name: "test"}, &libvirtxml.DomainCaps{Arch: arch})
-		repo := &VirtualMachineRepository{}
-		if err := repo.attachInterface(config, &compute.VirtualMachineAttachedInterface{NetworkName: "qemu-usernet", Model: "virtio"}); err != nil {
+		c := newDomainConfig(&compute.VirtualMachine{}, &libvirtxml.DomainCaps{Arch: arch})
+		nic := (compute.NetworkBinding{Type: compute.NetworkUser}).Interface("internet")
+		nic.Model = "virtio"
+		if err := (&VirtualMachineRepository{}).attachInterface(c, nic); err != nil {
 			t.Fatal(err)
 		}
-		want := "virtio-net-device,"
-		if arch == "x86_64" {
-			want = "virtio-net-pci,"
+		if c.QEMUCommandline != nil || len(c.Devices.Interfaces) != 1 || c.Devices.Interfaces[0].Source.User == nil {
+			t.Fatal("not a native user interface")
 		}
-		args := config.QEMUCommandline.Args
-		if !strings.HasPrefix(args[len(args)-1].Value, want) {
-			t.Fatalf("%s: %v", arch, args)
-		}
-		config.VCPU = &libvirtxml.DomainVCPU{Value: 2}
-		config.Memory = &libvirtxml.DomainMemory{Value: 1024, Unit: "MiB"}
-		observed, err := VirtualMachineFromDomainConfig(config, &vir.DomainInfo{State: vir.DOMAIN_SHUTOFF})
-		if err != nil || len(observed.Interfaces) != 1 || observed.Interfaces[0].NetworkName != "qemu-usernet" || observed.Interfaces[0].Model != "virtio" {
-			t.Fatalf("QEMU network did not retain domain meaning: %+v, %v", observed, err)
+		observed := VirtualMachineAttachedInterfaceFromInterfaceConfig(c.Devices.Interfaces[0])
+		if observed.Binding.Kind() != compute.NetworkUser || observed.Model != "virtio" || observed.LogicalNetwork != "" || observed.Managed {
+			t.Fatal("observation inferred ownership", observed)
 		}
 	}
 }

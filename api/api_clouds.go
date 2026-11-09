@@ -70,7 +70,9 @@ type apiAdoptInput struct {
 	Cloud string `path:"cloud"`
 	VM    string `path:"vm"`
 	Body  struct {
-		HardwareProfile string `json:"hardware_profile,omitempty" minLength:"1" doc:"Libvirt clouds require a compatible named hardware profile."`
+		HardwareProfile string            `json:"hardware_profile,omitempty" minLength:"1" doc:"Libvirt clouds require a compatible named hardware profile."`
+		ConfigDrive     *string           `json:"config_drive,omitempty" doc:"Attached disk device_id, or an explicit empty string for No config drive. Required for libvirt adoption."`
+		Networks        map[string]string `json:"networks,omitempty" doc:"Explicit device_id to logical network choices for ambiguous adoption matches."`
 	}
 }
 type apiChangeTypeInput struct {
@@ -240,7 +242,7 @@ func (e *Environ) registerClouds(api huma.API) {
 		return e.submitTask(ctx, in.IdempotencyKey, "volume.create", compute.InfrastructureCommand{CloudID: in.Cloud, VolumeSpec: &in.Body})
 	})
 	registerAPI(api, "POST", "/clouds/{cloud}/machines/{vm}/adopt", "adopt-machine", "Explicitly adopt a machine with a compatible hardware profile without changing its hardware", func(ctx context.Context, in *apiAdoptInput) (*apiAccepted, error) {
-		return e.submitTask(ctx, in.IdempotencyKey, "machine.adopt", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, AdoptionPolicyRef: in.Body.HardwareProfile})
+		return e.submitTask(ctx, in.IdempotencyKey, "machine.adopt", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, AdoptionPolicyRef: in.Body.HardwareProfile, AdoptionConfigDrive: in.Body.ConfigDrive, AdoptionNetworks: in.Body.Networks})
 	})
 	registerAPI(api, "POST", "/clouds/{cloud}/machines/{vm}/instance-type", "change-instance-type", "Change a stopped machine's instance type on its current host", func(ctx context.Context, in *apiChangeTypeInput) (*apiAccepted, error) {
 		return e.submitTask(ctx, in.IdempotencyKey, "machine.change-type", compute.InfrastructureCommand{CloudID: in.Cloud, VM: in.VM, InstanceType: in.Body.InstanceType})

@@ -36,11 +36,12 @@ func (s *CloudService) HostCatalog(cloudID, node string, vm *VirtualMachine) (Ho
 	}
 	for _, network := range c.Networks {
 		if b, ok := h.Networks[network.ID]; ok {
-			model := b.Model
-			if model == "" && vm != nil && len(vm.Interfaces) > 0 {
-				model = vm.Interfaces[0].Model
+			nic := b.Interface(network.ID)
+			if vm != nil && len(vm.AppliedPolicy) > 0 {
+				if err := s.VMs.ResolveInterfaceAttachment(vm, nic); err != nil {
+					return out, err
+				}
 			}
-			nic := &VirtualMachineAttachedInterface{NetworkName: b.Network, Bridge: b.Bridge, Model: model, AccessVlan: b.VLAN}
 			if err := s.VMs.ValidateNetwork(node, nic); err == nil {
 				out.Networks = append(out.Networks, network)
 			} else if !errors.Is(err, ErrInvalid) && !errors.Is(err, ErrConflict) && !errors.Is(err, ErrNotFound) {

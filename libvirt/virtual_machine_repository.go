@@ -169,7 +169,7 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId s
 	}
 
 	for _, volume := range vm.Volumes {
-		if volume.Alias != "configdrive" && !strings.HasSuffix(volume.Path, settings.CdSuffix) {
+		if volume.Purpose != compute.PurposeConfigDrive {
 			continue
 		}
 		repo.configCacheMu.Lock()
@@ -194,84 +194,37 @@ func (repo *VirtualMachineRepository) domainToVm(conn *libvirt.Connect, nodeId s
 	return vm, nil
 }
 
-func (repo *VirtualMachineRepository) attachInterface(virDomainConfig *libvirtxml.Domain, attachedIface *compute.VirtualMachineAttachedInterface) error {
-	if !attachedIface.Bridge && (attachedIface.NetworkName == "macos-socket-vmnet" || attachedIface.NetworkName == "qemu-usernet") {
-		if virDomainConfig.QEMUCommandline == nil {
-			virDomainConfig.QEMUCommandline = &libvirtxml.DomainQEMUCommandline{}
-		}
-		if attachedIface.Mac == "" {
-			attachedIface.Mac = generateMacAddress("52:54:00")
-		}
-
-		ifaceNum := 0
-		for idx, arg := range virDomainConfig.QEMUCommandline.Args {
-			if arg.Value != "-netdev" {
-				continue
-			}
-			argv := virDomainConfig.QEMUCommandline.Args[idx+1].Value
-			params := parseQemuDeviceArg(argv)
-			if strings.HasPrefix(params["id"], "vmngmcos") {
-				thisIfaceNum, err := strconv.ParseInt(string(params["id"][len("vmngmcos"):]), 10, 64)
-				if err != nil {
-					repo.logger.Debug().Err(err).Str("full_argv", argv).Msg("failed to extract number from vmngmcos interface")
-					continue
-				}
-				if thisIfaceNum > int64(ifaceNum) {
-					ifaceNum = int(thisIfaceNum)
-				}
-			}
-		}
-		ifaceNum++
-		ifaceName := fmt.Sprintf("vmngmcos%d", ifaceNum)
-		deviceID := ""
-		if alias := logicalNetworkAlias(attachedIface.LogicalNetwork); alias != "" {
-			deviceID = ",id=" + alias
-		}
-		deviceModel := "virtio-net-device"
-		if virDomainConfig.OS.Type.Arch == "x86_64" {
-			deviceModel = "virtio-net-pci"
-		}
-		switch attachedIface.NetworkName {
-		default:
-			panic(fmt.Errorf("unhandled network type %s", attachedIface.NetworkName))
-		case "macos-socket-vmnet":
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-netdev"})
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "socket,id=" + ifaceName + ",fd=3"})
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-device"})
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: deviceModel + ",netdev=" + ifaceName + ",mac=" + attachedIface.Mac + deviceID})
-		case "qemu-usernet":
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-netdev"})
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "user,id=" + ifaceName})
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: "-device"})
-			virDomainConfig.QEMUCommandline.Args = append(virDomainConfig.QEMUCommandline.Args, libvirtxml.DomainQEMUCommandlineArg{Value: deviceModel + ",netdev=" + ifaceName + ",mac=" + attachedIface.Mac + deviceID})
-		}
-
-		return nil
+func (repo *VirtualMachineRepository) attachInterface(c *libvirtxml.Domain, nic *compute.VirtualMachineAttachedInterface) error {
+	if nic.Binding == nil {
+		return fmt.Errorf("network attachment requires an explicit resolved binding")
 	}
-
-	if attachedIface.Model == "" {
-		attachedIface.Model = "virtio"
+	if err := nic.Binding.Validate(); err != nil {
+		return err
 	}
-	domainIface := libvirtxml.DomainInterface{}
-	if alias := logicalNetworkAlias(attachedIface.LogicalNetwork); alias != "" {
-		domainIface.Alias = &libvirtxml.DomainAlias{Name: alias}
+	if nic.Model == "" {
+		return fmt.Errorf("network attachment requires a profile-resolved NIC model")
 	}
-	if attachedIface.Mac != "" {
-		domainIface.MAC = &libvirtxml.DomainInterfaceMAC{Address: attachedIface.Mac}
+	if nic.AccessVlan != 0 {
+		return fmt.Errorf("VLAN configuration is unsupported; configure the host network infrastructure")
 	}
-	domainIface.Source = &libvirtxml.DomainInterfaceSource{}
-	domainIface.Model = &libvirtxml.DomainInterfaceModel{Type: attachedIface.Model}
-	if attachedIface.Bridge {
-		domainIface.Source.Bridge = &libvirtxml.DomainInterfaceSourceBridge{Bridge: attachedIface.NetworkName}
-	} else {
-		domainIface.Source.Network = &libvirtxml.DomainInterfaceSourceNetwork{Network: attachedIface.NetworkName}
+	if nic.Mac == "" {
+		nic.Mac = generateMacAddress("52:54:00")
 	}
-	if attachedIface.AccessVlan > 0 {
-		domainIface.VLan = &libvirtxml.DomainInterfaceVLan{
-			Tags: []libvirtxml.DomainInterfaceVLanTag{libvirtxml.DomainInterfaceVLanTag{ID: attachedIface.AccessVlan}},
-		}
+	if nic.Binding.Kind() == compute.NetworkSocketVMNet {
+		return repo.attachSocketVMNet(c, nic)
 	}
-	virDomainConfig.Devices.Interfaces = append(virDomainConfig.Devices.Interfaces, domainIface)
+	iface := libvirtxml.DomainInterface{MAC: &libvirtxml.DomainInterfaceMAC{Address: nic.Mac}, Model: &libvirtxml.DomainInterfaceModel{Type: nic.Model}, Source: &libvirtxml.DomainInterfaceSource{}}
+	switch nic.Binding.Kind() {
+	case compute.NetworkLibvirt:
+		iface.Source.Network = &libvirtxml.DomainInterfaceSourceNetwork{Network: nic.Binding.Network}
+	case compute.NetworkBridge:
+		iface.Source.Bridge = &libvirtxml.DomainInterfaceSourceBridge{Bridge: nic.Binding.Bridge}
+	case compute.NetworkUser:
+		iface.Source.User = &libvirtxml.DomainInterfaceSourceUser{}
+	default:
+		return fmt.Errorf("unsupported network binding type")
+	}
+	c.Devices.Interfaces = append(c.Devices.Interfaces, iface)
 	return nil
 }
 
@@ -434,17 +387,8 @@ func newDomainConfig(vm *compute.VirtualMachine, domCapsConfig *libvirtxml.Domai
 	}
 	applyDomainPowerPolicy(virDomainConfig)
 	virDomainConfig.Devices = &libvirtxml.DomainDeviceList{Emulator: domCapsConfig.Path}
-	// ARM virt has no implicit PS/2 input. USB input works in both UEFI and
-	// graphical guests, including before guest-specific drivers are loaded.
-	plan, planErr := hardware.DecodePlan(vm.AppliedPolicy)
-	if planErr == nil && plan.Profile.Presentation != nil {
+	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil && plan.Profile.Presentation != nil {
 		applyPresentation(virDomainConfig, plan.Profile.Presentation)
-	} else if domCapsConfig.Arch == "aarch64" && (vm.Graphic.Type == compute.GraphicTypeVnc || vm.Graphic.Type == compute.GraphicTypeSpice) {
-		virDomainConfig.Devices.Controllers = append(virDomainConfig.Devices.Controllers, libvirtxml.DomainController{Type: "usb", Model: "qemu-xhci"})
-		virDomainConfig.Devices.Inputs = []libvirtxml.DomainInput{
-			{Type: "keyboard", Bus: "usb"},
-			{Type: "tablet", Bus: "usb"},
-		}
 	}
 	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
 		ensureStorageControllers(virDomainConfig, plan.Profile)
@@ -465,7 +409,7 @@ func (repo *VirtualMachineRepository) SaveResources(vm *compute.VirtualMachine) 
 }
 
 func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resourcesOnly bool) (err error) {
-	if err := repo.ValidateAppliedPolicy(vm); err != nil {
+	if err := repo.ValidateAcceptedPolicy(vm.AppliedPolicy); err != nil {
 		return err
 	}
 	ref := compute.VMRef(vm.NodeId, vm.Id)
@@ -500,6 +444,11 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 
 	if isNewVm && resourcesOnly {
 		return compute.ErrNotFound
+	}
+	if !isNewVm {
+		if err := repo.ValidateAppliedPolicy(vm); err != nil {
+			return err
+		}
 	}
 	if isNewVm {
 		if err := repo.ApplyHardware(vm, vm.AppliedPolicy); err != nil {
@@ -556,6 +505,9 @@ func (repo *VirtualMachineRepository) save(vm *compute.VirtualMachine, resources
 			if err := repo.attachInterface(virDomainConfig, attachedIface); err != nil {
 				return repositoryError(err, "cannot attach interface")
 			}
+		}
+		if err := recordAttachments(virDomainConfig, vm); err != nil {
+			return err
 		}
 		ensureDomainBootDisk(virDomainConfig)
 	}
@@ -666,13 +618,12 @@ func (repo *VirtualMachineRepository) nodeList(nodeId string) ([]*compute.Virtua
 	}
 	defer repo.pool.Release(nodeId)
 	vms := []*compute.VirtualMachine{}
-	settings := repo.settings[nodeId]
 	domains, err := conn.ListAllDomains(0)
 	if err != nil {
 		return nil, repositoryError(err, "cannot list all domains")
 	}
 	for _, domain := range domains {
-		vm, err := repo.domainToVm(conn, nodeId, &domain, settings)
+		vm, err := repo.domainToVm(conn, nodeId, &domain, repo.settings[nodeId])
 		domain.Free()
 		if err != nil {
 			return nil, repositoryError(err, "cannot convert libvirt domain to vm")
@@ -723,12 +674,11 @@ func (repo *VirtualMachineRepository) Get(id, nodeId string) (*compute.VirtualMa
 	}
 	defer repo.pool.Release(nodeId)
 
-	settings := repo.settings[nodeId]
 	domain, err := conn.LookupDomainByUUIDString(id)
 	if err != nil {
 		return nil, repositoryError(err, "failed to lookup vm")
 	}
-	vm, err := repo.domainToVm(conn, nodeId, domain, settings)
+	vm, err := repo.domainToVm(conn, nodeId, domain, repo.settings[nodeId])
 	if err != nil {
 		return nil, repositoryError(err, "cannot convert libvirt domain to vm")
 	}
@@ -895,6 +845,9 @@ func (repo *VirtualMachineRepository) AttachVolume(id, nodeId string, attachedVo
 	if err := repo.attachVolume(conn, virDomainConfig, attachedVolume, namer, plan.Profile, false); err != nil {
 		return repositoryError(err, "cannot add volume xml config")
 	}
+	if err := updateAttachmentRecords(virDomainConfig, attachedVolume, nil); err != nil {
+		return err
+	}
 	ensureDomainBootDisk(virDomainConfig)
 	if err = validateStorageNative(conn, virDomainConfig); err != nil {
 		return err
@@ -957,6 +910,9 @@ func (repo *VirtualMachineRepository) DetachVolume(id, nodeId, needlePath string
 		return compute.ErrNotFound
 	}
 	virDomainConfig.Devices.Disks = newDisks
+	if err := updateAttachmentRecords(virDomainConfig, nil, nil); err != nil {
+		return err
+	}
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {
 		return repositoryError(err, "cannot create domain xml")
@@ -1008,6 +964,9 @@ func (repo *VirtualMachineRepository) AttachInterface(id, nodeId string, attache
 		return repositoryError(err, "cannot parse domain xml")
 	}
 	if err := repo.attachInterface(virDomainConfig, attachedIface); err != nil {
+		return err
+	}
+	if err := updateAttachmentRecords(virDomainConfig, nil, attachedIface); err != nil {
 		return err
 	}
 	virDomainXml, err = virDomainConfig.Marshal()
@@ -1064,6 +1023,9 @@ func (repo *VirtualMachineRepository) detachInterfaceLibvirt(id, nodeId, needleM
 		return compute.ErrInterfaceNotFound
 	}
 	virDomainConfig.Devices.Interfaces = newInterfaces
+	if err := updateAttachmentRecords(virDomainConfig, nil, nil); err != nil {
+		return err
+	}
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {
 		return repositoryError(err, "cannot create domain xml")
@@ -1107,46 +1069,12 @@ func (repo *VirtualMachineRepository) detachInterfaceQemuArgs(id, nodeId, needle
 		return compute.ErrInterfaceNotFound
 	}
 
-	needleNetdevId := ""
-	for idx, qarg := range virDomainConfig.QEMUCommandline.Args {
-		switch qarg.Value {
-		case "-device":
-			argv := virDomainConfig.QEMUCommandline.Args[idx+1].Value
-			if strings.Contains(strings.ToLower(argv), "="+strings.ToLower(needleMac)) {
-				params := parseQemuDeviceArg(argv)
-				needleNetdevId = params["netdev"]
-			}
-		}
+	if err := detachRawInterface(virDomainConfig, needleMac); err != nil {
+		return err
 	}
-
-	newArgs := []libvirtxml.DomainQEMUCommandlineArg{}
-	for idx := 0; idx < len(virDomainConfig.QEMUCommandline.Args); idx++ {
-		arg := virDomainConfig.QEMUCommandline.Args[idx]
-		switch arg.Value {
-		default:
-			newArgs = append(newArgs, arg)
-		case "-netdev":
-			idx++
-			nextarg := virDomainConfig.QEMUCommandline.Args[idx]
-			params := parseQemuDeviceArg(nextarg.Value)
-			if params["id"] == needleNetdevId {
-				continue
-			}
-			newArgs = append(newArgs, arg, nextarg)
-		case "-device":
-			idx++
-			nextarg := virDomainConfig.QEMUCommandline.Args[idx]
-			params := parseQemuDeviceArg(nextarg.Value)
-			if params["netdev"] == needleNetdevId {
-				continue
-			}
-			newArgs = append(newArgs, arg, nextarg)
-		}
+	if err := updateAttachmentRecords(virDomainConfig, nil, nil); err != nil {
+		return err
 	}
-	if len(newArgs) == len(virDomainConfig.QEMUCommandline.Args) {
-		return compute.ErrInterfaceNotFound
-	}
-	virDomainConfig.QEMUCommandline.Args = newArgs
 	virDomainXml, err = virDomainConfig.Marshal()
 	if err != nil {
 		return repositoryError(err, "cannot create domain xml")
@@ -1165,6 +1093,7 @@ func (repo *VirtualMachineRepository) DetachInterface(id, nodeId, needleMac stri
 		if err == compute.ErrInterfaceNotFound {
 			return repo.detachInterfaceQemuArgs(id, nodeId, needleMac)
 		}
+		return err
 	}
 	return nil
 }

@@ -356,3 +356,37 @@ separate integration verification before claiming those deployment scenarios
 as tested. A successful macOS check does not establish Linux/KVM behavior.
 Verify VM lifecycle operations on a real hypervisor before release.
 See [the release process](https://github.com/subuk/vmango/blob/master/HOWTO-RELEASE.md).
+
+
+## Local macOS QEMU/HVF
+
+Use a local libvirt session and the real QEMU executable, with an explicit native
+user-network binding. Inside the existing cloud, retain its logical `lan` network
+and change the local host settings:
+
+```hcl
+host "local" {
+    uri = "qemu:///session"
+    emulator = "/opt/homebrew/bin/qemu-system-aarch64"
+    zone = "local"
+    image_pool = "default"
+    config_drive_pool = "default"
+    network "lan" { type = "qemu-user" }
+    storage_class "standard" { pool = "default" format = "qcow2" }
+}
+```
+
+Create the `default` directory storage pool separately and use an ARM64 image and
+compatible hardware profile. No emulator wrapper is needed. User networking gives
+each guest outgoing NAT and DNS with QEMU defaults. Guests can access host services
+at the default gateway (`10.0.2.2`); the host cannot directly connect into them.
+Vmango does not configure port forwarding. Sharing the logical `lan` network does
+not connect guests to each other. VNC and serial consoles use Vmango's authenticated
+console transport independently of guest networking.
+
+Profiles own NIC model, graphics and USB input. Use VNC with virtio video and USB
+keyboard/tablet for supported graphical guests, or `graphics { type="none" }` for
+a serial-only guest. Existing machines require explicit adoption when attachment
+records are absent. See the [migration guide](https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md#explicit-network-bindings-and-attachment-records-krg-126)
+for bridge/libvirt-network alternatives, adoption and the unverified socket-vmnet
+backend. Socket-vmnet testing is outside KRG-126.

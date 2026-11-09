@@ -11,7 +11,7 @@ rewrite existing VM hardware, convert disks, or replay unfinished old commands.
 2. Define named hardware profiles inside each libvirt cloud. Reference one profile
    explicitly from every image in that cloud, including aliases and hidden images.
 3. Move image hardware settings, instance-type hugepages and config-drive policy
-   into profiles. Remove deprecated fields after reviewing their warnings.
+   into profiles. Remove deprecated fields; their presence now prevents startup.
 4. Start the service and review configuration diagnostics and task history.
    Unfinished commands accepted before the incompatible upgrade fail without
    execution. Inspect any recorded effects and uncertainty locks before resubmitting.
@@ -94,8 +94,8 @@ settings; move any former format setting to the profile and remove `graphics_lis
 
 ## Deprecated fields
 
-The following legacy fields produce migration warnings and are ignored, including
-when a valid new profile is present. They never override that profile.
+The following legacy fields are rejected, including false, zero and empty values,
+even when a valid new profile is present. Correct them before restarting Vmango.
 
 | Old location | Fields | Replacement |
 | --- | --- | --- |
@@ -105,9 +105,11 @@ when a valid new profile is present. They never override that profile.
 | Instance type | `autostart` | No configurable replacement; lifecycle-managed |
 | Host | `config_drive_write_format` | Profile config-drive format |
 | Host | `graphics_listen` | No configurable replacement; derived loopback listener |
+| Host network | `model` | `hardware_profile.nic_model` |
+| Logical/host network | `vlan` | Configure VLANs in host/libvirt network infrastructure |
 
-Warnings identify the configuration location and link to this guide. Remove the
-old fields rather than relying on their apparent values. The defaults in new
+Errors identify the file, block/field and source location, and link to this guide.
+Remove the old fields and use the listed replacement. The defaults in new
 profiles are independent of deprecated image and host fields.
 
 ## Ordinary disks and config drive
@@ -463,8 +465,7 @@ The flat hardware-profile syntax `firmware = "efi"` is rejected with migration
 instructions. Replace it with `firmware { type = "efi" }` (likewise `bios` or
 `auto`). An omitted or empty block is `auto`. New explicit EFI defaults to
 firmware without Secure Boot; request `secure_boot = true` for support and
-initially enrolled keys. Deprecated image-inline firmware remains warned and
-ignored. Supported persisted policy/commands keep their historical meaning.
+initially enrolled keys. Deprecated image-inline firmware is rejected. Supported persisted policy/commands keep their historical meaning.
 See [firmware profiles and NVRAM](FIRMWARE.md) for named profiles, host bindings,
 formats, ownership, missing-file regeneration and security evidence.
 
@@ -492,6 +493,95 @@ Use `graphics {type="none"}` for a serial-only server. It adds no graphics/video
 input or USB dependency; an explicit standalone XHCI is retained. Existing
 applied policies and accepted plans keep historical omission semantics. Adoption
 preserves omitted input constraints and extra PS/2/devices/addresses/listeners.
-Image-inline deprecated fields and host `graphics_listen` remain warned/ignored.
+Image-inline deprecated fields and host `graphics_listen` are rejected.
 See [graphics/input documentation](content/en/docs/graphics-input.md) and the
 [parser-tested examples](examples/graphics.conf) before migrating profiles.
+
+
+## Explicit network bindings and attachment records (KRG-126)
+
+Logical networks remain cloud catalogs. Each host describes how it implements a
+logical network; the hardware profile alone selects the virtual NIC model:
+
+```hcl
+network "lan" { network = "default" } # Omitted type means libvirt-network.
+network "bridged" { type = "bridge" bridge = "br0" }
+network "internet" { type = "qemu-user" }
+network "vmnet" { type = "socket-vmnet" socket = "/var/run/socket_vmnet" }
+```
+
+These examples belong inside `host`; declare matching logical networks at cloud
+level. Incompatible fields are errors, including explicitly empty fields. The
+names `qemu-usernet` and `macos-socket-vmnet` have no special meaning: a `network`
+value always names a real libvirt network. Manually replace old bindings with an
+explicit type. Remove `model` and `vlan` from host network blocks. Do not move
+VLAN IDs to another Vmango field; configure the underlying infrastructure.
+
+`qemu-user` creates a native libvirt user interface with default QEMU SLIRP
+settings. Each VM has independent outgoing NAT, DHCP and DNS. Its guest can reach
+host services through the default gateway address (normally `10.0.2.2`). The host
+cannot directly initiate connections to the guest; Vmango exposes no port
+forwarding setting. Two VMs using the same logical network are **not** on a shared
+segment and cannot directly reach one another through this backend. Use a real
+libvirt network or host bridge when shared connectivity is required. Native user
+interfaces participate in libvirt device allocation; existing raw QEMU interfaces
+retain the raw-device PCI safety restrictions.
+
+### socket-vmnet client contract — unverified
+
+The administrator installs and runs the shared service and configures its mode,
+DHCP range and socket permissions. Vmango does not stop that service when a VM is
+deleted. The implementation requires local macOS `qemu:///session`, QEMU >= 7.2,
+and a virtio NIC. Remote/system connections are rejected because this version
+cannot establish socket accessibility as the remote QEMU user.
+
+Use the real QEMU emulator, not an FD wrapper. QEMU's native `stream` backend
+connects to the configured Unix socket and owns the connection until QEMU exits.
+There is no fixed descriptor number or separately launched per-VM helper. Runtime
+validation checks the supported host, QEMU version and socket accessibility and
+reports missing service/permission problems before provisioning. This integration
+has **not been tested** in KRG-126; socket-vmnet validation remains separate work.
+Shared service installation and lifecycle automation are tracked in KRG-127.
+
+### Existing machines and adoption
+
+Read-back no longer infers config drives from filenames/aliases or network
+ownership from QEMU device names. Existing hardware stays observable. Missing or
+inconsistent attachment metadata, or an applied plan without resolved presentation
+policy, requires explicit adoption/re-adoption before managed mutations.
+
+In the adoption dialog, select a compatible hardware profile and explicitly select
+an attached config drive or **No config drive**. Disk source, device and storage
+format are shown. Vmango verifies the selected disk contains supported NoCloud or
+OpenStack data. Adoption records its purpose without modifying it or acquiring
+permission to overwrite/delete it. The selected profile must agree with the
+existing drive's presence and format; adoption never creates or attaches a drive.
+
+NICs automatically match configured host bindings when exactly one matches. An
+ambiguous match requires a selection. If none matches, add the logical network
+and host binding to configuration and restart before retrying. Existing attachments
+are preserved, including raw QEMU devices and VLAN tags. A legacy inherited socket
+FD cannot reveal its service path: explicitly confirm the matching configured
+socket-vmnet service even if only one is offered. Its existing wrapper/FD setup
+remains unchanged; moving that VM to the new backend is a separate operation.
+Normal read-back uses
+persisted logical network and binding records independently of later catalog edits.
+
+Attachment metadata records stable device IDs, actual source/model, purpose and
+ownership in the existing VM metadata. Deleting a VM with `delete_volumes=true`
+only deletes disks explicitly owned by Vmango; externally adopted disks remain.
+Host `config_drive_suffix` controls names of newly generated files only.
+
+### Accepted work at the upgrade boundary
+
+Infrastructure command format is now version 5. Older unfinished commands and
+unsupported nested plans are rejected before execution; Vmango does not rebuild
+or replay them from current profiles. Terminal history, recorded effects and
+uncertainty/resource fences are retained. Inspect existing effects before explicitly
+resubmitting an operation. Supported version-5 plans retain their resolved profile
+and binding values across configuration edits and restarts.
+
+The libvirt XML-to-native export rewrites native interfaces to TAP-backed ethernet.
+Storage preflight therefore excludes native NICs; NIC capabilities are checked
+separately and libvirt validates the full layout on domain definition. This avoids
+allocating TAP devices during the macOS storage probe.

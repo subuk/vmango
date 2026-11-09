@@ -61,11 +61,11 @@ type CloudHostConfig struct {
 	Storage                []StorageBindingConfig         `hcl:"storage_class"`
 }
 type NetworkBindingConfig struct {
+	Type    string `hcl:"type"`
+	Socket  string `hcl:"socket"`
 	Bridge  string `hcl:"bridge"`
 	ID      string `hcl:",key"`
 	Network string `hcl:"network"`
-	Model   string `hcl:"model"`
-	VLAN    uint   `hcl:"vlan"`
 }
 type StorageBindingConfig struct {
 	ID     string `hcl:",key"`
@@ -160,15 +160,14 @@ func (cfg *Config) CloudDefinitions() ([]compute.Cloud, error) {
 				if _, ok := host.Networks[b.ID]; ok {
 					return nil, fmt.Errorf("duplicate network binding %s", b.ID)
 				}
-				model := b.Model
-				network := b.Network
-				if (network == "") == (b.Bridge == "") {
-					return nil, fmt.Errorf("network binding %s must select exactly one network or bridge", b.ID)
+				binding := compute.NetworkBinding{Type: b.Type, Network: b.Network, Bridge: b.Bridge, Socket: b.Socket}
+				if binding.Type == "" {
+					binding.Type = compute.NetworkLibvirt
 				}
-				if b.Bridge != "" {
-					network = b.Bridge
+				if err := binding.Validate(); err != nil {
+					return nil, fmt.Errorf("cloud %s host %s network %s: %w", c.ID, h.Node, b.ID, err)
 				}
-				host.Networks[b.ID] = compute.NetworkBinding{Network: network, Bridge: b.Bridge != "", Model: model, VLAN: b.VLAN}
+				host.Networks[b.ID] = binding
 			}
 			for _, b := range h.Storage {
 				if _, ok := host.Storage[b.ID]; ok {

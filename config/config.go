@@ -302,6 +302,9 @@ func Parse(filename string) (*Config, error) {
 		return nil, util.NewError(err, "cannot read configuration file")
 	}
 	config, err := ParseBytes(content)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", filename, err)
+	}
 	if err == nil {
 		for _, warning := range config.MigrationWarnings {
 			fmt.Fprintf(os.Stderr, "%s: warning: %s\n", filename, warning)
@@ -346,7 +349,9 @@ func ParseBytes(content []byte) (*Config, error) {
 		}
 	}
 	if list, ok := parsed.Node.(*ast.ObjectList); ok {
-		config.MigrationWarnings = removeDeprecatedHardware(list)
+		if err := rejectDeprecatedHardware(list); err != nil {
+			return nil, err
+		}
 	}
 	if err := hcl.DecodeObject(config, parsed); err != nil {
 		return nil, util.NewError(err, "invalid configuration format")

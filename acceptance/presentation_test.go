@@ -68,6 +68,22 @@ func checkPresentationXML(t *testing.T, c *x.Domain, mode string) {
 	}
 }
 
+const guestNetworkProbe = `import socket, time, urllib.request
+for attempt in range(6):
+    try:
+        addresses = socket.getaddrinfo('example.com', 80)
+        with urllib.request.urlopen('http://example.com', timeout=10) as response:
+            assert response.status == 200
+            assert response.read(256)
+        print('VMANGO_NETWORK_DNS_HTTP_OK', flush=True)
+        break
+    except Exception as error:
+        print('VMANGO_NETWORK_RETRY', str(error), flush=True)
+        if attempt == 5:
+            raise
+        time.sleep(2)
+`
+
 const guestInputProbe = `import glob, os, select, struct, time
 fds = {}
 end = time.time()+60
@@ -94,14 +110,17 @@ assert not fds, fds
 `
 
 func presentationUserdata(mode, password, hostname, marker, serial string) string {
-	script := ""
-	command := ""
+	script := "write_files:\n  - path: /var/lib/cloud/vmango-network.py\n    permissions: '0700'\n    content: |\n"
+	for _, line := range strings.Split(guestNetworkProbe, "\n") {
+		script += "      " + line + "\n"
+	}
+	command := fmt.Sprintf("; python3 /var/lib/cloud/vmango-network.py > %s 2>&1", serial)
 	if mode != "headless" {
-		script = "write_files:\n  - path: /var/lib/cloud/vmango-input.py\n    permissions: '0700'\n    content: |\n"
+		script += "  - path: /var/lib/cloud/vmango-input.py\n    permissions: '0700'\n    content: |\n"
 		for _, line := range strings.Split(guestInputProbe, "\n") {
 			script += "      " + line + "\n"
 		}
-		command = fmt.Sprintf("; python3 /var/lib/cloud/vmango-input.py > %s 2>&1", serial)
+		command += fmt.Sprintf("; python3 /var/lib/cloud/vmango-input.py > %s 2>&1", serial)
 	}
 	return fmt.Sprintf("#cloud-config\n%sruncmd:\n  - [sh, -c, 'echo root:%s | chpasswd; test \"$(hostname)\" = %s && echo %s > %s%s']\n", script, password, hostname, marker, serial, command)
 }

@@ -25,6 +25,12 @@ type MachineAutostartRepository interface {
 	SetAutostart(id, node string, enabled bool) error
 }
 
+// BackendPlanCompatibility checks accepted snapshots without backend calls or
+// resolving defaults from the current catalog.
+type BackendPlanCompatibility interface {
+	ValidateAcceptedPolicy(json.RawMessage) error
+}
+
 func (s *VirtualMachineService) ResolveDiskAttachment(vm *VirtualMachine, disk *VirtualMachineAttachedVolume) error {
 	if backend, ok := s.VirtualMachineRepository.(BackendMachineRepository); ok {
 		return backend.ResolveDiskAttachment(vm, disk)
@@ -46,6 +52,46 @@ func (h *CommandHandler) CheckCommandCompatibility(command tasks.Command) error 
 	var envelope struct{ Version int }
 	if json.Unmarshal(command.Payload, &envelope) != nil || envelope.Version != InfrastructureCommandVersion {
 		return fmt.Errorf("task was accepted before an incompatible upgrade; migrate configuration and resubmit (see https://github.com/subuk/vmango/blob/master/docs/HARDWARE-PROFILES-MIGRATION.md)")
+	}
+	if h.VMs == nil {
+		return nil
+	}
+	validator, ok := h.VMs.VirtualMachineRepository.(BackendPlanCompatibility)
+	if !ok {
+		return nil
+	}
+	var c InfrastructureCommand
+	if err := json.Unmarshal(command.Payload, &c); err != nil {
+		return err
+	}
+	policies := []json.RawMessage{c.AdoptionPolicy}
+	for _, p := range c.CandidatePolicies {
+		policies = append(policies, p)
+	}
+	if c.Machine != nil {
+		policies = append(policies, c.Machine.AppliedPolicy)
+	}
+	for _, raw := range policies {
+		if len(raw) > 0 {
+			if err := validator.ValidateAcceptedPolicy(raw); err != nil {
+				return fmt.Errorf("incompatible accepted hardware plan; inspect effects and resubmit explicitly: %w", err)
+			}
+		}
+	}
+	if command.Kind == "machine.adopt" && (c.Adoption == nil || c.Adoption.Attachments == nil || c.Adoption.Attachments.Version != AttachmentVersion) {
+		return fmt.Errorf("accepted adoption lacks supported attachment records; resubmit explicitly")
+	}
+	nics := []*VirtualMachineAttachedInterface{}
+	if c.Interface != nil {
+		nics = append(nics, c.Interface)
+	}
+	if c.Machine != nil {
+		nics = append(nics, c.Machine.Interfaces...)
+	}
+	for _, n := range nics {
+		if n.Binding == nil || n.Binding.Type == "" || n.Binding.Validate() != nil || n.AccessVlan != 0 {
+			return fmt.Errorf("accepted interface lacks a supported explicit binding; resubmit explicitly")
+		}
 	}
 	return nil
 }

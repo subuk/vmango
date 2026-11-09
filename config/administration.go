@@ -51,11 +51,7 @@ func (cfg *Config) AdministrationSnapshot(version string) (compute.Administratio
 			}
 			out := compute.AdministrationHost{ID: h.Node, CloudID: c.ID, Zone: h.Zone, Labels: labels, CPUOvercommit: h.CPUOvercommit, CPUReserve: h.CPUReserve, MemoryReserveBytes: h.MemoryReserveBytes, Emulator: emulator, ImagePool: conf.ImagePool, ConfigDrivePool: conf.ConfigDrivePool, ConfigDriveSuffix: conf.ConfigDriveSuffix, ConfigDriveFormat: "profile-owned", GraphicsListen: "derived per VM", Cache: conf.Cache, QcowPreallocMetadata: conf.QcowPreallocMetadata, Networks: []compute.AdministrationNetworkBinding{}, Storage: []compute.AdministrationStorageBinding{}}
 			for id, b := range h.Networks {
-				kind := "network"
-				if b.Bridge {
-					kind = "bridge"
-				}
-				out.Networks = append(out.Networks, compute.AdministrationNetworkBinding{ID: id, Kind: kind, Backend: b.Network, Model: b.Model, VLAN: b.VLAN})
+				out.Networks = append(out.Networks, compute.AdministrationNetworkBinding{ID: id, Kind: b.Kind(), Backend: b.Target()})
 			}
 			for id, b := range h.Storage {
 				out.Storage = append(out.Storage, compute.AdministrationStorageBinding{ID: id, Pool: b.Pool, Format: b.Format.String()})

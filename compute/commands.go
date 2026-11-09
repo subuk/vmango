@@ -18,13 +18,15 @@ func VolumeRef(node, path string) tasks.ResourceRef {
 
 // InfrastructureCommand is a private, versioned desired command. Read models
 // and command payloads are deliberately separate from the public task schema.
-// Version 4 retires discounted CPU admission and host-derived new-VM topology.
-// Version 3 commands remain historical and require a fresh request, never replay.
-const InfrastructureCommandVersion = 4
+// Version 5 requires explicit network bindings and attachment ownership.
+// Older commands remain historical and require a fresh request, never replay.
+const InfrastructureCommandVersion = 5
 
 type InfrastructureCommand struct {
 	CandidateSettings     map[string]VirtualMachineManagerNodeSettings `json:",omitempty"`
 	CandidatePolicies     map[string]json.RawMessage                   `json:",omitempty"`
+	AdoptionConfigDrive   *string                                      `json:",omitempty"`
+	AdoptionNetworks      map[string]string                            `json:",omitempty"`
 	AdoptionPolicyRef     string                                       `json:",omitempty"`
 	AdoptionPolicy        json.RawMessage                              `json:",omitempty"`
 	NamespaceID           NamespaceID
@@ -536,6 +538,9 @@ func (h *CommandHandler) execute(ctx context.Context, command tasks.Command, pro
 		if c.DeleteVolumes {
 			paths := []string{}
 			for _, disk := range c.Disks {
+				if !disk.Managed && c.Version >= 5 {
+					continue
+				}
 				if h.Clouds != nil {
 					volume, err := h.Volumes.Get(disk.Path, c.Node)
 					if err != nil {
@@ -583,6 +588,9 @@ func (h *CommandHandler) execute(ctx context.Context, command tasks.Command, pro
 		}
 		if c.DeleteVolumes {
 			for _, disk := range c.Disks {
+				if !disk.Managed && c.Version >= 5 {
+					continue
+				}
 				if h.Clouds != nil {
 					volume, err := h.Volumes.Get(disk.Path, c.Node)
 					if err != nil {

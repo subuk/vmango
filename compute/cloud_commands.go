@@ -158,7 +158,7 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 				if !hasPolicyBackend {
 					return command, c, ErrUnavailable
 				}
-				vm := &VirtualMachine{NodeId: host.Node, Name: c.CreateSpec.Name, Arch: image.Arch, VCpus: selectedType.VCPUs, Memory: NewSize(selectedType.MemoryBytes, SizeUnitB), Config: &VirtualMachineConfig{Hostname: c.CreateSpec.Name, Userdata: []byte(c.CreateSpec.UserData), Keys: c.AcceptedKeys}, Metadata: &MachineMetadata{Cloud: cloud.ID, Image: image.ID}, Interfaces: []*VirtualMachineAttachedInterface{{Model: network.Model, NetworkName: network.Network}}}
+				vm := &VirtualMachine{NodeId: host.Node, Name: c.CreateSpec.Name, Arch: image.Arch, VCpus: selectedType.VCPUs, Memory: NewSize(selectedType.MemoryBytes, SizeUnitB), Config: &VirtualMachineConfig{Hostname: c.CreateSpec.Name, Userdata: []byte(c.CreateSpec.UserData), Keys: c.AcceptedKeys}, Metadata: &MachineMetadata{Cloud: cloud.ID, Image: image.ID}, Interfaces: []*VirtualMachineAttachedInterface{network.Interface(c.CreateSpec.Network)}}
 				if err := backend.ResolveHardware(vm, image.BackendPolicy, binding); err != nil {
 					policyErrors = append(policyErrors, host.Node+": "+safePolicyFailure(err))
 					continue
@@ -217,6 +217,21 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 				}
 				if c.AdoptionPolicyRef == "" {
 					return command, c, invalid("hardware_profile", "Select an explicit compatible hardware profile for adoption.")
+				}
+				if attachments, ok := h.VMs.VirtualMachineRepository.(MachineAttachmentRepository); ok {
+					records, e := AdoptionAttachments(vm, host, c.AdoptionConfigDrive, c.AdoptionNetworks)
+					if e != nil {
+						return command, c, e
+					}
+					if e = attachments.PrepareAdoptionAttachments(vm, records); e != nil {
+						return command, c, e
+					}
+					if vm.Metadata == nil || vm.Metadata.Cloud == "" {
+						vm.Metadata = &MachineMetadata{Cloud: cloud.ID, Zone: host.Zone, CPURequest: vm.VCpus, MemoryRequestBytes: vm.Memory.Bytes()}
+					}
+					copy := *vm.Metadata
+					copy.Attachments = records
+					vm.Metadata = &copy
 				}
 				c.AdoptionPolicy, err = backend.PrepareAdoption(vm, cloud.ID, c.AdoptionPolicyRef)
 				if err != nil {
@@ -302,16 +317,15 @@ func (h *CommandHandler) prepareCloud(command tasks.Command, c InfrastructureCom
 			if err != nil {
 				return command, c, err
 			}
-			nic := &VirtualMachineAttachedInterface{LogicalNetwork: c.Interface.NetworkName, NetworkName: b.Network, Bridge: b.Bridge, Model: c.Interface.Model, AccessVlan: b.VLAN, Mac: c.Interface.Mac}
+			nic := b.Interface(c.Interface.NetworkName)
+			nic.Mac = c.Interface.Mac
+			if c.Interface.Model != "" || c.Interface.AccessVlan != 0 {
+				return command, c, invalid("network", "NIC model and VLAN inputs are unsupported; select a hardware profile and configure the host network infrastructure.")
+			}
 			if len(vm.AppliedPolicy) != 0 {
 				if err := h.VMs.ResolveInterfaceAttachment(vm, nic); err != nil {
 					return command, c, err
 				}
-				if b.Model != "" && b.Model != nic.Model {
-					return command, c, invalid("network", "The host network model conflicts with the VM's applied hardware policy; choose a compatible network binding.")
-				}
-			} else {
-				nic.Model = b.Model
 			}
 			c.Interface = nic
 		}
@@ -569,7 +583,7 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 				}
 				manager = scoped
 			}
-			if err := manager.AttachVolume(c.VM, c.Node, &VirtualMachineAttachedVolume{Path: volume.Path, Alias: d.Name, DeviceType: DeviceTypeDisk, DeviceBus: attachment.DeviceBus}); err != nil {
+			if err := manager.AttachVolume(c.VM, c.Node, &VirtualMachineAttachedVolume{Managed: true, Path: volume.Path, Alias: d.Name, DeviceType: DeviceTypeDisk, DeviceBus: attachment.DeviceBus}); err != nil {
 				return err
 			}
 			return p.Effect(VolumeRef(c.Node, volume.Path), "attached")
@@ -589,6 +603,11 @@ func (h *CommandHandler) executeCloud(ctx context.Context, command tasks.Command
 		policyBackend, policyOK := h.VMs.VirtualMachineRepository.(BackendMachineRepository)
 		if len(c.AdoptionPolicy) != 0 && !policyOK || len(c.AdoptionPolicy) == 0 && !legacyOK {
 			return ErrUnavailable
+		}
+		if attachments, ok := h.VMs.VirtualMachineRepository.(MachineAttachmentRepository); ok {
+			if err := attachments.PrepareAdoptionAttachments(vm, m.Attachments); err != nil {
+				return err
+			}
 		}
 		if len(c.AdoptionPolicy) != 0 {
 			if err := policyBackend.ValidateAdoptionPolicy(vm, c.AdoptionPolicy); err != nil {

@@ -486,7 +486,7 @@ func (m *VirtualMachineManager) PrepareImages(input *VirtualMachine, requested [
 		if legacyHardware && !slices.Contains(caps.NICModels, iface.Model) {
 			return nil, nil, fmt.Errorf("NIC model %q is unsupported on this node", iface.Model)
 		}
-		if models, restricted := caps.NetworkModels[iface.NetworkName]; legacyHardware && restricted && !slices.Contains(models, iface.Model) {
+		if models, restricted := caps.NetworkModels[iface.BindingKind()]; legacyHardware && restricted && !slices.Contains(models, iface.Model) {
 			return nil, nil, fmt.Errorf("NIC model is unsupported for the selected network")
 		}
 	}

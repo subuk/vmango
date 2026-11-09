@@ -672,3 +672,68 @@ No positive vmvga framebuffer/guest-input result is claimed. Use a compatible
 x86 Linux QEMU build and native network for this verification. The harness also
 accepts `ACCEPTANCE_ARCH=x86_64 ACCEPTANCE_VIRT_TYPE=qemu` for explicit local
 software-emulation tests; those never count as HVF/KVM results.
+
+## Explicit network bindings and attachment adoption (KRG-126)
+
+`ACCEPTANCE_DISPLAY` now also checks guest DNS resolution and an HTTP fetch from
+`http://example.com`; that guest network needs working outgoing access. A running
+VM, DHCP lease or successful XML conversion alone does not pass the network test.
+The native user-network binding is `type="qemu-user"`. `ACCEPTANCE_NETWORK=default`
+selects the existing literal libvirt network instead.
+
+Set `ACCEPTANCE_ADOPT_ATTACHMENTS=1` to remove only the disposable guest's scheduler
+metadata, reject a nonexistent/invalid config-drive selection, explicitly adopt
+its existing config drive and auto-match its NIC. The check compares domain XML
+before/after adoption and verifies that deletion preserves externally adopted
+root/config disks, which the harness then removes explicitly. This flag works on
+ARM and x86. `ACCEPTANCE_ADOPT_POWER=1` additionally checks graceful guest shutdown;
+it remains a separate x86 guest/ACPI check.
+
+Validation on 2026-11-09:
+
+- `make test`, `make api-types`, `make ui-test`: passed (210 UI tests and five asset
+  checks). Metadata regressions cover native user/network/bridge identities,
+  external disk ownership, configured network matching and incompatible commands.
+- Playwright with Chrome: rendered adoption form on desktop/mobile, explicit disk
+  choice, automatic network matching, missing configuration and ambiguous choices
+  passed against isolated API fixtures. This browser check does not exercise a
+  hypervisor; real VNC/input is checked by the acceptance suite separately.
+- Local macOS ARM64/HVF, Ubuntu Noble ARM64, native `qemu-user`, virtio disks and
+  VNC/virtio video with USB keyboard/tablet: full lifecycle passed, including guest
+  DNS/HTTP, guest-observed keyboard/pointer events, config-drive adoption, service
+  restart, external-disk preservation and cleanup. Run with:
+
+  ```sh
+  ACCEPTANCE_DISPLAY=vnc ACCEPTANCE_DISK_BUS=virtio \
+  ACCEPTANCE_ADOPT_ATTACHMENTS=1 \
+  ACCEPTANCE_IMAGE=/absolute/path/to/noble-server-cloudimg-arm64.img make acceptance
+  ```
+
+The macOS XML-to-native TAP problem mentioned in the earlier graphics validation
+is addressed by probing storage independently of native interfaces; NIC capability
+checks remain and libvirt validates the complete layout at domain definition.
+The raw-device PCI guards remain for existing raw QEMU NICs. PCI root allocation
+also reserves the implicit i440fx chipset slot before attaching another virtio disk.
+
+Socket-vmnet was not tested: no connectivity, lifecycle or compatibility result is
+claimed. No distribution package builds were run for this task.
+
+Linux completion: x86_64/KVM on `lanst`, Alpine 3.24.3, native `qemu-user`, virtio
+disks and VNC/virtio video with USB keyboard/tablet passed the complete lifecycle
+with `ACCEPTANCE_ADOPT_ATTACHMENTS=1` (235 seconds). This includes invalid drive
+rejection, explicit existing-drive adoption without hardware changes, DNS/HTTP,
+guest-observed input, service restart, disk/interface attachment changes,
+external-disk preservation and disposable-resource cleanup. The local Mac run
+with the same attachment-adoption flag passed in 44 seconds.
+
+Separate infrastructure/guest limitations observed on lanst:
+
+- The existing `default` libvirt NAT network assigned DHCP and answered DNS, but
+  guest HTTP SYN packets received no reply. The host itself could fetch the same
+  URL. That network run failed the connectivity assertion; no host firewall or
+  shared network configuration was changed. Native `qemu-user` successfully
+  fetched HTTP content on the same host.
+- The optional `ACCEPTANCE_ADOPT_POWER=1` Alpine/i440fx graceful ACPI shutdown
+  check timed out. Its preceding adoption, networking and VNC/input checks
+  passed. This is not a successful ACPI shutdown result; attachment adoption is
+  verified independently with `ACCEPTANCE_ADOPT_ATTACHMENTS=1` and hard poweroff.

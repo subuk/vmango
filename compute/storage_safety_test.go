@@ -49,7 +49,7 @@ type safetyMachines struct {
 
 func (r *safetyMachines) Start(string, string) error { r.starts++; return nil }
 func (r *safetyMachines) Get(id, node string) (*VirtualMachine, error) {
-	return &VirtualMachine{Id: id, NodeId: node, Volumes: []*VirtualMachineAttachedVolume{{Path: "/base"}}}, nil
+	return &VirtualMachine{Id: id, NodeId: node, Volumes: []*VirtualMachineAttachedVolume{{Managed: true, Path: "/base"}}}, nil
 }
 
 type safetyEvents struct{}

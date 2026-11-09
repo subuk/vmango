@@ -613,12 +613,6 @@ function HostNetworks({ cloud, host }: { cloud: string; host: AdminHost }) {
                             label: "Backend",
                             value: (n) => n.backend,
                         },
-                        {
-                            id: "model",
-                            label: "Model",
-                            value: (n) => n.model || "Inherited",
-                        },
-                        { id: "vlan", label: "VLAN", value: (n) => n.vlan },
                     ]}
                     empty="No network bindings are configured."
                 />

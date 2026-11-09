@@ -63,10 +63,8 @@ type AdministrationFieldState struct {
 }
 type AdministrationNetworkBinding struct {
 	ID      string `json:"id"`
-	Kind    string `json:"kind" enum:"network,bridge"`
+	Kind    string `json:"kind" enum:"libvirt-network,bridge,qemu-user,socket-vmnet"`
 	Backend string `json:"backend"`
-	Model   string `json:"model"`
-	VLAN    uint   `json:"vlan"`
 }
 type AdministrationStorageBinding struct {
 	ID     string `json:"id"`

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"subuk/vmango/compute"
 
 	"github.com/hashicorp/hcl"
 	"github.com/hashicorp/hcl/hcl/ast"
@@ -223,8 +224,8 @@ func (d *InstallDocument) Prepare(edits InstallEdits) (*InstallCandidate, error)
 					network = &v
 				}
 			}
-			if network != nil && network.Bridge != "" {
-				return nil, fmt.Errorf("host %q network %q is a bridge binding; installer NAT conversion is unsupported", host.Node, host.NetworkID)
+			if network != nil && network.Type != "" && network.Type != compute.NetworkLibvirt {
+				return nil, fmt.Errorf("host %q network %q is a %s binding; installer NAT conversion is unsupported", host.Node, host.NetworkID, network.Type)
 			}
 			np := appendPath(hp, []string{"network", host.NetworkID})
 			data, err = installEnsureBlock(data, np, "")

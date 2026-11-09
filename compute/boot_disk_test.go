@@ -5,7 +5,7 @@ import "testing"
 func TestDefaultBootDisk(t *testing.T) {
 	root := &VirtualMachineAttachedVolume{Alias: "root", DeviceType: DeviceTypeDisk}
 	data := &VirtualMachineAttachedVolume{Alias: "data", DeviceType: DeviceTypeDisk}
-	config := &VirtualMachineAttachedVolume{Alias: "configdrive", DeviceType: DeviceTypeDisk}
+	config := &VirtualMachineAttachedVolume{Purpose: PurposeConfigDrive, Alias: "configdrive", DeviceType: DeviceTypeDisk}
 	optical := &VirtualMachineAttachedVolume{DeviceType: DeviceTypeCdrom}
 	for _, tt := range []struct {
 		name  string

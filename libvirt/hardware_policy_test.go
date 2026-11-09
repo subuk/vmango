@@ -14,7 +14,7 @@ import (
 func boolPointer(v bool) *bool { return &v }
 func fixtureHardwarePolicy(t *testing.T, vm *compute.VirtualMachine) json.RawMessage {
 	t.Helper()
-	p := hardware.Profile{ID: "fixture", GuestAgent: boolPointer(vm.GuestAgent), Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), VideoModel: vm.VideoModel.String(), ConfigDrive: hardware.ConfigDrive{Enabled: boolPointer(false)}}
+	p := hardware.Profile{Presentation: &hardware.Presentation{Type: vm.Graphic.Type.String(), VideoModel: vm.VideoModel.String(), Keyboard: "none", Pointer: "none"}, ID: "fixture", GuestAgent: boolPointer(vm.GuestAgent), Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), VideoModel: vm.VideoModel.String(), ConfigDrive: hardware.ConfigDrive{Enabled: boolPointer(false)}}
 	if len(vm.Volumes) > 0 {
 		p.DiskBus = vm.Volumes[0].DeviceBus.String()
 	}
@@ -74,7 +74,7 @@ func TestHardwarePlanIndependentConfigDriveAndLaterDisks(t *testing.T) {
 	}
 }
 func TestAppliedPolicyMetadataSurvivesTaskHistoryAndUnrelatedMetadata(t *testing.T) {
-	raw := testPlan(t, hardware.Profile{ID: "stable"})
+	raw := testPlan(t, hardware.Profile{ID: "stable", Presentation: &hardware.Presentation{}})
 	config := &xmlmodel.Domain{Metadata: &xmlmodel.DomainMetadata{XML: `<owner xmlns="urn:owner">keep</owner>`}}
 	if err := writeHardwareMetadata(config, raw); err != nil {
 		t.Fatal(err)
@@ -94,6 +94,7 @@ func TestAppliedPolicyMetadataSurvivesTaskHistoryAndUnrelatedMetadata(t *testing
 		t.Fatal("missing policy accepted")
 	}
 	vm.AppliedPolicy = raw
+	vm.Metadata.Attachments = fixtureAttachments(vm)
 	if err := (&VirtualMachineRepository{}).ValidateAppliedPolicy(vm); err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +121,7 @@ func TestExplicitAdoptionCompatibility(t *testing.T) {
 	if err = validateAdoptionPolicy(vm, plan); err == nil {
 		t.Fatal("enabled profile accepted absent configdrive")
 	}
-	vm.Volumes = append(vm.Volumes, &compute.VirtualMachineAttachedVolume{Alias: "configdrive", DeviceType: compute.DeviceTypeDisk, DeviceBus: compute.DeviceBusVirtio})
+	vm.Volumes = append(vm.Volumes, &compute.VirtualMachineAttachedVolume{Purpose: compute.PurposeConfigDrive, Alias: "configdrive", DeviceType: compute.DeviceTypeDisk, DeviceBus: compute.DeviceBusVirtio})
 	if err = validateAdoptionPolicy(vm, plan); err == nil {
 		t.Fatal("unreadable configdrive guessed")
 	}
@@ -222,17 +223,20 @@ func TestLaterInterfaceUsesAppliedPolicyWithoutExistingInterfaces(t *testing.T) 
 		t.Fatal("host binding overrode applied NIC policy")
 	}
 }
-func TestSyntheticNetworksRejectConflictingNICPolicy(t *testing.T) {
-	repo := &VirtualMachineRepository{}
-	for _, network := range []string{"qemu-usernet", "macos-socket-vmnet"} {
-		nic := &compute.VirtualMachineAttachedInterface{NetworkName: network, Model: "e1000"}
-		if err := repo.ValidateNetwork("host", nic); err == nil {
-			t.Fatalf("%s silently substituted virtio", network)
+func TestNetworkValidationRequiresExplicitBinding(t *testing.T) {
+	for _, name := range []string{"qemu-usernet", "ordinary"} {
+		nic := &compute.VirtualMachineAttachedInterface{NetworkName: name, Model: "virtio"}
+		if err := (&VirtualMachineRepository{}).ValidateNetwork("host", nic); err == nil {
+			t.Fatal("missing explicit binding accepted")
 		}
-		nic.Model = "virtio"
-		if err := repo.ValidateNetwork("host", nic); err != nil {
-			t.Fatal(err)
-		}
+	}
+	nic := (compute.NetworkBinding{Type: compute.NetworkUser}).Interface("internet")
+	nic.Model = "e1000"
+	if err := (&VirtualMachineRepository{}).ValidateNetwork("host", nic); err != nil {
+		t.Fatal(err)
+	}
+	if nic.Model != "e1000" {
+		t.Fatal("model substituted")
 	}
 }
 

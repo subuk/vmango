@@ -122,6 +122,7 @@ func TestExplicitAdoptionPreservesPersistentPowerSettings(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			metadata.Attachments = fixtureAttachments(observedVM)
 			if err := repo.AdoptWithPolicy(id, "n", metadata, fixtureHardwarePolicy(t, observedVM)); err != nil {
 				t.Fatal(err)
 			}

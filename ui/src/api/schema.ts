@@ -1270,10 +1270,7 @@ export interface components {
             backend: string;
             id: string;
             /** @enum {string} */
-            kind: "network" | "bridge";
-            model: string;
-            /** Format: int64 */
-            vlan: number;
+            kind: "libvirt-network" | "bridge" | "qemu-user" | "socket-vmnet";
         };
         AdministrationRemoteSource: {
             host: string;
@@ -1322,8 +1319,14 @@ export interface components {
             unavailable_hosts: components["schemas"]["AdministrationUnavailableHost"][];
         };
         ApiAdoptInputBody: {
+            /** @description Attached disk device_id, or an explicit empty string for No config drive. Required for libvirt adoption. */
+            config_drive?: string;
             /** @description Libvirt clouds require a compatible named hardware profile. */
             hardware_profile?: string;
+            /** @description Explicit device_id to logical network choices for ambiguous adoption matches. */
+            networks?: {
+                [key: string]: string;
+            };
         };
         ApiAssignmentPreview: {
             machines: components["schemas"]["ApiVM"][];
@@ -1647,9 +1650,29 @@ export interface components {
              */
             type?: string;
         };
+        ApiReadDisk: {
+            alias?: string;
+            /** @enum {string} */
+            bus?: "virtio" | "scsi" | "ide" | "sata";
+            /**
+             * @default disk
+             * @enum {string}
+             */
+            device?: "disk" | "cdrom";
+            device_id?: string;
+            format?: string;
+            managed: boolean;
+            purpose?: string;
+            source?: string;
+            /** @description Compound host/path volume identifier returned by cloud discovery. */
+            volume_id: string;
+        };
         ApiReadInterface: {
+            binding?: components["schemas"]["NetworkBinding"];
+            device_id?: string;
             ip_addresses: string[];
             mac?: string;
+            managed: boolean;
             model?: string;
             network: string;
             /** Format: int64 */
@@ -1682,7 +1705,7 @@ export interface components {
             configured_keys: components["schemas"]["ApiConfiguredKey"][] | null;
             cpu_pinning: components["schemas"]["ApiCPUPinning"];
             disk_controller: string;
-            disks: components["schemas"]["ApiDisk"][];
+            disks: components["schemas"]["ApiReadDisk"][];
             firmware: string;
             graphics: string;
             graphics_listen: string;
@@ -1721,7 +1744,7 @@ export interface components {
             configured_keys: components["schemas"]["ApiConfiguredKey"][] | null;
             cpu_pinning: components["schemas"]["ApiCPUPinning"];
             disk_controller: string;
-            disks: components["schemas"]["ApiDisk"][];
+            disks: components["schemas"]["ApiReadDisk"][];
             firmware: string;
             graphics: string;
             graphics_listen: string;
@@ -2065,6 +2088,12 @@ export interface components {
             memory_mode?: string;
             mode: string;
             mode_explicit: boolean;
+        };
+        NetworkBinding: {
+            bridge?: string;
+            network?: string;
+            socket?: string;
+            type: string;
         };
         ObservedCatchUp: {
             /** Format: int64 */

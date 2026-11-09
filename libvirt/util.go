@@ -2,6 +2,7 @@ package libvirt
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sort"
@@ -131,12 +132,28 @@ func generateMacAddress(prefix string) string {
 }
 
 func parseQemuDeviceArg(argv string) map[string]string {
+	if strings.HasPrefix(strings.TrimSpace(argv), "{") {
+		var p struct {
+			Type string `json:"type"`
+			ID   string `json:"id"`
+			Addr struct {
+				Type string `json:"type"`
+				Path string `json:"path"`
+			} `json:"addr"`
+		}
+		if json.Unmarshal([]byte(argv), &p) == nil {
+			return map[string]string{"": p.Type, "id": p.ID, "addr.type": p.Addr.Type, "addr.path": p.Addr.Path}
+		}
+		return map[string]string{}
+	}
 	parts := strings.Split(argv, ",")
 	params := map[string]string{}
 	params[""] = parts[0]
 	for _, part := range parts[1:] {
 		kv := strings.SplitN(part, "=", 2)
-		params[kv[0]] = kv[1]
+		if len(kv) == 2 {
+			params[kv[0]] = kv[1]
+		}
 	}
 	return params
 }

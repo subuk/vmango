@@ -3,6 +3,7 @@ package libvirt
 import (
 	"encoding/xml"
 	"subuk/vmango/compute"
+	"subuk/vmango/libvirt/hardware"
 	"testing"
 
 	libvirtxml "libvirt.org/go/libvirtxml"
@@ -56,15 +57,20 @@ func TestNewDomainConfigPlatformFeatures(t *testing.T) {
 	}
 }
 
-func TestNewARMGraphicalDomainHasFirmwareCompatibleInput(t *testing.T) {
+func TestGraphicalDomainInputComesOnlyFromProfile(t *testing.T) {
 	for _, arch := range []string{"aarch64", "x86_64"} {
 		for _, graphics := range []compute.GraphicType{compute.GraphicTypeNone, compute.GraphicTypeVnc, compute.GraphicTypeSpice} {
 			t.Run(arch+"/"+graphics.String(), func(t *testing.T) {
 				vm := &compute.VirtualMachine{Graphic: compute.VirtualMachineGraphic{Type: graphics}}
 				config := newDomainConfig(vm, &libvirtxml.DomainCaps{Arch: arch})
-				wantInput := arch == "aarch64" && graphics != compute.GraphicTypeNone
+				if len(config.Devices.Inputs) != 0 || len(config.Devices.Controllers) != 0 {
+					t.Fatal("legacy XML fallback injected input")
+				}
+				vm.AppliedPolicy = testPlan(t, hardware.Profile{ID: "input", Presentation: &hardware.Presentation{Type: graphics.String()}})
+				config = newDomainConfig(vm, &libvirtxml.DomainCaps{Arch: arch})
+				wantInput := graphics != compute.GraphicTypeNone
 				if !wantInput {
-					if len(config.Devices.Inputs) != 0 || len(config.Devices.Controllers) != 0 {
+					if len(config.Devices.Inputs) != 0 || len(config.Devices.Controllers) > 1 || len(config.Devices.Controllers) == 1 && config.Devices.Controllers[0].Model != "none" {
 						t.Fatal("unexpected input devices")
 					}
 					return

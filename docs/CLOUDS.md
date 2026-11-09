@@ -110,7 +110,7 @@ host "local" {
 Omitted `image_pool` and `config_drive_pool` default to `default`, and
 `config_drive_suffix` to `_config.iso`. `cache` and `qcow_prealloc_metadata`
 default to `false`. Legacy `config_drive_write_format` and `graphics_listen`
-warn and are ignored: format belongs to the profile, and listeners are derived.
+are rejected: format belongs to the profile, and listeners are derived.
 
 ## Catalog and placement
 

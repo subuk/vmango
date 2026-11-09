@@ -315,9 +315,9 @@ func TestPrivateGraphicsListenerValidation(t *testing.T) {
 	for _, address := range []string{"", "127.0.0.1", "0.0.0.0", "::1", "::", "not-an-ip", "127.0.0.1:5900"} {
 		path := filepath.Join(t.TempDir(), "listener.conf")
 		os.WriteFile(path, []byte(strings.Replace(cloudConfig, `uri="qemu:///session"`, `uri="qemu:///session" graphics_listen="`+address+`"`, 1)), 0600)
-		cfg, err := Parse(path)
-		if err != nil || cfg.Hosts()[0].GraphicsListen != "" || len(cfg.MigrationWarnings) != 1 {
-			t.Fatalf("legacy binding %q must be ignored with warning: %v", address, err)
+		_, err := Parse(path)
+		if err == nil || !strings.Contains(err.Error(), "graphics_listen is unsupported") {
+			t.Fatalf("removed binding %q must fail: %v", address, err)
 		}
 	}
 }

@@ -262,7 +262,7 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 				return err
 			}
 			failure.Volumes = append(failure.Volumes, volume.Path)
-			vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{Path: volume.Path, Alias: p.Alias, DeviceType: p.DeviceType, DeviceBus: p.DeviceBus})
+			vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{Managed: true, Path: volume.Path, Alias: p.Alias, DeviceType: p.DeviceType, DeviceBus: p.DeviceBus})
 			return effect(VolumeRef(vm.NodeId, volume.Path), "created")
 		}); err != nil {
 			return err
@@ -276,7 +276,7 @@ func (manager *VirtualMachineManager) createPrepared(vm *VirtualMachine, cloneVo
 				return err
 			}
 			failure.Volumes = append(failure.Volumes, volume.Path)
-			vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{Path: volume.Path, Alias: p.Alias, DeviceType: p.DeviceType, DeviceBus: p.DeviceBus})
+			vm.Volumes = append(vm.Volumes, &VirtualMachineAttachedVolume{Managed: true, Path: volume.Path, Alias: p.Alias, DeviceType: p.DeviceType, DeviceBus: p.DeviceBus})
 			return effect(VolumeRef(vm.NodeId, volume.Path), "created")
 		}); err != nil {
 			return err
@@ -430,7 +430,9 @@ func (manager *VirtualMachineManager) Delete(id, node string, deleteVolumes bool
 			return util.NewError(err, "cannot fetch vm info")
 		}
 		for _, volume := range vm.Volumes {
-			volumesToDelete = append(volumesToDelete, volume)
+			if volume.Managed {
+				volumesToDelete = append(volumesToDelete, volume)
+			}
 		}
 	}
 	paths := []string{}

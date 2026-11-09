@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Alert, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import {
+    Alert,
+    Box,
+    MenuItem,
+    Stack,
+    TextField,
+    Typography,
+} from "@mui/material";
 import { useRequest } from "../app/Workspace";
 import { adminCloudPath, useAdministration } from "../api/administration";
 import type { components } from "../api/schema";
@@ -230,17 +237,62 @@ export function AdoptMachine({ vm, onClose }: { vm: VM; onClose: () => void }) {
         `${adminCloudPath(vm.cloud)}/hardware-profiles`,
     );
     const profile = profiles.data?.find((p) => p.id === selected);
+    const [configDrive, setConfigDrive] = useState<string | undefined>();
+    const [networkChoices, setNetworkChoices] = useState<
+        Record<string, string>
+    >({});
+    const host = useAdministration<components["schemas"]["AdministrationHost"]>(
+        `${adminCloudPath(vm.cloud)}/configuration/hosts/${encodeURIComponent(vm.node)}`,
+    );
+    const mappings = (vm.interfaces || []).map((nic) => {
+        const binding = nic.binding;
+        const target =
+            binding?.network || binding?.bridge || binding?.socket || "";
+        const confirmService =
+            binding?.type === "socket-vmnet" && !binding.socket;
+        const candidates = (host.data?.networks || []).filter(
+            (network) =>
+                network.kind === binding?.type &&
+                (confirmService || network.backend === target),
+        );
+        const id = nic.device_id || nic.mac || "";
+        const selected =
+            networkChoices[id] ||
+            (candidates.length === 1 && !confirmService
+                ? candidates[0].id
+                : "");
+        return { nic, candidates, id, selected, confirmService };
+    });
+    const networksReady =
+        mappings.length === 0 ||
+        (!!host.data &&
+            mappings.every((m) =>
+                m.candidates.some((c) => c.id === m.selected),
+            ));
+
     return (
         <OperationDialog
             title={`Adopt ${vm.name}`}
             action="Adopt machine"
             onClose={onClose}
-            submitDisabled={!profile}
+            submitDisabled={
+                !profile ||
+                configDrive === undefined ||
+                !networksReady ||
+                (configDrive === "") !==
+                    (profile.config_drive.enabled === false)
+            }
             run={() =>
                 request(
                     `/api/v1/clouds/${encodeURIComponent(vm.cloud)}/machines/${encodeURIComponent(vm.id)}/adopt`,
                     "POST",
-                    { hardware_profile: selected },
+                    {
+                        hardware_profile: selected,
+                        config_drive: configDrive,
+                        networks: Object.fromEntries(
+                            mappings.map((m) => [m.id, m.selected]),
+                        ),
+                    },
                 )
             }
         >
@@ -271,7 +323,120 @@ export function AdoptMachine({ vm, onClose }: { vm: VM; onClose: () => void }) {
                             </TextField>
                         )}
                     </QueryState>
-                    {profile && <HardwareProfileFields profile={profile} />}
+                    <TextField
+                        select
+                        required
+                        label="Config drive"
+                        name="config_drive"
+                        value={
+                            configDrive === undefined
+                                ? "__choose__"
+                                : configDrive
+                        }
+                        onChange={(event) => setConfigDrive(event.target.value)}
+                        fullWidth
+                        helperText="Select an existing disk or No config drive. Adoption does not create a disk or grant permission to overwrite or delete an external disk."
+                    >
+                        <MenuItem value="__choose__" disabled>
+                            Choose explicitly
+                        </MenuItem>
+                        <MenuItem value="">No config drive</MenuItem>
+                        {(vm.disks || [])
+                            .filter((disk) => disk.device_id)
+                            .map((disk) => (
+                                <MenuItem
+                                    key={disk.device_id}
+                                    value={disk.device_id}
+                                >
+                                    {disk.source} · {disk.device_id} ·{" "}
+                                    {disk.device} ·{" "}
+                                    {disk.format || "Unknown format"}
+                                </MenuItem>
+                            ))}
+                    </TextField>
+                    {configDrive === "" &&
+                        profile?.config_drive.enabled !== false &&
+                        profile && (
+                            <Alert severity="warning">
+                                This profile requires a config drive. Select an
+                                existing config drive or a compatible profile
+                                with config drive disabled.
+                            </Alert>
+                        )}
+                    {mappings.length > 0 && (
+                        <QueryState query={host}>
+                            {() => (
+                                <Stack spacing={2}>
+                                    {mappings.map((mapping) =>
+                                        mapping.candidates.length === 0 ? (
+                                            <Alert
+                                                severity="warning"
+                                                key={mapping.id}
+                                            >
+                                                Interface {mapping.nic.mac}: add
+                                                a matching network and host
+                                                binding to the configuration,
+                                                then restart Vmango before
+                                                adoption.
+                                            </Alert>
+                                        ) : mapping.candidates.length === 1 &&
+                                          !mapping.confirmService ? (
+                                            <Typography key={mapping.id}>
+                                                Interface {mapping.nic.mac} →{" "}
+                                                {mapping.selected} (matched from
+                                                host configuration)
+                                            </Typography>
+                                        ) : (
+                                            <TextField
+                                                select
+                                                required
+                                                key={mapping.id}
+                                                label={`Network for ${mapping.nic.mac}`}
+                                                value={mapping.selected}
+                                                helperText={
+                                                    mapping.confirmService
+                                                        ? "The existing socket connection does not identify its service path. Confirm the service configured for this interface; adoption preserves its existing setup."
+                                                        : undefined
+                                                }
+                                                onChange={(event) =>
+                                                    setNetworkChoices(
+                                                        (current) => ({
+                                                            ...current,
+                                                            [mapping.id]:
+                                                                event.target
+                                                                    .value,
+                                                        }),
+                                                    )
+                                                }
+                                            >
+                                                {mapping.candidates.map(
+                                                    (network) => (
+                                                        <MenuItem
+                                                            key={network.id}
+                                                            value={network.id}
+                                                        >
+                                                            {network.id}
+                                                        </MenuItem>
+                                                    ),
+                                                )}
+                                            </TextField>
+                                        ),
+                                    )}
+                                </Stack>
+                            )}
+                        </QueryState>
+                    )}
+                    {profile && (
+                        <Box component="details">
+                            <Typography
+                                component="summary"
+                                sx={{ cursor: "pointer" }}
+                            >
+                                Selected profile details
+                            </Typography>
+                            <HardwareProfileFields profile={profile} />
+                        </Box>
+                    )}
                 </Stack>
             )}
         </OperationDialog>

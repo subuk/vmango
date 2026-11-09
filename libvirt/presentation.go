@@ -249,7 +249,7 @@ func validatePresentationNetwork(vm *compute.VirtualMachine, p hardware.Profile)
 		return nil
 	}
 	for _, nic := range vm.Interfaces {
-		if !nic.Bridge && (nic.NetworkName == "qemu-usernet" || nic.NetworkName == "macos-socket-vmnet") {
+		if nic.RawBackend || nic.BindingKind() == compute.NetworkSocketVMNet {
 			return &compute.ValidationError{Field: "network", Message: fmt.Sprintf("Host %s: x86 video with raw QEMU network %s has unsafe PCI address allocation. Select a native libvirt network/bridge, or explicitly disable video in the hardware profile. Existing VM devices will not be moved.", vm.NodeId, nic.NetworkName)}
 		}
 	}

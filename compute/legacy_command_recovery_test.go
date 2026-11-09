@@ -26,8 +26,8 @@ func TestPreUpgradeTasksFailWithoutExecutionAndPreserveFences(t *testing.T) {
 	now := time.Now().UTC()
 	terminal := tasks.Record{Task: tasks.Task{ID: "terminal", State: tasks.Succeeded, CreatedAt: now, FinishedAt: &now, Effects: []tasks.Effect{effect}}, Payload: json.RawMessage(`{"Version":3}`), Locks: locks, KeyHash: "terminal", Fingerprint: "terminal"}
 	if err := repo.Update(func(store *tasks.Store) error {
-		store.Records["queued"] = tasks.Record{Task: tasks.Task{ID: "queued", Kind: "machine.create", State: tasks.Queued, CreatedAt: now, BlocksResources: true}, Payload: json.RawMessage(`{"Version":3,"Machine":"deliberately not decodable"}`), Locks: locks, KeyHash: "queued", Fingerprint: "queued"}
-		store.Records["running"] = tasks.Record{Task: tasks.Task{ID: "running", Kind: "machine.create", State: tasks.Running, CreatedAt: now, BlocksResources: true, Effects: []tasks.Effect{effect}}, Payload: json.RawMessage(`{"Version":3}`), Locks: locks, KeyHash: "running", Fingerprint: "running"}
+		store.Records["queued"] = tasks.Record{Task: tasks.Task{ID: "queued", Kind: "machine.create", State: tasks.Queued, CreatedAt: now, BlocksResources: true}, Payload: json.RawMessage(`{"Version":4,"Machine":"deliberately not decodable"}`), Locks: locks, KeyHash: "queued", Fingerprint: "queued"}
+		store.Records["running"] = tasks.Record{Task: tasks.Task{ID: "running", Kind: "machine.create", State: tasks.Running, CreatedAt: now, BlocksResources: true, Effects: []tasks.Effect{effect}}, Payload: json.RawMessage(`{"Version":4}`), Locks: locks, KeyHash: "running", Fingerprint: "running"}
 		store.Records["terminal"] = terminal
 		return nil
 	}); err != nil {

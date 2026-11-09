@@ -7,6 +7,17 @@ import (
 	"subuk/vmango/libvirt/hardware"
 )
 
+type APIDiskFields = apiDisk
+
+type apiReadDisk struct {
+	APIDiskFields
+	DeviceID string `json:"device_id,omitempty"`
+	Source   string `json:"source,omitempty"`
+	Format   string `json:"format,omitempty"`
+	Purpose  string `json:"purpose,omitempty"`
+	Managed  bool   `json:"managed"`
+}
+
 type apiDisk struct {
 	VolumeID string `json:"volume_id" minLength:"1" doc:"Compound host/path volume identifier returned by cloud discovery."`
 	Alias    string `json:"alias,omitempty"`
@@ -20,11 +31,14 @@ type apiInterface struct {
 }
 
 type apiReadInterface struct {
-	Network     string   `json:"network"`
-	MAC         string   `json:"mac,omitempty"`
-	Model       string   `json:"model,omitempty"`
-	VLAN        uint     `json:"vlan,omitempty"`
-	IPAddresses []string `json:"ip_addresses" nullable:"false"`
+	DeviceID    string                  `json:"device_id,omitempty"`
+	Binding     *compute.NetworkBinding `json:"binding,omitempty"`
+	Managed     bool                    `json:"managed"`
+	Network     string                  `json:"network"`
+	MAC         string                  `json:"mac,omitempty"`
+	Model       string                  `json:"model,omitempty"`
+	VLAN        uint                    `json:"vlan,omitempty"`
+	IPAddresses []string                `json:"ip_addresses" nullable:"false"`
 }
 type apiVCPUPin struct {
 	VCPU     uint   `json:"vcpu"`
@@ -79,7 +93,7 @@ type apiVM struct {
 	Hugepages      bool                `json:"hugepages"`
 	Graphics       string              `json:"graphics"`
 	VideoModel     string              `json:"video_model"`
-	Disks          []apiDisk           `json:"disks" nullable:"false"`
+	Disks          []apiReadDisk       `json:"disks" nullable:"false"`
 	Interfaces     []apiReadInterface  `json:"interfaces" nullable:"false"`
 	GraphicsListen string              `json:"graphics_listen"`
 	CPUPinning     *apiCPUPinning      `json:"cpu_pinning"`
@@ -111,7 +125,7 @@ type apiVolumeDetail struct {
 }
 
 func vmDTO(vm *compute.VirtualMachine) apiVM {
-	v := apiVM{Node: vm.NodeId, ID: vm.Id, Name: vm.Name, Arch: vm.Arch.String(), State: vm.State.String(), VCPUs: vm.VCpus, MemoryBytes: vm.Memory.Bytes(), Firmware: vm.Firmware, DiskController: vm.DiskController, GuestAgent: vm.GuestAgent, Autostart: vm.Autostart, Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), GraphicsListen: vm.Graphic.Listen, VideoModel: vm.VideoModel.String(), Disks: []apiDisk{}, Interfaces: []apiReadInterface{}, IPAddresses: vm.IpAddressList()}
+	v := apiVM{Node: vm.NodeId, ID: vm.Id, Name: vm.Name, Arch: vm.Arch.String(), State: vm.State.String(), VCPUs: vm.VCpus, MemoryBytes: vm.Memory.Bytes(), Firmware: vm.Firmware, DiskController: vm.DiskController, GuestAgent: vm.GuestAgent, Autostart: vm.Autostart, Hugepages: vm.Hugepages, Graphics: vm.Graphic.Type.String(), GraphicsListen: vm.Graphic.Listen, VideoModel: vm.VideoModel.String(), Disks: []apiReadDisk{}, Interfaces: []apiReadInterface{}, IPAddresses: vm.IpAddressList()}
 	if plan, err := hardware.DecodePlan(vm.AppliedPolicy); err == nil {
 		v.LibvirtHardware = &apiLibvirtMachineHardware{Presentation: plan.Presentation, Storage: plan.Storage, Firmware: plan.Firmware, Profile: plan.Profile, Version: plan.Version, Devices: plan.Devices, Applied: plan.Platform(), GuestSystem: plan.GuestSystem, CPU: plan.CPU, SimpleCPUTopology: plan.SimpleCPUTopology}
 	}
@@ -136,14 +150,14 @@ func vmDTO(vm *compute.VirtualMachine) apiVM {
 		v.ConfiguredKeys = &keys
 	}
 	for _, d := range vm.Volumes {
-		v.Disks = append(v.Disks, apiDisk{volumeID(vm.NodeId, d.Path), d.Alias, d.DeviceType.String(), d.DeviceBus.String()})
+		v.Disks = append(v.Disks, apiReadDisk{APIDiskFields: apiDisk{VolumeID: volumeID(vm.NodeId, d.Path), Alias: d.Alias, Device: d.DeviceType.String(), Bus: d.DeviceBus.String()}, DeviceID: d.DeviceID, Source: d.Path, Format: d.Format, Purpose: d.Purpose, Managed: d.Managed})
 	}
 	for _, n := range vm.Interfaces {
 		logical := n.LogicalNetwork
 		if logical == "" {
 			logical = n.NetworkName
 		}
-		v.Interfaces = append(v.Interfaces, apiReadInterface{logical, n.Mac, n.Model, n.AccessVlan, append([]string{}, n.IpAddressList...)})
+		v.Interfaces = append(v.Interfaces, apiReadInterface{Network: logical, MAC: n.Mac, Model: n.Model, VLAN: n.AccessVlan, IPAddresses: append([]string{}, n.IpAddressList...), DeviceID: n.DeviceID, Binding: n.Binding, Managed: n.Managed})
 	}
 	return v
 }

@@ -132,8 +132,8 @@ func TestObservedUnknownVideoIsNotNone(t *testing.T) {
 }
 
 func TestPresentationRejectsRawX86NetworkBeforeBackendEffects(t *testing.T) {
-	for _, network := range []string{"qemu-usernet", "macos-socket-vmnet"} {
-		vm := &compute.VirtualMachine{Arch: compute.ArchAmd64, NodeId: "host", Interfaces: []*compute.VirtualMachineAttachedInterface{{NetworkName: network}}}
+	for _, network := range []string{"legacy-user", "external-raw"} {
+		vm := &compute.VirtualMachine{Arch: compute.ArchAmd64, NodeId: "host", Interfaces: []*compute.VirtualMachineAttachedInterface{{NetworkName: network, RawBackend: true}}}
 		_, plan := presentationDomain(t, hardware.Presentation{}, "x86_64")
 		// No pool exists: rejection must happen before even acquiring a connection.
 		if err := (&VirtualMachineRepository{}).validateHardwareCapabilities(vm, plan, false, true); err == nil {
@@ -152,6 +152,7 @@ func TestPresentationRejectsRawX86NetworkBeforeBackendEffects(t *testing.T) {
 			t.Fatal("ARM MMIO rejected", err)
 		}
 		vm.Arch = compute.ArchAmd64
+		vm.Interfaces[0].RawBackend = false
 		vm.Interfaces[0].NetworkName = "default"
 		if err := validatePresentationNetwork(vm, plan.Profile); err != nil {
 			t.Fatal("native network rejected", err)

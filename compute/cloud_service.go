@@ -129,10 +129,7 @@ func (s *CloudService) Offers(c Cloud) ([]CloudOffer, error) {
 				offer := CloudOffer{Zone: h.Zone, Image: id, InstanceType: t.ID, Networks: []string{}, StorageClasses: []string{}}
 				for _, n := range c.Networks {
 					if b, ok := h.Networks[n.ID]; ok {
-						if b.Model != "" && image.Defaults.NICModel != "" && b.Model != image.Defaults.NICModel {
-							continue
-						}
-						nic := &VirtualMachineAttachedInterface{NetworkName: b.Network, Bridge: b.Bridge, Model: b.Model, AccessVlan: b.VLAN}
+						nic := b.Interface(n.ID)
 						if len(image.BackendPolicy) != 0 {
 							backend, ok := s.VMs.VirtualMachineRepository.(BackendMachineRepository)
 							if !ok {
@@ -422,10 +419,8 @@ func (s *CloudService) ResolveCreate(c Cloud, spec MachineCreateSpec, images *Im
 			if !ok {
 				return InfrastructureCommand{}, fmt.Errorf("logical network is not bound on host")
 			}
-			if network.Model != "" && image.Defaults.NICModel != "" && network.Model != image.Defaults.NICModel {
-				return InfrastructureCommand{}, fmt.Errorf("network model conflicts with image requirements")
-			}
-			vm := &VirtualMachine{Id: uuid.NewString(), Name: spec.Name, NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Config: &VirtualMachineConfig{Hostname: spec.Name, Userdata: []byte(spec.UserData)}, Interfaces: []*VirtualMachineAttachedInterface{{NetworkName: network.Network, LogicalNetwork: spec.Network, Bridge: network.Bridge, Model: network.Model, AccessVlan: network.VLAN}}, Metadata: &MachineMetadata{Cloud: c.ID, Zone: h.Zone, InstanceType: t.ID, Image: image.ID, CPURequest: t.VCPUs, MemoryRequestBytes: t.MemoryBytes, MinimumMemoryBytes: image.MinimumMemoryBytes}}
+
+			vm := &VirtualMachine{Id: uuid.NewString(), Name: spec.Name, NodeId: h.Node, Arch: image.Arch, VCpus: t.VCPUs, Memory: NewSize(t.MemoryBytes, SizeUnitB), Config: &VirtualMachineConfig{Hostname: spec.Name, Userdata: []byte(spec.UserData)}, Interfaces: []*VirtualMachineAttachedInterface{network.Interface(spec.Network)}, Metadata: &MachineMetadata{Cloud: c.ID, Zone: h.Zone, InstanceType: t.ID, Image: image.ID, CPURequest: t.VCPUs, MemoryRequestBytes: t.MemoryBytes, MinimumMemoryBytes: image.MinimumMemoryBytes}}
 			if spec.Hostname != "" {
 				vm.Config.Hostname = spec.Hostname
 			}

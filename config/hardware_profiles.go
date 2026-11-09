@@ -116,47 +116,67 @@ func (c *Config) HardwareProfiles() (map[string]map[string]hardware.Profile, err
 	return result, nil
 }
 
-// Remove legacy attributes before decoding, so even invalid old values cannot
-// accidentally influence new policy. AST presence also detects false/empty values.
-func removeDeprecatedHardware(root *ast.ObjectList) []string {
-	warnings := []string{}
-	legacy := map[string]map[string]bool{
-		"image":         {"efi": true, "firmware": true, "disk_bus": true, "disk_controller": true, "nic_model": true, "graphics": true, "video_model": true, "guest_agent": true, "initialization": true},
-		"instance_type": {"hugepages": true, "autostart": true},
-		"host":          {"graphics_listen": true, "config_drive_write_format": true},
+// Reject field presence before decoding, including false, zero and empty values.
+func rejectDeprecatedHardware(root *ast.ObjectList) error {
+	replacements := map[string]map[string]string{
+		"image":         {},
+		"instance_type": {"hugepages": "use hardware_profile.hugepages", "autostart": "autostart follows VM lifecycle operations"},
+		"host":          {"graphics_listen": "graphics listeners are loopback-only", "config_drive_write_format": "use hardware_profile.config_drive"},
+		"host.network":  {"model": "use hardware_profile.nic_model", "vlan": "configure VLANs in the underlying host or libvirt network infrastructure"},
+		"cloud.network": {"vlan": "configure VLANs in the underlying host or libvirt network infrastructure"},
 	}
-	for _, item := range root.Items {
-		if len(item.Keys) < 2 || item.Keys[0].Token.Value() != "cloud" {
-			continue
-		}
-		cloud, ok := item.Val.(*ast.ObjectType)
-		if !ok {
-			continue
-		}
-		cloudID := fmt.Sprint(item.Keys[1].Token.Value())
-		for _, block := range cloud.List.Items {
-			if len(block.Keys) < 2 {
-				continue
-			}
-			owner := fmt.Sprint(block.Keys[0].Token.Value())
-			attrs, ok := block.Val.(*ast.ObjectType)
-			if !ok || legacy[owner] == nil {
-				continue
-			}
-			kept := []*ast.ObjectItem{}
-			for _, attribute := range attrs.List.Items {
-				key := fmt.Sprint(attribute.Keys[0].Token.Value())
-				if !legacy[owner][key] {
-					kept = append(kept, attribute)
-					continue
+	for _, field := range []string{"efi", "firmware", "disk_bus", "disk_controller", "nic_model", "graphics", "video_model", "guest_agent", "initialization"} {
+		replacements["image"][field] = "select a named hardware_profile on the image and configure hardware policy in that profile"
+	}
+	var walk func(*ast.ObjectList, []string, string) error
+	walk = func(list *ast.ObjectList, path []string, parent string) error {
+		if parent == "host.network" {
+			kind := compute.NetworkLibvirt
+			for _, item := range list.Items {
+				if len(item.Keys) == 1 && fmt.Sprint(item.Keys[0].Token.Value()) == "type" {
+					if literal, ok := item.Val.(*ast.LiteralType); ok {
+						kind = fmt.Sprint(literal.Token.Value())
+					}
 				}
-				location := strings.Join([]string{"cloud", cloudID, owner, fmt.Sprint(block.Keys[1].Token.Value()), key}, ".")
-				warnings = append(warnings, fmt.Sprintf("line %d: %s is deprecated and ignored; see %s", attribute.Pos().Line, location, HardwareMigrationGuide))
 			}
-			attrs.List.Items = kept
+			field := map[string]string{compute.NetworkLibvirt: "network", compute.NetworkBridge: "bridge", compute.NetworkUser: "", compute.NetworkSocketVMNet: "socket"}[kind]
+			seen := map[string]bool{}
+			for _, item := range list.Items {
+				key := fmt.Sprint(item.Keys[0].Token.Value())
+				if _, deprecated := replacements[parent][key]; deprecated {
+					continue // Report the migration guidance below.
+				}
+				if seen[key] || key != "type" && key != field {
+					return fmt.Errorf("line %d column %d: %s.%s is duplicate or incompatible with network type %q; use only type and its required binding field", item.Pos().Line, item.Pos().Column, strings.Join(path, "."), key, kind)
+				}
+				seen[key] = true
+			}
 		}
+		for _, item := range list.Items {
+			if len(item.Keys) == 0 {
+				continue
+			}
+			key := fmt.Sprint(item.Keys[0].Token.Value())
+			full := append(append([]string{}, path...), key)
+			if rule, removed := replacements[parent][key]; removed {
+				return fmt.Errorf("line %d column %d: %s is unsupported; %s; see %s", item.Pos().Line, item.Pos().Column, strings.Join(full, "."), rule, HardwareMigrationGuide)
+			}
+			if obj, ok := item.Val.(*ast.ObjectType); ok {
+				owner := key
+				if key == "network" {
+					owner = parent + ".network"
+				}
+				for _, k := range item.Keys[1:] {
+					full = append(full, fmt.Sprint(k.Token.Value()))
+				}
+				if err := walk(obj.List, full, owner); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	}
-	return warnings
+	return walk(root, nil, "")
 }
 
 // Pointer fields retain omission separately from an explicit disable.

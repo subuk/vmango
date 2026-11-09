@@ -237,7 +237,7 @@ func TestInstallerRejectsIdentityMovesAndBridgeConversion(t *testing.T) {
 		t.Run(mutation, func(t *testing.T) {
 			source := cloudConfig
 			if mutation == "bridge" {
-				source = strings.Replace(source, `network="default"`, `bridge="br0"`, 1)
+				source = strings.Replace(source, `network="default"`, `type="bridge" bridge="br0"`, 1)
 			}
 			d := installFixture(t, source)
 			h := installerHost()

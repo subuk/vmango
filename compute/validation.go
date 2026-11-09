@@ -34,7 +34,7 @@ func ValidateInterface(v *VirtualMachineAttachedInterface) error {
 	if v.Model == "" {
 		v.Model = "virtio"
 	}
-	if v.NetworkName == "" || v.AccessVlan > 4094 || !slices.Contains([]string{"virtio", "e1000", "rtl8139"}, v.Model) {
+	if (v.Binding == nil && v.NetworkName == "") || (v.Binding != nil && v.Binding.Validate() != nil) || v.AccessVlan > 4094 || !slices.Contains([]string{"virtio", "e1000", "rtl8139"}, v.Model) {
 		return &ValidationError{Field: "network", Message: "Choose a supported network/model and a VLAN between 0 and 4094."}
 	}
 	if v.Mac != "" {

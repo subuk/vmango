@@ -53,10 +53,8 @@ const host: AdminHost = {
     networks: [
         {
             id: "lan",
-            kind: "network",
+            kind: "libvirt-network",
             backend: "backend-private",
-            model: "virtio",
-            vlan: 0,
         },
     ],
     storage: [{ id: "fast", pool: "ssd", format: "qcow2" }],
