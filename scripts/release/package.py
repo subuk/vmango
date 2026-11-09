@@ -33,6 +33,10 @@ def package(version, target, binary, runtime=None):
             "docs/TASKS.md": "TASKS.md",
             "docs/CLOUDS.md": "CLOUDS.md",
             "docs/HARDWARE-PROFILES-MIGRATION.md": "HARDWARE-PROFILES-MIGRATION.md",
+            "docs/FIRMWARE.md": "FIRMWARE.md",
+            "docs/DISKS.md": "DISKS.md",
+            "docs/content/en/docs/cpu-policies.md": "CPU-POLICIES.md",
+            "docs/content/en/docs/graphics-input.md": "GRAPHICS-INPUT.md",
             "docs/NAMESPACES.md": "NAMESPACES.md",
             "docs/INSTALLER.md": "INSTALLER.md",
             "acceptance/README.md": "ACCEPTANCE.md",
@@ -41,7 +45,12 @@ def package(version, target, binary, runtime=None):
         guide_links = {
             "UI-MIGRATION.md": "MIGRATION.md",
             "../acceptance/README.md": "ACCEPTANCE.md",
+            "../docs/FIRMWARE.md": "FIRMWARE.md",
+            "../docs/DISKS.md": "DISKS.md",
             "content/en/docs/images.md": "IMAGES.md",
+            "content/en/docs/cpu-policies.md": "CPU-POLICIES.md",
+            "content/en/docs/graphics-input.md": "GRAPHICS-INPUT.md",
+            "../graphics-input/": "GRAPHICS-INPUT.md",
             "/docs/start/": "QUICKSTART.md",
             "/docs/docker/": "DOCKER.md",
             "/docs/clouds/": "CLOUDS.md",
@@ -54,6 +63,7 @@ def package(version, target, binary, runtime=None):
                 text = text.replace(f"]({old})", f"]({new})")
                 text = text.replace(f"]({old}#", f"]({new}#")
             (stage / destination).write_text(text, encoding="utf-8")
+        shutil.copytree(root / "docs/examples", stage / "examples")
         provenance = stage / "docs/data"
         provenance.mkdir(parents=True)
         shutil.copy2(root / "docs/data/image-sources.json", provenance)

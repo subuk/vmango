@@ -9,6 +9,7 @@
 !vmango.dist.conf
 !vmango.quickstart.conf
 !docs/data/image-sources.json
+!docs/examples/**
 !bootstrap/**
 !installer/**
 !compute/**

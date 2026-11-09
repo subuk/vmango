@@ -24,11 +24,14 @@ class OfflineDocumentationTest(unittest.TestCase):
                 "docs/INSTALLER.md", "docs/HARDWARE-PROFILES-MIGRATION.md", "acceptance/README.md",
                 "docs/content/en/docs/start.md", "docs/content/en/docs/images.md",
                 "docs/content/en/docs/docker.md",
+                "docs/FIRMWARE.md", "docs/DISKS.md",
+                "docs/content/en/docs/cpu-policies.md", "docs/content/en/docs/graphics-input.md",
                 "docs/data/image-sources.json",
             ):
                 target = root / filename
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / filename, target)
+            shutil.copytree(ROOT / "docs/examples", root / "docs/examples")
             # Packaging only reads these inputs; executable behavior is outside this test.
             binary = root / "vmango"
             binary.write_bytes(b"packaging fixture")
@@ -40,13 +43,16 @@ class OfflineDocumentationTest(unittest.TestCase):
             with tarfile.open(archive) as packaged:
                 prefix = "vmango-test-linux-x64/"
                 files = {item.name.removeprefix(prefix) for item in packaged if item.isfile()}
-                for guide in ("API.md", "CLOUDS.md", "DOCKER.md", "IMAGES.md", "MIGRATION.md", "NAMESPACES.md", "TASKS.md", "QUICKSTART.md", "INSTALLER.md", "ACCEPTANCE.md", "HARDWARE-PROFILES-MIGRATION.md"):
+                for guide in ("API.md", "CLOUDS.md", "DOCKER.md", "IMAGES.md", "MIGRATION.md", "NAMESPACES.md", "TASKS.md", "QUICKSTART.md", "INSTALLER.md", "ACCEPTANCE.md", "HARDWARE-PROFILES-MIGRATION.md", "FIRMWARE.md", "DISKS.md", "CPU-POLICIES.md", "GRAPHICS-INPUT.md"):
                     self.assertIn(guide, files)
-                for guide in ("API.md", "CLOUDS.md", "DOCKER.md", "IMAGES.md", "MIGRATION.md", "NAMESPACES.md", "TASKS.md", "QUICKSTART.md", "INSTALLER.md", "ACCEPTANCE.md", "HARDWARE-PROFILES-MIGRATION.md"):
+                for example in (ROOT / "docs/examples").glob("*.conf"):
+                    self.assertEqual(packaged.extractfile(prefix + "examples/" + example.name).read(), example.read_bytes())
+                for guide in sorted(name for name in files if name.endswith(".md")):
                     text = packaged.extractfile(prefix + guide).read().decode()
                     for target in re.findall(r"\]\(([^)]+)\)", text):
                         if "://" not in target and not target.startswith("#"):
-                            self.assertIn(target.split("#", 1)[0], files, (guide, target))
+                            with self.subTest(guide=guide, target=target):
+                                self.assertIn(target.split("#", 1)[0], files)
                 self.assertIn("](UI-MIGRATION.md)", (root / "docs/API.md").read_text())
 
 

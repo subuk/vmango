@@ -179,6 +179,8 @@ jobs:
           Copy-Item candidate/result/windows-tests/*.exe $runtime
           Copy-Item candidate/result/windows-tests/testdata $runtime -Recurse
           Copy-Item vmango.quickstart.conf runtime/vmango.quickstart.conf
+          New-Item -ItemType Directory -Force runtime/docs | Out-Null
+          Copy-Item docs/examples runtime/docs/examples -Recurse
           Push-Location $runtime
           try {
             Get-ChildItem *.test.exe | ForEach-Object {
